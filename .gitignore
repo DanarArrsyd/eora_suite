@@ -5,3 +5,11 @@ vendor/
 .env.*
 !.env.example
 .playwright-mcp/
+.next/
+out/
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+.turbo/
+next-env.d.ts

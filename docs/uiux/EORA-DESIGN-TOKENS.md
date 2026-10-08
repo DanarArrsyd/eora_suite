@@ -86,3 +86,14 @@ Rendered-page verification (real foreground/background combinations, hover/selec
 
 ## 6. Motion
 120–180 ms ease for hover, menu and drawer; respects `prefers-reduced-motion`; no looping or decorative animation. Skeleton shimmer only while loading.
+
+## 7. Implementation mapping (Phase 1, ADR-0011)
+Canonical variables live in `packages/design-tokens/src/tokens.css` (same names as §2). Tailwind utilities use short aliases defined in `apps/web/app/globals.css` (`@theme inline`) to avoid circular names:
+| Utility family | Maps to |
+|---|---|
+| `bg-workspace`, `bg-surface`, `bg-subtle`, `bg-hover`, `bg-selected`, `bg-sidebar`, `bg-overlay` | `--color-bg-*` |
+| `text-ink`, `text-ink-2`, `text-ink-2s`, `text-ink-muted`, `text-link`, `text-on-accent`, `text-sidebar-ink` | `--color-text-*` |
+| `border-line`, `border-line-control`, `border-line-strong`, `outline-ring` | `--color-border*`, `--color-focus-ring` |
+| `bg-accent`, `bg-accent-hover`, `bg-accent-subtle` | `--color-primary*` |
+| `*-stat-ok`, `*-stat-warn`, `*-stat-err`, `*-stat-info`, `*-stat-neutral` (`-fg`, `-bg`) | status tokens |
+Breakpoints: `md` 768, `lg` 1024, `wide` 1200, `xl` 1280, `xxl` 1440, `3xl` 1600, `4xl` 1680. Raw hex in components is blocked by lint (`no-restricted-syntax`).

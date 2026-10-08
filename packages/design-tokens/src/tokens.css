@@ -1,0 +1,65 @@
+/* =====================================================================
+   EORA Suite — design tokens · theme "Modern Corporate Blue" (single theme, no dark mode)
+   Canonical spec: docs/uiux/EORA-DESIGN-TOKENS.md (D-021, D-023, D-027).
+   Components use semantic tokens only; raw palette values below are not used directly.
+   ===================================================================== */
+:root {
+  /* raw palette */
+  --blue-950: #172554; --blue-800: #2948A8; --blue-700: #3559C7; --blue-100: #DBEAFE; --blue-50: #EFF6FF;
+  --slate-50: #F8FAFC; --slate-100: #F1F5F9; --slate-200: #E2E8F0; --slate-300: #CBD5E1; --slate-400: #94A3B8;
+  --slate-450: #7F8EA3; --slate-500: #64748B; --slate-600: #475569; --slate-800: #1E293B;
+
+  /* surfaces */
+  --color-bg-workspace: var(--slate-50);
+  --color-bg-surface: #FFFFFF;
+  --color-bg-subtle: var(--slate-50);
+  --color-bg-hover: var(--slate-100);
+  --color-bg-selected: var(--blue-50);
+  --color-bg-sidebar-primary: var(--blue-950);
+  --color-bg-sidebar-secondary: #FFFFFF;
+  --color-bg-overlay: rgb(15 23 42 / 0.4);
+
+  /* text */
+  --color-text-primary: var(--slate-800);            /* 14.63:1 on white */
+  --color-text-secondary: var(--slate-500);          /* 4.76:1 on white, 4.55:1 on workspace */
+  --color-text-secondary-strong: var(--slate-600);   /* 6.96:1 on #EFF6FF — tinted backgrounds */
+  --color-text-muted: var(--slate-400);              /* decorative icons only */
+  --color-text-on-primary: #FFFFFF;                  /* 6.17:1 on accent */
+  --color-text-link: var(--blue-700);
+  --color-text-sidebar: var(--slate-300);            /* 9.90:1 on sidebar */
+  --color-text-sidebar-active: #FFFFFF;
+
+  /* borders */
+  --color-border: var(--slate-200);                  /* decorative separators */
+  --color-border-control: var(--slate-450);          /* controls ≥ 3:1 (WCAG 1.4.11) */
+  --color-border-strong: var(--slate-300);
+  --color-focus-ring: var(--blue-700);
+
+  /* action */
+  --color-primary: var(--blue-700);
+  --color-primary-hover: var(--blue-800);
+  --color-primary-subtle: var(--blue-50);
+
+  /* status — solid for icons/strokes, fg/bg for badges */
+  --color-success: #15803D; --color-success-fg: #166534; --color-success-bg: #DCFCE7;
+  --color-warning: #B45309; --color-warning-fg: #92400E; --color-warning-bg: #FEF3C7;
+  --color-danger: #DC2626;  --color-danger-fg: #991B1B;  --color-danger-bg: #FEE2E2;
+  --color-info: #2563EB;    --color-info-fg: #1D4ED8;    --color-info-bg: #DBEAFE;
+  --color-neutral-fg: var(--slate-600); --color-neutral-bg: var(--slate-100);
+
+  /* layout */
+  --shell-primary-w: 64px;
+  --shell-secondary-w: 248px;
+  --shell-topbar-h: 56px;
+
+  /* elevation (hierarchy only) */
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow-popover: 0 8px 24px rgb(15 23 42 / 0.12), 0 2px 6px rgb(15 23 42 / 0.06);
+
+  /* motion */
+  --dur-fast: 120ms; --dur-base: 180ms; --ease: cubic-bezier(.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}

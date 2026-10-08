@@ -65,3 +65,28 @@ Automated checks above do not replace these; each must be completed before pilot
 - Windows high-contrast / forced-colors mode.
 - Reduced-motion preference.
 Results are recorded here with date, tester and findings.
+
+## 7. Running locally
+```bash
+npx pnpm@12.10.1 install      # build scripts of dependencies are denied by default (pnpm-workspace.yaml allowBuilds)
+npx pnpm@12.10.1 dev          # http://localhost:3100
+npx pnpm@12.10.1 check        # typecheck + lint + unit/component tests
+npx pnpm@12.10.1 build && npx pnpm@12.10.1 e2e   # Playwright uses the installed Google Chrome (channel "chrome")
+```
+Turborepo and Next.js telemetry are disabled in the scripts.
+
+## 8. Phase log
+### Phase 1 — Foundation (2026-10-08) — awaiting owner review
+| Gate | Result |
+|---|---|
+| Typecheck | 4/4 packages, 0 errors |
+| Lint | 0 errors, 0 warnings (ESLint 9, next/core-web-vitals + typescript + jsx-a11y rules) |
+| Unit + component tests | 29/29 pass (Vitest + Testing Library; axe-core rules in jsdom, colour contrast excluded there) |
+| E2E accessibility | axe `wcag2a/2aa/21a/21aa/22aa`: 5 routes × desktop + mobile, open overlays (search, workspace, notifications, account) and mobile sheet — 0 violations |
+| Keyboard | skip link, Ctrl/Cmd+K, focus return after search and tablet overlay, focus ring on 25 tab stops, mobile sheet focus trap / Esc / backdrop / scroll lock — pass |
+| Responsive | 10 widths (1920 → 375, incl. 640 px ≈ 200 % zoom) × 5 routes: no page-level overflow; bell, profile, current crumb, workspace access always present; D-028 search modes verified at 9 width/context cases |
+| Stability | full E2E suite (38 tests) passed 3 consecutive runs after fixes |
+| Production build | Next 16.4 build succeeds; 113 static pages |
+| Visual review | screenshots in `docs/review/phase-1/` for owner sign-off |
+Defects found and fixed during gates: colour contrast of small labels on hovered topbar buttons (4.34:1 → `text-ink-2s`); focus not returned after search/overlay opened via shortcut or toggle; missing breadcrumb on `/system/ui-kit`; modal account menu aria-hiding focusable content (now non-modal); wrong module highlighted on non-module pages; React Compiler lint (state set inside effects) resolved without effects.
+Not done (by design / tracked): screen-reader and real-device validation (§6); Storybook (proposed with Phase 2 component catalogue).

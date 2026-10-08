@@ -1,0 +1,16 @@
+{
+  "name": "@eora/features",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./navigation": "./src/navigation/index.ts",
+    "./shell": "./src/shell/index.ts"
+  },
+  "scripts": { "typecheck": "tsc -p tsconfig.json" },
+  "dependencies": { "@eora/ui": "workspace:*", "lucide-react": "1.53.0", "radix-ui": "1.7.0" },
+  "peerDependencies": { "next": "^16.0.0", "react": "^19.0.0", "react-dom": "^19.0.0" },
+  "devDependencies": { "@eora/config": "workspace:*", "next": "16.4.0", "react": "19.3.0", "react-dom": "19.3.0" }
+}

@@ -1,0 +1,13 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+minimumReleaseAgeExclude:
+  - "@playwright/test@1.64.0"
+  - lucide-react@1.53.0
+  - playwright-core@1.64.0
+  - playwright@1.64.0
+
+# Dependency build scripts are denied by default; listed packages are explicitly NOT built
+# (prebuilt native bindings are delivered via optionalDependencies).
+allowBuilds:
+  unrs-resolver: false

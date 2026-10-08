@@ -1,0 +1,74 @@
+@import 'tailwindcss';
+@import '@eora/design-tokens/tokens.css';
+
+/* Scan shared packages for class names (Tailwind v4). */
+@source '../../../packages/ui/src';
+@source '../../../packages/features/src';
+
+/*
+ * Utility names → canonical tokens (docs/uiux/EORA-DESIGN-TOKENS.md).
+ * Short utility names avoid circular references with the canonical --color-* token names.
+ */
+@theme inline {
+  --font-sans: var(--font-inter), Arial, system-ui, sans-serif;
+
+  --color-workspace: var(--color-bg-workspace);
+  --color-surface: var(--color-bg-surface);
+  --color-subtle: var(--color-bg-subtle);
+  --color-hover: var(--color-bg-hover);
+  --color-selected: var(--color-bg-selected);
+  --color-sidebar: var(--color-bg-sidebar-primary);
+  --color-overlay: var(--color-bg-overlay);
+
+  --color-ink: var(--color-text-primary);
+  --color-ink-2: var(--color-text-secondary);
+  --color-ink-2s: var(--color-text-secondary-strong);
+  --color-ink-muted: var(--color-text-muted);
+  --color-link: var(--color-text-link);
+  --color-on-accent: var(--color-text-on-primary);
+  --color-sidebar-ink: var(--color-text-sidebar);
+
+  --color-line: var(--color-border);
+  --color-line-control: var(--color-border-control);
+  --color-line-strong: var(--color-border-strong);
+  --color-ring: var(--color-focus-ring);
+
+  --color-accent: var(--color-primary);
+  --color-accent-hover: var(--color-primary-hover);
+  --color-accent-subtle: var(--color-primary-subtle);
+
+  --color-stat-ok: var(--color-success);
+  --color-stat-ok-fg: var(--color-success-fg);
+  --color-stat-ok-bg: var(--color-success-bg);
+  --color-stat-warn: var(--color-warning);
+  --color-stat-warn-fg: var(--color-warning-fg);
+  --color-stat-warn-bg: var(--color-warning-bg);
+  --color-stat-err: var(--color-danger);
+  --color-stat-err-fg: var(--color-danger-fg);
+  --color-stat-err-bg: var(--color-danger-bg);
+  --color-stat-info: var(--color-info);
+  --color-stat-info-fg: var(--color-info-fg);
+  --color-stat-info-bg: var(--color-info-bg);
+  --color-stat-neutral-fg: var(--color-neutral-fg);
+  --color-stat-neutral-bg: var(--color-neutral-bg);
+}
+
+/* Shell breakpoints (navigation doc §5, D-028). */
+@theme {
+  --breakpoint-wide: 75rem;  /* 1200px */
+  --breakpoint-xxl: 90rem;   /* 1440px */
+  --breakpoint-3xl: 100rem;  /* 1600px */
+  --breakpoint-4xl: 105rem;  /* 1680px */
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--color-bg-workspace);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+}
+:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
