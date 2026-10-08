@@ -7,7 +7,11 @@ export default function WorkspaceError({ error, reset }: { error: Error & { dige
     <ErrorState
       title="This page could not be displayed"
       description={`Something went wrong while rendering. Reference ${error.digest ?? 'n/a'} — share it with support if the problem continues.`}
-      action={<Button variant="primary" onClick={reset}>Try again</Button>}
+      action={
+        <Button variant="primary" onClick={reset}>
+          Try again
+        </Button>
+      }
     />
   );
 }

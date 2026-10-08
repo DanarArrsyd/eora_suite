@@ -25,7 +25,7 @@ export function GlobalSearchDialog({ open, onOpenChange, returnFocusTo }: Search
               returnFocusTo.current.focus();
             }
           }}
-          className="fixed left-1/2 top-[10vh] z-80 flex max-h-[75vh] w-[calc(100vw-32px)] max-w-[600px] -translate-x-1/2 flex-col overflow-hidden rounded-lg bg-surface shadow-[var(--shadow-popover)] focus-visible:outline-none max-md:inset-0 max-md:top-0 max-md:h-dvh max-md:max-h-none max-md:w-full max-md:max-w-none max-md:translate-x-0 max-md:rounded-none"
+          className="fixed top-[10vh] left-1/2 z-80 flex max-h-[75vh] w-[calc(100vw-32px)] max-w-[600px] -translate-x-1/2 flex-col overflow-hidden rounded-lg bg-surface shadow-[var(--shadow-popover)] focus-visible:outline-none max-md:inset-0 max-md:top-0 max-md:h-dvh max-md:max-h-none max-md:w-full max-md:max-w-none max-md:translate-x-0 max-md:rounded-none"
         >
           <DialogPrimitive.Title className="sr-only">Search records</DialogPrimitive.Title>
           <SearchBody />
@@ -40,36 +40,48 @@ function SearchBody() {
   const [query, setQuery] = React.useState('');
   return (
     <>
-          <div className="flex items-center gap-3 border-b border-line pl-4 pr-2">
-            <Search aria-hidden="true" className="size-5 text-ink-2" />
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search records"
-              placeholder="Search Customer PO, Sales Order, WO, part, material, lot, run, inspection lot, delivery order"
-              className="h-13 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-ink-2 max-md:text-base"
-            />
-            <DialogPrimitive.Close className="inline-grid size-9 place-items-center rounded-md text-ink-2 hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring max-md:size-11" aria-label="Close search">
-              <X aria-hidden="true" className="size-4" />
-            </DialogPrimitive.Close>
-          </div>
-          <div className="overflow-y-auto">
-            <EmptyState
-              title={query ? `No search service connected yet` : 'Search across EORA records'}
-              description="Results, debounced queries and loading/error states are delivered in Phase 2 with a permission-aware mock adapter. Nothing is searched in Phase 1."
-            />
-          </div>
-          <div id="global-search-scope" className="flex flex-wrap justify-between gap-3 border-t border-line px-4 py-2 text-xs text-ink-2">
-            <span>Results will only include records you may view in this tenant.</span>
-            <span className="flex items-center gap-1"><Kbd>Esc</Kbd> to close</span>
-          </div>
+      <div className="flex items-center gap-3 border-b border-line pr-2 pl-4">
+        <Search aria-hidden="true" className="size-5 text-ink-2" />
+        <input
+          autoFocus
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Search records"
+          placeholder="Search Customer PO, Sales Order, WO, part, material, lot, run, inspection lot, delivery order"
+          className="h-13 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-ink-2 max-md:text-base"
+        />
+        <DialogPrimitive.Close
+          className="inline-grid size-9 place-items-center rounded-md text-ink-2 hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring max-md:size-11"
+          aria-label="Close search"
+        >
+          <X aria-hidden="true" className="size-4" />
+        </DialogPrimitive.Close>
+      </div>
+      <div className="overflow-y-auto">
+        <EmptyState
+          title={query ? `No search service connected yet` : 'Search across EORA records'}
+          description="Results, debounced queries and loading/error states are delivered in Phase 2 with a permission-aware mock adapter. Nothing is searched in Phase 1."
+        />
+      </div>
+      <div id="global-search-scope" className="flex flex-wrap justify-between gap-3 border-t border-line px-4 py-2 text-xs text-ink-2">
+        <span>Results will only include records you may view in this tenant.</span>
+        <span className="flex items-center gap-1">
+          <Kbd>Esc</Kbd> to close
+        </span>
+      </div>
     </>
   );
 }
 
 /* ===================== Secondary menu overlay (768–1279 px) ===================== */
-type SecondaryOverlayProps = { open: boolean; onOpenChange: (open: boolean) => void; module: NavModule | undefined; counts: BadgeCounts; pathname: string; returnFocusTo?: React.RefObject<HTMLElement | null> };
+type SecondaryOverlayProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  module: NavModule | undefined;
+  counts: BadgeCounts;
+  pathname: string;
+  returnFocusTo?: React.RefObject<HTMLElement | null>;
+};
 
 /** Below 1280 px the module menu opens as an overlay next to the primary sidebar (backdrop, Esc, focus return). */
 export function SecondaryOverlay({ open, onOpenChange, module, counts, pathname, returnFocusTo }: SecondaryOverlayProps) {
@@ -86,17 +98,21 @@ export function SecondaryOverlay({ open, onOpenChange, module, counts, pathname,
               returnFocusTo.current.focus();
             }
           }}
-          className="fixed bottom-0 left-[var(--shell-primary-w)] top-0 z-45 flex w-[var(--shell-secondary-w)] flex-col bg-surface shadow-[var(--shadow-popover)] focus-visible:outline-none">
-          <div className="flex h-[var(--shell-topbar-h)] shrink-0 items-center justify-between border-b border-line pl-4 pr-3">
-            <DialogPrimitive.Title className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.06em]">
+          className="fixed top-0 bottom-0 left-[var(--shell-primary-w)] z-45 flex w-[var(--shell-secondary-w)] flex-col bg-surface shadow-[var(--shadow-popover)] focus-visible:outline-none"
+        >
+          <div className="flex h-[var(--shell-topbar-h)] shrink-0 items-center justify-between border-b border-line pr-3 pl-4">
+            <DialogPrimitive.Title className="flex items-center gap-2 text-[13px] font-semibold tracking-[0.06em] uppercase">
               <Menu aria-hidden="true" className="size-4" />
               {module.label}
             </DialogPrimitive.Title>
-            <DialogPrimitive.Close className="inline-grid size-9 place-items-center rounded-md text-ink-2 hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring" aria-label="Close module menu">
+            <DialogPrimitive.Close
+              className="inline-grid size-9 place-items-center rounded-md text-ink-2 hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring"
+              aria-label="Close module menu"
+            >
               <X aria-hidden="true" className="size-4" />
             </DialogPrimitive.Close>
           </div>
-          <div className="overflow-y-auto px-2 pb-6 pt-2">
+          <div className="overflow-y-auto px-2 pt-2 pb-6">
             <ModuleMenu module={module} counts={counts} pathname={pathname} onNavigate={() => onOpenChange(false)} />
           </div>
         </DialogPrimitive.Content>
@@ -142,7 +158,7 @@ export function MobileNavSheet({ modules, activeModule, counts, badgeFor, pathna
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Trigger className="inline-flex h-11 items-center gap-1.5 rounded-md pl-1.5 pr-2.5 text-sm font-semibold hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring md:hidden">
+      <DialogPrimitive.Trigger className="inline-flex h-11 items-center gap-1.5 rounded-md pr-2.5 pl-1.5 text-sm font-semibold hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring md:hidden">
         <Menu aria-hidden="true" className="size-5" />
         Menu
       </DialogPrimitive.Trigger>
@@ -154,21 +170,29 @@ export function MobileNavSheet({ modules, activeModule, counts, badgeFor, pathna
             e.preventDefault();
             closeRef.current?.focus();
           }}
-          className="fixed bottom-0 left-0 top-0 z-47 flex w-[min(340px,88vw)] flex-col bg-surface shadow-[var(--shadow-popover)] focus-visible:outline-none"
+          className="fixed top-0 bottom-0 left-0 z-47 flex w-[min(340px,88vw)] flex-col bg-surface shadow-[var(--shadow-popover)] focus-visible:outline-none"
         >
-          <div className="flex h-[var(--shell-topbar-h)] shrink-0 items-center justify-between bg-sidebar pl-4 pr-2 text-white">
+          <div className="flex h-[var(--shell-topbar-h)] shrink-0 items-center justify-between bg-sidebar pr-2 pl-4 text-white">
             <DialogPrimitive.Title className="flex items-center gap-2 font-semibold">
-              <span aria-hidden="true" className="grid size-[30px] place-items-center rounded-lg bg-accent text-[13px] font-bold">E</span>
+              <span aria-hidden="true" className="grid size-[30px] place-items-center rounded-lg bg-accent text-[13px] font-bold">
+                E
+              </span>
               EORA Suite
             </DialogPrimitive.Title>
-            <DialogPrimitive.Close ref={closeRef} className="inline-grid size-11 place-items-center rounded-md text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white" aria-label="Close navigation">
+            <DialogPrimitive.Close
+              ref={closeRef}
+              className="inline-grid size-11 place-items-center rounded-md text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white"
+              aria-label="Close navigation"
+            >
               <X aria-hidden="true" className="size-5" />
             </DialogPrimitive.Close>
           </div>
           <div className="flex-1 overflow-y-auto overscroll-contain p-2">
             {level === 'modules' || !shown ? (
               <>
-                <p id="mnav-modules" className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.06em] text-ink-2">Modules</p>
+                <p id="mnav-modules" className="px-3 pt-3 pb-1 text-xs font-semibold tracking-[0.06em] text-ink-2 uppercase">
+                  Modules
+                </p>
                 <ul aria-labelledby="mnav-modules">
                   {modules.map((m) => {
                     const n = badgeFor(m);
@@ -183,7 +207,10 @@ export function MobileNavSheet({ modules, activeModule, counts, badgeFor, pathna
                             setModuleId(m.id);
                             setLevel('menu');
                           }}
-                          className={cn('flex min-h-12 w-full items-center gap-3 rounded-md px-3 text-left text-[15px] font-medium hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring', m.id === shown?.id && 'bg-selected font-semibold text-accent')}
+                          className={cn(
+                            'flex min-h-12 w-full items-center gap-3 rounded-md px-3 text-left text-[15px] font-medium hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring',
+                            m.id === shown?.id && 'bg-selected font-semibold text-accent',
+                          )}
                         >
                           <Icon aria-hidden="true" className="size-5" />
                           <span className="flex-1">{m.label}</span>
@@ -197,13 +224,23 @@ export function MobileNavSheet({ modules, activeModule, counts, badgeFor, pathna
               </>
             ) : (
               <>
-                <button type="button" onClick={() => setLevel('modules')} className="flex min-h-12 w-full items-center gap-2 rounded-md px-2 text-sm font-semibold text-link hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring">
+                <button
+                  type="button"
+                  onClick={() => setLevel('modules')}
+                  className="flex min-h-12 w-full items-center gap-2 rounded-md px-2 text-sm font-semibold text-link hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring"
+                >
                   <ChevronLeft aria-hidden="true" className="size-4" />
                   All modules
                 </button>
-                <p className="flex items-center justify-between px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.06em] text-ink-2">
+                <p className="flex items-center justify-between px-3 pt-3 pb-1 text-xs font-semibold tracking-[0.06em] text-ink-2 uppercase">
                   {shown.label}
-                  <Link href={moduleHref(shown.id)} onClick={() => setOpen(false)} className="inline-flex min-h-8 items-center normal-case tracking-normal text-link">Module overview</Link>
+                  <Link
+                    href={moduleHref(shown.id)}
+                    onClick={() => setOpen(false)}
+                    className="inline-flex min-h-8 items-center tracking-normal text-link normal-case"
+                  >
+                    Module overview
+                  </Link>
                 </p>
                 <ModuleMenu module={shown} counts={counts} pathname={pathname} size="touch" onNavigate={() => setOpen(false)} />
               </>

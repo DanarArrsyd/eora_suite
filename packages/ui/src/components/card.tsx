@@ -9,7 +9,7 @@ export function CardHeader({ className, ...props }: React.ComponentPropsWithRef<
   return <div className={cn('flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4 max-md:px-4', className)} {...props} />;
 }
 export function CardTitle({ className, ...props }: React.ComponentPropsWithRef<'h2'>) {
-  return <h2 className={cn('m-0 text-base font-semibold leading-6', className)} {...props} />;
+  return <h2 className={cn('m-0 text-base leading-6 font-semibold', className)} {...props} />;
 }
 export function CardDescription({ className, ...props }: React.ComponentPropsWithRef<'p'>) {
   return <p className={cn('mt-0.5 text-xs text-ink-2', className)} {...props} />;

@@ -33,18 +33,23 @@ export default async function ModulePage({ params }: { params: Promise<Params> }
             </CardHeader>
             <CardContent className="p-2 max-md:p-2">
               <ul>
-                {g.items.filter((i) => !i.decision).map((i) => {
-                  const Icon = i.icon;
-                  return (
-                    <li key={i.id}>
-                      <Link href={itemHref(mod.id, i.id)} className="flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring">
-                        <Icon aria-hidden="true" className="size-4 text-ink-2" />
-                        <span className="flex-1">{i.label}</span>
-                        <Badge tone="neutral">{i.release}</Badge>
-                      </Link>
-                    </li>
-                  );
-                })}
+                {g.items
+                  .filter((i) => !i.decision)
+                  .map((i) => {
+                    const Icon = i.icon;
+                    return (
+                      <li key={i.id}>
+                        <Link
+                          href={itemHref(mod.id, i.id)}
+                          className="flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring"
+                        >
+                          <Icon aria-hidden="true" className="size-4 text-ink-2" />
+                          <span className="flex-1">{i.label}</span>
+                          <Badge tone="neutral">{i.release}</Badge>
+                        </Link>
+                      </li>
+                    );
+                  })}
               </ul>
             </CardContent>
           </Card>

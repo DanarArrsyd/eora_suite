@@ -5,10 +5,11 @@
 ## 1. Repository structure
 ```
 package.json · pnpm-workspace.yaml · turbo.json · eslint.config.mjs · vitest.config.ts
+.prettierrc.json · .nvmrc (Node 24) · .github/workflows/ci.yml
 apps/
   web/                         Next.js App Router (UI only — no business logic, no DB access)
     app/                       routes: (workspace)/[module]/[item], system/ui-kit, error/not-found
-    e2e/                       Playwright: responsive, accessibility (axe), keyboard
+    e2e/                       Playwright: responsive, accessibility (axe), keyboard, media preferences
 packages/
   design-tokens/               tokens.css (CSS variables) + index.ts (typed exports)
   ui/                          primitives: Button, Input, Select, Field, Badge, StatusBadge, NumericBadge,
@@ -17,7 +18,7 @@ packages/
   features/                    shell (AppShell, PrimarySidebar, SecondarySidebar, Topbar, Breadcrumb,
                                MobileNavSheet, WorkspaceSwitcher, UserMenu, NotificationBell,
                                GlobalSearch trigger/dialog), PageHeader, navigation config + selectors
-                               + mock adapter; later phases add FilterBar, DataTable, Pagination, …
+                               + mock adapter; patterns/ StatusTabs; later phases add FilterBar, DataTable, Pagination, …
   config/                      tsconfig base
 ```
 Dependency direction: `apps/web → features → ui → design-tokens`. Packages never import from `apps/web`; `ui` never imports `features`.
@@ -39,6 +40,7 @@ Dependency direction: `apps/web → features → ui → design-tokens`. Packages
 ## 4. Quality gates (every phase)
 | Gate | Command / method | Pass condition |
 |---|---|---|
+| Format | `pnpm format:check` (Prettier 3 + Tailwind class sorting) | no diff |
 | Typecheck | `pnpm typecheck` (tsc --noEmit per package) | 0 errors |
 | Lint | `pnpm lint` (ESLint 9 flat config: next/core-web-vitals, typescript-eslint, jsx-a11y via next) | 0 errors |
 | Unit tests | `pnpm test` (Vitest) | all pass |
@@ -70,10 +72,11 @@ Results are recorded here with date, tester and findings.
 ```bash
 npx pnpm@12.10.1 install      # build scripts of dependencies are denied by default (pnpm-workspace.yaml allowBuilds)
 npx pnpm@12.10.1 dev          # http://localhost:3100
-npx pnpm@12.10.1 check        # typecheck + lint + unit/component tests
+npx pnpm@12.10.1 check        # format check + typecheck + lint + unit/component tests
 npx pnpm@12.10.1 build && npx pnpm@12.10.1 e2e   # Playwright uses the installed Google Chrome (channel "chrome")
 ```
-Turborepo and Next.js telemetry are disabled in the scripts.
+Turborepo and Next.js telemetry are disabled in the scripts; Turborepo agent guidance (auto-editing AGENTS.md) is off (`turbo.json` `agentGuidance: false`).
+CI: `.github/workflows/ci.yml` runs the same gates (format → typecheck → lint → test → build → E2E with Chrome). It has **not run on GitHub yet** — the repository is not pushed (owner decision).
 
 ## 8. Phase log
 ### Phase 1 — Foundation (2026-10-08) — awaiting owner review
@@ -90,3 +93,15 @@ Turborepo and Next.js telemetry are disabled in the scripts.
 | Visual review | screenshots in `docs/review/phase-1/` for owner sign-off |
 Defects found and fixed during gates: colour contrast of small labels on hovered topbar buttons (4.34:1 → `text-ink-2s`); focus not returned after search/overlay opened via shortcut or toggle; missing breadcrumb on `/system/ui-kit`; modal account menu aria-hiding focusable content (now non-modal); wrong module highlighted on non-module pages; React Compiler lint (state set inside effects) resolved without effects.
 Not done (by design / tracked): screen-reader and real-device validation (§6); Storybook (proposed with Phase 2 component catalogue).
+
+#### Phase 1 completion items (2026-10-08, after first review stop)
+| Item | Result |
+|---|---|
+| Raw-hex guard | `#fff` in notification badge replaced by token; lint rule now catches 3/4/6/8-digit hex in literals and template strings (verified with a probe file, removed) |
+| Prettier | Prettier 3.9.9 + Tailwind plugin; whole workspace formatted; `format:check` part of `pnpm check` and CI |
+| Turborepo | `agentGuidance: false` — AGENTS.md no longer modified by turbo runs |
+| `EoraStatusTabs` | `packages/features/src/patterns` per EORA-COMPONENT-STANDARDS §3; "View by" label, counts in accessible names (`All, 11`), Radix arrow-key navigation, single tab panel; UI kit demo with Mock data label |
+| Media-preference E2E | reduced motion (0 transitions/animations in shell), forced-colors emulation (focus outline ≥ 2 px on first tab stops + axe), landmarks (one banner/main/h1, all navigation labelled) desktop + mobile, StatusTabs keyboard |
+| Gates rerun | format ✓ · typecheck 4/4 · lint 0 · unit/component 32/32 · build 113 pages · E2E 43/43 on 4 consecutive runs |
+Forced-colors and reduced-motion checks are emulation proxies; real Windows high-contrast and OS-level validation stay in §6.
+

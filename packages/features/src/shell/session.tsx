@@ -50,7 +50,13 @@ export function ShellSessionProvider({ children, source = mockNavigationSource }
   }, []);
 
   const value = React.useMemo<ShellSession>(
-    () => ({ role, setRole, source, user: { name: 'R. Pratama', initials: 'RP' }, workspace: { company: 'PT Sample Manufaktur', plant: 'Plant A · Cikarang' } }),
+    () => ({
+      role,
+      setRole,
+      source,
+      user: { name: 'R. Pratama', initials: 'RP' },
+      workspace: { company: 'PT Sample Manufaktur', plant: 'Plant A · Cikarang' },
+    }),
     [role, setRole, source],
   );
   return <ShellSessionContext.Provider value={value}>{children}</ShellSessionContext.Provider>;

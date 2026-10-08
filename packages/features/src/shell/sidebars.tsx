@@ -54,7 +54,7 @@ export function PrimarySidebar({ modules, activeModuleId, badgeFor, onPreview }:
             )}
           >
             <Icon aria-hidden="true" className="size-5" />
-            {n ? <NumericBadge count={n} label="to action" className="absolute right-0 top-0.5 shadow-[0_0_0_2px_var(--color-bg-sidebar-primary)]" /> : null}
+            {n ? <NumericBadge count={n} label="to action" className="absolute top-0.5 right-0 shadow-[0_0_0_2px_var(--color-bg-sidebar-primary)]" /> : null}
           </Link>
         </Tooltip>
       </li>
@@ -62,7 +62,7 @@ export function PrimarySidebar({ modules, activeModuleId, badgeFor, onPreview }:
   };
 
   return (
-    <nav aria-label="Modules" className="flex h-full flex-col items-center gap-0.5 overflow-y-auto overflow-x-hidden bg-sidebar py-3 [scrollbar-width:none]">
+    <nav aria-label="Modules" className="flex h-full flex-col items-center gap-0.5 overflow-x-hidden overflow-y-auto bg-sidebar py-3 [scrollbar-width:none]">
       <div role="img" aria-label="EORA Suite" className="mb-3 grid size-9 shrink-0 place-items-center rounded-lg bg-accent text-[15px] font-bold text-white">
         E
       </div>
@@ -137,8 +137,8 @@ export function SecondarySidebar({ module, counts, pathname, onClose, closeLabel
   if (!module) return null;
   return (
     <nav aria-label={`${module.label} menu`} className="flex h-full min-w-0 flex-col overflow-hidden border-r border-line bg-surface">
-      <div className="flex h-[var(--shell-topbar-h)] shrink-0 items-center justify-between border-b border-line pl-4 pr-3">
-        <span className="flex min-w-0 items-center gap-2 truncate text-[13px] font-semibold uppercase tracking-[0.06em]">
+      <div className="flex h-[var(--shell-topbar-h)] shrink-0 items-center justify-between border-b border-line pr-3 pl-4">
+        <span className="flex min-w-0 items-center gap-2 truncate text-[13px] font-semibold tracking-[0.06em] uppercase">
           <Menu aria-hidden="true" className="size-4" />
           {module.label}
         </span>
@@ -146,7 +146,7 @@ export function SecondarySidebar({ module, counts, pathname, onClose, closeLabel
           <PanelLeftClose aria-hidden="true" />
         </IconButton>
       </div>
-      <div className="overflow-y-auto px-2 pb-6 pt-2">
+      <div className="overflow-y-auto px-2 pt-2 pb-6">
         <ModuleMenu module={module} counts={counts} pathname={pathname} />
       </div>
     </nav>

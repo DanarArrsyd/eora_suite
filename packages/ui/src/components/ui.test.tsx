@@ -19,7 +19,11 @@ describe('Button', () => {
 
 describe('Field', () => {
   it('wires label, hint and error to the control', async () => {
-    render(<Field label="Weighed remaining (kg)" hint="Scale SC-02" error="Enter a number" required>{(p) => <Input {...p} />}</Field>);
+    render(
+      <Field label="Weighed remaining (kg)" hint="Scale SC-02" error="Enter a number" required>
+        {(p) => <Input {...p} />}
+      </Field>,
+    );
     const input = screen.getByLabelText(/Weighed remaining/);
     expect(input).toHaveAttribute('aria-invalid', 'true');
     expect(input).toHaveAttribute('aria-required', 'true');
@@ -28,7 +32,11 @@ describe('Field', () => {
     expect(input).toHaveValue('12');
   });
   it('has no axe violations', async () => {
-    const { container } = render(<Field label="Lot" hint="e.g. C-08">{(p) => <Input {...p} />}</Field>);
+    const { container } = render(
+      <Field label="Lot" hint="e.g. C-08">
+        {(p) => <Input {...p} />}
+      </Field>,
+    );
     expect(await axeViolations(container)).toEqual([]);
   });
 });

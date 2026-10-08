@@ -7,7 +7,11 @@ export default function NotFound() {
       <EmptyState
         title="Page not found"
         description="This address is not part of EORA navigation, or you do not have access to it."
-        action={<Link href="/ppic" className={buttonVariants({ variant: 'primary' })}>Go to PPIC / Planning</Link>}
+        action={
+          <Link href="/ppic" className={buttonVariants({ variant: 'primary' })}>
+            Go to PPIC / Planning
+          </Link>
+        }
       />
     </main>
   );

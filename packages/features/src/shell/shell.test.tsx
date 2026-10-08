@@ -109,7 +109,11 @@ describe('AppShell', () => {
     pathname = '/system/ui-kit';
     renderShell();
     const modules = screen.getByRole('navigation', { name: 'Modules' });
-    expect(within(modules).queryAllByRole('link').filter((l) => l.getAttribute('aria-current') === 'true')).toHaveLength(0);
+    expect(
+      within(modules)
+        .queryAllByRole('link')
+        .filter((l) => l.getAttribute('aria-current') === 'true'),
+    ).toHaveLength(0);
     expect(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByText('UI kit')).toHaveAttribute('aria-current', 'page');
   });
 

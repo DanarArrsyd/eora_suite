@@ -4,7 +4,10 @@ import { expect, test } from '@playwright/test';
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const ROUTES = ['/ppic', '/ppic/control-tower', '/inventory/raw-material', '/system/ui-kit', '/does-not-exist'];
 
-for (const [label, width] of [['desktop', 1440], ['mobile', 390]] as const) {
+for (const [label, width] of [
+  ['desktop', 1440],
+  ['mobile', 390],
+] as const) {
   for (const route of ROUTES) {
     test(`axe ${TAGS.join('/')} — ${route} (${label})`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });

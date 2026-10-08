@@ -3,8 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "sideEffects": ["*.css"],
-  "exports": { ".": "./src/index.ts", "./tokens.css": "./src/tokens.css" },
-  "scripts": { "typecheck": "tsc -p tsconfig.json" },
-  "devDependencies": { "@eora/config": "workspace:*" }
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens.css": "./src/tokens.css"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@eora/config": "workspace:*"
+  }
 }

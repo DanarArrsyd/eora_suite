@@ -1,8 +1,8 @@
 packages:
-  - "apps/*"
-  - "packages/*"
+  - 'apps/*'
+  - 'packages/*'
 minimumReleaseAgeExclude:
-  - "@playwright/test@1.64.0"
+  - '@playwright/test@1.64.0'
   - lucide-react@1.53.0
   - playwright-core@1.64.0
   - playwright@1.64.0

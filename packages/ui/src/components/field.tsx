@@ -23,10 +23,19 @@ export function Field({ label, hint, error, required, className, children }: Fie
     <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
       <label htmlFor={id} className="text-[13px] font-medium text-ink">
         {label}
-        {required ? <span aria-hidden="true" className="text-stat-err-fg"> *</span> : null}
+        {required ? (
+          <span aria-hidden="true" className="text-stat-err-fg">
+            {' '}
+            *
+          </span>
+        ) : null}
       </label>
       {children({ id, 'aria-describedby': describedBy, ...(error ? { 'aria-invalid': true } : {}), ...(required ? { 'aria-required': true } : {}) })}
-      {hint ? <p id={hintId} className="text-xs text-ink-2">{hint}</p> : null}
+      {hint ? (
+        <p id={hintId} className="text-xs text-ink-2">
+          {hint}
+        </p>
+      ) : null}
       {error ? (
         <p id={errorId} className="flex items-center gap-1 text-xs font-medium text-stat-err-fg">
           <CircleAlert aria-hidden="true" className="size-3.5" />

@@ -1,0 +1,48 @@
+# Frontend quality gates (docs/22-FRONTEND-ARCHITECTURE.md §4).
+# Not yet exercised on GitHub: the repository has not been pushed (owner decision).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+  NEXT_TELEMETRY_DISABLED: '1'
+  PNPM: npx -y pnpm@12.10.1
+
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - name: Install
+        run: $PNPM install --frozen-lockfile
+      - name: Format
+        run: $PNPM format:check
+      - name: Typecheck
+        run: $PNPM typecheck
+      - name: Lint
+        run: $PNPM lint
+      - name: Unit and component tests
+        run: $PNPM test
+      - name: Production build
+        run: $PNPM build
+      - name: Install Google Chrome for Playwright
+        working-directory: apps/web
+        run: npx playwright install --with-deps chrome
+      - name: E2E (responsive, accessibility, keyboard, media preferences)
+        working-directory: apps/web
+        run: npx playwright test --workers=2

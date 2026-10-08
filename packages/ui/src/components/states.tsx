@@ -4,10 +4,24 @@ import { cn } from '../lib/cn';
 
 type StateProps = { title: string; description?: React.ReactNode; action?: React.ReactNode; icon?: React.ReactNode; className?: string };
 
-function StateFrame({ title, description, action, icon, className, tone = 'neutral', role }: StateProps & { tone?: 'neutral' | 'error'; role?: 'alert' | 'status' }) {
+function StateFrame({
+  title,
+  description,
+  action,
+  icon,
+  className,
+  tone = 'neutral',
+  role,
+}: StateProps & { tone?: 'neutral' | 'error'; role?: 'alert' | 'status' }) {
   return (
     <div role={role} className={cn('flex flex-col items-center gap-2 px-6 py-10 text-center', className)}>
-      <div className={cn('grid size-11 place-items-center rounded-full [&_svg]:size-5', tone === 'error' ? 'bg-stat-err-bg text-stat-err-fg' : 'bg-stat-neutral-bg text-ink-2')} aria-hidden="true">
+      <div
+        className={cn(
+          'grid size-11 place-items-center rounded-full [&_svg]:size-5',
+          tone === 'error' ? 'bg-stat-err-bg text-stat-err-fg' : 'bg-stat-neutral-bg text-ink-2',
+        )}
+        aria-hidden="true"
+      >
         {icon}
       </div>
       <h3 className="mt-2 text-[15px] font-semibold">{title}</h3>
@@ -44,5 +58,9 @@ export function Kbd({ children, className }: { children: React.ReactNode; classN
 }
 /** Visible label for screens backed by mock adapters (doc 22 §2). */
 export function MockDataLabel({ className }: { className?: string }) {
-  return <span className={cn('inline-flex h-[22px] items-center rounded-sm bg-stat-warn-bg px-2 text-xs font-semibold text-stat-warn-fg', className)}>Mock data</span>;
+  return (
+    <span className={cn('inline-flex h-[22px] items-center rounded-sm bg-stat-warn-bg px-2 text-xs font-semibold text-stat-warn-fg', className)}>
+      Mock data
+    </span>
+  );
 }

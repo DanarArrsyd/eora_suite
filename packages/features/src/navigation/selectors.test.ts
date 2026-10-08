@@ -37,7 +37,9 @@ describe('navigation config', () => {
 
 describe('visibility', () => {
   it('hides items that depend on an OPEN decision unless explicitly shown', () => {
-    const netting = NAV_MODULES.find((m) => m.id === 'demand')!.groups.flatMap((g) => g.items).find((i) => i.id === 'netting')!;
+    const netting = NAV_MODULES.find((m) => m.id === 'demand')!
+      .groups.flatMap((g) => g.items)
+      .find((i) => i.id === 'netting')!;
     expect(isItemVisible(netting, all)).toBe(false);
     expect(isItemVisible(netting, { ...all, showPendingDecisions: true })).toBe(true);
   });

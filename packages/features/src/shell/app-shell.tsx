@@ -50,13 +50,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (isOverlayWidth()) {
       rememberFocus();
       setOverlayOpen(true);
-    }
-    else setCollapsed(false);
+    } else setCollapsed(false);
   };
 
   return (
     <TooltipProvider delayDuration={300}>
-      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-90 focus:rounded-md focus:bg-surface focus:px-4 focus:py-2 focus:font-semibold focus:shadow-[var(--shadow-popover)]">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-90 focus:rounded-md focus:bg-surface focus:px-4 focus:py-2 focus:font-semibold focus:shadow-[var(--shadow-popover)]"
+      >
         Skip to main content
       </a>
       <div
@@ -69,7 +71,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div role="note" className="col-span-full flex items-center gap-2 border-b border-line bg-stat-warn-bg px-4 py-1.5 text-xs text-stat-warn-fg">
           <FlaskConical aria-hidden="true" className="size-4 shrink-0" />
           <span>
-            <b className="font-semibold">EORA Suite · Phase 1 foundation build.</b> Navigation badges and workspace values come from mock adapters; no operational data is shown.
+            <b className="font-semibold">EORA Suite · Phase 1 foundation build.</b> Navigation badges and workspace values come from mock adapters; no
+            operational data is shown.
           </span>
         </div>
         <div className="hidden md:block">
@@ -87,14 +90,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             actionCount={nav.counts.bell ?? 0}
             onOpenSearch={() => setSearchOpen(true)}
             onToggleSecondary={toggleSecondary}
-            mobileMenuTrigger={<MobileNavSheet modules={nav.modules} activeModule={nav.match?.module} counts={nav.counts} badgeFor={nav.badgeFor} pathname={nav.pathname} />}
+            mobileMenuTrigger={
+              <MobileNavSheet modules={nav.modules} activeModule={nav.match?.module} counts={nav.counts} badgeFor={nav.badgeFor} pathname={nav.pathname} />
+            }
           />
           <main id="main" tabIndex={-1} className="min-h-0 flex-1 overflow-auto focus:outline-none">
             {children}
           </main>
         </div>
       </div>
-      <SecondaryOverlay open={overlayOpen} onOpenChange={setOverlayOpen} module={nav.menuModule} counts={nav.counts} pathname={nav.pathname} returnFocusTo={returnFocus} />
+      <SecondaryOverlay
+        open={overlayOpen}
+        onOpenChange={setOverlayOpen}
+        module={nav.menuModule}
+        counts={nav.counts}
+        pathname={nav.pathname}
+        returnFocusTo={returnFocus}
+      />
       <GlobalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} returnFocusTo={returnFocus} />
     </TooltipProvider>
   );

@@ -17,7 +17,12 @@ export function PlannedPage({ module, item, group }: { module: NavModule; item: 
   return (
     <div className="mx-auto max-w-[1680px] p-6 max-md:p-4">
       <PageHeader
-        title={<>{item.label}<Badge tone="neutral">Release {item.release}</Badge></>}
+        title={
+          <>
+            {item.label}
+            <Badge tone="neutral">Release {item.release}</Badge>
+          </>
+        }
         description={`${module.label} › ${group}`}
       />
       <Card>
@@ -25,7 +30,11 @@ export function PlannedPage({ module, item, group }: { module: NavModule; item: 
           icon={<Construction />}
           title="This page is not built yet"
           description={`The route and navigation are in place. The ${item.label} screen is delivered in ${phase}. No data is shown here to avoid presenting anything as operational.`}
-          action={<Link href={moduleHref(module.id)} className={buttonVariants({ variant: 'secondary' })}>Back to {module.label}</Link>}
+          action={
+            <Link href={moduleHref(module.id)} className={buttonVariants({ variant: 'secondary' })}>
+              Back to {module.label}
+            </Link>
+          }
         />
       </Card>
     </div>

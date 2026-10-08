@@ -8,7 +8,10 @@ export const metadata: Metadata = { title: 'UI kit (Phase 1 review)' };
 export default function UiKitPage() {
   return (
     <div className="mx-auto max-w-[1280px] p-6 max-md:p-4">
-      <PageHeader title="UI kit" description="Phase 1 shared primitives rendered with the Modern Corporate Blue tokens. Internal review page — not linked from module navigation." />
+      <PageHeader
+        title="UI kit"
+        description="Phase 1 shared primitives rendered with the Modern Corporate Blue tokens. Internal review page — not linked from module navigation."
+      />
       <UiKitDemos />
     </div>
   );

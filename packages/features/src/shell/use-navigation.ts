@@ -22,7 +22,10 @@ export type ShellNavigation = {
 export function useShellNavigation(): ShellNavigation {
   const pathname = usePathname() ?? '/';
   const { role, source } = useShellSession();
-  const modules = React.useMemo(() => visibleModules(NAV_MODULES, { allowedModules: source.allowedModules(role), showPendingDecisions: false }), [role, source]);
+  const modules = React.useMemo(
+    () => visibleModules(NAV_MODULES, { allowedModules: source.allowedModules(role), showPendingDecisions: false }),
+    [role, source],
+  );
   const counts = React.useMemo(() => source.badgeCounts(role), [role, source]);
   const match = React.useMemo(() => matchRoute(modules, pathname), [modules, pathname]);
   // A module previewed from the primary sidebar applies only to the route it was chosen on.
