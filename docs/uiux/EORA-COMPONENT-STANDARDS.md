@@ -114,3 +114,17 @@ Typography (Inter only, scale respected) · palette (tokens only, one accent) ·
 | `EoraNotificationCenter` | `NotificationCenter` (`NotificationSource`) | bell panel + `/system/notifications`; Needs action / Unread / All; deep links only when the role can open the module |
 Engineering rule learned in Phase 2: anything rendered **above** a page's Suspense boundary (providers, shell) must not change context value during hydration — see ADR-0011 Amendment 1.
 
+## 11. Phase 3 business components (Control Tower, 2026-10-09)
+Built in `apps/web/modules/ppic/components` (layer 4 business components) on top of the shared patterns — no new shared pattern was needed:
+| Component | Rule |
+|---|---|
+| `CtScreen` | configuration-only composition of EnterprisePage + ListWorkspace + StatusTabs + FilterBar + DataTable + Pagination + ExportMenu + detail drawer; screens differ by config |
+| `CtDetailDrawer` | definition lists, "Show calculation" disclosure, source-document drill links |
+| `KpiCard` | label, value + UOM (secondary quantity with its own UOM), definition, source, basis, meaning, as-of, drill link; no deltas |
+| `MaterialFlowStrip` | UOM bands with an explicit transformation boundary; never sums across it |
+| `ConversionBadge`, `EstimatedPcs` | Calculated / Provisional / Not calculable — missing inputs; estimates always labelled "est." |
+| `IndicatorCell` | signed value + % + indicator status (ADR-0005); never "loss" |
+| `MethodLabel`, `RiskReasons`, `FreshnessBadge` | measurement method (by-difference highlighted), CT-8 reason codes, read-model lag with stale warning |
+| `DueVsSupplyChart` | one axis (pcs) per part, validated palette (`--viz-demand`, `--viz-supply`), legend, risk labels, focusable days with tooltip, table view |
+`QuantityWithUom` (apps/web/components/quantity.tsx) is used for every quantity cell.
+

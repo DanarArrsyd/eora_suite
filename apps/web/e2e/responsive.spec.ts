@@ -10,6 +10,8 @@ const ROUTES = [
   '/system/patterns',
   '/system/examples/raw-material-lots',
   '/system/notifications',
+  '/ppic/demand-fulfillment',
+  '/ppic/material-variance',
 ];
 
 async function visible(page: Page, selector: string) {

@@ -10,6 +10,15 @@ const ROUTES = [
   '/system/patterns',
   '/system/examples/raw-material-lots',
   '/system/notifications',
+  '/ppic/daily-delivery',
+  '/ppic/shortage',
+  '/ppic/rm-availability',
+  '/ppic/material-at-production',
+  '/ppic/wo-progress',
+  '/ppic/daily-results',
+  '/ppic/pending-quality',
+  '/ppic/daily-fg',
+  '/ppic/fg-availability',
   '/does-not-exist',
 ];
 
@@ -21,6 +30,9 @@ for (const [label, width] of [
     test(`axe ${TAGS.join('/')} — ${route} (${label})`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(route);
+      // Scan the settled page: no pending data (aria-busy) and colour transitions finished (120–180 ms tokens).
+      await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+      await page.waitForTimeout(300);
       const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
       expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
     });

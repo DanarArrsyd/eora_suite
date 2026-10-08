@@ -41,7 +41,7 @@
 | `--color-focus-ring` | blue-700 | 2 px focus outline |
 | Status solid | success / warning / danger / info | Icons, strokes, chart risk |
 | Status badge fg/bg | success `#166534/#DCFCE7` · warning `#92400E/#FEF3C7` · danger `#991B1B/#FEE2E2` · info `#1D4ED8/#DBEAFE` · neutral `#475569/#F1F5F9` | Badges, chips, banners |
-| Data-viz | `--viz-1` blue-700, `--viz-2` `#93A8E6`, `--viz-3` slate-400, `--viz-risk` danger | Max 4 series |
+| Data-viz | `--viz-1` blue-700, `--viz-2` `#93A8E6`, `--viz-3` slate-400, `--viz-risk` danger | Max 4 series. **Phase 3 implementation (validated with the dataviz palette validator, 2026-10-09):** `#93A8E6` fails the chroma floor and 3:1 contrast on white, so the production two-series pair is `--viz-supply #2948A8` (blue-800, line) + `--viz-demand #6F86D6` (bars) — all checks pass (CVD ΔE 19.5, contrast ≥ 3:1); `--viz-risk` = danger with icon + text; `--viz-grid` = slate-200 |
 
 ## 3. Typography
 Font: **Inter** (400/500/600/700), fallback `Arial, system-ui, sans-serif`. Numerals: `font-variant-numeric: tabular-nums` in tables, KPI and quantity fields.

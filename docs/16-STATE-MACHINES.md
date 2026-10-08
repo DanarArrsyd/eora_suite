@@ -144,7 +144,7 @@ stateDiagram-v2
   Draft --> Cancelled
   Firm --> Cancelled: cancel (no delivered qty; allocations released)
   Firm --> Superseded: revision n+1 replaces line
-  PartiallyFulfilled --> Superseded: revision n+1 (delivered carried to successor)
+  PartiallyFulfilled --> Superseded: revision n+1 (delivered stays here; only outstanding re-allocated)
   Superseded --> [*]
   Cancelled --> [*]
   Fulfilled --> [*]
@@ -153,7 +153,7 @@ stateDiagram-v2
 |---|---|---|
 | Draft → Firm | SO line mapped (BR-DEM-05); qty > 0; UOM = SO line UOM | enters firm demand (BR-DEM-07), consumes forecast (BR-DEM-08) |
 | → PartiallyFulfilled / Fulfilled | posted shipment line referencing this schedule line (BR-DEM-09) | outstanding recomputed (BR-DEM-10); allocation consumed by shipment |
-| → Superseded | revision posted (BR-DEM-11) | counts zero; delivered carried to successor; pegged WO/MPS/allocation → PPIC notification |
+| → Superseded | revision posted with unambiguous or user-confirmed mapping (BR-DEM-11, D-038) | outstanding counts zero; posted shipments keep this line as reference; outstanding re-allocated via `schedule_reallocations`; ambiguous mapping → `REVISION_MAPPING_AMBIGUOUS` exception, line stays active until resolved; pegged WO/MPS/allocation → PPIC notification |
 | → Cancelled | delivered = 0 | allocations released; pegged records notified |
 SO **line** status is derived: `OPEN` (any Firm/PartiallyFulfilled), `FULFILLED` (all active lines Fulfilled), `CANCELLED` (all Cancelled), `CLOSED` (manual short-close with reason and approval, outstanding written off as demand only — no inventory effect).
 

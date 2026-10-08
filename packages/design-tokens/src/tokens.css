@@ -67,6 +67,12 @@
   --color-neutral-fg: var(--slate-600);
   --color-neutral-bg: var(--slate-100);
 
+  /* data-viz (validated pair, dataviz validator 2026-10-09: lightness, chroma, CVD ΔE ≥ 18, contrast ≥ 3:1 on white) */
+  --viz-supply: #2948a8;
+  --viz-demand: #6f86d6;
+  --viz-risk: var(--color-danger);
+  --viz-grid: var(--slate-200);
+
   /* layout */
   --shell-primary-w: 64px;
   --shell-secondary-w: 248px;

@@ -14,6 +14,8 @@
 | CT-6 Material Variance (Loss Investigation) | PPIC, Supervisor, Inventory Controller | Which runs/WOs/lots show unexplained variance and what is their investigation status? |
 | CT-7 FG Available / Reserved | PPIC, Delivery | What FG is free vs allocated? |
 | CT-8 Shortage & Delivery Risk | PPIC | Which demand lines will miss due date, and why? |
+| CT-9 Demand & Fulfillment *(added 2026-10-09, D-034..D-041)* | PPIC, Sales admin | Which customer requirements exist (Customer PO → SO line → schedule lines / releases), what is delivered, outstanding, unscheduled on blankets, and how demand nets per week? |
+| CT-10 Production Monitoring *(added 2026-10-09)* | PPIC, Production Leader | Are work orders progressing to plan, and is consumption measured? |
 
 Naming rule (BR-REC-02, D-024): the screen is labelled **"Material Variance"** with sub-label *Loss Investigation*. "Actual Material Loss" appears only for cases resolved `ACTUAL_MATERIAL_LOSS_CONFIRMED`; "Physical Stock Discrepancy" only for approved stock-count results (`PHYSICAL_DISCREPANCY_CONFIRMED`). CT-6 shows confirmed loss and confirmed discrepancy as separate columns from unexplained variance.
 
@@ -62,7 +64,7 @@ Grain: inspection lot. Columns: part, output lot, WO/run, production date/shift,
 Grain: production date × shift × part (toggle calendar date). Columns: planned output (from WO schedule), good output posted, QC released, **FG received**, received vs plan, released-not-received (QC_RELEASED balance). Definitions: FG received = Σ FG_RECEIPT legs into FG_WAREHOUSE in period. Day boundary from shift calendar (DD-08).
 
 ### CT-5 Daily Delivery & Outstanding
-Grain: date × customer × part × PO line/release. Columns: due qty, shipped qty (posted shipments), delivered (POD), outstanding, FG available, allocated, gap, risk flag. Outstanding = PO line/release qty − Σ shipped. Partial shipments listed under the line.
+Grain: date × customer × part × PO line/release. Columns: due qty, shipped qty (posted shipments), delivered (POD), outstanding, FG available, allocated, gap, risk flag. Outstanding = schedule-line required qty − Σ shipped (BR-DEM-10; grain is the Delivery Schedule Line of an SO line, D-034). Partial shipments listed under the line (detail drawer). Daily dates are never collapsed into weeks (D-041).
 
 ### CT-6 Material Variance (Loss Investigation)
 Grain: run, with roll-up to WO and input lot. Columns:
@@ -83,7 +85,7 @@ Filters add: indicator status, breach only, case status, cause code. Drill: run 
 Grain: part × FG location × lot. On-hand UNRESTRICTED, allocated (by delivery line), available, QC_RELEASED-not-received shown separately as "incoming from QC".
 
 ### CT-8 Shortage & Delivery Risk
-Grain: demand line (PO line/release) by due date. Projection: `available FG + QC_RELEASED + PENDING_QC×(expected acceptance, shown separately) + planned output of released WOs before due date − allocations − earlier demand`. Each contribution shown as its own column; risk reason codes: `NO_WO`, `MATERIAL_SHORT`, `QC_BACKLOG`, `CAPACITY` (V1 basic), `NOT_CALCULABLE_CONVERSION`. Netting per BR-DEM-03.
+Grain: Delivery Schedule Line by due date (D-034). Projection: `available FG + QC_RELEASED + planned output of released WOs before due date − allocations − earlier demand`; `PENDING_QC × expected acceptance` is **not projected in R1** because no expected-acceptance policy is approved — Pending QC is shown as its own column only (Phase 3 decision recorded here; owner may approve a policy later). Risk is evaluated per due date even when the weekly bucket is covered (D-041, doc 14 #48). Each contribution shown as its own column; risk reason codes: `NO_WO`, `MATERIAL_SHORT`, `QC_BACKLOG`, `CAPACITY` (V1 basic), `NOT_CALCULABLE_CONVERSION`. Netting per BR-DEM-03.
 
 ## 4. Data sources and refresh
 | Read model | Updated by | Max lag target |
@@ -105,3 +107,26 @@ Overview p95 < 1.0 s with read models at baseline load; CT-6 query p95 < 1.5 s f
 - CT-A4: Variance from by-difference consumption shows PROVISIONAL and a linked case; no "loss" wording.
 - CT-A5: Grid and export of CT-5 with the same filter produce identical rows (doc 14 #13).
 - CT-A6: User scoped to Plant A sees no Plant B rows in any widget, strip or export.
+
+## 7. CT-9 Demand & Fulfillment (added 2026-10-09)
+Grain: Delivery Schedule Line (D-034). Columns: schedule line + type + revision, due date (daily) + weekly bucket, part/customer, SO line and source Customer PO line, required, delivered, outstanding, FG allocated, status / demand exception. Views: All, Outstanding, Due ≤ 7 days, Partially fulfilled, Blanket releases, Exceptions, Fulfilled & superseded (history kept, D-038).
+Panels sharing the filter scope: **Weekly demand (MPS netting bucket)** — firm required, firm outstanding, forecast, net forecast, outstanding demand, forecast match status per customer × part × plant × week (BR-DEM-07/08/13, D-040/D-041); forecast without customer shows *Needs review — not netted*. **Blanket orders** — Blanket Order Qty, Released, Delivered, Remaining Scheduled, Unscheduled Blanket Balance (BR-DEM-14, D-039). The net production requirement (BR-PLN-05) is **not** shown while PROPOSED.
+
+## 8. CT-10 Production Monitoring (added 2026-10-09)
+Work Order Progress (grain WO): good of planned, NG reworkable, NG rejected, weighed process scrap (kg), actual consumed (material UOM) + measured flag, material-short flag. Daily Production Results (grain production date × shift × run): good, NG, scrap, consumed with measurement method; by-difference consumption flagged. Good output is not FG.
+
+## 9. Overview KPI definitions (CT-0, implemented Phase 3)
+| KPI | Value / UOM | Definition | Source domain | Basis | Meaning |
+|---|---|---|---|---|---|
+| Demand lines at delivery risk · next 7 days | lines + gap pcs | schedule lines due ≤ 7 days with projected supply < outstanding | Demand · Inventory · Planning (CT-8) | CT-8 projection (Pending QC excluded) | uncovered pieces; not a material shortage or failure yet |
+| Released WOs short of material | WOs | allocated + available RM < WO requirement | Planning · Materials (CT-1) | material UOM, never estimated pcs | material must be allocated/received/substituted |
+| Pending QC over 24 h SLA | lots + pcs | PENDING_QC older than tenant SLA (default 24 h) | Quality (CT-3) | age since output posting | not FG available until QC release + FG receipt |
+| Open material variance cases | cases | cases not closed (split FINAL breach vs provisional/unmeasured) | Reconciliation (CT-6) | ADR-0005 tolerance on FINAL / unmeasured consumption | investigation, not confirmed loss |
+Every card shows as-of and drills to its source list. No deltas or trends are shown (none are defined).
+Flow strip bands: physical material (kg / sheet, separate lines) | transformation boundary | Pending QC → QC released not received → FG available → Shipped this week (pcs). Chart: "Will FG supply cover customer dues each day?" per part (pieces only comparable within a part), bars = outstanding due, line = projected supply, risk labels, table view; palette validated (tokens doc).
+Detail tables are on their own server-paged screens; the overview never loads all transactions (performance rule, doc 20).
+
+## 10. Data contracts (typed mock, Phase 3)
+Contracts: `apps/web/modules/ppic/contracts.ts`. Each list screen = one QueryDefinition resource (`ct.demand-lines`, `ct.weekly-demand`, `ct.blanket-orders`, `ct.daily-delivery`, `ct.delivery-risk`, `ct.rm-lots`, `ct.conversion`, `ct.material-at-production`, `ct.wo-progress`, `ct.daily-production`, `ct.pending-qc`, `ct.daily-fg-receipt`, `ct.fg-availability`, `ct.material-variance`) consumed through `ListSource<T>` (`ListQuery` → rows + `ListMeta {total, asOf, timezone}`); the overview is the single-row resource `ct.overview` (ADR-0008 Amendment 1). Rows carry server-computed business values (outstanding, estimates, indicators, risk) and their own UOM; the UI formats only. Mock adapters (`modules/ppic/mock/*`) simulate filtering, sorting, paging, view counts, latency, stale/forbidden/error states, and compute values with reference implementations of the approved formulas (`calc.ts`, unit-tested against doc 02/14 examples).
+Open contract questions (recommendations): (1) `view` counts — return them from the same QueryDefinition (`GET …?counts=views`) to avoid an extra endpoint; (2) cursor pagination for CT-6 / daily screens when history grows (ADR-0008 §4); (3) the overview exception queue should be a server read model (`ct_exception_queue`) ranked server-side; (4) expected-acceptance policy for Pending QC in CT-8 needs an owner decision before it can be projected.
+

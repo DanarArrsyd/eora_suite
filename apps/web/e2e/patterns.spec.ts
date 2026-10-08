@@ -6,6 +6,9 @@ const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const LIST = '/system/examples/raw-material-lots';
 
 async function axe(page: Page, name: string) {
+  // Scan the settled page: refetching tables are dimmed on purpose (aria-busy) and would fail contrast mid-transition.
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+  await page.waitForTimeout(300);
   const r = await new AxeBuilder({ page }).withTags(TAGS).analyze();
   expect(r.violations.map((v) => `${name} ${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
 }
@@ -220,4 +223,17 @@ test('hydration keeps a single page tree (no orphaned streamed segments)', async
     await expect(page.locator('[id^="S:"]'), route).toHaveCount(0);
     await expect(page.locator('main h1'), route).toHaveCount(1);
   }
+});
+
+test('rapid list interactions are never lost (tab → tab → sort without waiting)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(LIST);
+  await expect(page.getByRole('table', { name: 'Raw material lots' }).locator('tbody tr')).toHaveCount(20);
+  await page.getByRole('tab', { name: /^Hold, \d+/ }).click();
+  await page.getByRole('tab', { name: /^Blocked, \d+/ }).click();
+  await page.getByRole('tab', { name: /^All, 214/ }).click();
+  await page.getByRole('table', { name: 'Raw material lots' }).getByRole('button', { name: 'Lot', exact: true }).click();
+  await expect(page).toHaveURL(/sort=lot\.desc/);
+  await expect(page).not.toHaveURL(/view=/);
+  await expect(page.getByRole('tab', { name: /^All, 214/ })).toHaveAttribute('aria-selected', 'true');
 });

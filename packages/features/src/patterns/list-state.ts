@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import type { FilterValues, ListQuery, SortRule } from '../data';
 
 export type ListUrlConfig = {
@@ -86,34 +86,38 @@ export function writeListQuery(q: ListQuery, cfg: ListUrlConfig): URLSearchParam
  */
 export function useListUrlState(cfg: ListUrlConfig): ListUrlState {
   const params = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
   const query = React.useMemo(() => readListQuery(new URLSearchParams(params.toString()), cfg), [params, cfg]);
 
-  const commit = React.useCallback(
-    (next: ListQuery) => {
-      const qs = writeListQuery(next, cfg).toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  // Native history API (integrates with useSearchParams, Next docs "Native History API"): synchronous, no router
+  // round-trip, so rapid clicks (tab → sort → page) never race or get de-duplicated against a pending navigation.
+  // Every change starts from the *current* URL, not from a possibly stale render.
+  const update = React.useCallback(
+    (change: (current: ListQuery) => ListQuery) => {
+      const current = readListQuery(new URLSearchParams(window.location.search), cfg);
+      const qs = writeListQuery(change(current), cfg).toString();
+      window.history.replaceState(null, '', qs ? `${pathname}?${qs}` : pathname);
     },
-    [router, pathname, cfg],
+    [pathname, cfg],
   );
 
   return React.useMemo(
     () => ({
       query,
-      setPage: (page) => commit({ ...query, page }),
-      setPageSize: (pageSize) => commit({ ...query, pageSize, page: 1 }),
-      setSort: (sort) => commit({ ...query, sort, page: 1 }),
-      applyFilters: (filters) => commit({ ...query, filters, page: 1 }),
-      removeFilter: (key, value) => {
-        const current = query.filters[key];
-        const next = Array.isArray(current) && value !== undefined ? current.filter((v) => v !== value) : undefined;
-        commit({ ...query, filters: { ...query.filters, [key]: next && next.length ? next : undefined }, page: 1 });
-      },
-      clearFilters: () => commit({ ...query, filters: {}, search: '', page: 1 }),
-      setSearch: (search) => commit({ ...query, search, page: 1 }),
-      setView: (view) => commit({ ...query, view, page: 1 }),
+      setPage: (page) => update((q) => ({ ...q, page })),
+      setPageSize: (pageSize) => update((q) => ({ ...q, pageSize, page: 1 })),
+      setSort: (sort) => update((q) => ({ ...q, sort, page: 1 })),
+      applyFilters: (filters) => update((q) => ({ ...q, filters, page: 1 })),
+      removeFilter: (key, value) =>
+        update((q) => {
+          const v = q.filters[key];
+          const next = Array.isArray(v) && value !== undefined ? v.filter((x) => x !== value) : undefined;
+          return { ...q, filters: { ...q.filters, [key]: next && next.length ? next : undefined }, page: 1 };
+        }),
+      clearFilters: () => update((q) => ({ ...q, filters: {}, search: '', page: 1 })),
+      setSearch: (search) => update((q) => ({ ...q, search, page: 1 })),
+      setView: (view) => update((q) => ({ ...q, view, page: 1 })),
     }),
-    [query, commit],
+    [query, update],
   );
 }

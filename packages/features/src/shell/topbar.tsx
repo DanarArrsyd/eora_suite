@@ -122,9 +122,9 @@ function ContextFields({ kind }: { kind: TopbarContext }) {
     <div className="flex flex-col gap-3 p-3">
       <Field label="Production date">
         {(p) => (
-          <Select {...p} defaultValue="2026-10-08">
+          <Select {...p} defaultValue="2026-10-09">
+            <option value="2026-10-09">09 Oct 2026</option>
             <option value="2026-10-08">08 Oct 2026</option>
-            <option value="2026-10-07">07 Oct 2026</option>
           </Select>
         )}
       </Field>
@@ -159,7 +159,7 @@ const ctxButton =
 export function PageContextControl({ kind }: { kind: TopbarContext }) {
   const Icon = kind === 'period' ? Calendar : Warehouse;
   const label = kind === 'period' ? 'Production date' : 'Warehouse';
-  const value = kind === 'period' ? '08 Oct · All shifts' : 'RM-WH1';
+  const value = kind === 'period' ? '09 Oct · All shifts' : 'RM-WH1';
   return (
     <Popover>
       <PopoverTrigger className={cn(ctxButton, 'max-md:hidden')} aria-label={`${label}: ${value}. Change`}>

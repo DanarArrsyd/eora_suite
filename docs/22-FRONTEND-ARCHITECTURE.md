@@ -39,7 +39,7 @@ Dependency direction: `apps/web → features → ui → design-tokens`. Packages
 |---|---|---|
 | **1 Foundation** | Workspace + tooling; Next.js + TS + Tailwind + tokens + Inter + Lucide; shadcn-pattern primitives; AppShell with dual sidebar (docked ≥ 1280, overlay below), topbar (breadcrumb, responsive search trigger per D-028 + dialog shell, workspace switcher, bell with actionable badge, user menu), mobile navigation sheet; route structure from navigation config with honest "planned" pages; UI kit review page | All gates in §4 green; screenshots at review widths |
 | **2 Shared enterprise patterns** | *(owner scope D-036: page template, FilterBar, DataTable, density, status tabs/badges, forms, dialogs/feedback, pagination, states incl. permission denied, import/export shell, notification center, showcase — global search results moved to a later phase)* FilterBar (schema-driven, URL sync, mobile sheet), DataTable (TanStack, density presets per D-029, row menu, drawer/row expansion), Pagination, Form + validation (RHF + Zod), StatusBadge catalogue, Modal/Drawer patterns, Notification Center UI, states | Gates green; component docs |
-| **3 PPIC Control Tower** | CT screens per doc 19 with typed mock adapter | Gates green; business labels reviewed against docs 02/15/19 |
+| **3 PPIC Control Tower** | CT screens per doc 19 with typed mock adapter *(built 2026-10-09: CT-0..CT-10, contracts `apps/web/modules/ppic/contracts.ts`)* | Gates green; business labels reviewed against docs 02/15/19 |
 | **4 Production Reconciliation** | Run detail, consumption, outputs, remnant/return, variance, investigation, approval, audit timeline | Gates green |
 | **5 Mobile PWA foundation** | Mobile shell, role navigation, My Shift, My Tasks, Scan UI, Production reporting UI, QC UI, Inbox; no offline final posting | Gates green; device validation list updated |
 
@@ -111,7 +111,7 @@ Not done (by design / tracked): screen-reader and real-device validation (§6); 
 | Gates rerun | format ✓ · typecheck 4/4 · lint 0 · unit/component 32/32 · build 113 pages · E2E 43/43 on 4 consecutive runs |
 Forced-colors and reduced-motion checks are emulation proxies; real Windows high-contrast and OS-level validation stay in §6.
 
-### Phase 2 — Shared enterprise UI patterns (2026-10-08) — awaiting owner review
+### Phase 2 — Shared enterprise UI patterns (2026-10-08) — **approved by owner (D-037, baseline `1aac1c4`)**
 Scope per D-036. Review pages (not in module navigation): `/system/patterns` (showcase), `/system/examples/raw-material-lots` (enterprise list), `/system/notifications`; bell panel uses the same NotificationCenter.
 | Gate | Result |
 |---|---|
@@ -127,3 +127,21 @@ Scope per D-036. Review pages (not in module navigation): `/system/patterns` (sh
 | CI on GitHub runner | **not validated** — workflow exists, repository not pushed |
 Defects found and fixed during gates: server sort cycle (TanStack inferred desc-first from an empty accessor → explicit `sortDescFirst: false`, no removal); focus not returned when drawer / filter sheet / confirmation opened from state (`useReturnFocus`); error summary focus raced RHF's own field focus and a later formState commit; contrast during the loading→enabled colour transition of “Mark all as read”; **hydration regression**: Radix Toast/Tooltip providers above the page boundary changed context during hydration, React client-rendered the streamed page and left a hidden duplicate tree (fixed with a stable feedback store rendered as a sibling and TooltipProvider moved into the session provider; E2E guard added); navigation release tags for Sales Orders / Delivery Schedules / MPS updated to R1 (D-035).
 Not done / tracked: screen reader, real devices, Windows High Contrast, 200/400 % zoom (§6, O-021); CI execution on GitHub; Storybook (decided against for now, ADR-0011 Amendment 1); global search results; server-side saved views and preference adapter (localStorage cache only); column visibility not yet persisted.
+
+### Phase 3 — PPIC Control Tower frontend (2026-10-09) — awaiting owner review
+Scope per D-037. Screens (navigation `ppic/*`, rendered through `modules/ppic/registry.tsx`): CT-0 Overview, CT-9 Demand & Fulfillment (+ weekly netting and blanket panels), CT-5 Daily Delivery, CT-8 Shortage & Delivery Risk, CT-1 Raw Material Availability, CT-1 Coil/Sheet Conversion, CT-2 Material at Production, CT-10 Work Order Progress, CT-10 Daily Production Results, CT-3 Pending Quality, CT-4 Daily Finished Goods, CT-7 FG Availability, CT-6 Material Variance. All reuse the Phase 2 patterns; business components listed in EORA-COMPONENT-STANDARDS §11.
+| Gate | Result |
+|---|---|
+| Format | Prettier clean |
+| Typecheck | 4/4 packages, 0 errors |
+| Lint | 0 errors, 0 warnings |
+| Unit + component | 78/78 (incl. 21 calculation tests against doc 02 / doc 14 examples: coil 1,930 est. pcs, unit-less pitch not calculable, GYV 47 / PvS −17 / UMV 7.610 kg, sheet GYV 25 provisional, by-difference never FINAL, partial fulfilment, revision, blanket 8,700 + over-release guard, same-bucket forecast matching, uncertain match, ISO week buckets, daily risk inside a covered week, Pending QC not projected; registry ↔ navigation sync) |
+| E2E | 94 tests, **3 consecutive full runs green** after fixes (axe on 12 CT routes × desktop/mobile added to the accessibility suite; 12 new Control Tower tests: KPI definitions, UOM bands, filter → URL → drill-down, chart table view, CT-9 netting/blanket/revision/partial, CT-8 daily risk, conversion, Pending QC vs FG, CT-6 indicators/no total loss, adapter states, phone layouts) |
+| Accessibility | axe 0 violations on all 13 CT screens (desktop + mobile), overview, drawers; scans wait for a settled page (refetching tables are intentionally dimmed and marked `aria-busy`) |
+| Responsive | no page-level overflow 1920 → 375 on CT-0, CT-9, CT-6 + all review routes |
+| Production build | succeeds, 117 routes |
+| Visual review | `docs/review/phase-3/` (18 screenshots incl. drawers and filtered overview) |
+| CI on GitHub runner | **not validated** (no push) |
+Defects found and fixed: chart SVG exposed as `img` with focusable children (axe nested-interactive) → `group`; KPI "Definition & basis" target < 24 px; exception titles repeated raw ISO dates; topbar mock period out of sync with the sample business date; CT-9 axe flake (scan during refetch dimming) → scans wait for `aria-busy` to clear; **shared-pattern race** in `useListUrlState` (rapid tab/sort clicks lost under load because a second `router.replace` was de-duplicated against a pending navigation) → native `history.replaceState` per Next 16 docs, computed from the current URL; regression E2E added.
+Not done / tracked: production-vs-calendar date toggle (mock does not model shifts crossing midnight); expected-acceptance projection of Pending QC (needs policy); BOM-quantity-based conversion method (not in approved formulas — only layout/pitch methods with BOM-sourced cavity/parts per blank are shown); server read models, cursor pagination, counts parameter (doc 19 §10 recommendations); O-021 and CI on GitHub.
+

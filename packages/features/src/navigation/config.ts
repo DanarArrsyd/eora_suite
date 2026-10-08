@@ -154,6 +154,7 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Customer Demand',
         items: [
+          { id: 'demand-fulfillment', label: 'Demand & Fulfillment', icon: ListChecks, release: 'R1', phase: 3 },
           { id: 'customer-po', label: 'Customer Purchase Orders', icon: FileText, release: 'R1', phase: 'later' },
           { id: 'sales-orders', label: 'Sales Orders', icon: FileCheck, release: 'R1', phase: 'later' },
           { id: 'forecast', label: 'Forecast', icon: TrendingUp, release: 'R2', phase: 'later' },
@@ -173,14 +174,14 @@ export const NAV_MODULES: readonly NavModule[] = [
         items: [
           { id: 'rm-availability', label: 'Raw Material Availability', icon: Boxes, release: 'R1', phase: 3 },
           { id: 'conversion', label: 'Coil / Sheet Conversion', icon: Calculator, release: 'R1', phase: 3 },
-          { id: 'shortage', label: 'Material Shortage', icon: TriangleAlert, release: 'R1', phase: 3 },
+          { id: 'shortage', label: 'Shortage & Delivery Risk', icon: TriangleAlert, release: 'R1', phase: 3 },
         ],
       },
       {
         label: 'Production Monitoring',
         items: [
-          { id: 'wo-progress', label: 'Work Order Progress', icon: Activity, release: 'R1', phase: 'later' },
-          { id: 'daily-results', label: 'Daily Production Results', icon: Factory, release: 'R1', phase: 'later' },
+          { id: 'wo-progress', label: 'Work Order Progress', icon: Activity, release: 'R1', phase: 3 },
+          { id: 'daily-results', label: 'Daily Production Results', icon: Factory, release: 'R1', phase: 3 },
           { id: 'pending-quality', label: 'Pending Quality', icon: Hourglass, release: 'R1', phase: 3 },
         ],
       },

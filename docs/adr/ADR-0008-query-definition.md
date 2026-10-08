@@ -26,3 +26,10 @@ Docs 06/08 require schema-driven filters, URL-synced state and **identical** ser
 
 ## Verification
 Parity test: for each resource, grid rows (all pages) == export rows for same filter and user; permission-filtered schema; sensitive columns absent from both.
+
+## Amendment 1 — Control Tower resources (2026-10-09, D-037)
+- Control Tower widgets and lists are QueryDefinition resources named `ct.<resource>` and use the **existing** endpoints (`/api/v1/query/{resource}`, `/schema`, exports); no new endpoint style.
+- The CT-0 overview is the single-row resource `ct.overview` (KPIs with definition metadata, flow-strip stages per UOM, top-N exception queue, due-vs-supply points) with `meta.as_of`.
+- Status-tab counts are returned by the same resource (proposed `counts=views` parameter) rather than a separate endpoint.
+- Frontend contracts: `apps/web/modules/ppic/contracts.ts` (typed, mock-backed in Phase 3). Business values are computed server-side; the client never recomputes outstanding, estimates or variance indicators.
+
