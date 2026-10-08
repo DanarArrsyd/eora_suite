@@ -27,7 +27,8 @@ Production variance indicators (per run, rolled up to WO and input lot):
 Each indicator has status `NOT_CALCULABLE → PROVISIONAL → FINAL`; tolerance breach is evaluated on FINAL values (abs AND %).
 
 Other metrics (unchanged in meaning):
-1. **Physical material discrepancy:** counted physical quantity minus expected ledger balance in material UOM (kg/sheets); subject to stock count investigation. Only this metric, after approval, may become **confirmed physical discrepancy**.
+1. **Physical material discrepancy:** counted physical quantity minus expected ledger balance in material UOM (kg/sheets); subject to stock count investigation. Only this metric, after approval, may become a **Physical Stock Discrepancy**.
+   - **Actual Material Loss** (D-024) is a separate, investigation-proven outcome (evidence + independent approval + adjustment with loss reason code). Unexplained variance alone never becomes loss.
 2. **Process loss (documented):** measured trim/skeleton, setup, head/tail scrap with reason codes; documented outputs, not unexplained.
 3. **FG reconciliation:** QC accepted, FG received, reserved, shipped and returned are separate stages; never infer them from good production output alone.
 

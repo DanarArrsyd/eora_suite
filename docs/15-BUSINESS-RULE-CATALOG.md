@@ -92,7 +92,7 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 | ID | Rule | Owner | Enforce | Source | Test |
 |---|---|---|---|---|---|
 | BR-REC-01 | Three indicators GYV, PvS, UMV calculated per ADR-0005 with status NOT_CALCULABLE/PROVISIONAL/FINAL. | Traceability (Reconciliation) | SVC | D-012 | #2–#5, #23 |
-| BR-REC-02 | No indicator is labelled loss/theft/missing; "Confirmed physical discrepancy" only from approved stock count. | All UI/reports | UI + report templates review | doc 02 | copy review |
+| BR-REC-02 | Three distinct terms (D-024): **Unexplained Material Variance** (calculated indicator, never called loss); **Actual Material Loss** (only when an investigation proves physical loss — evidence, approval, stock adjustment, case resolution `ACTUAL_MATERIAL_LOSS_CONFIRMED`); **Physical Stock Discrepancy** (counted minus book from an approved stock count, resolution `PHYSICAL_DISCREPANCY_CONFIRMED`). Menus and general indicators use "Material Variance". | All UI/reports | UI + report templates review | doc 02, D-024 | copy review |
 | BR-REC-03 | Tolerance breach (abs AND %) on FINAL indicator opens case; without configuration strict default *(OPEN O-012)*. | Traceability | SVC | ADR-0005 | tolerance test |
 | BR-REC-04 | Case cannot be closed without FINAL indicator or approved exception; resolution by cause code, optional adjustment with maker-checker. | Traceability/Inventory | SVC + POL | doc 02 | case test |
 | BR-REC-05 | Reversal of an included document reopens indicators to PROVISIONAL with versioned history. | Traceability | SVC | ADR-0005 | reversal test |

@@ -5,8 +5,8 @@
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Run Reconciliation · EORA</title>
-<link rel="stylesheet" href="assets/eora-tokens.css?v=10">
-<link rel="stylesheet" href="assets/eora-ui.css?v=10">
+<link rel="stylesheet" href="assets/eora-tokens.css?v=30">
+<link rel="stylesheet" href="assets/eora-ui.css?v=30">
 <style>
   .header-card .dl { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--space-5); margin-top: var(--space-5); align-items: start; }
@@ -38,6 +38,11 @@
   .calc { margin: var(--space-2) 0 0; padding: var(--space-3) var(--space-4); background: var(--color-bg-subtle); border-radius: var(--radius-md); font-size: 12.5px; line-height: 20px; font-variant-numeric: tabular-nums; }
   .calc div { display: flex; justify-content: space-between; gap: var(--space-4); }
   .calc .total { border-top: 1px solid var(--color-border-strong); margin-top: 4px; padding-top: 4px; font-weight: var(--fw-semibold); }
+  .terms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--color-border); }
+  .terms > div { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--color-text-secondary); }
+  .terms b { color: var(--color-text-primary); font-size: 13px; font-weight: 600; }
+  .terms .badge { align-self: flex-start; }
+  @media (max-width: 1100px) { .terms { grid-template-columns: minmax(0, 1fr); } }
   .finality { display: flex; gap: var(--space-2); align-items: flex-start; font-size: 12.5px; color: var(--color-text-secondary); padding: var(--space-3) var(--space-5); background: var(--color-bg-subtle); border-top: 1px solid var(--color-border); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
   .aside-card .card-body { display: flex; flex-direction: column; gap: var(--space-4); }
   .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px var(--space-3); font-size: 13px; }
@@ -125,7 +130,7 @@
         </section>
 
         <section class="card" aria-labelledby="var-h">
-          <div class="card-head"><div><h2 class="card-title" id="var-h">Variance analysis</h2><p class="card-sub">Three separate indicators. None is a confirmed physical discrepancy — that requires an approved stock count.</p></div><span class="badge badge-neutral">Calc v2 · 07 Oct 23:05</span></div>
+          <div class="card-head"><div><h2 class="card-title" id="var-h">Variance analysis</h2><p class="card-sub">Three separate indicators. A variance is never labelled loss until an investigation or stock count proves it.</p></div><span class="badge badge-neutral">Calc v2 · 07 Oct 23:05</span></div>
           <div class="ind-list">
             <div class="ind">
               <div><div class="ind-name">Gross Yield Variance</div><div class="ind-q">Theoretical pieces from consumed coil not accounted for by any reported piece</div></div>
@@ -155,6 +160,11 @@
               </details>
             </div>
           </div>
+          <div class="terms" role="note" aria-label="Terminology">
+            <div><span class="badge badge-neutral">Indicator</span><b>Unexplained Material Variance</b><span>Calculated difference; not proven loss. Opens investigation when tolerance is exceeded.</span></div>
+            <div><span class="badge badge-warning">Investigation outcome</span><b>Actual Material Loss</b><span>Physical loss proven by investigation (e.g. damage, spillage, missing material) with evidence, approval and stock adjustment.</span></div>
+            <div><span class="badge badge-warning">Stock count outcome</span><b>Physical Stock Discrepancy</b><span>Counted minus book quantity from an approved stock count; posted as adjustment.</span></div>
+          </div>
           <div class="finality"><i data-lucide="info" class="icon" aria-hidden="true"></i><span>Final because the run is closed, consumption is weighed, CP v3 is validated, scrap is weighed, NG split is confirmed by QC and no reversal is pending. A reversal of any included document returns these to Provisional and keeps this version in history.</span></div>
         </section>
       </div>
@@ -182,8 +192,8 @@
 
   <!-- LEDGER -->
   <div class="tabpanel" role="tabpanel" id="p-leg" aria-labelledby="t-leg" hidden>
-    <section class="card" style="margin-top:var(--space-5)">
-      <div class="card-head"><div><h2 class="card-title">Production posting PP-26-1182-01</h2><p class="card-sub">Input leaves Material at Production once; each output is its own ledger line. Posted 07 Oct 23:02 · immutable.</p></div><button class="btn btn-sm" type="button"><i data-lucide="rotate-ccw" class="icon" aria-hidden="true"></i>Request reversal</button></div>
+    <section class="card dt-card" data-dt style="margin-top:var(--space-5)">
+      <div class="card-head"><div><h2 class="card-title">Production posting PP-26-1182-01</h2><p class="card-sub">Input leaves Material at Production once; each output is its own ledger line. Posted 07 Oct 23:02 · immutable.</p></div><div class="page-actions"><span data-dt-density></span><button class="btn btn-sm" type="button"><i data-lucide="rotate-ccw" class="icon" aria-hidden="true"></i>Request reversal</button></div></div>
       <div class="table-wrap"><table class="dt">
         <thead><tr><th scope="col" class="num">#</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Item · lot</th><th scope="col">Stock status</th><th scope="col" class="num">Quantity</th><th scope="col">Evidence</th></tr></thead>
         <tbody>
@@ -194,14 +204,15 @@
           <tr><td class="num">5</td><td>Produced</td><td>Scrap yard</td><td>SCRAP-SPCC</td><td><span class="badge badge-success">Unrestricted</span></td><td class="num">128.900<span class="uom">kg</span></td><td>2 weighings</td></tr>
         </tbody>
       </table></div>
+      <div data-dt-pagination id="pgLeg" data-total="5" data-size="20"></div>
       <p class="hint" style="padding:var(--space-3) var(--space-5)">Related documents: MI-26-0712 issue 700.000 kg · LS-26-0088 lot split C-07 → C-07-R1 40.000 kg.</p>
     </section>
   </div>
 
   <!-- MEASUREMENTS -->
   <div class="tabpanel" role="tabpanel" id="p-mea" aria-labelledby="t-mea" hidden>
-    <section class="card" style="margin-top:var(--space-5)">
-      <div class="card-head"><div><h2 class="card-title">Measurements &amp; evidence</h2><p class="card-sub">Scale SC-02 · resolution 0.1 kg · calibration valid to 31 Dec 2026</p></div></div>
+    <section class="card dt-card" data-dt style="margin-top:var(--space-5)">
+      <div class="card-head"><div><h2 class="card-title">Measurements &amp; evidence</h2><p class="card-sub">Scale SC-02 · resolution 0.1 kg · calibration valid to 31 Dec 2026</p></div><span data-dt-density></span></div>
       <div class="table-wrap"><table class="dt">
         <thead><tr><th scope="col">Measured</th><th scope="col">Method</th><th scope="col" class="num">Gross</th><th scope="col" class="num">Tare</th><th scope="col" class="num">Net</th><th scope="col">By · time</th><th scope="col">Evidence</th></tr></thead>
         <tbody>
@@ -211,6 +222,7 @@
           <tr><td>Scrap bin 2</td><td>Weighed</td><td class="num">65.400<span class="uom">kg</span></td><td class="num">7.800<span class="uom">kg</span></td><td class="num">57.600<span class="uom">kg</span></td><td>S. Hidayat · 22:52</td><td><a href="#">Scale ticket</a></td></tr>
         </tbody>
       </table></div>
+      <div data-dt-pagination id="pgMea" data-total="4" data-size="20"></div>
       <p class="hint" style="padding:var(--space-3) var(--space-5)">Stroke counter D-220-A: 412,118 → 413,808 (1,690 strokes vs 1,688 theoretical).</p>
     </section>
   </div>
@@ -222,9 +234,9 @@
         <div class="card-head"><div><h2 class="card-title">Investigation · RC-0041</h2><p class="card-sub">Propose a resolution. Review and approval are done by other people.</p></div></div>
         <form class="card-body" id="resForm" novalidate>
           <div class="form-grid">
-            <div class="field"><label for="reason">Reason code <span aria-hidden="true" style="color:var(--color-danger-fg)">*</span></label>
-              <select class="select" id="reason" required aria-describedby="reason-err"><option value="">Select reason code</option><option>Measurement error</option><option>Unreported output (late posting)</option><option>Standard incorrect (new CP/SY/NW version)</option><option>Process loss explained</option><option>Physical discrepancy — requires stock count</option></select>
-              <span class="error-text" id="reason-err" hidden><i data-lucide="circle-alert" class="icon" aria-hidden="true"></i>Choose a reason code.</span></div>
+            <div class="field"><label for="reason">Proposed resolution <span aria-hidden="true" style="color:var(--color-danger-fg)">*</span></label>
+              <select class="select" id="reason" required aria-describedby="reason-err"><option value="">Select resolution</option><option>Measurement error</option><option>Unreported output (late posting)</option><option>Standard incorrect (new CP/SY/NW version)</option><option>Process loss explained (reason code)</option><option>Actual material loss — confirmed by investigation (evidence + approval + adjustment)</option><option>Physical stock discrepancy — from approved stock count</option></select>
+              <span class="error-text" id="reason-err" hidden><i data-lucide="circle-alert" class="icon" aria-hidden="true"></i>Choose a proposed resolution.</span></div>
             <div class="field"><label for="pic">Responsible PIC</label><select class="select" id="pic"><option>Y. Santoso · Supervisor Press</option></select></div>
             <div class="field full"><label for="note">Explanation <span aria-hidden="true" style="color:var(--color-danger-fg)">*</span></label>
               <textarea class="textarea" id="note" required aria-describedby="note-hint note-err" placeholder="What caused the 47 pcs and which evidence supports it"></textarea>
@@ -272,9 +284,10 @@
   </div>
 </main>
 <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" integrity="sha384-hJnF5AwidE18GSWTAGHv3ByzzvfNZ1Tcx5y1UUV3WkauuMCEzBJBMSwSt/PUPXnM" crossorigin="anonymous"></script>
-<script src="assets/eora-nav.config.js?v=10"></script>
-<script src="assets/eora-shell.js?v=10"></script>
-<script src="assets/eora-page.js?v=10"></script>
+<script src="assets/eora-nav.config.js?v=30"></script>
+<script src="assets/eora-shell.js?v=30"></script>
+<script src="assets/eora-table.js?v=30"></script>
+<script src="assets/eora-page.js?v=30"></script>
 <script>
   document.getElementById('goInv').addEventListener('click', () => { const t = document.getElementById('t-inv'); t.click(); t.focus(); });
   document.getElementById('resForm').addEventListener('submit', e => {

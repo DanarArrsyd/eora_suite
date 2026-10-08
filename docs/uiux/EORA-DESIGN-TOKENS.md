@@ -1,6 +1,6 @@
 # EORA Design Tokens — Modern Corporate Blue
 
-**Status:** DECIDED (D-021, ADR-0010) · **Canonical for tokens.** Principles: [EORA-DESIGN-CONSTITUTION.md](EORA-DESIGN-CONSTITUTION.md). Prototype source: `design/mockups/assets/eora-tokens.css`. Production: same names as CSS variables in `packages/design-tokens`, exposed to Tailwind via `@theme` and mapped to shadcn variables (`--background`, `--primary`, `--border`, `--ring`, …).
+**Status:** DECIDED (D-021, ADR-0010 + Amendment 1 / D-023, D-026) · **Canonical for tokens.** Principles: [EORA-DESIGN-CONSTITUTION.md](EORA-DESIGN-CONSTITUTION.md). Prototype source: `design/mockups/assets/eora-tokens.css`. Production: same names as CSS variables in `packages/design-tokens`, exposed to Tailwind via `@theme` and mapped to shadcn variables (`--background`, `--primary`, `--border`, `--ring`, …).
 
 ## 1. Owner palette (raw values — use only through semantic tokens)
 | Raw token | Hex | Owner role |
@@ -31,7 +31,8 @@
 | `--color-bg-sidebar-primary` | blue-950 | Primary sidebar, mobile header |
 | `--color-text-primary` | slate-800 | Body, headings, values |
 | `--color-text-secondary` | slate-500 | Labels, descriptions, helper text, placeholders |
-| `--color-text-muted` | slate-400 | **Disabled text and decorative only** (see §4) |
+| `--color-text-secondary-strong` | **slate-600 `#475569` (added, Amendment 1)** | Secondary text on tinted backgrounds: selected rows (`#EFF6FF`, 6.96:1), segmented controls on `#F1F5F9` (6.92:1), command-search sub-lines |
+| `--color-text-muted` | slate-400 | **Decorative icons only** (see §4) |
 | `--color-text-sidebar` | slate-300 `#CBD5E1` | Inactive primary-sidebar icons |
 | `--color-border` | slate-200 | Layout separators (decorative) |
 | `--color-border-control` | **slate-450 `#7F8EA3` (added)** | Input/select/checkbox outlines |
@@ -72,13 +73,15 @@ Monospace (`ui-monospace`) only for location/bin codes and technical IDs where c
 | Danger `#DC2626` on `#FEF2F2` | 4.41 | **Fails** | Badges use darker fg tokens (`#991B1B` on `#FEE2E2` = 6.80) |
 | Badge fg/bg pairs (§2) | 5.49–6.80 | AA | — |
 | Border `#E2E8F0` on white | 1.23 | Decorative only | Inputs need ≥ 3:1 (WCAG 1.4.11) → **added `--color-border-control #7F8EA3` = 3.33** |
-Adjustments keep the Modern Corporate Blue identity: no owner colour changed; one control-border token added and usage limits set for muted text and light danger backgrounds.
+Adjustments keep the Modern Corporate Blue identity: no owner colour changed; two tokens added (`--color-border-control`, `--color-text-secondary-strong`) and usage limits set for muted text and light danger backgrounds.
+
+Rendered-page verification (real foreground/background combinations, hover/selected/error/disabled states): see EORA-COMPONENT-STANDARDS.md §8a. Numeric badges: white on `--color-danger` 4.83:1 (11 px semibold).
 
 ## 5. Spacing, radius, elevation, layout
 - Spacing scale (4 px grid): 4, 8, 12, 16, 20, 24, 32, 40.
 - Radius: 4 badges/checkbox · 6 inputs/buttons · 8 cards/menus/panels · 12 mobile cards/sheets. No pill-shaped controls except count pills and avatars.
 - Elevation: cards `0 1px 2px` (hierarchy only); popovers/menus/notification panel; drawer. No decorative shadows.
-- Layout: primary sidebar 64 px, secondary sidebar 248 px, topbar 56 px, control height 36 px (sm 32), table row 44 px (compound rows 60 px), PWA touch target 48 px.
+- Layout: primary sidebar 64 px, secondary sidebar 248 px, topbar 56 px, control height 36 px (sm 32), table row 44 px comfortable / 34 px compact (no compound rows), PWA touch target 48 px (minimum 44 px).
 - Breakpoints: ≥1280 full dual sidebar; 1024–1279 secondary sidebar becomes overlay; 768–1023 compact topbar; <768 mobile shell (hamburger opens both sidebars as a sheet) — PWA task screens use bottom navigation.
 
 ## 6. Motion

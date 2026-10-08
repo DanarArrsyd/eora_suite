@@ -107,7 +107,7 @@ stateDiagram-v2
   ApprovedResolution --> Closed: resolution actions posted (adjustment/reclassification/master-data fix)
   Closed --> InvestigationOpen: reopen (reversal of included doc, approval)
 ```
-Resolution types: `MEASUREMENT_ERROR`, `UNREPORTED_OUTPUT` (late posting), `STANDARD_INCORRECT` (CP/SY/NW change via versioning, no retro edit), `PROCESS_LOSS_EXPLAINED` (reason code), `PHYSICAL_DISCREPANCY_CONFIRMED` (requires stock count + adjustment). Indicators must be FINAL (BR-REC-04).
+Resolution types: `MEASUREMENT_ERROR`, `UNREPORTED_OUTPUT` (late posting), `STANDARD_INCORRECT` (CP/SY/NW change via versioning, no retro edit), `PROCESS_LOSS_EXPLAINED` (reason code), `ACTUAL_MATERIAL_LOSS_CONFIRMED` (investigation proves physical loss — damage, spillage, missing material; requires evidence, independent approval and a stock adjustment with loss reason code; D-024), `PHYSICAL_DISCREPANCY_CONFIRMED` (requires approved stock count + adjustment). Indicators must be FINAL (BR-REC-04).
 
 ## 8. Stock Count
 `Planned → SnapshotTaken → Counting → Counted → (Recount) → VarianceReview → Approved → Posted → Closed`. Snapshot freezes book quantity per location/lot at cut-off; later movements tracked as deltas. Counter ≠ approver. Posted adjustments: `location ±d ↔ V_ADJUSTMENT`.

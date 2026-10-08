@@ -37,6 +37,14 @@ Authority for product/technical decisions. Change control rules at the bottom. P
 | D-022 | Permanent rule: **every frontend/UI task must review the approved EORA Design System and use relevant installed Caveman and Frontend Design skills**; missing skills are reported, never claimed; owner decisions win over skill defaults. | Recorded in CLAUDE.md, AGENTS.md, README, constitution §6. | EORA-DESIGN-CONSTITUTION.md |
 | D-023 | Token adjustments for accessibility within the palette: add `--color-border-control #7F8EA3` (3.33:1); muted `#94A3B8` only for disabled/decorative; badges use darker status foregrounds; table headers on `#F8FAFC`. | Owner may revise. | EORA-DESIGN-TOKENS.md §4 |
 
+## DECIDED — UI/UX approval gate follow-up (owner decision, 2026-10-08)
+
+| ID | Decision | Conditions | ADR / spec |
+|---|---|---|---|
+| D-024 | Terminology: **Material Variance** for menus and general indicators; **Finished Goods** (not "Finish Good"); consistent across modules. **Actual Material Loss** (investigation-proven, evidence + independent approval + stock adjustment, case resolution `ACTUAL_MATERIAL_LOSS_CONFIRMED`) and **Physical Stock Discrepancy** (approved stock count) are kept as distinct, proven outcomes — never inferred from unexplained variance. | Sales Orders (O-011) and MPS (O-014) remain pending business decisions — neither approved nor removed. | BR-REC-02, doc 16 §7, ADR-0005, doc 02, doc 19, constitution §4 |
+| D-025 | Navigation indicators: **numeric badges only for items requiring the user's action** (approvals, QC inspections, variance investigations, assigned tasks, action-required notifications). No total record counts. Permission-aware, tenant-scoped, computed from actual data server-side. | Supersedes amber attention dot. | EORA-NAVIGATION-ARCHITECTURE.md §10 |
+| D-026 | UX refinement set: responsive topbar priorities, mobile navigation sheet (backdrop, close, Esc, focus management, scroll lock, accessible state), DataTable Comfortable/Compact presets with shared configuration, grouped quantity columns, filter bottom sheet, rendered-page accessibility verification. | Prototype/spec only. | ADR-0010 Amendment 1, EORA-COMPONENT-STANDARDS.md |
+
 ### Promotion of earlier PROPOSED items
 - P-001 → **DECIDED** by D-016 (frontend/auth) + D-009 (database). Reverb, Redis/Horizon, S3-compatible storage and Docker remain PROPOSED until ADR-0007 version/compatibility check at Foundation stage.
 - P-002 → **DECIDED-DEFAULT**: pilot one plant per tenant, multi-plant-ready schema (no separate owner gate; contained in D-009/D-013 model).
@@ -66,9 +74,9 @@ These were proposed in the audit and are required to make D-009..D-019 implement
 - O-008: Hosting/provider, region, data residency (incl. Indonesian personal-data regulation review), SLO/RPO/RTO.
 - O-009: Pilot data migration, barcode/QR label standard, device/browser matrix, offline draft scope (proposed V1: production report draft and stock count draft only).
 - O-010: Logo/brand tokens, PDF watermark/print attribution policy. *(UX direction resolved by D-021; final mockup approval pending.)*
-- O-016: Final approval of Modern Corporate Blue mockups (`design/mockups/01–04`) — gate for production frontend.
-- O-017: Navigation labels from the owner's example: "Material Loss" proposed as **Material Variance** (BR-REC-02) and "Finish Good" as **Finished Goods**; "Sales Orders" (depends on O-011) and "Master Production Schedule" (depends on O-014) shown as pending decisions.
-- O-018: Placement of notification bell and profile — topbar (owner spec, implemented) vs bottom of primary sidebar (reference screenshot).
+- O-016: **CONDITIONALLY APPROVED (2026-10-08)** as design baseline. UX risks resolved in prototype v2.1 (D-026); **final approval of the refined prototypes is still required before production frontend.**
+- ~~O-017~~ → **DECIDED as D-024** (approved with conditions, 2026-10-08).
+- ~~O-018~~ → **DECIDED (2026-10-08)**: bell and profile at the right of the topbar; primary sidebar for modules only; secondary sidebar for grouped features.
 - O-011: Demand netting rule: forecast consumption bucket (proposed weekly), kanban as release against blanket PO line, and whether Sales Order is a separate entity in V1 (proposed: no).
 - O-012: Default variance tolerance when tenant has not configured one (proposed: strict — any non-zero final variance opens a case).
 - O-013: RM incoming inspection: V1 minimal `BLOCKED` on receipt + manual release (proposed) vs full incoming inspection.
@@ -84,6 +92,7 @@ These were proposed in the audit and are required to make D-009..D-019 implement
 | Date | Change | Owner | Affected |
 |---|---|---|---|
 | 2026-10-08 | Baseline register D-001..D-008, P-001..P-005, O-001..O-010 | Product owner | All |
+| 2026-10-08 | UI approval gate follow-up: O-016 conditionally approved; O-017 → D-024; O-018 decided; D-025 badge policy; D-026 UX refinements (ADR-0010 Amendment 1); git commits permitted locally (no push) | Product owner (decision), Claude Code (record) | docs 02, 15, 16, 19, ADR-0005, ADR-0010, uiux/*, design/mockups v2.1 |
 | 2026-10-08 | UI redesign: D-021 supersedes D-018; D-022 skill rule; D-023 token contrast adjustments; O-016..O-018 added | Product owner (decision), Claude Code (record) | docs 06, uiux/*, ADR-0009 (superseded), ADR-0010, CLAUDE.md, AGENTS.md, README, design/mockups |
 | 2026-10-08 | AG-01..AG-12 recorded as D-009..D-020; P-001..P-004 promoted; DD-01..DD-08 derived; O-011..O-015 added from audit | Product owner (decision), Claude Code (record) | docs 02, 04, 05, 06, 09, 14, 15–21, ADR-0001..0009 |
 

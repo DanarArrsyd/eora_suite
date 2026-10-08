@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#172554">
 <title>Mobile PWA · EORA</title>
-<link rel="stylesheet" href="assets/eora-tokens.css?v=10">
-<link rel="stylesheet" href="assets/eora-ui.css?v=10">
+<link rel="stylesheet" href="assets/eora-tokens.css?v=30">
+<link rel="stylesheet" href="assets/eora-ui.css?v=30">
 <style>
   body { background: var(--color-bg-workspace); }
   .intro { max-width: 1720px; margin: 0 auto; padding: var(--space-6) var(--space-6) 0; }
@@ -27,7 +27,7 @@
   .m-head .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .m-head h2 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
   .m-head .sub { font-size: 12.5px; color: #CBD5E1; margin-top: 2px; }
-  .m-head .ib { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; border: 0; background: rgba(255,255,255,.08); color: #FFFFFF; position: relative; }
+  .m-head .ib { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; border: 0; background: rgba(255,255,255,.08); color: #FFFFFF; position: relative; }
   .m-head .ib .badge-count { box-shadow: 0 0 0 2px var(--color-bg-sidebar-primary); }
   .m-body { flex: 1; overflow-y: auto; padding: 14px 14px 18px; display: flex; flex-direction: column; gap: 12px; }
   .m-card { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: var(--radius-xl); padding: 14px; }
@@ -49,7 +49,7 @@
   .btn-m.primary:hover { background: var(--color-primary-hover); }
   .btn-m[disabled] { opacity: .5; cursor: not-allowed; }
   .seg2 { display: grid; grid-template-columns: 1fr 1fr; background: var(--color-bg-hover); border-radius: 10px; padding: 3px; }
-  .seg2 button { min-height: 40px; border: 0; border-radius: 8px; background: none; font-size: 13.5px; font-weight: 600; color: var(--color-text-secondary); cursor: pointer; }
+  .seg2 button { min-height: 44px; border: 0; border-radius: 8px; background: none; font-size: 13.5px; font-weight: 600; color: var(--color-text-secondary-strong); cursor: pointer; }
   .seg2 button[aria-selected="true"] { background: var(--color-bg-surface); color: var(--color-text-primary); box-shadow: var(--shadow-card); }
   .banner { display: flex; gap: 10px; align-items: flex-start; border-radius: 10px; padding: 10px 12px; font-size: 13px; }
   .banner b { font-weight: 600; }
@@ -82,7 +82,8 @@
   .viewfinder .vf-text { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 12.5px; }
 
   /* Bottom navigation */
-  .bnav { flex: none; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--color-bg-surface); border-top: 1px solid var(--color-border); padding: 4px 4px 10px; }
+  .bnav { flex: none; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--color-bg-surface); border-top: 1px solid var(--color-border); padding: 4px 4px calc(10px + env(safe-area-inset-bottom)); }
+  .m-head .ib .hb { position: absolute; top: -4px; right: -6px; box-shadow: 0 0 0 2px var(--color-bg-sidebar-primary); }
   .bnav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; font-size: 11px; font-weight: 600; color: var(--color-text-secondary); text-decoration: none; position: relative; }
   .bnav a[aria-current="page"] { color: var(--color-primary); }
   .bnav a .icon { width: 22px; height: 22px; }
@@ -90,15 +91,16 @@
   .bnav .scan[aria-current="page"] span.l { color: var(--color-primary); }
   .bnav .scan .fab { width: 48px; height: 48px; border-radius: 14px; background: var(--color-primary); display: grid; place-items: center; margin-top: -18px; box-shadow: 0 4px 12px rgba(53, 89, 199, .35); }
   .bnav .scan span.l { color: var(--color-text-secondary); }
-  .bnav .nb { position: absolute; top: 4px; left: calc(50% + 4px); min-width: 16px; height: 16px; border-radius: 8px; background: var(--color-danger); color: #FFFFFF; font-size: 10px; line-height: 16px; text-align: center; padding: 0 4px; }
+  .bnav .nb { position: absolute; top: 2px; left: calc(50% + 4px); min-width: 18px; height: 18px; border-radius: 9px; background: var(--color-danger); color: #FFFFFF; font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; padding: 0 5px; }
 
   .list-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; padding: 0 2px; border-bottom: 1px solid var(--color-border); font-size: 14px; }
   .list-row:last-child { border-bottom: 0; }
   .list-row .lr-sub { font-size: 12px; color: var(--color-text-secondary); }
-  .switch { width: 46px; height: 28px; border-radius: 14px; background: var(--color-border-strong); border: 0; position: relative; cursor: pointer; flex: none; }
-  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #FFFFFF; transition: transform var(--dur-fast) var(--ease); box-shadow: var(--shadow-card); }
-  .switch[aria-checked="true"] { background: var(--color-primary); }
-  .switch[aria-checked="true"]::after { transform: translateX(18px); }
+  .switch { width: 56px; height: 44px; border: 0; background: transparent; position: relative; cursor: pointer; flex: none; }
+  .switch::before { content: ""; position: absolute; left: 4px; top: 8px; width: 48px; height: 28px; border-radius: 14px; background: var(--color-border-control); transition: background var(--dur-fast) var(--ease); }
+  .switch::after { content: ""; position: absolute; top: 11px; left: 7px; width: 22px; height: 22px; border-radius: 50%; background: #FFFFFF; transition: transform var(--dur-fast) var(--ease); box-shadow: var(--shadow-card); }
+  .switch[aria-checked="true"]::before { background: var(--color-primary); }
+  .switch[aria-checked="true"]::after { transform: translateX(20px); }
   .notif-m { display: grid; grid-template-columns: 36px 1fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--color-border); }
   .notif-m:last-child { border-bottom: 0; }
   .notif-m .t { font-size: 14px; font-weight: 600; }
@@ -112,7 +114,7 @@
 </style>
 </head>
 <body>
-<div class="proto-note" role="note"><i data-lucide="flask-conical" class="icon" aria-hidden="true"></i><span><b>Mockup 03 · Mobile PWA</b> — same Modern Corporate Blue design system, mobile-specific navigation. SAMPLE DATA. Wired: steppers, QC split, material confirmation, tabs, toggles.</span><span style="margin-left:auto"><a href="index.html">All mockups</a></span></div>
+<div class="proto-note" role="note"><i data-lucide="flask-conical" class="icon" aria-hidden="true"></i><span><b>Mockup 03 · Mobile PWA (v2.1)</b> — same Modern Corporate Blue design system, bottom navigation, numeric badges only for actionable items. SAMPLE DATA. Wired: steppers, QC split, material confirmation, tabs, toggles.</span><span style="margin-left:auto"><a href="index.html">All mockups</a></span></div>
 <div class="intro">
   <h1>EORA mobile — operator, QC and warehouse</h1>
   <p>Bottom navigation replaces the desktop dual sidebar. Scan is the central action. Inputs use steppers and numeric keypads (48 px targets). Offline work is always a draft; nothing shows as posted until the server confirms.</p>
@@ -123,7 +125,7 @@
   <!-- 1 MY SHIFT -->
   <figure><div class="device">
     <div class="sbar"><span>07:42</span><span>5G · 82%</span></div>
-    <div class="m-head"><div class="row"><div><h2>My Shift</h2><div class="sub">S1 07:00–15:00 · WC-PRESS1 · Plant A</div></div><button class="ib" type="button" aria-label="Notifications, 3 unread"><i data-lucide="bell" class="icon icon-lg" aria-hidden="true"></i><span class="badge-count">3</span></button></div></div>
+    <div class="m-head"><div class="row"><div><h2>My Shift</h2><div class="sub">S1 07:00–15:00 · WC-PRESS1 · Plant A</div></div><button class="ib" type="button" aria-label="Notifications: 2 need action"><i data-lucide="bell" class="icon icon-lg" aria-hidden="true"></i><span class="nbadge hb" aria-hidden="true">2</span></button></div></div>
     <div class="m-body">
       <div class="m-card">
         <div style="display:flex;justify-content:space-between;align-items:center"><h3>WO-1201 · BRKT-310</h3><span class="badge badge-info">Running</span></div>
@@ -136,7 +138,7 @@
       <div class="m-sec">Shortcuts</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn-m" type="button"><i data-lucide="clipboard-pen" class="icon" aria-hidden="true"></i>Report output</button><button class="btn-m" type="button"><i data-lucide="timer-off" class="icon" aria-hidden="true"></i>Log downtime</button></div>
     </div>
-    <nav class="bnav" aria-label="Main"><a href="#" aria-current="page"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+    <nav class="bnav" aria-label="Main"><a href="#" aria-current="page"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">4</span>Tasks<span class="sr-only">, 4 to do</span></a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">2</span>Inbox<span class="sr-only">, 2 need action</span></a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
   </div><figcaption><b>1 · My Shift.</b> Current WO, progress and what blocks the shift. Material at Production is shown in kg, output in pcs.</figcaption></figure>
 
   <!-- 2 MY TASKS -->
@@ -150,7 +152,7 @@
       <button class="task" type="button"><span class="ti-ico badge-info"><i data-lucide="clipboard-pen" class="icon icon-lg" aria-hidden="true"></i></span><span><div class="ti">Report output RUN-1201-S1</div><div class="ts">At shift end · 15:00</div></span><span class="badge badge-neutral">Later</span></button>
       <button class="task" type="button"><span class="ti-ico badge-info"><i data-lucide="clipboard-list" class="icon icon-lg" aria-hidden="true"></i></span><span><div class="ti">Stock count WC-PRESS1</div><div class="ts">Snapshot 14:30 · blind count</div></span><span class="badge badge-neutral">Later</span></button>
     </div>
-    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#" aria-current="page"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#" aria-current="page"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">4</span>Tasks<span class="sr-only">, 4 to do</span></a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">2</span>Inbox<span class="sr-only">, 2 need action</span></a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
   </div><figcaption><b>2 · My Tasks.</b> One list ordered by urgency; status as text badge, not colour alone.</figcaption></figure>
 
   <!-- 3 SCAN -->
@@ -165,7 +167,7 @@
       <div class="m-sec">Recent scans</div>
       <div class="m-card" style="padding:4px 14px"><div class="list-row"><span><b>C-10</b><div class="lr-sub">SPCC 1.2 × 120 · 1,980.200 kg</div></span><span class="badge badge-success">Unrestricted</span></div><div class="list-row"><span><b>C-12</b><div class="lr-sub">SPCC 1.2 × 120 · 702.400 kg</div></span><span class="badge badge-danger">Blocked</span></div></div>
     </div>
-    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan" aria-current="page"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">4</span>Tasks<span class="sr-only">, 4 to do</span></a><a href="#" class="scan" aria-current="page"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">2</span>Inbox<span class="sr-only">, 2 need action</span></a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
   </div><figcaption><b>3 · Scan material.</b> Camera with manual fallback. Error recovery says what failed, that nothing was posted, and what to do next.</figcaption></figure>
 
   <!-- 4 PRODUCTION REPORTING -->
@@ -184,7 +186,7 @@
       <div class="banner" id="pcsCheck" role="status" style="background:var(--color-bg-surface);border:1px solid var(--color-border)"></div>
       <button class="btn-m primary" type="button">Review before posting</button>
     </div>
-    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#" aria-current="page"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#" aria-current="page"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">4</span>Tasks<span class="sr-only">, 4 to do</span></a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">2</span>Inbox<span class="sr-only">, 2 need action</span></a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
   </div><figcaption><b>4 · Production reporting.</b> Measure first, then four output categories with their destination. Live check against theoretical pieces; over-reporting needs supervisor confirmation.</figcaption></figure>
 
   <!-- 5 QUALITY INSPECTION -->
@@ -204,7 +206,7 @@
       <button class="btn-m primary" type="button" disabled aria-describedby="offl">Submit disposition</button>
       <span id="offl" class="hint" style="text-align:center">Submit is available when online.</span>
     </div>
-    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#" aria-current="page"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#" aria-current="page"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">4</span>Tasks<span class="sr-only">, 4 to do</span></a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">2</span>Inbox<span class="sr-only">, 2 need action</span></a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
   </div><figcaption><b>5 · Quality inspection (offline).</b> Partial disposition; the remainder stays Pending QC. Offline state is explicit; submit explains why it is disabled.</figcaption></figure>
 
   <!-- 6 MATERIAL CONFIRMATION -->
@@ -219,13 +221,13 @@
       <button class="btn-m primary" type="button" id="confirmBtn"><i data-lucide="check" class="icon" aria-hidden="true"></i>Confirm receipt</button>
       <p class="hint" style="text-align:center;margin:0">Confirmation is posted by the server. A different weight opens a custody discrepancy case.</p>
     </div>
-    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#" aria-current="page"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#" aria-current="page"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">4</span>Tasks<span class="sr-only">, 4 to do</span></a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">2</span>Inbox<span class="sr-only">, 2 need action</span></a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
   </div><figcaption><b>6 · Material confirmation.</b> Two-step custody (tenant option). Tap Confirm to see the server-acknowledged result with document number.</figcaption></figure>
 
   <!-- 7 INBOX -->
   <figure><div class="device">
     <div class="sbar"><span>09:20</span><span>5G · 79%</span></div>
-    <div class="m-head"><div class="row"><div><h2>Inbox</h2><div class="sub">3 unread · 2 need action</div></div><button class="ib" type="button" aria-label="Mark all as read"><i data-lucide="check-check" class="icon icon-lg" aria-hidden="true"></i></button></div></div>
+    <div class="m-head"><div class="row"><div><h2>Inbox</h2><div class="sub">2 need action · 3 unread</div></div><button class="ib" type="button" aria-label="Mark all as read"><i data-lucide="check-check" class="icon icon-lg" aria-hidden="true"></i></button></div></div>
     <div class="m-body">
       <div class="seg2" role="tablist" aria-label="Inbox filter"><button role="tab" aria-selected="true" type="button">All</button><button role="tab" aria-selected="false" type="button">Action required · 2</button></div>
       <div class="m-card" style="padding:0 14px">
@@ -236,7 +238,7 @@
       </div>
       <p class="hint" style="text-align:center;margin:0">Opening a notification re-checks your access. Push previews hide quantities by default.</p>
     </div>
-    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#" aria-current="page"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">4</span>Tasks<span class="sr-only">, 4 to do</span></a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#" aria-current="page"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">2</span>Inbox<span class="sr-only">, 2 need action</span></a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
   </div><figcaption><b>7 · Notification inbox.</b> Persistent inbox is the record; push is optional. Action required vs information is labelled.</figcaption></figure>
 
   <!-- 8 PROFILE -->
@@ -246,7 +248,7 @@
     <div class="m-body">
       <div class="m-card" style="padding:4px 14px">
         <div class="list-row"><span>Company<div class="lr-sub">PT Sample Manufaktur</div></span></div>
-        <div class="list-row"><span>Plant · work centers<div class="lr-sub">Plant A · WC-PRESS1, WC-PRESS3</div></span><button class="btn btn-sm" type="button">Switch</button></div>
+        <div class="list-row"><span>Plant · work centers<div class="lr-sub">Plant A · WC-PRESS1, WC-PRESS3</div></span><button class="btn" type="button" style="height:44px">Switch</button></div>
       </div>
       <div class="m-sec">Notifications</div>
       <div class="m-card" style="padding:4px 14px">
@@ -262,7 +264,7 @@
       <button class="btn-m" type="button" style="color:var(--color-danger-fg)"><i data-lucide="log-out" class="icon" aria-hidden="true"></i>Sign out</button>
       <p class="hint" style="text-align:center;margin:0">Signing out deletes offline drafts on this device.</p>
     </div>
-    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#" aria-current="page"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">4</span>Tasks<span class="sr-only">, 4 to do</span></a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb" aria-hidden="true">2</span>Inbox<span class="sr-only">, 2 need action</span></a><a href="#" aria-current="page"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
   </div><figcaption><b>8 · Profile.</b> Scope, push opt-in with iOS note, offline drafts and session. Sign-out warns about draft deletion.</figcaption></figure>
 </div>
 

@@ -5,33 +5,31 @@
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Raw Material · EORA</title>
-<link rel="stylesheet" href="assets/eora-tokens.css?v=10">
-<link rel="stylesheet" href="assets/eora-ui.css?v=10">
+<link rel="stylesheet" href="assets/eora-tokens.css?v=30">
+<link rel="stylesheet" href="assets/eora-ui.css?v=30">
 <style>
   .page.flush { padding: 0; max-width: none; }
-  .ent-head { background: var(--color-bg-surface); padding: var(--space-5) var(--space-5) 0; }
-  .ent-head .page-header { margin-bottom: var(--space-3); }
-  .ent-body { background: var(--color-bg-surface); }
-  .bulkbar { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-5); background: var(--color-primary-subtle); color: var(--color-primary); font-size: 13px; font-weight: var(--fw-medium); border-bottom: 1px solid var(--color-border); }
-  .bulkbar[hidden] { display: none; }
-  .tab-note { font-size: 12px; color: var(--color-text-secondary); padding: var(--space-2) var(--space-5) 0; }
+  .ent-head { padding: var(--space-5) var(--space-5) 0; }
+  .ent-card { margin: 0 var(--space-5) var(--space-5); }
+  .tab-note { font-size: 12px; color: var(--color-text-secondary); padding: var(--space-2) var(--space-5) 0; margin: 0; }
   .demo-states { display: inline-flex; align-items: center; gap: var(--space-2); font-size: 12px; color: var(--color-text-secondary); }
-  .demo-states .select { height: 30px; width: 150px; font-size: 12.5px; }
+  .demo-states .select { height: 32px; width: 150px; font-size: 12.5px; }
   .drawer .dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mini { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: var(--space-2); }
   .mini th { text-align: left; font-size: 12px; color: var(--color-text-secondary); font-weight: var(--fw-semibold); padding: 6px 0; border-bottom: 1px solid var(--color-border); }
   .mini td { padding: 8px 0; border-bottom: 1px solid var(--color-border); }
   .mini .num { text-align: right; font-variant-numeric: tabular-nums; }
   .drawer h3 { font-size: 14px; font-weight: var(--fw-semibold); margin: var(--space-6) 0 0; }
+  @media (max-width: 767px) { .ent-head { padding: var(--space-4) var(--space-4) 0; } .ent-card { margin: 0 0 var(--space-4); border-radius: 0; border-left: 0; border-right: 0; } .demo-states label { display: none; } }
 </style>
 </head>
-<body data-module="inventory" data-item="raw-material" data-crumbs="Inventory|Raw Material" data-context="warehouse" data-proto="<b>Mockup 04 · EoraEnterprisePage list template</b> — Inventory › Raw Material, adapted from the owner's reference layout. SAMPLE DATA.">
+<body data-module="inventory" data-item="raw-material" data-crumbs="Inventory|Stock|Raw Material" data-context="warehouse" data-proto="<b>Mockup 04 · EoraEnterprisePage list template</b> — Inventory › Raw Material, adapted from the owner's reference layout. SAMPLE DATA.">
 <main id="page" class="page flush">
   <div class="ent-head">
     <div class="page-header">
       <div>
         <h1 class="page-title">Raw Material</h1>
-        <p class="page-desc">Raw material lots by stock status and location. Balances come from the inventory ledger; reservations reduce availability, never on-hand.</p>
+        <p class="page-desc">Raw material lots by stock status and location. Balances come from the inventory ledger; allocations reduce availability, never on-hand.</p>
       </div>
       <div class="page-actions">
         <span class="demo-states no-print"><label for="demoState">Prototype state</label><select class="select" id="demoState"><option value="data">Data</option><option value="loading">Loading</option><option value="empty">Filtered empty</option><option value="error">Error</option><option value="denied">No permission</option></select></span>
@@ -40,7 +38,7 @@
     </div>
   </div>
 
-  <div class="ent-body">
+  <section class="card dt-card ent-card" data-dt aria-label="Raw material lots">
     <div class="viewby">
       <span class="vb-label" id="vb-l">View by</span>
       <div class="tabs" role="tablist" aria-labelledby="vb-l">
@@ -52,74 +50,88 @@
         <button class="tab" role="tab" aria-selected="false" tabindex="-1" data-view="blocked">Blocked <span class="count" data-c="blocked"></span></button>
       </div>
     </div>
-    <p class="tab-note">Views are saved filters over approved dimensions: stock status (Unrestricted, Hold, Blocked), allocation, and location type (Material at Production). They do not create new stock statuses.</p>
+    <p class="tab-note">Views are saved filters over approved dimensions: stock status (Unrestricted, Hold, Blocked), allocation, and location type (Material at Production). They never create new stock statuses.</p>
 
     <div class="toolbar">
       <div class="left">
         <label class="input-icon search"><span class="sr-only">Search lots</span><i data-lucide="search" class="icon" aria-hidden="true"></i><input class="input" id="q" type="search" placeholder="Search lot, material, heat no."></label>
-        <button class="icon-btn bordered" type="button" id="filterToggle" aria-pressed="true" aria-controls="segf" aria-label="Show filters"><i data-lucide="sliders-horizontal" class="icon" aria-hidden="true"></i></button>
+        <button class="icon-btn bordered filter-toggle-desktop" type="button" id="filterToggle" aria-pressed="true" aria-controls="segf" aria-label="Show filters"><i data-lucide="sliders-horizontal" class="icon" aria-hidden="true"></i></button>
+        <button class="btn filter-open-btn" type="button" data-filter-open aria-controls="segf" aria-expanded="false"><i data-lucide="sliders-horizontal" class="icon" aria-hidden="true"></i>Filters <span class="nbadge" style="background:var(--color-primary)">2</span></button>
         <span class="record-count" aria-live="polite"><b id="rc">214</b> lots</span>
       </div>
       <div class="right">
-        <button class="btn" type="button"><i data-lucide="upload" class="icon" aria-hidden="true"></i>Import</button>
         <div style="position:relative">
-          <button class="btn" type="button" id="exportBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenu"><i data-lucide="download" class="icon" aria-hidden="true"></i>Export<i data-lucide="chevron-down" class="icon" aria-hidden="true"></i></button>
-          <div class="popover" id="exportMenu" role="menu" hidden style="right:0;top:40px;width:240px">
-            <button class="menu-item" role="menuitem"><i data-lucide="file-spreadsheet" class="icon" aria-hidden="true"></i>Excel (.xlsx) — current filters</button>
-            <button class="menu-item" role="menuitem"><i data-lucide="file-text" class="icon" aria-hidden="true"></i>PDF — current filters</button>
+          <button class="btn" type="button" id="viewsBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="viewsMenu"><i data-lucide="bookmark" class="icon" aria-hidden="true"></i><span class="hide-sm">Views</span><i data-lucide="chevron-down" class="icon" aria-hidden="true"></i></button>
+          <div class="popover" id="viewsMenu" role="menu" hidden style="left:0;top:40px;width:240px">
+            <div class="menu-label">My views</div>
+            <button class="menu-item" role="menuitem"><i data-lucide="check" class="icon" aria-hidden="true"></i>RM-WH1 default</button>
+            <button class="menu-item" role="menuitem"><i data-lucide="bookmark" class="icon" aria-hidden="true"></i>Hold &amp; blocked lots</button>
+            <div class="menu-label">Shared with PPIC</div>
+            <button class="menu-item" role="menuitem"><i data-lucide="users" class="icon" aria-hidden="true"></i>Coil for next 7 days</button>
             <div class="menu-sep"></div>
-            <div style="padding:6px 12px;font-size:12px;color:var(--color-text-secondary)">Same server query and permissions as this table. Large exports run in the background.</div>
+            <button class="menu-item" role="menuitem"><i data-lucide="plus" class="icon" aria-hidden="true"></i>Save current filters…</button>
           </div>
         </div>
-        <button class="icon-btn bordered" type="button" aria-label="Print" onclick="window.print()"><i data-lucide="printer" class="icon" aria-hidden="true"></i></button>
-        <span class="vsep" aria-hidden="true"></span>
+        <button class="btn hide-sm" type="button"><i data-lucide="upload" class="icon" aria-hidden="true"></i>Import</button>
+        <div style="position:relative">
+          <button class="btn" type="button" id="exportBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenu"><i data-lucide="download" class="icon" aria-hidden="true"></i><span class="hide-sm">Export</span><i data-lucide="chevron-down" class="icon" aria-hidden="true"></i></button>
+          <div class="popover" id="exportMenu" role="menu" hidden style="right:0;top:40px;width:260px">
+            <button class="menu-item" role="menuitem"><i data-lucide="file-spreadsheet" class="icon" aria-hidden="true"></i>Excel (.xlsx) — current filters</button>
+            <button class="menu-item" role="menuitem"><i data-lucide="file-text" class="icon" aria-hidden="true"></i>PDF — current filters</button>
+            <button class="menu-item" role="menuitem"><i data-lucide="printer" class="icon" aria-hidden="true"></i>Print</button>
+            <div class="menu-sep"></div>
+            <div class="hint" style="padding:6px 12px">Same server query and permissions as this table. Large exports run in the background and notify you.</div>
+          </div>
+        </div>
+        <span class="vsep hide-sm" aria-hidden="true"></span>
+        <span data-dt-density></span>
         <button class="icon-btn bordered" type="button" aria-label="Column settings"><i data-lucide="columns-3" class="icon" aria-hidden="true"></i></button>
       </div>
     </div>
 
     <form class="segfilter" id="segf" aria-label="Filters" onsubmit="event.preventDefault(); EORA.toast('Prototype: filters apply server-side and sync to the URL.')">
+      <div class="sheet-head"><span>Filters</span><button class="icon-btn" type="button" data-filter-close aria-label="Close filters"><i data-lucide="x" class="icon icon-lg" aria-hidden="true"></i></button></div>
       <span class="seg-label">Filter by</span>
-      <label class="seg active"><span class="sr-only">Plant</span><select><option>Plant A</option></select><i data-lucide="chevron-down" class="icon" aria-hidden="true"></i></label>
-      <label class="seg active"><span class="sr-only">Warehouse</span><select><option>RM-WH1</option><option>All warehouses</option></select><i data-lucide="chevron-down" class="icon" aria-hidden="true"></i></label>
-      <label class="seg"><span class="sr-only">Material type</span><select><option>Material type</option><option>Coil</option><option>Sheet</option></select><i data-lucide="chevron-down" class="icon" aria-hidden="true"></i></label>
-      <label class="seg"><span class="sr-only">Grade</span><select><option>Grade</option><option>SPCC</option><option>SPHC</option></select><i data-lucide="chevron-down" class="icon" aria-hidden="true"></i></label>
-      <label class="seg"><span class="sr-only">Receipt date</span><input type="text" placeholder="Receipt date"><i data-lucide="calendar" class="icon" aria-hidden="true"></i></label>
-      <button class="seg-apply" type="submit">Apply</button>
-      <button class="seg-reset" type="reset">Reset</button>
+      <label class="seg active"><span class="seg-k">Plant</span><select id="fPlant" aria-label="Plant"><option>Plant A</option><option>Plant B</option></select><i data-lucide="chevron-down" class="icon" aria-hidden="true"></i></label>
+      <label class="seg active"><span class="seg-k">Warehouse</span><select id="fWh" aria-label="Warehouse (depends on plant)"><option>RM-WH1</option><option>RM-WH2</option><option>All warehouses</option></select><i data-lucide="chevron-down" class="icon" aria-hidden="true"></i></label>
+      <label class="seg"><span class="seg-k">Material type</span><select aria-label="Material type"><option value="">Material type</option><option>Coil</option><option>Sheet</option></select><i data-lucide="chevron-down" class="icon" aria-hidden="true"></i></label>
+      <label class="seg"><span class="seg-k">Grade</span><select aria-label="Grade"><option value="">Grade</option><option>SPCC</option><option>SPHC</option></select><i data-lucide="chevron-down" class="icon" aria-hidden="true"></i></label>
+      <label class="seg"><span class="seg-k">Receipt date</span><input type="text" placeholder="Receipt date" aria-label="Receipt date range"><i data-lucide="calendar" class="icon" aria-hidden="true"></i></label>
+      <div class="seg-actions"><button class="seg-apply" type="submit">Apply</button><button class="seg-reset" type="reset">Reset</button></div>
     </form>
-    <div class="chips" aria-label="Active filters"><span>Active:</span><span class="chip">Plant A</span><span class="chip">RM-WH1<button type="button" aria-label="Remove filter RM-WH1"><i data-lucide="x" class="icon" aria-hidden="true"></i></button></span><button class="btn-link" type="button">Save as view</button></div>
+    <div class="chips" aria-label="Active filters"><span>Active:</span><span class="chip locked" title="Plant comes from your workspace">Plant A</span><span class="chip">RM-WH1<button type="button" aria-label="Remove filter RM-WH1"><i data-lucide="x" class="icon" aria-hidden="true"></i></button></span><button class="btn-link" type="button">Save as view</button></div>
 
     <div class="bulkbar" id="bulk" hidden><span id="selCount">0 selected</span><button class="btn btn-sm" type="button">Print labels</button><button class="btn btn-sm" type="button">Request issue</button><button class="btn-link" type="button" id="clearSel" style="margin-left:auto">Clear selection</button></div>
 
     <div class="table-wrap" id="tableWrap">
-      <table class="dt tall" id="dt">
-        <thead><tr>
-          <th scope="col" class="col-check"><input type="checkbox" id="selAll" aria-label="Select all rows on this page"></th>
-          <th scope="col" class="sortable" aria-sort="ascending" data-k="lot"><span class="sort">Lot<i data-lucide="arrow-up-down" class="icon" aria-hidden="true"></i></span></th>
-          <th scope="col">Material</th>
-          <th scope="col" class="num" title="Available + Allocated + Hold + Blocked = on-hand in warehouse">Warehouse stock <span style="font-weight:400">(base UOM)</span></th>
-          <th scope="col" class="num sortable" aria-sort="none" data-k="atprod"><span class="sort">At production<i data-lucide="arrow-up-down" class="icon" aria-hidden="true"></i></span></th>
-          <th scope="col">Location</th>
-          <th scope="col" class="sortable" aria-sort="none" data-k="rcv"><span class="sort">Received<i data-lucide="arrow-up-down" class="icon" aria-hidden="true"></i></span></th>
-          <th scope="col" class="col-actions" style="width:120px"><span class="sr-only">Actions</span></th>
-        </tr></thead>
+      <table class="dt reflow" id="dt">
+        <thead>
+          <tr class="grp">
+            <th scope="colgroup" colspan="3" class="sticky-start"><span class="sr-only">Lot</span></th>
+            <th scope="colgroup" colspan="4" class="grp-start" title="Available + Allocated + Hold + Blocked = on-hand in warehouse">Warehouse stock <span style="font-weight:400;color:var(--color-text-secondary)">(base UOM)</span></th>
+            <th scope="colgroup" colspan="4" class="grp-start"><span class="sr-only">Other</span></th>
+          </tr>
+          <tr>
+            <th scope="col" class="col-check sticky-start"><input type="checkbox" id="selAll" aria-label="Select all rows on this page"></th>
+            <th scope="col" class="sortable sticky-start-2" aria-sort="ascending" data-k="lot"><span class="sort">Lot<i data-lucide="arrow-up-down" class="icon" aria-hidden="true"></i></span></th>
+            <th scope="col">Material</th>
+            <th scope="col" class="num grp-start">Available</th>
+            <th scope="col" class="num">Allocated</th>
+            <th scope="col" class="num">Hold</th>
+            <th scope="col" class="num">Blocked</th>
+            <th scope="col" class="num sortable grp-start" aria-sort="none" data-k="atprod"><span class="sort">At production<i data-lucide="arrow-up-down" class="icon" aria-hidden="true"></i></span></th>
+            <th scope="col">Location</th>
+            <th scope="col" class="sortable" aria-sort="none" data-k="rcv"><span class="sort">Received<i data-lucide="arrow-up-down" class="icon" aria-hidden="true"></i></span></th>
+            <th scope="col" class="col-actions sticky-end"><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
         <tbody id="rows"></tbody>
       </table>
       <div id="stateBox"></div>
     </div>
-
-    <div class="pagination" id="pager">
-      <div class="page-size"><label for="ps">Items per page</label><select class="select" id="ps"><option>20</option><option>50</option><option>100</option></select></div>
-      <div class="goto"><label for="gp">Go to page</label><input class="input" id="gp" inputmode="numeric" placeholder="1–11"><button class="icon-btn bordered" type="button" aria-label="Go"><i data-lucide="arrow-right" class="icon" aria-hidden="true"></i></button></div>
-      <nav class="pages" aria-label="Pagination">
-        <button class="nav-btn" type="button" disabled><i data-lucide="chevrons-left" class="icon" aria-hidden="true"></i>First</button>
-        <button class="nav-btn" type="button" disabled><i data-lucide="chevron-left" class="icon" aria-hidden="true"></i>Prev</button>
-        <button class="page-btn" type="button" aria-current="page">1</button><button class="page-btn" type="button">2</button><button class="page-btn" type="button">3</button><span aria-hidden="true">…</span><button class="page-btn" type="button">11</button>
-        <button class="nav-btn" type="button">Next<i data-lucide="chevron-right" class="icon" aria-hidden="true"></i></button>
-        <button class="nav-btn" type="button">Last<i data-lucide="chevrons-right" class="icon" aria-hidden="true"></i></button>
-      </nav>
-    </div>
-  </div>
+    <p class="hint" style="margin:0;padding:var(--space-2) var(--space-5);border-top:1px solid var(--color-border)">Warehouse stock buckets are disjoint: Available + Allocated + Hold + Blocked = on-hand in the warehouse. Material at Production is shown separately and is still material stock.</p>
+    <div data-dt-pagination id="pager" data-total="214" data-size="20" data-page="1"></div>
+  </section>
 </main>
 
 <div class="drawer-backdrop" id="dbk" hidden></div>
@@ -130,59 +142,60 @@
 </aside>
 
 <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" integrity="sha384-hJnF5AwidE18GSWTAGHv3ByzzvfNZ1Tcx5y1UUV3WkauuMCEzBJBMSwSt/PUPXnM" crossorigin="anonymous"></script>
-<script src="assets/eora-nav.config.js?v=10"></script>
-<script src="assets/eora-shell.js?v=10"></script>
-<script src="assets/eora-page.js?v=10"></script>
+<script src="assets/eora-nav.config.js?v=30"></script>
+<script src="assets/eora-shell.js?v=30"></script>
 <script>
-  // SAMPLE rows representing one server page. Production: TanStack Table with manualPagination/manualSorting.
-  const U = { kg: 'kg', sh: 'sheet' };
+  // SAMPLE rows representing one server page. Production: TanStack Table, manual pagination/sorting/filtering.
   const DATA = [
-    { lot: 'C-08', item: 'RM-SPCC-12-120', mat: 'SPCC 1.2 × 120 coil', u: 'kg', un: '2,450.000', al: '700.000', ho: '0.000', bl: '0.000', ap: '0.000', loc: 'RM-WH1-A03', more: 0, rcv: '05 Oct 2026', heat: 'H-77120', cert: 'MC-55102' },
-    { lot: 'C-09', item: 'RM-SPCC-12-120', mat: 'SPCC 1.2 × 120 coil', u: 'kg', un: '2,380.500', al: '0.000', ho: '0.000', bl: '0.000', ap: '0.000', loc: 'RM-WH1-A04', more: 0, rcv: '05 Oct 2026', heat: 'H-77131', cert: '—' },
-    { lot: 'C-10', item: 'RM-SPCC-12-120', mat: 'SPCC 1.2 × 120 coil', u: 'kg', un: '1,980.200', al: '0.000', ho: '0.000', bl: '0.000', ap: '0.000', loc: 'RM-WH1-A05', more: 0, rcv: '06 Oct 2026', heat: 'H-77188', cert: 'MC-55188' },
-    { lot: 'C-07', item: 'RM-SPCC-12-120', mat: 'SPCC 1.2 × 120 coil', u: 'kg', un: '0.000', al: '0.000', ho: '0.000', bl: '0.000', ap: '47.600', loc: 'WC-PRESS1', more: 0, rcv: '01 Oct 2026', heat: 'H-77002', cert: 'MC-54990' },
-    { lot: 'C-07-R1', item: 'RM-SPCC-12-120', mat: 'SPCC 1.2 × 120 remnant', u: 'kg', un: '0.000', al: '0.000', ho: '0.000', bl: '0.000', ap: '40.000', loc: 'WC-PRESS1', more: 0, rcv: '07 Oct 2026', heat: 'H-77002', cert: 'from C-07' },
-    { lot: 'C-11', item: 'RM-SPCC-16-150', mat: 'SPCC 1.6 × 150 coil', u: 'kg', un: '3,120.000', al: '0.000', ho: '0.000', bl: '0.000', ap: '0.000', loc: 'RM-WH1-B01', more: 0, rcv: '06 Oct 2026', heat: 'H-80211', cert: 'MC-56010' },
-    { lot: 'C-12', item: 'RM-SPCC-12-120', mat: 'SPCC 1.2 × 120 coil', u: 'kg', un: '0.000', al: '0.000', ho: '0.000', bl: '702.400', ap: '0.000', loc: 'RM-WH1-RCV', more: 0, rcv: '08 Oct 2026', heat: 'H-77240', cert: 'Pending' },
-    { lot: 'S-210', item: 'RM-SPHC-20-SHT', mat: 'SPHC 2.0 × 1219 × 2438 sheet', u: 'sheet', un: '120', al: '0', ho: '0', bl: '0', ap: '0', loc: 'RM-WH1-C02', more: 1, rcv: '02 Oct 2026', heat: 'H-90011', cert: 'MC-57001' },
-    { lot: 'S-211', item: 'RM-SPHC-20-SHT', mat: 'SPHC 2.0 × 1219 × 2438 sheet', u: 'sheet', un: '60', al: '20', ho: '0', bl: '0', ap: '0', loc: 'RM-WH1-C03', more: 2, rcv: '03 Oct 2026', heat: 'H-90034', cert: 'MC-57012' },
-    { lot: 'S-207', item: 'RM-SPHC-20-SHT', mat: 'SPHC 2.0 × 1219 × 2438 sheet', u: 'sheet', un: '0', al: '0', ho: '0', bl: '0', ap: '22', loc: 'WC-PRESS3', more: 0, rcv: '28 Sep 2026', heat: 'H-89977', cert: 'MC-56950' },
-    { lot: 'S-205', item: 'RM-SPHC-20-SHT', mat: 'SPHC 2.0 × 1219 × 2438 sheet', u: 'sheet', un: '0', al: '0', ho: '35', bl: '0', ap: '0', loc: 'RM-WH1-QH1', more: 0, rcv: '27 Sep 2026', heat: 'H-89960', cert: 'MC-56941' },
+    { lot: 'C-07', item: 'RM-SPCC-12-120', mat: 'SPCC 1.2 × 120 coil', u: 'kg', un: 0, al: 0, ho: 0, bl: 0, ap: 47.6, loc: 'WC-PRESS1', more: 0, rcv: '01 Oct 2026', heat: 'H-77002', cert: 'MC-54990' },
+    { lot: 'C-07-R1', item: 'RM-SPCC-12-120', mat: 'SPCC 1.2 × 120 remnant', u: 'kg', un: 0, al: 0, ho: 0, bl: 0, ap: 40, loc: 'WC-PRESS1', more: 0, rcv: '07 Oct 2026', heat: 'H-77002', cert: 'from C-07' },
+    { lot: 'C-08', item: 'RM-SPCC-12-120', mat: 'SPCC 1.2 × 120 coil', u: 'kg', un: 2450, al: 700, ho: 0, bl: 0, ap: 0, loc: 'RM-WH1-A03', more: 0, rcv: '05 Oct 2026', heat: 'H-77120', cert: 'MC-55102' },
+    { lot: 'C-09', item: 'RM-SPCC-12-120', mat: 'SPCC 1.2 × 120 coil', u: 'kg', un: 2380.5, al: 0, ho: 0, bl: 0, ap: 0, loc: 'RM-WH1-A04', more: 0, rcv: '05 Oct 2026', heat: 'H-77131', cert: '—' },
+    { lot: 'C-10', item: 'RM-SPCC-12-120', mat: 'SPCC 1.2 × 120 coil', u: 'kg', un: 1980.2, al: 0, ho: 0, bl: 0, ap: 0, loc: 'RM-WH1-A05', more: 0, rcv: '06 Oct 2026', heat: 'H-77188', cert: 'MC-55188' },
+    { lot: 'C-11', item: 'RM-SPCC-16-150', mat: 'SPCC 1.6 × 150 coil', u: 'kg', un: 3120, al: 0, ho: 0, bl: 0, ap: 0, loc: 'RM-WH1-B01', more: 0, rcv: '06 Oct 2026', heat: 'H-80211', cert: 'MC-56010' },
+    { lot: 'C-12', item: 'RM-SPCC-12-120', mat: 'SPCC 1.2 × 120 coil', u: 'kg', un: 0, al: 0, ho: 0, bl: 702.4, ap: 0, loc: 'RM-WH1-RCV', more: 0, rcv: '08 Oct 2026', heat: 'H-77240', cert: 'Pending' },
+    { lot: 'S-205', item: 'RM-SPHC-20-SHT', mat: 'SPHC 2.0 × 1219 × 2438 sheet', u: 'sheet', un: 0, al: 0, ho: 35, bl: 0, ap: 0, loc: 'RM-WH1-QH1', more: 0, rcv: '27 Sep 2026', heat: 'H-89960', cert: 'MC-56941' },
+    { lot: 'S-207', item: 'RM-SPHC-20-SHT', mat: 'SPHC 2.0 × 1219 × 2438 sheet', u: 'sheet', un: 0, al: 0, ho: 0, bl: 0, ap: 22, loc: 'WC-PRESS3', more: 0, rcv: '28 Sep 2026', heat: 'H-89977', cert: 'MC-56950' },
+    { lot: 'S-210', item: 'RM-SPHC-20-SHT', mat: 'SPHC 2.0 × 1219 × 2438 sheet', u: 'sheet', un: 120, al: 0, ho: 0, bl: 0, ap: 0, loc: 'RM-WH1-C02', more: 1, rcv: '02 Oct 2026', heat: 'H-90011', cert: 'MC-57001' },
+    { lot: 'S-211', item: 'RM-SPHC-20-SHT', mat: 'SPHC 2.0 × 1219 × 2438 sheet', u: 'sheet', un: 60, al: 20, ho: 0, bl: 0, ap: 0, loc: 'RM-WH1-C03', more: 2, rcv: '03 Oct 2026', heat: 'H-90034', cert: 'MC-57012' },
   ];
-  const nz = v => parseFloat(v.replace(/,/g, '')) > 0;
-  const VIEW = { all: () => true, unrestricted: r => nz(r.un), allocated: r => nz(r.al), atprod: r => nz(r.ap), hold: r => nz(r.ho), blocked: r => nz(r.bl) };
+  const fmt = (n, u) => n.toLocaleString('en-US', { minimumFractionDigits: u === 'kg' ? 3 : 0, maximumFractionDigits: u === 'kg' ? 3 : 0 });
+  const q4 = (n, u) => n > 0 ? `<span class="qv">${fmt(n, u)}<span class="uom">${u}</span></span>` : `<span class="qv"><span class="zero">–</span><span class="sr-only">zero</span></span>`;
+  const VIEW = { all: () => true, unrestricted: r => r.un > 0, allocated: r => r.al > 0, atprod: r => r.ap > 0, hold: r => r.ho > 0, blocked: r => r.bl > 0 };
+  const MENU = JSON.stringify([{ label: 'View details', icon: 'eye' }, { label: 'Movement ledger', icon: 'book-open' }, { label: 'Trace lot', icon: 'git-branch' }, { label: 'Print lot label', icon: 'printer' }, '-', { label: 'Request issue', icon: 'arrow-right-left' }, { label: 'Adjust stock', icon: 'sliders-horizontal', disabled: 'Requires Inventory Controller role' }]).replace(/'/g, '&#39;');
   let view = 'all', q = '', sortK = 'lot', sortDir = 1, state = 'data';
-  const tbody = document.getElementById('rows'), stateBox = document.getElementById('stateBox'), table = document.getElementById('dt');
+  const tbody = document.getElementById('rows'), stateBox = document.getElementById('stateBox'), table = document.getElementById('dt'), pager = document.getElementById('pager');
   document.querySelectorAll('[data-c]').forEach(c => c.textContent = DATA.filter(VIEW[c.dataset.c]).length);
 
-  const num = v => parseFloat(v.replace(/,/g, ''));
-  const fmt = (n, u) => n.toLocaleString('en-US', { minimumFractionDigits: u === 'kg' ? 3 : 0, maximumFractionDigits: u === 'kg' ? 3 : 0 });
-  // Disjoint buckets: Available + Allocated (both Unrestricted) + Hold + Blocked = on-hand in warehouse.
-  const qcell = r => `<div class="qbreak">${[['Available', fmt(num(r.un) - num(r.al), r.u), 'dot-ok'], ['Allocated', r.al, 'dot-info'], ['Hold', r.ho, 'dot-warn'], ['Blocked', r.bl, 'dot-danger']].map(([k, v, d]) => `<div class="q ${d} ${nz(v) ? '' : 'zero'}"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}</div>`;
   function render() {
     if (state !== 'data') return renderState();
-    table.hidden = false; stateBox.innerHTML = ''; document.getElementById('pager').hidden = false;
-    const rows = DATA.filter(VIEW[view]).filter(r => !q || (r.lot + r.mat + r.heat + r.item).toLowerCase().includes(q))
-      .sort((a, b) => { const A = sortK === 'atprod' ? parseFloat(a.ap.replace(/,/g, '')) : sortK === 'rcv' ? Date.parse(a.rcv) : a.lot; const B = sortK === 'atprod' ? parseFloat(b.ap.replace(/,/g, '')) : sortK === 'rcv' ? Date.parse(b.rcv) : b.lot; return (A > B ? 1 : A < B ? -1 : 0) * sortDir; });
-    document.getElementById('rc').textContent = view === 'all' && !q ? '214' : rows.length;
+    table.hidden = false; stateBox.innerHTML = ''; pager.hidden = false;
+    const key = r => sortK === 'atprod' ? r.ap : sortK === 'rcv' ? Date.parse(r.rcv) : r.lot;
+    const rows = DATA.filter(VIEW[view]).filter(r => !q || (r.lot + r.mat + r.heat + r.item).toLowerCase().includes(q)).sort((a, b) => (key(a) > key(b) ? 1 : key(a) < key(b) ? -1 : 0) * sortDir);
+    const total = view === 'all' && !q ? 214 : rows.length;
+    document.getElementById('rc').textContent = total;
+    pager.dataset.total = total; EoraTable.pagination(pager);
     if (!rows.length) { state = 'empty'; renderState(); state = 'data'; return; }
     tbody.innerHTML = rows.map(r => `<tr data-lot="${r.lot}">
-      <td class="col-check"><input type="checkbox" class="rowsel" aria-label="Select lot ${r.lot}"></td>
-      <td class="nowrap"><a class="id" href="#" data-open="${r.lot}">${r.lot}</a><span class="cell-sub">${r.item}</span></td>
-      <td style="min-width:200px">${r.mat}<span class="cell-sub">Heat ${r.heat} · UOM ${r.u}</span></td>
-      <td class="num">${qcell(r)}</td>
-      <td class="num">${nz(r.ap) ? `${r.ap}<span class="uom">${r.u}</span>` : '<span class="text-secondary">—</span>'}</td>
-      <td><span class="loc"><code>${r.loc}</code>${r.more ? `<a class="more" href="#">+${r.more}</a>` : ''}</span></td>
-      <td class="nowrap">${r.rcv}</td>
-      <td class="col-actions"><span class="row-actions"><button class="btn btn-sm btn-ghost" type="button" data-open="${r.lot}">View</button><button class="icon-btn" type="button" aria-label="More actions for ${r.lot}"><i data-lucide="ellipsis-vertical" class="icon" aria-hidden="true"></i></button></span></td></tr>`).join('');
+      <td class="col-check sticky-start"><input type="checkbox" class="rowsel" aria-label="Select lot ${r.lot}"></td>
+      <td class="nowrap sticky-start-2 lead" data-label="Lot"><a class="id" href="#" data-open="${r.lot}">${r.lot}</a><span class="cell-sub">${r.item}</span></td>
+      <td class="text-col" data-label="Material" title="${r.mat} · Heat ${r.heat} · UOM ${r.u}">${r.mat}<span class="cell-sub">Heat ${r.heat}</span></td>
+      <td class="num grp-start ${r.un - r.al > 0 ? '' : 'is-zero'}" data-label="Available">${q4(r.un - r.al, r.u)}</td>
+      <td class="num ${r.al > 0 ? '' : 'is-zero'}" data-label="Allocated">${q4(r.al, r.u)}</td>
+      <td class="num ${r.ho > 0 ? '' : 'is-zero'}" data-label="Hold">${q4(r.ho, r.u)}</td>
+      <td class="num ${r.bl > 0 ? '' : 'is-zero'}" data-label="Blocked">${q4(r.bl, r.u)}</td>
+      <td class="num grp-start ${r.ap > 0 ? '' : 'is-zero'}" data-label="At production">${q4(r.ap, r.u)}</td>
+      <td data-label="Location"><span class="loc"><code>${r.loc}</code>${r.more ? `<a class="more" href="#" aria-label="${r.more} more locations">+${r.more}</a>` : ''}</span></td>
+      <td class="nowrap" data-label="Received">${r.rcv}</td>
+      <td class="col-actions sticky-end"><span class="row-actions"><button class="btn btn-sm btn-ghost" type="button" data-open="${r.lot}">View</button><button class="icon-btn" type="button" data-row-menu='${MENU}' aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${r.lot}"><i data-lucide="ellipsis-vertical" class="icon" aria-hidden="true"></i></button></span></td></tr>`).join('');
     EORA.refreshIcons(); bindRows();
   }
   function renderState() {
-    table.hidden = true; document.getElementById('pager').hidden = state !== 'loading' ? true : false;
+    table.hidden = true; pager.hidden = state !== 'loading';
     const S = {
-      loading: `<table class="dt" aria-busy="true" aria-label="Loading raw material lots"><tbody>${Array.from({ length: 6 }).map(() => `<tr>${[40, 90, 200, 260, 90, 120, 90, 80].map(w => `<td><span class="skeleton" style="width:${w}px"></span></td>`).join('')}</tr>`).join('')}</tbody></table><p class="sr-only" role="status">Loading raw material lots</p>`,
+      loading: `<table class="dt" aria-busy="true" aria-label="Loading raw material lots"><tbody>${Array.from({ length: 6 }).map(() => `<tr>${[24, 70, 200, 80, 80, 60, 60, 80, 110, 90, 70].map(w => `<td><span class="skeleton" style="width:${w}px"></span></td>`).join('')}</tr>`).join('')}</tbody></table><p class="sr-only" role="status">Loading raw material lots</p>`,
       empty: `<div class="state"><div class="state-icon"><i data-lucide="search-x" class="icon icon-lg" aria-hidden="true"></i></div><h3>No lots match these filters</h3><p>Nothing in RM-WH1 matches the current view, search and filters. Clear filters or switch to All.</p><div class="actions"><button class="btn btn-sm" type="button" onclick="resetAll()">Clear filters</button></div></div>`,
-      error: `<div class="state error"><div class="state-icon"><i data-lucide="cloud-alert" class="icon icon-lg" aria-hidden="true"></i></div><h3>Raw material lots could not be loaded</h3><p>The server did not respond in time. Your filters are kept. Reference ID 7c1e-55a2 for support.</p><div class="actions"><button class="btn btn-sm btn-primary" type="button" onclick="setState('data')">Try again</button></div></div>`,
+      error: `<div class="state error" role="alert"><div class="state-icon"><i data-lucide="cloud-alert" class="icon icon-lg" aria-hidden="true"></i></div><h3>Raw material lots could not be loaded</h3><p>The server did not respond in time. Your filters are kept. Reference ID 7c1e-55a2 for support.</p><div class="actions"><button class="btn btn-sm btn-primary" type="button" onclick="setState('data')">Try again</button></div></div>`,
       denied: `<div class="state"><div class="state-icon"><i data-lucide="lock" class="icon icon-lg" aria-hidden="true"></i></div><h3>You don't have access to RM-WH1</h3><p>Your role can view Plant A raw material only for assigned warehouses. Ask a Company Admin to add RM-WH1 to your scope.</p><div class="actions"><button class="btn btn-sm" type="button">Request access</button></div></div>`,
     };
     stateBox.innerHTML = S[state]; EORA.refreshIcons();
@@ -198,41 +211,40 @@
     const k = th.dataset.k; sortDir = sortK === k ? -sortDir : 1; sortK = k;
     document.querySelectorAll('th.sortable').forEach(x => x.setAttribute('aria-sort', x === th ? (sortDir > 0 ? 'ascending' : 'descending') : 'none')); render();
   }));
-  // selection
+  document.getElementById('fPlant').addEventListener('change', e => { document.getElementById('fWh').innerHTML = e.target.value === 'Plant B' ? '<option>RM-WH3</option><option>All warehouses</option>' : '<option>RM-WH1</option><option>RM-WH2</option><option>All warehouses</option>'; EORA.toast('Warehouse options now limited to ' + e.target.value + '.'); });
   const bulk = document.getElementById('bulk'), selAll = document.getElementById('selAll');
-  function syncSel() { const all = [...document.querySelectorAll('.rowsel')], n = all.filter(c => c.checked).length; bulk.hidden = n === 0; document.getElementById('selCount').textContent = n + ' selected'; selAll.checked = n && n === all.length; selAll.indeterminate = n > 0 && n < all.length; all.forEach(c => c.closest('tr').setAttribute('aria-selected', String(c.checked))); }
+  function syncSel() { const all = [...document.querySelectorAll('.rowsel')], n = all.filter(c => c.checked).length; bulk.hidden = n === 0; document.getElementById('selCount').textContent = n + ' selected'; selAll.checked = n > 0 && n === all.length; selAll.indeterminate = n > 0 && n < all.length; all.forEach(c => c.closest('tr').setAttribute('aria-selected', String(c.checked))); }
   selAll.addEventListener('change', () => { document.querySelectorAll('.rowsel').forEach(c => c.checked = selAll.checked); syncSel(); });
   document.getElementById('clearSel').addEventListener('click', () => { document.querySelectorAll('.rowsel').forEach(c => c.checked = false); syncSel(); });
-  // drawer
   const drawer = document.getElementById('drawer'), dbk = document.getElementById('dbk'); let lastFocus;
   function openDrawer(lot) {
     const r = DATA.find(x => x.lot === lot); lastFocus = document.activeElement;
     document.getElementById('dr-title').textContent = r.lot; document.getElementById('dr-sub').textContent = r.mat;
+    const rows = [['Unrestricted', r.un, 'success'], ['Hold', r.ho, 'warning'], ['Blocked', r.bl, 'danger']].filter(x => x[1] > 0).map(([s, v, t]) => `<tr><td>${r.loc}</td><td><span class="badge badge-${t}">${s}</span></td><td class="num">${fmt(v, r.u)} ${r.u}</td></tr>`).join('') + (r.ap > 0 ? `<tr><td>${r.loc} · Material at Production</td><td><span class="badge badge-success">Unrestricted</span></td><td class="num">${fmt(r.ap, r.u)} ${r.u}</td></tr>` : '');
     document.getElementById('dr-body').innerHTML = `<dl class="dl"><div><dt>Item</dt><dd>${r.item}</dd></div><div><dt>Heat / mill cert</dt><dd>${r.heat} · ${r.cert}</dd></div><div><dt>Received</dt><dd>${r.rcv}</dd></div><div><dt>Base UOM</dt><dd>${r.u}</dd></div></dl>
-      <h3>Balance by location and status</h3><table class="mini"><thead><tr><th>Location</th><th>Status</th><th class="num">On hand</th></tr></thead><tbody>
-      ${nz(r.un) ? `<tr><td>${r.loc}</td><td><span class="badge badge-success">Unrestricted</span></td><td class="num">${r.un} ${r.u}</td></tr>` : ''}
-      ${nz(r.ho) ? `<tr><td>${r.loc}</td><td><span class="badge badge-warning">Hold</span></td><td class="num">${r.ho} ${r.u}</td></tr>` : ''}
-      ${nz(r.bl) ? `<tr><td>${r.loc}</td><td><span class="badge badge-danger">Blocked</span></td><td class="num">${r.bl} ${r.u}</td></tr>` : ''}
-      ${nz(r.ap) ? `<tr><td>${r.loc} · Material at Production</td><td><span class="badge badge-success">Unrestricted</span></td><td class="num">${r.ap} ${r.u}</td></tr>` : ''}
-      </tbody></table>${nz(r.al) ? `<p class="hint" style="margin-top:8px">Allocated ${r.al} ${r.u} to WO-1201 — reduces availability, not on-hand.</p>` : ''}
-      <h3>Recent movements</h3><table class="mini"><thead><tr><th>Document</th><th>Date</th><th class="num">Qty</th></tr></thead><tbody><tr><td>RM receipt RR-26-0419</td><td>${r.rcv}</td><td class="num">+ received</td></tr><tr><td colspan="3" class="hint">Full history in Movement Ledger.</td></tr></tbody></table>`;
-    drawer.hidden = false; dbk.hidden = false; document.getElementById('drClose').focus(); EORA.refreshIcons();
+      <h3>Balance by location and status</h3><table class="mini"><thead><tr><th>Location</th><th>Status</th><th class="num">On hand</th></tr></thead><tbody>${rows}</tbody></table>${r.al > 0 ? `<p class="hint" style="margin-top:8px">Allocated ${fmt(r.al, r.u)} ${r.u} to WO-1201 — reduces availability, not on-hand.</p>` : ''}
+      <h3>Recent movements</h3><table class="mini"><thead><tr><th>Document</th><th>Date</th><th class="num">Qty</th></tr></thead><tbody><tr><td>RM receipt RR-26-0419</td><td>${r.rcv}</td><td class="num">received</td></tr><tr><td colspan="3" class="hint">Full history in Movement Ledger.</td></tr></tbody></table>`;
+    drawer.hidden = false; dbk.hidden = false; EORA.lockScroll(true); document.getElementById('drClose').focus(); EORA.refreshIcons();
   }
-  function closeDrawer() { drawer.hidden = true; dbk.hidden = true; lastFocus && lastFocus.focus(); }
+  function closeDrawer() { if (drawer.hidden) return; drawer.hidden = true; dbk.hidden = true; EORA.lockScroll(false); lastFocus && lastFocus.focus(); }
   document.getElementById('drClose').addEventListener('click', closeDrawer); dbk.addEventListener('click', closeDrawer);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !drawer.hidden) closeDrawer(); });
+  drawer.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); closeDrawer(); } EORA.trapFocus(drawer, e); });
   function bindRows() {
     document.querySelectorAll('.rowsel').forEach(c => c.addEventListener('change', syncSel));
     document.querySelectorAll('[data-open]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); openDrawer(a.dataset.open); }));
   }
-  // export menu + filter toggle
-  const eb = document.getElementById('exportBtn'), em = document.getElementById('exportMenu');
-  eb.addEventListener('click', () => { const o = em.hidden; em.hidden = !o; eb.setAttribute('aria-expanded', String(o)); if (o) em.querySelector('.menu-item').focus(); });
-  em.querySelectorAll('.menu-item').forEach(m => m.addEventListener('click', () => { em.hidden = true; eb.setAttribute('aria-expanded', 'false'); EORA.toast('Prototype: export job queued with the same filters. You will be notified when it is ready.'); }));
-  document.addEventListener('click', e => { if (!em.hidden && !em.contains(e.target) && !eb.contains(e.target)) { em.hidden = true; eb.setAttribute('aria-expanded', 'false'); } });
+  [['exportBtn', 'exportMenu'], ['viewsBtn', 'viewsMenu']].forEach(([b, m]) => {
+    const eb = document.getElementById(b), em = document.getElementById(m);
+    eb.addEventListener('click', () => { const o = em.hidden; document.querySelectorAll('.toolbar .popover').forEach(p => p.hidden = true); em.hidden = !o; eb.setAttribute('aria-expanded', String(o)); if (o) em.querySelector('.menu-item').focus(); });
+    em.querySelectorAll('.menu-item').forEach(mi => mi.addEventListener('click', () => { em.hidden = true; eb.setAttribute('aria-expanded', 'false'); EORA.toast(b === 'exportBtn' ? 'Prototype: export job queued with the same filters. You will be notified when it is ready.' : 'Prototype: view “' + mi.textContent.trim() + '” applied.'); eb.focus(); }));
+    em.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); em.hidden = true; eb.setAttribute('aria-expanded', 'false'); eb.focus(); } const its = [...em.querySelectorAll('.menu-item')], i = its.indexOf(document.activeElement); if (e.key === 'ArrowDown') { e.preventDefault(); its[(i + 1) % its.length].focus(); } if (e.key === 'ArrowUp') { e.preventDefault(); its[(i - 1 + its.length) % its.length].focus(); } });
+    document.addEventListener('click', e => { if (!em.hidden && !em.contains(e.target) && !eb.contains(e.target)) { em.hidden = true; eb.setAttribute('aria-expanded', 'false'); } });
+  });
   const ft = document.getElementById('filterToggle'), sf = document.getElementById('segf');
-  ft.addEventListener('click', () => { const on = ft.getAttribute('aria-pressed') !== 'true'; ft.setAttribute('aria-pressed', String(on)); sf.hidden = !on; });
-  render();
+  ft.addEventListener('click', () => { const on = ft.getAttribute('aria-pressed') !== 'true'; ft.setAttribute('aria-pressed', String(on)); sf.style.display = on ? '' : 'none'; });
 </script>
+<script src="assets/eora-table.js?v=30"></script>
+<script src="assets/eora-page.js?v=30"></script>
+<script>render();</script>
 </body>
 </html>

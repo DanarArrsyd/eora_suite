@@ -13,6 +13,6 @@ Format: Nygard (Context / Decision / Consequences) plus Verification. Status val
 | [0007](ADR-0007-platform-runtime.md) | Platform runtime, queues, outbox, realtime, storage | Proposed | P-001 remainder, P-005 |
 | [0008](ADR-0008-query-definition.md) | Shared QueryDefinition for grid/export/dashboards | Accepted | D-006, DD-06 |
 | [0009](ADR-0009-ui-direction-design-system.md) | Hybrid UI direction and design system | **Superseded by ADR-0010** | D-018 (superseded) |
-| [0010](ADR-0010-modern-corporate-ui.md) | Modern Corporate Enterprise Workspace | Accepted (mockup final approval pending) | D-021 |
+| [0010](ADR-0010-modern-corporate-ui.md) | Modern Corporate Enterprise Workspace (+ Amendment 1) | Accepted; baseline conditionally approved, final approval pending | D-021, D-024..D-026 |
 
 No ADR authorizes implementation. Implementation still requires the next explicit owner approval (D-008, AG gate follow-up).

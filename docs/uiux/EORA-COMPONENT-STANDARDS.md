@@ -1,6 +1,6 @@
 # EORA Component Standards
 
-**Status:** DECIDED (D-021, ADR-0010) · **Canonical for:** component layering, contracts, filter bar, data table, states, accessibility and QA checklist. Tokens: [EORA-DESIGN-TOKENS.md](EORA-DESIGN-TOKENS.md). Shell: [EORA-NAVIGATION-ARCHITECTURE.md](EORA-NAVIGATION-ARCHITECTURE.md). Prototype CSS: `design/mockups/assets/eora-ui.css`.
+**Status:** DECIDED (D-021, ADR-0010 + Amendment 1 / D-026) · **Canonical for:** component layering, contracts, filter bar, data table, states, accessibility and QA checklist. Tokens: [EORA-DESIGN-TOKENS.md](EORA-DESIGN-TOKENS.md). Shell: [EORA-NAVIGATION-ARCHITECTURE.md](EORA-NAVIGATION-ARCHITECTURE.md). Prototype CSS: `design/mockups/assets/eora-ui.css`.
 
 ## 1. Layers (composition over duplication)
 | Layer | Package | Contents | May depend on |
@@ -32,23 +32,36 @@ type FilterField =
   | { key: string; type: 'date' | 'daterange'; label: string; presets?: string[] }
   | { key: 'customer'|'company'|'plant'|'warehouse'|'material'|'part'|'work_order'|'machine'|'shift'|'status'; type: 'entity'; label: string; dependsOn?: string[] };
 ```
-- Schema comes from `GET /api/v1/query/{resource}/schema` (ADR-0008), already filtered by permission.
-- Variants: **segmented** (default on list pages, reference style) and **stacked** (forms/side panels, mobile sheet).
-- Behaviour: Apply/Reset, active-filter chips with remove, saved views (server-side, per user/role), URL query sync, dependent filters (plant → warehouse → location), server-side filtering only, filtered-empty state with "Clear filters".
-- Keyboard: every segment reachable by Tab; Enter applies.
-- Only field configuration, data source and permission differ per page. No custom filter UI per module.
+- Schema from `GET /api/v1/query/{resource}/schema` (ADR-0008), already filtered by permission.
+- **One form element, two presentations** (Amendment 1): segmented bar on ≥ 768 px (`Filter by │ field ▾ │ … │ Apply │ Reset`); the **same form** becomes a bottom sheet on phones, opened by a "Filters (n)" button — dialog semantics, Close button, Esc, backdrop, focus trap, body scroll lock, 44 px controls, 16 px input text (prevents iOS zoom). No second filter component.
+- Behaviour: Apply/Reset, active-filter chips (scope chips locked, others removable), saved views (menu: my views, shared views, "Save current filters…"; stored server-side), URL query sync, dependent filters (plant → warehouse → location: child options re-query when the parent changes), server-side filtering only, filtered-empty state with "Clear filters".
+- Toolbar order (list pages): search · filter toggle · record count │ Views ▾ · Import · Export ▾ (Excel, PDF, Print) · density · column settings.
 
-## 5. EoraDataTable (TanStack Table)
+## 5. EoraDataTable (TanStack Table) — one table for every module
 - `manualPagination`, `manualSorting`, `manualFiltering`; server returns rows + `meta {total|has_more, as_of, timezone}`. Never load all rows for client pagination.
 - Columns from QueryDefinition schema + page column defs (format only). Column visibility, order and width saved per user. Resizing on wide data tables only.
-- Visual: header `--color-bg-subtle`, 12 px semibold secondary text; rows 44 px (60 px for compound cells); hover `--color-bg-subtle`; selected `--color-bg-selected`; sticky header inside the scroll container; horizontal scroll inside the card, never the page.
-- Alignment: text left; numbers, quantities, money, percentages **right** with tabular numerals; dates `DD Mon YYYY` (tenant locale) and times `HH:mm` + timezone in page meta.
-- Quantities: `QuantityWithUom` — `700.000 kg`, `80 sheet`, `760 pcs`. Decimal places per UOM (kg 3, pcs 0). Footer totals only within one UOM.
-- Row selection + bulk-action bar (permission-aware). Row actions: one visible primary action + overflow menu; unavailable actions hidden or disabled with reason.
-- States: skeleton rows (loading, `aria-busy`), filtered-empty, first-run empty, error with retry + reference ID, no-permission, stale (`as_of` warning).
+- **Density presets** (Amendment 1, D-026) — a per-user preference applied to every table, switched from the table toolbar (`Comfortable | Compact`, `aria-pressed`):
+  | Token | Comfortable (default) | Compact |
+  |---|---|---|
+  | Row height | 44 px | 34 px |
+  | Header height | 38 px | 32 px |
+  | Cell padding x | 12 px | 10 px |
+  | Body text | 13 px | 12.5 px |
+  | Secondary sub-line | visible (12 px) | hidden → full text in `title` / drawer |
+  | Status badge | 22 px | 20 px |
+  | Row action buttons | 32 px | 28 px (spacing keeps ≥ 24 px target rule) |
+  Rows never wrap: text columns are single-line with ellipsis + `title` (`text-col`, 200–280 px), so preset heights are exact (verified 44/34 px).
+- **Quantities**: `QuantityWithUom` — value + UOM in one element (`700.000 kg`, `80 sheet`, `760 pcs`); kg 3 decimals, pcs/sheet 0. Zero shown as "–" (screen-reader text "zero"). Multi-status quantities use **grouped columns** (two-row header: group label + bucket columns) — never a stacked mini-label cell, never colour-only dots. Footer totals only within one UOM.
+- **Status** uses `EoraStatusBadge` (text always present); never adds row height beyond the preset.
+- **Row actions**: one visible primary action (e.g. View) + overflow menu (`aria-haspopup="menu"`, arrow keys, Esc, focus return). Unavailable actions stay visible but disabled **with the reason** (e.g. "Requires Inventory Controller role").
+- **Horizontal scroll** only inside the table container (`overscroll-behavior-x: contain`), never the page. Selection + identity columns pinned left, actions pinned right (`sticky-start`, `sticky-end`) with scroll shadows.
+- **Header**: sticky; sortable headers expose `aria-sort`; group header row sticky above.
+- **Selection** + bulk-action bar (permission-aware); selected rows use `--color-bg-selected` and `--color-text-secondary-strong` for secondary text.
+- **Phones (< 768 px)**: list tables reflow into cards (`data-label` per cell, identity line first, zero buckets hidden, actions at the bottom with 44 px targets); data-dense analytical tables keep the scroll container.
+- **States**: skeleton rows (loading, `aria-busy`), filtered-empty, first-run empty, error with retry + reference ID (`role="alert"`), no-permission, stale (`as_of` warning).
 
-## 6. EoraPagination
-Items per page (20/50/100), go-to-page, First/Prev/pages/Next/Last; cursor mode shows Prev/Next only. Page size persisted per user.
+## 6. EoraPagination — identical in every module
+`Showing a–b of N` · Items per page (20/50/100, persisted) · Go to page · First / Prev / numbered pages / Next / Last (cursor mode: Prev/Next only). Phones: summary + current page + Prev/Next (44 px). Rendered by one shared component (`eora-table.js` in prototypes) — pages never build their own pager.
 
 ## 7. Other shared patterns
 - `EoraPageHeader`: title, description, meta line (as-of, scope), primary/secondary actions.
@@ -57,10 +70,23 @@ Items per page (20/50/100), go-to-page, First/Prev/pages/Next/Last; cursor mode 
 - `EoraExportMenu`: Excel/PDF using the same query scope; async job + bell notification; Print uses print CSS.
 - `EoraImportWizard`: template → upload → validate → preview/errors → approval → idempotent commit (doc 08).
 - `EoraEmptyState` / `EoraLoadingState` / `EoraErrorState`: icon, title, cause, next action; never a bare spinner or "No data".
-- Business: `MaterialFlowStrip` groups stages into bands by UOM (Physical material kg │ Transformation │ Production & quality pcs │ FG & shipment pcs) and never sums across the boundary; `QuantityBreakdownCell` shows disjoint buckets that add up to on-hand; `ConversionBadge` shows Calculated/Provisional/Not calculable + missing inputs; `VarianceIndicator` shows value, %, tolerance result, status and a "Show calculation" disclosure.
+- Business: `MaterialFlowStrip` groups stages into bands by UOM (Physical material kg │ Transformation │ Production & quality pcs │ FG & shipment pcs) and never sums across the boundary; grouped quantity columns show disjoint buckets that add up to on-hand (~~`QuantityBreakdownCell`~~ superseded by Amendment 1); `ConversionBadge` shows Calculated/Provisional/Not calculable + missing inputs; `VarianceIndicator` shows value, %, tolerance result, status and a "Show calculation" disclosure.
 
 ## 8. Accessibility rules
 WCAG 2.2 AA; semantic landmarks (`nav`, `header`, `main`); visible 2 px focus ring; tooltips on hover and focus; all icon-only buttons have accessible names; status never colour-only; tables use `scope`, `aria-sort`; dialogs trap focus and restore it; live regions for async results; targets ≥ 24 px desktop, ≥ 48 px PWA; `prefers-reduced-motion` respected; text resizable to 200 % without loss.
 
+## 8a. Accessibility verification on rendered pages (2026-10-08, Playwright, prototypes v2.1)
+Method: every visible text node's computed colour against its effective (blended) background; control borders vs surrounding background; focus ring on 30 consecutive Tab stops; interactive target sizes. States covered: default, hover, selected row, error state, form validation errors, notification panel open, mobile navigation open, mobile PWA.
+| Check | Result |
+|---|---|
+| Text contrast (≈ 1,950 text nodes across 10 states) | All ≥ 4.5:1 (normal) / ≥ 3:1 (large) after one fix (PWA inactive segmented tab 4.34 → `--color-text-secondary-strong`) |
+| Input / select / filter / checkbox boundaries | All ≥ 3:1 (`--color-border-control`) |
+| Focus indicator | 2 px `--color-focus-ring` outline visible on all 30 tab stops tested (menus use inset ring) |
+| Target size desktop (≥ 24 px) | Pass; 18 px table checkboxes rely on the WCAG 2.5.8 spacing exception (each sits alone in a 44 px cell) |
+| Target size phones (≥ 44 px PWA / ≥ 24 px web) | Pass after fixes (header icons 40 → 44, switches 28 → 44 hit area, checkboxes 24 px on phones) |
+| Disabled states | Disabled buttons use neutral fill + secondary text and keep a reason (tooltip/sub-text); exempt from contrast but still legible (4.34:1) |
+| Error messages | `--color-danger-fg` on white 8.31:1, icon + text, `aria-invalid` + `aria-describedby` |
+Not yet verified: screen-reader walkthrough (NVDA/VoiceOver), 200 % zoom reflow, Windows high-contrast mode, real-device touch testing.
+
 ## 9. QA checklist (before showing any UI)
-Typography (Inter only, scale respected) · palette (tokens only, one accent) · spacing scale · icons (Lucide, one size per context) · buttons and form controls consistent · filter bar and data table consistent with this file · widths 1920/1440/1024/768/390/375 with no page-level horizontal scroll · keyboard path through shell, tabs, filters, table, drawer · contrast per tokens doc · overflow/truncation with tooltips · touch targets · empty/loading/error/no-permission states · business labels per constitution §4 · sample data labelled.
+Typography (Inter only, scale respected) · palette (tokens only, one accent) · navigation badges actionable only (navigation doc §10) · density presets exact · rendered-page contrast audit (§8a method) · spacing scale · icons (Lucide, one size per context) · buttons and form controls consistent · filter bar and data table consistent with this file · widths 1920/1440/1024/768/390/375 with no page-level horizontal scroll · keyboard path through shell, tabs, filters, table, drawer · contrast per tokens doc · overflow/truncation with tooltips · touch targets · empty/loading/error/no-permission states · business labels per constitution §4 · sample data labelled.

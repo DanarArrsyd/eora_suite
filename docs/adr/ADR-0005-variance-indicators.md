@@ -33,7 +33,9 @@ Question answered: "Did we make more or fewer good pieces than the standard expe
 Question answered: "How much consumed material mass is not explained by weighed scrap and the mass of reported pieces?" Independent of nesting/pitch theory; depends on measured weights. Positive = mass unaccounted; negative = over-reporting or wrong `NW`/scale — both investigated.
 
 ### Not one of the three
-- **Confirmed physical discrepancy** exists **only** from an approved stock count variance (doc 02 metric 1). No indicator above may be labelled "loss", "theft" or "missing stock".
+- **Physical Stock Discrepancy** exists **only** from an approved stock count variance (doc 02 metric 1).
+- **Actual Material Loss** exists **only** as an approved investigation outcome (`ACTUAL_MATERIAL_LOSS_CONFIRMED`, D-024) backed by evidence and a stock adjustment.
+- No indicator above may itself be labelled "loss", "theft" or "missing stock"; an indicator can *lead to* one of the two outcomes above, never replace them.
 - **Remaining Material at Production** is stock, never variance.
 
 ### Rounding

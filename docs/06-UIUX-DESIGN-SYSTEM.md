@@ -1,6 +1,6 @@
 # 06 — UX, Design System & Consistent Page Templates
 
-> **Updated 2026-10-08 (D-021, ADR-0010).** This file is now the **entry point**. The approved design system lives in `docs/uiux/`; each topic has exactly one canonical document. Do not restate rules here — link to them.
+> **Updated 2026-10-08 (D-021, ADR-0010 + Amendment 1: D-024..D-026).** This file is now the **entry point**. The approved design system lives in `docs/uiux/`; each topic has exactly one canonical document. Do not restate rules here — link to them.
 
 | Need | Canonical document |
 |---|---|
@@ -24,6 +24,8 @@
 - ~~Selected direction D-018: hybrid "Ledger Ink" / "Andon Signal" / "Traceline" (ADR-0009)~~ → superseded by D-021 / ADR-0010 on 2026-10-08. Archived prototypes: `design/mockups/_superseded-v1-ledger-ink/`.
 - ~~Mockup gate requiring 3 distinct directions with light/dark options~~ → fulfilled; the owner selected one direction and **one theme without dark mode** (D-021). New gate: final approval of the Modern Corporate Blue mockups before production frontend.
 - ~~Additional components FloorNumpad, AsOfStamp as Ledger Ink styling~~ → replaced by the component list in EORA-COMPONENT-STANDARDS.md.
+- ~~Primary-sidebar amber attention dot and record-count menu pills~~ → actionable numeric badges only (D-025).
+- ~~`QuantityBreakdownCell` stacked mini-label cell~~ → grouped quantity columns (Amendment 1).
 
 ## Mandatory frontend skill and visual quality gate
 See [EORA-DESIGN-CONSTITUTION.md §6](uiux/EORA-DESIGN-CONSTITUTION.md). Every frontend/UI task must review the approved EORA Design System and use relevant installed Caveman and Frontend Design skills; missing skills are reported, never claimed. No production frontend before explicit owner approval.

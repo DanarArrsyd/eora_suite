@@ -5,55 +5,82 @@
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EORA Mockups</title>
-<link rel="stylesheet" href="assets/eora-tokens.css?v=10">
-<link rel="stylesheet" href="assets/eora-ui.css?v=10">
+<link rel="stylesheet" href="assets/eora-tokens.css?v=30">
+<link rel="stylesheet" href="assets/eora-ui.css?v=30">
 <style>
-  main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6); }
+  body { overflow: auto; }
+  main { max-width: 1200px; margin: 0 auto; padding: var(--space-8) var(--space-6); }
   h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -.02em; }
-  .lead { color: var(--color-text-secondary); margin: 8px 0 0; max-width: 760px; }
-  .list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); margin-top: var(--space-6); }
+  h2 { font-size: 18px; font-weight: 600; margin: var(--space-10) 0 var(--space-2); }
+  .lead { color: var(--color-text-secondary); margin: 8px 0 0; max-width: 820px; }
+  .list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); margin-top: var(--space-5); }
   .item { display: grid; grid-template-rows: auto 1fr; overflow: hidden; color: inherit; }
   .item:hover { text-decoration: none; border-color: var(--color-primary); }
   .item img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; object-position: top left; border-bottom: 1px solid var(--color-border); display: block; background: var(--color-bg-subtle); }
   .item .card-body { display: flex; flex-direction: column; gap: 6px; }
-  .item h2 { margin: 0; font-size: 16px; font-weight: 600; }
+  .item h3 { margin: 0; font-size: 16px; font-weight: 600; }
   .item p { margin: 0; color: var(--color-text-secondary); font-size: 13.5px; }
-  h3 { font-size: 18px; font-weight: 600; margin: var(--space-10) 0 var(--space-2); }
-  table.cmp { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+  .shots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); margin-top: var(--space-4); }
+  .shots figure { margin: 0; }
+  .shots img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top left; border: 1px solid var(--color-border); border-radius: var(--radius-md); display: block; background: #FFFFFF; }
+  .shots figcaption { font-size: 12.5px; color: var(--color-text-secondary); margin-top: 6px; }
+  .shots a { color: inherit; }
+  table.cmp { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--color-bg-surface); border: 1px solid var(--color-border); }
   .cmp th, .cmp td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--color-border); vertical-align: top; }
   .cmp th { background: var(--color-bg-subtle); font-size: 12px; color: var(--color-text-secondary); font-weight: 600; }
-  .cmp td:first-child { font-weight: 500; white-space: nowrap; }
-  @media (max-width: 760px) { .list { grid-template-columns: minmax(0, 1fr); } main { padding: var(--space-5) var(--space-4); } .cmp td:first-child { white-space: normal; } }
+  .cmp td:first-child { font-weight: 500; }
+  .tbl { overflow-x: auto; border-radius: var(--radius-lg); }
+  @media (max-width: 900px) { .shots { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 760px) { .list, .shots { grid-template-columns: minmax(0, 1fr); } main { padding: var(--space-5) var(--space-4); } }
 </style>
 </head>
 <body>
-<div class="proto-note" role="note"><i data-lucide="flask-conical" class="icon" aria-hidden="true"></i><span><b>EORA Suite V1 — UI prototypes</b> · Modern Corporate Blue (D-021 / ADR-0010) · static HTML with SAMPLE DATA · pending owner approval before production frontend.</span></div>
+<div class="proto-note" role="note"><i data-lucide="flask-conical" class="icon" aria-hidden="true"></i><span><b>EORA Suite V1 — UI prototypes v2.1</b> · Modern Corporate Blue (D-021 / ADR-0010 + Amendment 1) · static HTML with SAMPLE DATA · design baseline conditionally approved (O-016); final approval pending before production frontend.</span></div>
 <main>
   <h1>EORA Modern Corporate Enterprise Workspace</h1>
-  <p class="lead">Dual sidebar navigation, one theme, Inter typography, shared components. All four mockups use the same token file, component CSS and centralized navigation config.</p>
+  <p class="lead">Refinement v2.1 resolves the UX risks from the v2 review: responsive topbar, mobile navigation sheet, DataTable density presets, actionable-only badges, terminology for proven loss, and accessibility verified on rendered pages. All pages share one token file, one component stylesheet, one navigation config and one table script.</p>
+
+  <h2>Mockups</h2>
   <div class="list">
-    <a class="card item" href="01-control-tower-desktop.html"><img src="screenshots/01-control-tower-desktop-1440.png" alt="PPIC Control Tower at 1440 px"><div class="card-body"><h2>01 · PPIC Control Tower</h2><p>Decision KPIs, MaterialFlowStrip with kg → pcs boundary, exceptions, due vs supply chart, stage detail tabs.</p></div></a>
-    <a class="card item" href="02-run-reconciliation-desktop.html"><img src="screenshots/02-run-reconciliation-desktop-1440.png" alt="Production run reconciliation at 1440 px"><div class="card-body"><h2>02 · Production Run Reconciliation</h2><p>Transaction header, material and production summaries, three variance indicators with progressive disclosure, case and approval.</p></div></a>
-    <a class="card item" href="03-mobile-pwa.html"><img src="screenshots/03-mobile-pwa-1920.png" alt="Eight mobile PWA screens"><div class="card-body"><h2>03 · Mobile PWA</h2><p>My Shift, Tasks, Scan, Production reporting, QC inspection, Material confirmation, Inbox, Profile.</p></div></a>
-    <a class="card item" href="04-raw-material-list.html"><img src="screenshots/04-raw-material-list-1440.png" alt="Raw material list at 1440 px"><div class="card-body"><h2>04 · EoraEnterprisePage list template</h2><p>Reference layout: view-by tabs, search toolbar, segmented filter, compound stock cell, pagination, drawer, states.</p></div></a>
+    <a class="card item" href="01-control-tower-desktop.html"><img src="screenshots/01-control-tower-desktop-1440.png" alt="PPIC Control Tower at 1440 px"><div class="card-body"><h3>01 · PPIC Control Tower</h3><p>Decision KPIs, MaterialFlowStrip with kg → pcs boundary, exceptions, due vs supply chart, tabbed detail tables with shared density and pagination.</p></div></a>
+    <a class="card item" href="02-run-reconciliation-desktop.html"><img src="screenshots/02-run-reconciliation-desktop-1440.png" alt="Production run reconciliation at 1440 px"><div class="card-body"><h3>02 · Production Run Reconciliation</h3><p>Material and production summaries, three variance indicators, terminology for Actual Material Loss and Physical Stock Discrepancy, case, approval, audit.</p></div></a>
+    <a class="card item" href="03-mobile-pwa.html"><img src="screenshots/03-mobile-pwa-1920.png" alt="Eight mobile PWA screens"><div class="card-body"><h3>03 · Mobile PWA</h3><p>My Shift, Tasks, Scan, Production reporting, QC inspection, Material confirmation, Inbox, Profile. Bottom navigation with actionable badges.</p></div></a>
+    <a class="card item" href="04-raw-material-list.html"><img src="screenshots/04-raw-material-list-1440.png" alt="Raw material list at 1440 px"><div class="card-body"><h3>04 · EoraEnterprisePage list template</h3><p>View-by tabs, toolbar, schema filter bar (mobile bottom sheet), grouped quantity columns, density presets, sticky columns, row menu, pagination, drawer, states.</p></div></a>
   </div>
 
-  <h3>Before vs after</h3>
-  <p class="lead" style="margin-bottom:var(--space-4)">Previous direction kept for comparison: <a href="_superseded-v1-ledger-ink/index.html">Superseded v1 “Ledger Ink / Andon Signal”</a>.</p>
-  <table class="cmp">
-    <thead><tr><th scope="col">Aspect</th><th scope="col">Before (ADR-0009, superseded)</th><th scope="col">After (ADR-0010)</th></tr></thead>
+  <h2>Refinement evidence (rendered with Playwright)</h2>
+  <div class="shots">
+    <figure><a href="screenshots/01-control-tower-desktop-1280.png"><img src="screenshots/01-control-tower-desktop-1280.png" alt=""></a><figcaption>Responsive topbar at 1280 px: search as icon, breadcrumb collapsed to “…”, context, workspace, bell, profile.</figcaption></figure>
+    <figure><a href="screenshots/v21-workspace-switcher-1280.png"><img src="screenshots/v21-workspace-switcher-1280.png" alt=""></a><figcaption>Company / plant switcher.</figcaption></figure>
+    <figure><a href="screenshots/v21-command-search-1440.png"><img src="screenshots/v21-command-search-1440.png" alt=""></a><figcaption>Permission-aware command search (Ctrl K).</figcaption></figure>
+    <figure><a href="screenshots/v21-notification-1440.png"><img src="screenshots/v21-notification-1440.png" alt=""></a><figcaption>Notification Center: action required first, grouped by day, mark read.</figcaption></figure>
+    <figure><a href="screenshots/v21-table-comfortable-1440.png"><img src="screenshots/v21-table-comfortable-1440.png" alt=""></a><figcaption>DataTable Comfortable — 44 px rows.</figcaption></figure>
+    <figure><a href="screenshots/v21-table-compact-1440.png"><img src="screenshots/v21-table-compact-1440.png" alt=""></a><figcaption>DataTable Compact — 34 px rows, sub-lines move to tooltip.</figcaption></figure>
+    <figure><a href="screenshots/v21-table-sticky-scroll-1280.png"><img src="screenshots/v21-table-sticky-scroll-1280.png" alt=""></a><figcaption>Controlled horizontal scroll: lot and actions columns stay pinned.</figcaption></figure>
+    <figure><a href="screenshots/v21-row-menu-1440.png"><img src="screenshots/v21-row-menu-1440.png" alt=""></a><figcaption>Row actions: visible View + menu with permission-disabled item and reason.</figcaption></figure>
+    <figure><a href="screenshots/v21-tablet-secondary-1024.png"><img src="screenshots/v21-tablet-secondary-1024.png" alt=""></a><figcaption>Tablet: secondary menu as overlay with backdrop.</figcaption></figure>
+    <figure><a href="screenshots/v21-mobile-nav-menu-390.png"><img src="screenshots/v21-mobile-nav-menu-390.png" alt=""></a><figcaption>Mobile navigation sheet: labelled Menu, close, backdrop, focus trap.</figcaption></figure>
+    <figure><a href="screenshots/v21-mobile-nav-modules-390.png"><img src="screenshots/v21-mobile-nav-modules-390.png" alt=""></a><figcaption>Drill-down to modules with actionable badges.</figcaption></figure>
+    <figure><a href="screenshots/v21-filter-sheet-390.png"><img src="screenshots/v21-filter-sheet-390.png" alt=""></a><figcaption>Same filter bar as a mobile bottom sheet.</figcaption></figure>
+    <figure><a href="screenshots/04-raw-material-list-390.png"><img src="screenshots/04-raw-material-list-390.png" alt=""></a><figcaption>List rows reflow to cards on phones; zero buckets hidden.</figcaption></figure>
+    <figure><a href="screenshots/v21-notification-390.png"><img src="screenshots/v21-notification-390.png" alt=""></a><figcaption>Notification Center full-screen on phones.</figcaption></figure>
+    <figure><a href="screenshots/v21-terminology-1440.png"><img src="screenshots/v21-terminology-1440.png" alt=""></a><figcaption>Variance vs Actual Material Loss vs Physical Stock Discrepancy.</figcaption></figure>
+  </div>
+
+  <h2>Before vs after</h2>
+  <p class="lead" style="margin-bottom:var(--space-4)">v1 kept for comparison: <a href="_superseded-v1-ledger-ink/index.html">Superseded “Ledger Ink / Andon Signal”</a>.</p>
+  <div class="tbl"><table class="cmp">
+    <thead><tr><th scope="col">Aspect</th><th scope="col">v1 (ADR-0009, superseded)</th><th scope="col">v2 (ADR-0010)</th><th scope="col">v2.1 refinement (this version)</th></tr></thead>
     <tbody>
-      <tr><td>Navigation</td><td>Single text rail, flat list, links to nowhere</td><td>Primary icon sidebar (13 modules) + grouped secondary sidebar from one config; RBAC demo; counts</td></tr>
-      <tr><td>Typography</td><td>IBM Plex Sans Condensed + IBM Plex Mono for every number; Barlow on mobile</td><td>Inter everywhere; tabular numerals in tables; monospace only for location codes</td></tr>
-      <tr><td>Theme</td><td>Paper/oxide desktop, graphite/concrete mobile, dark toggles</td><td>One theme: Modern Corporate Blue, semantic tokens, contrast-checked</td></tr>
-      <tr><td>Topbar</td><td>Context selects mixed with theme toggle</td><td>Breadcrumb, permission-aware search, period, company/plant switcher, bell, profile</td></tr>
-      <tr><td>Lists</td><td>Hand-written tables per page</td><td>EoraEnterprisePage: view-by tabs, toolbar, segmented filter, data table, pagination, drawer, states</td></tr>
-      <tr><td>Control Tower</td><td>Hairline “ledger” sections, text-heavy</td><td>4 decision KPIs, grouped flow bands, exceptions table, one chart that answers a question, tabbed detail</td></tr>
-      <tr><td>Reconciliation</td><td>One long technical report</td><td>Tabs, section cards, formulas behind “Show calculation”, case panel with timeline and approval</td></tr>
-      <tr><td>Mobile</td><td>3 screens, terminal-like</td><td>8 screens, bottom nav with central Scan, steppers, offline and error recovery states</td></tr>
-      <tr><td>Business rules</td><td colspan="2">Unchanged: no WIP, issue ≠ consumption, kg/pcs never summed, Pending QC ≠ FG, three variance indicators, no “loss” label without stock count, server-confirmed posting.</td></tr>
+      <tr><td>Topbar</td><td>Context selects + theme toggle</td><td>Breadcrumb, search, period, company/plant, bell, profile — overflowed at 1280–1440</td><td>Priority rules: search → icon &lt;1600, middle crumbs → “…”, context → icon &lt;1024, overflow menu &lt;768; command search dialog; bell and profile always visible</td></tr>
+      <tr><td>Mobile navigation</td><td>None (desktop shrunk)</td><td>Both sidebars as sheet, no backdrop</td><td>Labelled “Menu” sheet with drill-down, backdrop, close, Esc, focus trap and return, body scroll lock, <code>aria-expanded</code></td></tr>
+      <tr><td>Badges</td><td>—</td><td>Record totals and dots</td><td>Numeric badges only for actionable items (approvals, QC inspections, variance investigations, tasks, action-required notifications), per role</td></tr>
+      <tr><td>Data table</td><td>Hand-written per page</td><td>Shared styles; compound cell doubled row height</td><td>Shared script: Comfortable 44 px / Compact 34 px, grouped quantity columns, sticky lot and actions, row menu, one pagination, mobile card reflow</td></tr>
+      <tr><td>Filters</td><td>None</td><td>Segmented bar</td><td>Same form becomes a bottom sheet on phones; dependent filter (plant → warehouse); saved views</td></tr>
+      <tr><td>Terminology</td><td>“Loss” avoided</td><td>Material Variance</td><td>Unexplained Material Variance vs Actual Material Loss (proven) vs Physical Stock Discrepancy (stock count)</td></tr>
+      <tr><td>Accessibility</td><td>Not verified</td><td>Token-level contrast</td><td>Rendered-page contrast audit incl. hover, selected, error, notification, mobile nav; focus ring on 30 tab stops; target sizes</td></tr>
     </tbody>
-  </table>
+  </table></div>
 </main>
 <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" integrity="sha384-hJnF5AwidE18GSWTAGHv3ByzzvfNZ1Tcx5y1UUV3WkauuMCEzBJBMSwSt/PUPXnM" crossorigin="anonymous"></script>
 <script>lucide.createIcons();</script>

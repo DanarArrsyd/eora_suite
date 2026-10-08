@@ -15,7 +15,7 @@
 | CT-7 FG Available / Reserved | PPIC, Delivery | What FG is free vs allocated? |
 | CT-8 Shortage & Delivery Risk | PPIC | Which demand lines will miss due date, and why? |
 
-Naming rule (BR-REC-02): the screen is labelled **"Material Variance"** with sub-label *Loss Investigation*. The words "loss/lost/missing" appear only for `PHYSICAL_DISCREPANCY_CONFIRMED` case resolutions.
+Naming rule (BR-REC-02, D-024): the screen is labelled **"Material Variance"** with sub-label *Loss Investigation*. "Actual Material Loss" appears only for cases resolved `ACTUAL_MATERIAL_LOSS_CONFIRMED`; "Physical Stock Discrepancy" only for approved stock-count results (`PHYSICAL_DISCREPANCY_CONFIRMED`). CT-6 shows confirmed loss and confirmed discrepancy as separate columns from unexplained variance.
 
 ## 2. Common behaviour
 - **Global context bar:** tenant (fixed by session), plant, date range, production date vs calendar date toggle, shift, timezone shown (e.g. `WIB`).

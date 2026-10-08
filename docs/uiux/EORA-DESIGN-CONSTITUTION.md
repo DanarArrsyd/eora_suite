@@ -1,6 +1,6 @@
 # EORA Design Constitution
 
-**Status:** DECIDED (D-021, ADR-0010) · **Date:** 2026-10-08 · **Canonical for:** design direction, principles, rules, workflow. Other UI/UX documents reference this file and do not restate its rules.
+**Status:** DECIDED (D-021, ADR-0010 + Amendment 1: D-024..D-026) · **Date:** 2026-10-08 · Baseline conditionally approved (O-016); production frontend still gated · **Canonical for:** design direction, principles, rules, workflow. Other UI/UX documents reference this file and do not restate its rules.
 
 | Topic | Canonical document |
 |---|---|
@@ -38,7 +38,8 @@ Supersedes ADR-0009 (Ledger Ink / Andon Signal / condensed industrial typography
 - Quantities always show their UOM. Never add kg, sheet and pcs together; conversions show basis and certainty (*Calculated / Provisional / Not calculable*).
 - Estimated pcs are planning estimates, visually separated from stock and never labelled stock.
 - Pending QC ≠ QC Released ≠ FG Unrestricted ≠ Shipped — separate stages, never merged in one number.
-- Variance indicators are GYV, PvS and UMV with status (*Not calculable / Provisional / Final*). The word **"loss"** appears only as *Loss Investigation* context or for a confirmed physical discrepancy from an approved stock count (BR-REC-02).
+- Variance indicators are GYV, PvS and UMV with status (*Not calculable / Provisional / Final*); menus and general indicators say **Material Variance**. Two proven outcomes keep their own names and must not be hidden: **Actual Material Loss** (investigation-proven, approved, adjusted) and **Physical Stock Discrepancy** (approved stock count). Neither is ever inferred from unexplained variance (BR-REC-02, D-024).
+- Navigation badges are numeric and only for items needing the user's action (D-025, navigation doc §10).
 - Status tabs and filters are views over approved dimensions (stock status, allocation, location type). They never introduce a new stock status (DD-01).
 - Posting is confirmed only after server acknowledgement; offline work is shown as *Draft*.
 - Approvals open a review screen; never one-tap approve from a notification.

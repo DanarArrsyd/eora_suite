@@ -5,8 +5,8 @@
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PPIC Control Tower · EORA</title>
-<link rel="stylesheet" href="assets/eora-tokens.css?v=10">
-<link rel="stylesheet" href="assets/eora-ui.css?v=10">
+<link rel="stylesheet" href="assets/eora-tokens.css?v=30">
+<link rel="stylesheet" href="assets/eora-ui.css?v=30">
 <style>
   .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
   .kpi { padding: var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: 6px; }
@@ -15,6 +15,7 @@
   .kpi-ico { width: 32px; height: 32px; border-radius: var(--radius-md); display: grid; place-items: center; }
   .kpi-value { font-size: var(--fs-kpi); line-height: var(--lh-kpi); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
   .kpi-value small { font-size: 14px; font-weight: var(--fw-medium); color: var(--color-text-secondary); margin-left: 4px; letter-spacing: 0; }
+  .kpi-foot a { display: inline-flex; align-items: center; min-height: 24px; padding: 0 2px; }
   .kpi-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: 12.5px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); padding-top: var(--space-2); margin-top: 2px; }
 
   /* MaterialFlowStrip (modern) */
@@ -53,7 +54,7 @@
   @media (max-width: 767px) { .kpis { grid-template-columns: minmax(0, 1fr); } .stages { grid-auto-flow: row; } .stage .s-val { font-size: 20px; } }
 </style>
 </head>
-<body data-module="ppic" data-item="control-tower" data-crumbs="PPIC / Planning|Control Tower" data-context="period" data-proto="<b>Mockup 01 · PPIC Control Tower</b> — Modern Corporate Blue (ADR-0010). All figures are SAMPLE DATA for review only.">
+<body data-module="ppic" data-item="control-tower" data-crumbs="PPIC / Planning|Overview|Control Tower" data-context="period" data-proto="<b>Mockup 01 · PPIC Control Tower</b> — Modern Corporate Blue (ADR-0010). All figures are SAMPLE DATA for review only.">
 <main id="page" class="page">
   <div class="page-header">
     <div>
@@ -143,8 +144,8 @@
   </section>
 
   <div class="row2">
-    <section class="card" aria-labelledby="exc-h" id="exceptions">
-      <div class="card-head"><div><h2 class="card-title" id="exc-h">Exceptions</h2><p class="card-sub">Ranked by delivery impact (due date × quantity). Each row opens its source record.</p></div><span class="badge badge-neutral" id="excCount">6 open</span></div>
+    <section class="card dt-card" data-dt aria-labelledby="exc-h" id="exceptions">
+      <div class="card-head"><div><h2 class="card-title" id="exc-h">Exceptions</h2><p class="card-sub">Ranked by delivery impact (due date × quantity). Each row opens its source record.</p></div><div class="page-actions"><span class="badge badge-neutral" id="excCount">6 open</span><span data-dt-density></span></div></div>
       <div class="table-wrap">
         <table class="dt" aria-describedby="exc-h">
           <thead><tr><th scope="col" style="width:44px"><span class="sr-only">Severity</span></th><th scope="col">Exception</th><th scope="col">Reference</th><th scope="col" class="num">Impact</th><th scope="col">Age</th><th scope="col" class="col-actions"><span class="sr-only">Action</span></th></tr></thead>
@@ -159,6 +160,7 @@
         </table>
         <div class="state" id="excEmpty" hidden><div class="state-icon"><i data-lucide="circle-check" class="icon icon-lg" aria-hidden="true"></i></div><h3>No exceptions for this stage</h3><p>Nothing in this stage needs action. Clear the stage selection to see all exceptions.</p><div class="actions"><button class="btn btn-sm" type="button" id="clearStage">Show all stages</button></div></div>
       </div>
+      <div data-dt-pagination id="pgExc" data-total="6" data-size="20"></div>
     </section>
 
     <section class="card chart" aria-labelledby="chart-h">
@@ -192,9 +194,9 @@
     </section>
   </div>
 
-  <section class="card" aria-labelledby="detail-h">
+  <section class="card dt-card" data-dt aria-labelledby="detail-h">
     <div class="card-head"><div><h2 class="card-title" id="detail-h">Detail by stage</h2><p class="card-sub">Each tab is a server-side query with the same filters; export uses the identical scope.</p></div>
-      <div class="page-actions"><button class="icon-btn bordered" type="button" aria-label="Column settings"><i data-lucide="columns-3" class="icon" aria-hidden="true"></i></button><button class="icon-btn bordered" type="button" aria-label="Export this table"><i data-lucide="download" class="icon" aria-hidden="true"></i></button></div></div>
+      <div class="page-actions"><span data-dt-density></span><button class="icon-btn bordered" type="button" aria-label="Column settings"><i data-lucide="columns-3" class="icon" aria-hidden="true"></i></button><button class="icon-btn bordered" type="button" aria-label="Export this table"><i data-lucide="download" class="icon" aria-hidden="true"></i></button></div></div>
     <div class="tabs" role="tablist" aria-label="Detail views" style="padding:0 var(--space-5)">
       <button class="tab" role="tab" aria-selected="true" aria-controls="tp-phys" id="t-phys">Physical material <span class="count">4</span></button>
       <button class="tab" role="tab" aria-selected="false" aria-controls="tp-est" id="t-est" tabindex="-1">Estimated conversion <span class="count">4</span></button>
@@ -213,6 +215,7 @@
         <tr><td><a class="id" href="#">C-07</a></td><td>SPCC 1.2 × 120 coil<span class="cell-sub">Remnant C-07-R1 split</span></td><td><span class="loc"><code>WC-PRESS1</code><span class="more">+1</span></span></td><td><span class="badge badge-info">At production</span></td><td class="num">87.600<span class="uom">kg</span></td><td class="num">87.600<span class="uom">kg</span></td><td class="num">0.000<span class="uom">kg</span></td></tr>
       </tbody>
       <tfoot><tr><td colspan="4">Total SPCC 1.2 × 120 (RM warehouse)</td><td class="num">6,810.700<span class="uom">kg</span></td><td class="num">700.000<span class="uom">kg</span></td><td class="num">6,110.700<span class="uom">kg</span></td></tr></tfoot></table>
+      <div data-dt-pagination id="pg-tp-phys" data-total="4" data-size="20"></div>
     </div>
 
     <div class="tabpanel table-wrap" role="tabpanel" id="tp-est" aria-labelledby="t-est" hidden>
@@ -223,6 +226,7 @@
         <tr><td><a class="id" href="#">C-10</a></td><td>BRKT-220 · CP v3</td><td>Mill cert thickness</td><td class="num">1,980.200<span class="uom">kg</span></td><td class="num">5,304–5,469<span class="uom">pcs</span></td><td><span class="badge badge-success"><i data-lucide="circle-check" class="icon" aria-hidden="true"></i>Calculated</span></td></tr>
         <tr><td><a class="id" href="#">C-11</a></td><td>BRKT-310 · CP v2 (draft)</td><td>—</td><td class="num">3,120.000<span class="uom">kg</span></td><td class="num" style="color:var(--color-text-secondary)">—</td><td><span class="badge badge-neutral"><i data-lucide="circle-off" class="icon" aria-hidden="true"></i>Not calculable</span><span class="cell-sub">Missing: pitch unit, density</span></td></tr>
       </tbody></table>
+      <div data-dt-pagination id="pg-tp-est" data-total="4" data-size="20"></div>
       <p class="hint" style="padding:var(--space-3) var(--space-5)">Range = floor(strokes × cavity × standard yield) to floor(strokes × cavity). Estimates are planning figures, never stock. Alternative parts from the same lot are listed separately and never summed.</p>
     </div>
 
@@ -234,6 +238,7 @@
         <tr><td>06 Oct · S2</td><td><a class="id" href="#">RUN-1190-S2</a></td><td class="num">1,602<span class="uom">pcs</span></td><td class="num">8<span class="uom">pcs</span></td><td class="num">11<span class="uom">pcs</span></td><td class="num">121.000<span class="uom">kg</span></td><td><span class="badge badge-warning">By difference</span></td></tr>
         <tr><td>06 Oct · S1</td><td><a class="id" href="#">RUN-1178-S1</a></td><td class="num">1,540<span class="uom">pcs</span></td><td class="num">3<span class="uom">pcs</span></td><td class="num">5<span class="uom">pcs</span></td><td class="num">117.600<span class="uom">kg</span></td><td><span class="badge badge-success">Weighed</span></td></tr>
       </tbody></table>
+      <div data-dt-pagination id="pg-tp-out" data-total="4" data-size="20"></div>
     </div>
 
     <div class="tabpanel table-wrap" role="tabpanel" id="tp-qc" aria-labelledby="t-qc" hidden>
@@ -243,6 +248,7 @@
         <tr><td><a class="id" href="#">IL-1180-02</a></td><td>RUN-1180-S1</td><td class="num">0<span class="uom">pcs</span></td><td class="num">0<span class="uom">pcs</span></td><td class="num">300<span class="uom">pcs</span></td><td><span class="badge badge-neutral">9 h</span></td><td>R. Dewi</td></tr>
         <tr><td><a class="id" href="#">IL-1180-01</a></td><td>RUN-1180-S1</td><td class="num">0<span class="uom">pcs</span></td><td class="num">40<span class="uom">pcs</span></td><td class="num">1,148<span class="uom">pcs</span></td><td><span class="badge badge-neutral">18 h</span></td><td>R. Dewi</td></tr>
       </tbody></table>
+      <div data-dt-pagination id="pg-tp-qc" data-total="3" data-size="20"></div>
     </div>
 
     <div class="tabpanel table-wrap" role="tabpanel" id="tp-fg" aria-labelledby="t-fg" hidden>
@@ -252,6 +258,7 @@
         <tr><td>BRKT-221 Bracket Seat RH</td><td><span class="loc"><code>FG-B02-04</code></span></td><td class="num">1,860<span class="uom">pcs</span></td><td class="num">1,800<span class="uom">pcs</span></td><td class="num">60<span class="uom">pcs</span></td><td class="num">0<span class="uom">pcs</span></td></tr>
         <tr><td>BRKT-118 Mount Plate</td><td><span class="loc"><code>FG-C01-02</code><span class="more">+1</span></span></td><td class="num">980<span class="uom">pcs</span></td><td class="num">0<span class="uom">pcs</span></td><td class="num">980<span class="uom">pcs</span></td><td class="num">0<span class="uom">pcs</span></td></tr>
       </tbody></table>
+      <div data-dt-pagination id="pg-tp-fg" data-total="3" data-size="20"></div>
     </div>
 
     <div class="tabpanel table-wrap" role="tabpanel" id="tp-ship" aria-labelledby="t-ship" hidden>
@@ -261,13 +268,15 @@
         <tr><td>Sat 10 Oct</td><td><a class="id" href="#">PO-24-0918 / 2</a></td><td class="num">3,000<span class="uom">pcs</span></td><td class="num">0<span class="uom">pcs</span></td><td class="num">3,000<span class="uom">pcs</span></td><td><span class="badge badge-danger">At risk · gap 560</span></td></tr>
         <tr><td>Wed 14 Oct</td><td><a class="id" href="#">PO-24-0931 / 1</a><span class="cell-sub">Rev 2</span></td><td class="num">2,400<span class="uom">pcs</span></td><td class="num">0<span class="uom">pcs</span></td><td class="num">2,400<span class="uom">pcs</span></td><td><span class="badge badge-info">Covered by WO-1201</span></td></tr>
       </tbody></table>
+      <div data-dt-pagination id="pg-tp-ship" data-total="3" data-size="20"></div>
     </div>
   </section>
 </main>
 <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" integrity="sha384-hJnF5AwidE18GSWTAGHv3ByzzvfNZ1Tcx5y1UUV3WkauuMCEzBJBMSwSt/PUPXnM" crossorigin="anonymous"></script>
-<script src="assets/eora-nav.config.js?v=10"></script>
-<script src="assets/eora-shell.js?v=10"></script>
-<script src="assets/eora-page.js?v=10"></script>
+<script src="assets/eora-nav.config.js?v=30"></script>
+<script src="assets/eora-shell.js?v=30"></script>
+<script src="assets/eora-table.js?v=30"></script>
+<script src="assets/eora-page.js?v=30"></script>
 <script>
   // MaterialFlowStrip → exception filter
   const stages = document.querySelectorAll('.stage'), rows = document.querySelectorAll('#exceptions tbody tr');

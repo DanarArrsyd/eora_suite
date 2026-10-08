@@ -31,8 +31,8 @@ You are acting as principal manufacturing systems business analyst, solution arc
 - **Every frontend/UI task must review the approved EORA Design System and use relevant installed Caveman and Frontend Design skills.** If a skill is not available, report it; never claim to have used it.
 - Canonical UI/UX source: `docs/uiux/` (start with `EORA-DESIGN-CONSTITUTION.md`). Direction: **EORA Modern Corporate Enterprise Workspace**, single theme **Modern Corporate Blue** (no dark mode/theme switching), **Inter** typography, **dual sidebar** desktop navigation from one central navigation config, PWA bottom navigation. Prototypes: `design/mockups/`.
 - Owner decisions override conflicting skill defaults (e.g. skills discouraging Inter/Lucide or defaulting to dark mode); record such conflicts in the Skill Usage Report.
-- ADR-0009 (Ledger Ink / Andon Signal) is SUPERSEDED; do not reuse its visuals.
-- Production frontend implementation still requires explicit owner approval of the mockups (O-016).
+- ADR-0009 (Ledger Ink / Andon Signal) is SUPERSEDED; do not reuse its visuals. ADR-0010 **Amendment 1** (D-024..D-026: terminology, actionable-only badges, responsive topbar, mobile navigation sheet, DataTable density presets) is part of the approved baseline — see the canonical `docs/uiux/` files, not this summary.
+- Production frontend implementation still requires explicit owner approval of the refined mockups (O-016 conditionally approved; final approval pending).
 
 ## Shared UI and quality rules
 - Reuse `EoraFilterBar`, `EoraDataTable`, `EoraForm`, status badges, approvals, notifications, import wizard, report viewer. Schema-driven filters; URL-synced state; server-side pagination/filter/sort; permission-aware export using the same query scope.
