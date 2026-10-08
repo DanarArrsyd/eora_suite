@@ -81,6 +81,9 @@ export function allRouteParams(modules: readonly NavModule[]): { module: string;
 /** Pages outside module navigation (internal/system) still get a breadcrumb. */
 export const STATIC_TRAILS: Readonly<Record<string, { label: string; href?: string }[]>> = {
   '/system/ui-kit': [{ label: 'System' }, { label: 'UI kit' }],
+  '/system/patterns': [{ label: 'System' }, { label: 'Enterprise patterns' }],
+  '/system/examples/raw-material-lots': [{ label: 'System' }, { label: 'Examples' }, { label: 'Raw material lots' }],
+  '/system/notifications': [{ label: 'Notifications' }],
 };
 
 export function trailForPath(match: RouteMatch | undefined, pathname: string): { label: string; href?: string }[] {

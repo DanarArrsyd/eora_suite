@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Dialog as D, Popover as P, Tooltip as T, DropdownMenu as M, Tabs as TB } from 'radix-ui';
 import { X } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { useReturnFocus } from '../lib/return-focus';
 
 /* ---------------- Tooltip (hover + focus; supplementary only) ---------------- */
 export const TooltipProvider = T.Provider;
@@ -83,9 +84,23 @@ type ModalContentProps = React.ComponentPropsWithRef<typeof D.Content> & {
   description?: React.ReactNode;
   hideTitle?: boolean;
   size?: 'md' | 'lg';
+  /** Accessible name of the header close button; omit to hide it (e.g. confirmations with explicit Cancel). */
+  closeLabel?: string;
 };
-/** EoraModal — focus trap, Esc, scroll lock and focus return handled by Radix Dialog. */
-export function ModalContent({ className, title, description, hideTitle, size = 'md', children, ...props }: ModalContentProps) {
+/** EoraModal — focus trap, Esc, scroll lock and focus return handled by Radix Dialog. Compose with ModalBody / ModalFooter. */
+export function ModalContent({
+  className,
+  title,
+  description,
+  hideTitle,
+  size = 'md',
+  closeLabel,
+  children,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
+  ...props
+}: ModalContentProps) {
+  const focus = useReturnFocus({ onOpenAutoFocus, onCloseAutoFocus });
   return (
     <D.Portal>
       <D.Overlay className="fixed inset-0 z-80 bg-overlay" />
@@ -97,12 +112,34 @@ export function ModalContent({ className, title, description, hideTitle, size = 
         )}
         {...(description ? {} : { 'aria-describedby': undefined })}
         {...props}
+        {...focus}
       >
-        <D.Title className={cn('text-base font-semibold', hideTitle && 'sr-only')}>{title}</D.Title>
+        <div className={cn('flex items-start justify-between gap-3 px-5 pt-5 pb-2', hideTitle && 'sr-only')}>
+          <D.Title className="m-0 text-base font-semibold">{title}</D.Title>
+          {closeLabel ? (
+            <D.Close
+              className="-mt-1.5 -mr-1.5 inline-grid size-9 shrink-0 place-items-center rounded-md text-ink-2 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-ring max-md:size-11"
+              aria-label={closeLabel}
+            >
+              <X aria-hidden="true" className="size-4" />
+            </D.Close>
+          ) : null}
+        </div>
         {description ? <D.Description className="sr-only">{description}</D.Description> : null}
         {children}
       </D.Content>
     </D.Portal>
+  );
+}
+export function ModalBody({ className, ...props }: React.ComponentPropsWithRef<'div'>) {
+  return <div className={cn('min-h-0 flex-1 overflow-y-auto px-5 pt-1 pb-5 text-[13.5px]', className)} {...props} />;
+}
+export function ModalFooter({ className, ...props }: React.ComponentPropsWithRef<'div'>) {
+  return (
+    <div
+      className={cn('flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3 max-md:pb-[calc(12px+env(safe-area-inset-bottom))]', className)}
+      {...props}
+    />
   );
 }
 
@@ -117,7 +154,18 @@ type DrawerContentProps = React.ComponentPropsWithRef<typeof D.Content> & {
   hideHeader?: boolean;
 };
 /** EoraDrawer — side sheet with overlay, Esc, focus trap/return, scroll lock (Radix Dialog). */
-export function DrawerContent({ className, title, side = 'right', closeLabel = 'Close', hideHeader, children, ...props }: DrawerContentProps) {
+export function DrawerContent({
+  className,
+  title,
+  side = 'right',
+  closeLabel = 'Close',
+  hideHeader,
+  children,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
+  ...props
+}: DrawerContentProps) {
+  const focus = useReturnFocus({ onOpenAutoFocus, onCloseAutoFocus });
   return (
     <D.Portal>
       <D.Overlay className="fixed inset-0 z-70 bg-overlay" />
@@ -129,6 +177,7 @@ export function DrawerContent({ className, title, side = 'right', closeLabel = '
           className,
         )}
         {...props}
+        {...focus}
       >
         <div className={cn('flex items-start justify-between gap-3 border-b border-line p-5', hideHeader && 'sr-only')}>
           <D.Title className="text-lg font-semibold">{title}</D.Title>

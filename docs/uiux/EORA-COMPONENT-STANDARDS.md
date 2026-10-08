@@ -26,11 +26,15 @@ Radix Tabs. Optional "View by" label, counts from server. Arrow/Home/End keys. T
 
 ## 4. EoraFilterBar (schema-driven, one pattern everywhere)
 ```ts
-type FilterField =
-  | { key: string; type: 'text' | 'search'; label: string }
-  | { key: string; type: 'select' | 'multiselect'; label: string; source: 'static' | 'api'; options?: Option[]; endpoint?: string; dependsOn?: string[] }
-  | { key: string; type: 'date' | 'daterange'; label: string; presets?: string[] }
-  | { key: 'customer'|'company'|'plant'|'warehouse'|'material'|'part'|'work_order'|'machine'|'shift'|'status'; type: 'entity'; label: string; dependsOn?: string[] };
+type FilterField = { key: string; label: string; locked?: boolean /* workspace scope chip */ } & (
+  | { type: 'text' | 'search'; placeholder?: string }
+  | { type: 'select' | 'multiselect'; source: 'static'; options: Option[]; dependsOn?: string[] }
+  | { type: 'select' | 'multiselect'; source: 'api'; loadOptions: (deps, signal) => Promise<Option[]>; dependsOn?: string[] }
+  | { type: 'daterange' }                                   // value travels as `from..to`
+  | { type: 'entity'; entity: 'customer'|'company'|'plant'|'warehouse'|'material'|'part'|'work_order'|'machine'|'shift'|'status'; loadOptions; dependsOn?: string[] }
+);
+```
+(Implemented in `packages/features/src/patterns/filter-bar/types.ts`; `loadOptions` wraps the schema endpoint so the component never builds URLs.)
 ```
 - Schema from `GET /api/v1/query/{resource}/schema` (ADR-0008), already filtered by permission.
 - **One form element, two presentations** (Amendment 1): segmented bar on ≥ 768 px (`Filter by │ field ▾ │ … │ Apply │ Reset`); the **same form** becomes a bottom sheet on phones, opened by a "Filters (n)" button — dialog semantics, Close button, Esc, backdrop, focus trap, body scroll lock, 44 px controls, 16 px input text (prevents iOS zoom). No second filter component.
@@ -90,3 +94,23 @@ Not yet verified: screen-reader walkthrough (NVDA/VoiceOver), 200 % zoom reflow,
 
 ## 9. QA checklist (before showing any UI)
 Typography (Inter only, scale respected) · palette (tokens only, one accent) · navigation badges actionable only (navigation doc §10) · density presets exact · rendered-page contrast audit (§8a method) · spacing scale · icons (Lucide, one size per context) · buttons and form controls consistent · filter bar and data table consistent with this file · widths 1920/1440/1024/768/390/375 with no page-level horizontal scroll · keyboard path through shell, tabs, filters, table, drawer · contrast per tokens doc · overflow/truncation with tooltips · touch targets · empty/loading/error/no-permission states · business labels per constitution §4 · sample data labelled.
+
+## 10. Phase 2 implementation map (D-036, 2026-10-08)
+| Standard | Implementation | Notes |
+|---|---|---|
+| `EoraEnterprisePage` + list order (PAGE-TEMPLATES §1) | `EnterprisePage`, `ListWorkspace` | slot order fixed in code: tabs → toolbar → filter bar → active filters → bulk bar → content → footnote → pagination |
+| `EoraStatusTabs` | `StatusTabs` | counts in accessible names (`All, 214`) |
+| `EoraStatusBadge` | `DomainStatusBadge` + `STATUS_CATALOGUE` | domains: stock (DD-01), document (doc 16), schedule (D-034), indicator (ADR-0005); never mixed |
+| `EoraFilterBar` | `FilterBar`, `FilterToggle`, `ActiveFilters`, `SavedViewsMenu`, `ListSearch` | one schema → segmented bar ≥ 768 px / bottom sheet on phones; URL sync via `useListUrlState`; dependent fields clear children; locked scope never written to the URL |
+| `EoraDataTable` | `DataTable` (TanStack Table v9 inside) | modules use `EoraColumn<T>` only; `critical` columns cannot be hidden; `emptyOnPhone` hides zero buckets in cards; disabled actions stay focusable (`aria-disabled`) with the reason |
+| Density (§5) | `DensityToggle` + `useDensityPreference` | Comfortable default (D-029); exact 44/34 px rows, 38/32 px headers (E2E-measured); hidden on phones (cards) |
+| `EoraPagination` | `Pagination` | numbered window with gaps; phones: summary + current + Prev/Next (44 px) |
+| `EoraForm` | `EoraForm`, `FormTextField`, `FormSelectField`, `FormTextareaField`, `FormQuantityField` | RHF + Zod; summary receives focus; server field errors mapped back; one idempotency key until success |
+| `EoraModal` / AlertDialog | `ModalContent` + `ModalBody` / `ModalFooter`, `ConfirmDialog` | ConfirmDialog: focus on Cancel, optional mandatory reason (audit), errors stay in the dialog |
+| `EoraDrawer` | `DrawerContent` | focus returns to the invoking element even when opened from state |
+| Feedback | `FeedbackProvider` / `useFeedback`, `InlineAlert` | toasts for background results only; persistent outcomes use InlineAlert / inbox |
+| States | `LoadingState`, `EmptyState`, `ErrorState`, `PermissionDeniedState`, `Skeleton`, stale banner | error shows reference id, never a stack trace |
+| `EoraExportMenu` / `EoraImportWizard` | `ExportMenu`, `ImportWizard` (`ExportSource`, `ImportSource`) | export = same query scope as the table, queued job; import = template → upload → validate → review errors → approval → idempotent commit |
+| `EoraNotificationCenter` | `NotificationCenter` (`NotificationSource`) | bell panel + `/system/notifications`; Needs action / Unread / All; deep links only when the role can open the module |
+Engineering rule learned in Phase 2: anything rendered **above** a page's Suspense boundary (providers, shell) must not change context value during hydration — see ADR-0011 Amendment 1.
+

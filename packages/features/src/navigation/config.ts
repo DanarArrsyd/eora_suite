@@ -117,7 +117,7 @@ export const NAV_MODULES: readonly NavModule[] = [
         label: 'Customer Orders',
         items: [
           { id: 'customer-po', label: 'Customer Purchase Orders', icon: FileText, release: 'R1', phase: 'later' },
-          { id: 'sales-orders', label: 'Sales Orders', icon: FileCheck, release: 'R2', phase: 'later' },
+          { id: 'sales-orders', label: 'Sales Orders', icon: FileCheck, release: 'R1', phase: 'later' },
           { id: 'po-revisions', label: 'Order Revisions', icon: RotateCcw, release: 'R1', phase: 'later' },
         ],
       },
@@ -126,7 +126,7 @@ export const NAV_MODULES: readonly NavModule[] = [
         items: [
           { id: 'forecast', label: 'Forecast', icon: TrendingUp, release: 'R2', phase: 'later' },
           { id: 'releases', label: 'Kanban / Delivery Releases', icon: CalendarCheck, release: 'R2', phase: 'later' },
-          { id: 'netting', label: 'Demand Netting', icon: GitMerge, release: 'R2', decision: 'O-019', phase: 'later' },
+          { id: 'netting', label: 'Demand Netting', icon: GitMerge, release: 'R2', decision: 'O-011', phase: 'later' },
         ],
       },
       {
@@ -155,15 +155,15 @@ export const NAV_MODULES: readonly NavModule[] = [
         label: 'Customer Demand',
         items: [
           { id: 'customer-po', label: 'Customer Purchase Orders', icon: FileText, release: 'R1', phase: 'later' },
-          { id: 'sales-orders', label: 'Sales Orders', icon: FileCheck, release: 'R2', phase: 'later' },
+          { id: 'sales-orders', label: 'Sales Orders', icon: FileCheck, release: 'R1', phase: 'later' },
           { id: 'forecast', label: 'Forecast', icon: TrendingUp, release: 'R2', phase: 'later' },
-          { id: 'delivery-schedules', label: 'Delivery Schedules', icon: CalendarCheck, release: 'R2', phase: 'later' },
+          { id: 'delivery-schedules', label: 'Delivery Schedules', icon: CalendarCheck, release: 'R1', phase: 'later' },
         ],
       },
       {
         label: 'Production Planning',
         items: [
-          { id: 'mps', label: 'Master Production Schedule', icon: CalendarDays, release: 'R2', phase: 'later' },
+          { id: 'mps', label: 'Master Production Schedule', icon: CalendarDays, release: 'R1', phase: 'later' },
           { id: 'work-orders', label: 'Work Orders', icon: ClipboardList, release: 'R1', phase: 'later' },
           { id: 'capacity', label: 'Capacity Planning', icon: Gauge, release: 'R2', phase: 'later' },
         ],

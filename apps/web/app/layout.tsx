@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'sw
 
 export const metadata: Metadata = {
   title: { default: 'EORA Suite', template: '%s · EORA Suite' },
-  description: 'EORA Suite — Manufacturing Operations Management (Phase 1 foundation build).',
+  description: 'EORA Suite — Manufacturing Operations Management (frontend prototype build).',
 };
 
 export const viewport: Viewport = { themeColor: '#172554', width: 'device-width', initialScale: 1 };

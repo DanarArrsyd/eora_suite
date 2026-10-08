@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { TooltipProvider } from '@eora/ui';
 import { mockNavigationSource, type NavigationSource, type RoleKey } from '../navigation';
 
 /**
@@ -59,7 +60,13 @@ export function ShellSessionProvider({ children, source = mockNavigationSource }
     }),
     [role, setRole, source],
   );
-  return <ShellSessionContext.Provider value={value}>{children}</ShellSessionContext.Provider>;
+  // TooltipProvider lives here (not in AppShell): Radix providers create a new context value on every render, and any
+  // context change above the page's Suspense boundary during hydration makes React client-render the streamed segment.
+  return (
+    <ShellSessionContext.Provider value={value}>
+      <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
+    </ShellSessionContext.Provider>
+  );
 }
 
 export function useShellSession(): ShellSession {

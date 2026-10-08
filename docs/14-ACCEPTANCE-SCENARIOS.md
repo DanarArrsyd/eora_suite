@@ -7,7 +7,7 @@
 5. **Coil unknown inputs:** Given 700 kg issued and pitch `0.32` without units/geometry, when PPIC requests equivalent pcs, then system says 'Not calculable — missing inputs', not 2,188 pcs or confirmed loss.
 6. **Partial QC:** Given 500 reported good output, when QC accepts 300 and leaves 200 pending, then only 300 can proceed to FG receipt and 200 remain Pending QC.
 7. **FG distinction:** Given 300 QC accepted but 0 FG receipt posted, then FG Warehouse stock is unchanged; receipt is required.
-8. **Customer demand:** Given forecast includes customer PO volume and Kanban is a release, then net demand does not double count same customer requirement.
+8. **Customer demand:** Given forecast includes customer PO volume and Kanban is a release, then net demand does not double count same customer requirement (worked cases #28–#39).
 9. **Substitution:** Given approved MAT-B replaces MAT-A, when issuing MAT-B to WO, then only MAT-B stock decreases and genealogy/approval reason is stored.
 10. **Concurrent posting:** Given two users issue same lot simultaneously, when available stock is insufficient for both, then exactly one or a valid bounded combination succeeds, no oversell/duplicate posting.
 11. **Reversal:** Given posted stock adjustment, when authorized correction is approved, then compensating movement is created and original history remains.
@@ -27,3 +27,27 @@
 25. **Reservation:** Given 500 pcs FG unrestricted and 300 allocated to a delivery line, then on-hand stays 500 and available shows 200.
 26. **Negative stock:** Given 10 kg at a work center, when consumption of 12 kg is posted, then posting is rejected and no leg is written.
 27. **Pooling isolation:** Given interleaved requests for Tenant A and B over a transaction-mode pooler, then no request reads or writes the other tenant's rows, and a connection without tenant context returns no rows.
+
+## Demand identity and double-counting guard (D-034, BR-DEM-05..12)
+Sample data for #28–#39 (illustrative, not tenant data): customer C-01, item PART-A (pcs), weekly buckets W41–W44 (bucket size still O-011). Customer PO **CPO-1001 line 10** = 1,000 pcs mapped to **SO-2001 line 1**, scheduled as four Delivery Schedule Lines DSL-1..4 of 250 pcs (W41..W44, revision 1, Firm). Forecast FC-PART-A: W41 300, W42 1,200, W43 0, W44 0.
+
+| Bucket | Forecast | Firm required | Delivered | Firm outstanding | Net forecast | Outstanding demand for planning |
+|---|---|---|---|---|---|---|
+| W41 (after #32) | 300 | 250 | 100 | 150 | 50 | 200 |
+| W42 | 1,200 | 250 | 0 | 250 | 950 | 1,200 |
+| W43 | 0 | 250 | 0 | 250 | 0 | 250 |
+| W44 | 0 | 250 | 0 | 250 | 0 | 250 |
+Never: 2,000 (PO line + SO line), 2,000 (SO line + its schedule lines), or forecast added on top of firm demand inside the same bucket.
+
+28. **Single identity:** Given CPO-1001/10 mapped to SO-2001/1 with DSL-1..4, when firm demand for PART-A W41–W44 is computed, then it is 1,000 pcs (250 per bucket); a second mapping of CPO-1001/10 to another SO line is rejected (unique mapping).
+29. **Schedule line completeness:** Given a schedule line without requirement date, without source line reference, or with UOM ≠ SO line UOM, when it is saved as Firm, then it is rejected with field-level errors and no demand changes.
+30. **Forecast consumption:** Given forecast W42 = 1,200 and firm required W42 = 250, then net forecast W42 = 950 and outstanding demand = 1,200; when firm required W42 rises to 1,500, then net forecast = 0 and outstanding demand = 1,500; W41 and W43 are unchanged.
+31. **Kanban release is a call-off:** Given blanket SO-2002/1 for 10,000 pcs with kanban release KB-77 = 500 pcs due W42 (Firm) and forecast W42 = 600 for that item only, then firm outstanding W42 = 500, net forecast = 100, outstanding demand = 600; unscheduled 9,500 pcs is shown separately and is not demand in any bucket (not 10,500 or 1,100).
+32. **Partial fulfilment:** Given DSL-1 = 250 pcs, when shipment SHP-1 posts 100 pcs referencing DSL-1, then delivered = 100, outstanding = 150, status Partially fulfilled; a drafted (unposted) delivery order for 150 does not change outstanding.
+33. **Allocation ≠ fulfilment:** Given 150 pcs FG allocated to DSL-1, then DSL-1 outstanding stays 150, firm demand is unchanged, and FG available decreases by 150 (#25).
+34. **Delivery does not reopen forecast:** Given forecast W41 = 300, DSL-1 required 250 and delivered 250 (Fulfilled), then net forecast W41 = 50 and outstanding demand W41 = 50 (not 300).
+35. **Shipment reversal:** Given SHP-1 (100 pcs) reversed with approval, then DSL-1 delivered = 0, outstanding = 250, status Firm; history keeps SHP-1 and its reversal.
+36. **Revision:** Given CPO-1001 revision 2 changes W43 from 250 to 300 and cancels W44, when the revision is posted, then DSL-3/DSL-4 become Superseded, DSL-3′ (rev 2) = 300 is Firm, W43 demand = 300 (not 550) and W44 demand = 0; a WO pegged to DSL-4 raises a PPIC notification and is not changed. If revision 2 sets DSL-1 (delivered 100) to 80, then DSL-1′ delivered = 100, outstanding = 0 and over-delivery 20 is flagged.
+37. **Idempotent schedule import:** Given the same schedule file (same source document, line references and revision) imported twice, then no new schedule lines are created and firm demand is unchanged (#15).
+38. **Requirement records are derived:** Given MPS version 3 computes weekly requirement records pegged to DSL-1..4 and FC-PART-A, when firm demand is queried after the MPS run, then it is still 1,000 pcs; re-running version 3 produces the same records (unique per version/item/bucket/pegged line).
+39. **MPS revision:** Given MPS version 3 approved and version 4 approved later, then version 3 becomes Superseded and its requirement records are never summed with version 4.

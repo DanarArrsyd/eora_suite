@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { CircleAlert, Inbox, Loader2 } from 'lucide-react';
+import { CircleAlert, CircleCheck, Inbox, Info, Loader2, ShieldX, TriangleAlert } from 'lucide-react';
 import { cn } from '../lib/cn';
 
 type StateProps = { title: string; description?: React.ReactNode; action?: React.ReactNode; icon?: React.ReactNode; className?: string };
@@ -62,5 +62,60 @@ export function MockDataLabel({ className }: { className?: string }) {
     <span className={cn('inline-flex h-[22px] items-center rounded-sm bg-stat-warn-bg px-2 text-xs font-semibold text-stat-warn-fg', className)}>
       Mock data
     </span>
+  );
+}
+
+/** EoraPermissionDeniedState — names the missing permission and who can grant it; never reveals the data. */
+export function PermissionDeniedState({ title = 'You do not have access to this view', description, action, className }: Partial<StateProps>) {
+  return (
+    <StateFrame
+      icon={<ShieldX />}
+      title={title}
+      description={description ?? 'Ask your company administrator for the required role. No data from this view was loaded.'}
+      action={action}
+      className={className}
+    />
+  );
+}
+
+type AlertTone = 'info' | 'success' | 'warning' | 'danger';
+const ALERT_ICON: Record<AlertTone, React.ReactNode> = { info: <Info />, success: <CircleCheck />, warning: <TriangleAlert />, danger: <CircleAlert /> };
+const ALERT_CLS: Record<AlertTone, string> = {
+  info: 'border-stat-info/40 bg-stat-info-bg text-stat-info-fg',
+  success: 'border-stat-ok/40 bg-stat-ok-bg text-stat-ok-fg',
+  warning: 'border-stat-warn/40 bg-stat-warn-bg text-stat-warn-fg',
+  danger: 'border-stat-err/40 bg-stat-err-bg text-stat-err-fg',
+};
+
+/**
+ * EoraInlineAlert — persistent message inside a page or form (stale data, validation summary, posting result).
+ * `danger` is announced immediately (role=alert); other tones politely (role=status).
+ */
+export function InlineAlert({
+  tone = 'info',
+  title,
+  children,
+  action,
+  className,
+  ...props
+}: { tone?: AlertTone; title: React.ReactNode; children?: React.ReactNode; action?: React.ReactNode; className?: string } & Omit<
+  React.ComponentPropsWithRef<'div'>,
+  'title'
+>) {
+  return (
+    <div
+      role={tone === 'danger' ? 'alert' : 'status'}
+      className={cn('flex items-start gap-3 rounded-md border px-4 py-3 text-[13.5px]', ALERT_CLS[tone], className)}
+      {...props}
+    >
+      <span aria-hidden="true" className="mt-0.5 [&_svg]:size-4">
+        {ALERT_ICON[tone]}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="m-0 font-semibold">{title}</p>
+        {children ? <div className="mt-0.5 text-ink">{children}</div> : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
   );
 }

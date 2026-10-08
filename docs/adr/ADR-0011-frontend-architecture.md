@@ -23,3 +23,13 @@ The owner approved prototype v2.1 as the design baseline (D-027) and authorized 
 + Mock adapters let UI progress without inventing backend contracts.
 − Two runtimes later (Node + PHP); same-origin proxy per ADR-0006 required at integration.
 − Node 25 is the local runtime; CI must pin a supported LTS (decided at CI setup).
+
+## Amendment 1 — Phase 2 dependencies and data-pattern rules (2026-10-08, D-036)
+Added to `packages/features` (exact pins, each released ≥ 2 weeks before adoption): `@tanstack/react-table` **9.2.4** (v9 is the current stable major; v8 has had no release since 2025-04), `@tanstack/react-query` **5.103.2**, `react-hook-form` **7.88.0**, `zod` **4.6.5**, `@hookform/resolvers` **5.9.1**. `apps/web` pins the same Query and Zod versions. Prettier 3.9.9 (+ Tailwind plugin) and Node 24 LTS (`.nvmrc`, CI) were added at the end of Phase 1.
+Rules:
+1. Modules describe tables with `EoraColumn<T>` and lists with `ListSource<T>` (`packages/features/src/data`); TanStack Table stays inside `EoraDataTable`, so a library upgrade never touches module code.
+2. List state (view, search, filters, sort, page, size) lives in the URL; Query keys contain the full list query; sorting/filtering/paging are server-side (`manual*`).
+3. Providers rendered above a page's Suspense boundary must keep a **stable context value during hydration** (stable stores, providers as siblings). A changing provider value made React client-render streamed page segments and left a hidden duplicate tree (`#S:0`) — found and fixed in Phase 2, guarded by an E2E test.
+4. Dialogs opened from state restore focus to the invoking element (`useReturnFocus`).
+5. No Storybook in Phase 2: the shared reference is the in-app showcase (`/system/patterns`, `/system/examples/raw-material-lots`) running with the real providers. Revisit if external designers need isolated stories.
+Consequence update: Node 24 LTS is pinned for CI (supersedes the "decided at CI setup" note above).

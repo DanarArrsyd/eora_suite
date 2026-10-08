@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { FlaskConical } from 'lucide-react';
-import { TooltipProvider, cn } from '@eora/ui';
+import { cn } from '@eora/ui';
 import { trailForPath } from '../navigation';
 import { GlobalSearchDialog, MobileNavSheet, SecondaryOverlay } from './overlays';
 import { PrimarySidebar, SecondarySidebar } from './sidebars';
@@ -54,7 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <>
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-90 focus:rounded-md focus:bg-surface focus:px-4 focus:py-2 focus:font-semibold focus:shadow-[var(--shadow-popover)]"
@@ -71,7 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div role="note" className="col-span-full flex items-center gap-2 border-b border-line bg-stat-warn-bg px-4 py-1.5 text-xs text-stat-warn-fg">
           <FlaskConical aria-hidden="true" className="size-4 shrink-0" />
           <span>
-            <b className="font-semibold">EORA Suite · Phase 1 foundation build.</b> Navigation badges and workspace values come from mock adapters; no
+            <b className="font-semibold">EORA Suite · Frontend prototype build.</b> Navigation badges and workspace values come from mock adapters; no
             operational data is shown.
           </span>
         </div>
@@ -108,6 +108,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         returnFocusTo={returnFocus}
       />
       <GlobalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} returnFocusTo={returnFocus} />
-    </TooltipProvider>
+    </>
   );
 }

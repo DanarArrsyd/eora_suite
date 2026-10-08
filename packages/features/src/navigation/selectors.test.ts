@@ -33,6 +33,11 @@ describe('navigation config', () => {
     expect(items.find((i) => i.id === 'sales-orders')?.decision).toBeUndefined();
     expect(items.find((i) => i.id === 'mps')?.decision).toBeUndefined();
   });
+
+  it('places basic Sales Orders, Delivery Schedules and MPS in R1 (D-035)', () => {
+    const items = NAV_MODULES.flatMap((m) => m.groups.flatMap((g) => g.items));
+    for (const id of ['sales-orders', 'delivery-schedules', 'mps']) expect(items.filter((i) => i.id === id).every((i) => i.release === 'R1')).toBe(true);
+  });
 });
 
 describe('visibility', () => {

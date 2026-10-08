@@ -15,7 +15,7 @@ You are acting as principal manufacturing systems business analyst, solution arc
 - Inventory ledger is authoritative. Do not create duplicate mutable stock totals in Materials/Production/Quality/Warehouse. Inventory changes via transaction service only.
 - Issued, reserved, physically present, consumed, scrap, returned, pending QC, released FG and delivered are different concepts.
 - Do not label unexplained yield variance as theft/lost physical inventory without investigation.
-- Forecast, customer PO and kanban releases must not be double-counted.
+- Forecast, customer PO and kanban releases must not be double-counted: **Sales Order line = single demand identity**, schedule lines/releases are its children, planning requirement records are derived (D-034, BR-DEM-05..12, doc 14 #28–#39).
 - Enforce tenant and scoped permissions server-side; posted records use reversal/adjustment, not hard delete. Independent approval for sensitive corrections.
 - Outbox for reliable cross-module notifications; persisted inbox, permission-aware deep links; push is optional.
 - PDF/Excel branding, export/import security, audit and idempotent import jobs are cross-cutting features.
@@ -32,7 +32,7 @@ You are acting as principal manufacturing systems business analyst, solution arc
 - Canonical UI/UX source: `docs/uiux/` (start with `EORA-DESIGN-CONSTITUTION.md`). Direction: **EORA Modern Corporate Enterprise Workspace**, single theme **Modern Corporate Blue** (no dark mode/theme switching), **Inter** typography, **dual sidebar** desktop navigation from one central navigation config, PWA bottom navigation. Prototypes: `design/mockups/`.
 - Owner decisions override conflicting skill defaults (e.g. skills discouraging Inter/Lucide or defaulting to dark mode); record such conflicts in the Skill Usage Report.
 - ADR-0009 (Ledger Ink / Andon Signal) is SUPERSEDED; do not reuse its visuals. ADR-0010 **Amendment 1** (D-024..D-026: terminology, actionable-only badges, responsive topbar, mobile navigation sheet, DataTable density presets) is part of the approved baseline — see the canonical `docs/uiux/` files, not this summary.
-- Prototype v2.1 is the **official design baseline** (D-027). Frontend implementation is authorized **in phases only** (D-033, ADR-0011, `docs/22-FRONTEND-ARCHITECTURE.md`): stop for owner review after each phase; quality gates per doc 22 §4; typed mock adapters with visible "Mock data" labels. Backend logic, schema/migrations, business-rule or formula changes, deployment and git push still require new approval.
+- Prototype v2.1 is the **official design baseline** (D-027). Frontend implementation is authorized **in phases only** (D-033, ADR-0011, `docs/22-FRONTEND-ARCHITECTURE.md`): stop for owner review after each phase; quality gates per doc 22 §4; typed mock adapters with visible "Mock data" labels. Backend logic, schema/migrations, business-rule or formula changes, deployment and git push still require new approval. Phase 1 approved; Phase 2 authorized only (D-036).
 
 ## Shared UI and quality rules
 - Reuse `EoraFilterBar`, `EoraDataTable`, `EoraForm`, status badges, approvals, notifications, import wizard, report viewer. Schema-driven filters; URL-synced state; server-side pagination/filter/sort; permission-aware export using the same query scope.

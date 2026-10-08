@@ -10,7 +10,7 @@ Data ownership, ERD, state machines, RBAC, material formulas, reconciliation, AP
 Monorepo, auth/tenancy, RBAC, shared UI library, audit, outbox, database migrations, CI/CD, observability, test harness.
 
 ## Stage 3: End-to-end vertical slice
-Customer PO → WO → RM issue to Production → actual consumption/remnant → good/NG → Pending QC → QC release → FG receipt → shipment → traceability → reconciliation case. Include 25-pcs unexplained variance and correction/approval path. Verify concurrency and audit.
+Customer PO → Sales Order line + delivery schedule (basic, D-035) → basic MPS / planned order → WO → RM issue to Production → actual consumption/remnant → good/NG → Pending QC → QC release → FG receipt → shipment → traceability → reconciliation case. Include 25-pcs unexplained variance and correction/approval path. Verify concurrency and audit.
 
 ## Stage 4: Expand V1
 Forecast/kanban, basic capacity, substitutions, multi-lot, stock count/closing, basic maintenance, PWA, bell/push, Excel/PDF, PPIC Control Tower, dashboards and role-based workflows.

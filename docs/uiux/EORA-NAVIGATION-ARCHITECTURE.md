@@ -83,7 +83,7 @@ Rule: pages never declare menus; they declare `module`, `item` and breadcrumb on
 | Module | Groups → items |
 |---|---|
 | Dashboard | My Workspace → Overview, My Tasks, Approvals Inbox |
-| Demand | Customer Orders → Customer Purchase Orders, PO Revisions · Releases & Forecast → Forecast (R2), Kanban / Delivery Releases (R2), Demand Netting (R2, netting rule O-011/O-019) · Master Data → Customers, Customer Part Mapping |
+| Demand | Customer Orders → Customer Purchase Orders, PO Revisions · Releases & Forecast → Forecast (R2), Kanban / Delivery Releases (R2), Demand Netting (R2, bucket size O-011; counting level decided by D-034) · Master Data → Customers, Customer Part Mapping |
 | PPIC / Planning | Overview → Control Tower, Planning Dashboard (R2) · Customer Demand → Customer Purchase Orders, Sales Orders (R2, D-030), Forecast (R2), Delivery Schedules (R2) · Production Planning → Master Production Schedule (R2, D-031), Work Orders, Capacity Planning (R2) · Material Control → Raw Material Availability, Coil / Sheet Conversion, Material Shortage · Production Monitoring → Work Order Progress, Daily Production Results, Pending Quality · Inventory Monitoring → Finished Goods Availability, Material at Production · Reconciliation → Material Consumption, Material Variance, Variance Investigation · Reports → Daily Finished Goods, Daily Delivery, Production Fulfillment (R2) |
 | Materials | Receiving → RM Receipts, Incoming Release (R2, O-013) · Issue & Return → Material Issue, Custody Acceptance (R2), Material Return, Substitution Requests (R2) · Lots → Material Lots, Remnants |
 | Production | Execution → Production Runs, Run Reporting, Downtime (R2) · Output → Production Postings, Rework Orders (R2) · Reconciliation → Run Reconciliation, Measurements |
@@ -95,7 +95,7 @@ Rule: pages never declare menus; they declare `module`, `item` and breadcrumb on
 | Traceability | Lot Trace → Backward Trace, Forward Trace, Genealogy Graph (R2) · Reconciliation → Reconciliation Cases |
 | Analytics | Insights → Dashboards (R2), Reports · Data Exchange → Export Center, Import Jobs (R2) |
 | Administration | Organization → Company, Plants & Warehouses, Work Centers · Access → Users, Roles & Permissions, Approval Policies · System → Audit Log, Notification Settings (R2), Tenant Settings |
-Label notes (O-017 approved, D-024): "Material Loss" → **Material Variance** for menus and general indicators; **Actual Material Loss** and **Physical Stock Discrepancy** remain as proven outcomes inside investigations and stock counts. "Finish Good" → **Finished Goods** everywhere. **Sales Orders** (D-030) and **Master Production Schedule** (D-031) are approved for V1 basic scope; release placement pending O-020 (proposed R2). ~~Pending O-011 / O-014 tags~~ removed.
+Label notes (O-017 approved, D-024): "Material Loss" → **Material Variance** for menus and general indicators; **Actual Material Loss** and **Physical Stock Discrepancy** remain as proven outcomes inside investigations and stock counts. "Finish Good" → **Finished Goods** everywhere. **Sales Orders** (D-030) and **Master Production Schedule** (D-031) are approved for V1 basic scope and placed in **R1** (D-035); Delivery Schedules follow the SO line demand identity (D-034). ~~Pending O-011 / O-014 tags~~ removed.
 
 ## 8. Responsive behaviour
 | Width | Behaviour |

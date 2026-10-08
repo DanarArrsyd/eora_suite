@@ -1,7 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
 
 const WIDTHS = [1920, 1600, 1440, 1280, 1200, 1024, 768, 640, 390, 375];
-const ROUTES = ['/ppic', '/ppic/control-tower', '/ppic/work-orders', '/inventory/raw-material', '/system/ui-kit'];
+const ROUTES = [
+  '/ppic',
+  '/ppic/control-tower',
+  '/ppic/work-orders',
+  '/inventory/raw-material',
+  '/system/ui-kit',
+  '/system/patterns',
+  '/system/examples/raw-material-lots',
+  '/system/notifications',
+];
 
 async function visible(page: Page, selector: string) {
   return page.locator(selector).first().isVisible();

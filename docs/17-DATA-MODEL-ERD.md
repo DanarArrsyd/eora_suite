@@ -16,9 +16,11 @@ erDiagram
   MEMBERSHIP ||--o{ ROLE_ASSIGNMENT : scoped
   CUSTOMER ||--o{ CUSTOMER_PO : issues
   CUSTOMER_PO ||--o{ CUSTOMER_PO_LINE : contains
-  CUSTOMER_PO_LINE ||--o{ DEMAND_RELEASE : "called off by"
+  CUSTOMER_PO_LINE ||--|| SO_LINE : "mapped to (D-034)"
+  SALES_ORDER ||--o{ SO_LINE : contains
+  SO_LINE ||--o{ DELIVERY_SCHEDULE_LINE : "scheduled / called off by"
   FORECAST ||--o{ DEMAND_CONSUMPTION : "consumed by"
-  CUSTOMER_PO_LINE ||--o{ DEMAND_CONSUMPTION : consumes
+  DELIVERY_SCHEDULE_LINE ||--o{ DEMAND_CONSUMPTION : consumes
   ITEM ||--o{ BOM_VERSION : has
   ITEM ||--o{ ROUTING_VERSION : has
   ITEM ||--o{ CONVERSION_PROFILE : has
@@ -39,7 +41,7 @@ erDiagram
   INSPECTION_LOT }o--|| LOT : inspects
   INSPECTION_LOT ||--o{ QC_DISPOSITION : has
   SHIPMENT ||--|{ SHIPMENT_LINE : contains
-  SHIPMENT_LINE }o--|| CUSTOMER_PO_LINE : fulfils
+  SHIPMENT_LINE }o--|| DELIVERY_SCHEDULE_LINE : fulfils
   RECON_SCOPE ||--o{ VARIANCE_RESULT : calculates
   VARIANCE_RESULT ||--o| RECON_CASE : triggers
   RECON_CASE ||--o{ APPROVAL_REQUEST : needs
@@ -70,11 +72,12 @@ erDiagram
 `items (type: RAW, SEMI_FINISHED, FINISHED, SCRAP, CONSUMABLE; base_uom; lot_controlled; inspection_required)`, `uoms`, `uom_conversions (item-specific, versioned)`, `material_specs (grade, thickness_mm, width_mm, density_g_cm3, nominal)`, `bom_versions/lines`, `routing_versions/operations (standard_yield SY, version, effective_from)`, `item_weights (NW, version)`, `conversion_profiles (item_id, input_form SHEET|COIL, inputs JSONB validated by formula_code schema, status DRAFT|VALIDATED|RETIRED, version, effective_from, validated_by)`, `customers`, `customer_items (customer part ↔ item)`.
 
 ### Demand
-`sales_order_headers`, `sales_order_lines (so_line ↔ po_line mapping, delivery schedule, revision, status, outstanding)`, `po_so_links` — added by D-030 (logical only; no migration).
-`customer_po_headers (revision)`, `customer_po_lines (qty, due_date, status, revision)`, `demand_releases (kanban/delivery call-off → po_line)`, `forecasts (item, bucket_start, qty, version)`, `demand_consumptions (forecast_id ↔ po_line_id, qty)` — supports BR-DEM-03 without double counting.
+`sales_order_headers (customer, status, revision)`, `sales_order_lines (demand_id, item, ordered_qty, uom, status derived, revision)`, `po_so_links (customer_po_line → so_line, UNIQUE per po_line)` — D-030/D-034 (logical only; no migration).
+`delivery_schedule_lines (so_line, schedule_type CUSTOMER_SCHEDULE|KANBAN_RELEASE|MANUAL, source_document_type, source_document_no, source_line_ref, requirement_date, required_qty, uom, revision, status, superseded_by)` — UNIQUE (so_line, source_document_no, source_line_ref, revision); replaces the former `demand_releases → po_line` (D-034). Fulfilment via `shipment_lines.schedule_line_id`; allocation via `stock_allocations.demand_type = SCHEDULE_LINE`.
+`customer_po_headers (revision)`, `customer_po_lines (qty, due_date, status, revision)` — source documents only, never netted. `forecasts (item, bucket_start, qty, version)`, `demand_consumptions (forecast_id ↔ schedule_line_id, qty)` — BR-DEM-08.
 
 ### Planning / Production
-`mps_versions (plant, horizon, bucket, status DRAFT|SUBMITTED|APPROVED|SUPERSEDED)`, `mps_lines (item, bucket, demand, available, scheduled_supply, net_requirement)`, `planned_orders (mps_line, qty, due, status)`, `material_requirements (planned_order, material item, qty material UOM)` — added by D-031 (logical only; no migration).
+`mps_versions (plant, horizon, bucket, status DRAFT|SUBMITTED|APPROVED|SUPERSEDED)`, `mps_lines (item, bucket, demand, available, scheduled_supply, net_requirement)`, `mps_requirement_pegs (mps_line → schedule_line | forecast line, qty; UNIQUE per mps_version+item+bucket+pegged line, BR-DEM-12)`, `planned_orders (mps_line, qty, due, status)`, `material_requirements (planned_order, material item, qty material UOM)` — added by D-031 (logical only; no migration).
 `work_orders (item, qty, status, snapshot ids: bom_version, routing_version, conversion_profile_version, sy_version, nw_version)`, `wo_demand_links`, `production_runs (wo, work_center, machine, die, shift_id, production_date, operator, status, strokes_start/end)`, `run_measurements (run, lot, method, scale_id, gross, tare, net, counted_qty, evidence_file)`.
 
 ### Inventory ledger (authoritative)
@@ -84,7 +87,7 @@ erDiagram
 | `inventory_documents` | tenant_id, id, doc_type (`RM_RECEIPT, MAT_ISSUE, CUSTODY_ACCEPT, MAT_RETURN, LOT_SPLIT, PRODUCTION_POSTING, QC_DISPOSITION, FG_RECEIPT, PICK, SHIPMENT, SCRAP_DISPOSITION, REWORK_POSTING, STOCK_ADJUSTMENT, REVERSAL`), doc_no, status, plant_id, effective_date, production_date, shift_id, posted_at, posted_by, idempotency_key, reverses_document_id, correction_of_document_id, source_ref (type,id) | `UNIQUE (tenant_id, idempotency_key)`, `UNIQUE (tenant_id, doc_type, doc_no)` |
 | `inventory_movements` | tenant_id, id, document_id, leg_no, plant_id, location_id, item_id, lot_id, stock_status, ownership, uom_id, qty_signed NUMERIC(20,6), measurement_method, run_id, wo_id | append-only (no UPDATE/DELETE grant); partition by month (when volume justifies) |
 | `stock_balances` | tenant_id, plant_id, location_id, item_id, lot_id, stock_status, ownership, uom_id, qty, version | PK = balance key; `CHECK (qty >= 0)`; physical locations only |
-| `stock_allocations` | tenant_id, id, balance key, demand_type (`WO`,`DELIVERY_LINE`), demand_id, qty, status | Σ active ≤ on-hand (service-enforced under lock) |
+| `stock_allocations` | tenant_id, id, balance key, demand_type (`WO`,`SCHEDULE_LINE`), demand_id, qty, status | Σ active ≤ on-hand (service-enforced under lock) |
 | `genealogy_edges` | tenant_id, id, from_lot_id, to_lot_id, document_id, run_id, qty_from, uom_from, qty_to, uom_to | multi-lot, multi-WO |
 | `stock_counts`, `stock_count_lines` | snapshot qty, counted qty, blind flag | |
 

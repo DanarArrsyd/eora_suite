@@ -131,6 +131,32 @@ Approval expiry: approved but unposted requests expire per tenant policy and mus
 ## 11. Import Job (cross-cutting)
 `Uploaded → Validating → Validated(with errors|clean) → AwaitingApproval → Committing → Committed | PartiallyCommitted | Failed`. Commit chunks are idempotent by `(job_id, row_key)`; retry never duplicates postings (doc 14 #15).
 
+## 12. Sales Order line and Delivery Schedule Line (D-034, BR-DEM-05..11)
+```mermaid
+stateDiagram-v2
+  [*] --> Draft
+  Draft --> Firm: SO confirmed / schedule accepted (counts as firm demand)
+  Firm --> PartiallyFulfilled: posted shipment, 0 < delivered < required
+  PartiallyFulfilled --> Fulfilled: delivered ≥ required
+  Firm --> Fulfilled: posted shipment, delivered ≥ required
+  PartiallyFulfilled --> Firm: shipment reversal brings delivered to 0
+  Fulfilled --> PartiallyFulfilled: shipment reversal
+  Draft --> Cancelled
+  Firm --> Cancelled: cancel (no delivered qty; allocations released)
+  Firm --> Superseded: revision n+1 replaces line
+  PartiallyFulfilled --> Superseded: revision n+1 (delivered carried to successor)
+  Superseded --> [*]
+  Cancelled --> [*]
+  Fulfilled --> [*]
+```
+| Transition | Guard | Effect |
+|---|---|---|
+| Draft → Firm | SO line mapped (BR-DEM-05); qty > 0; UOM = SO line UOM | enters firm demand (BR-DEM-07), consumes forecast (BR-DEM-08) |
+| → PartiallyFulfilled / Fulfilled | posted shipment line referencing this schedule line (BR-DEM-09) | outstanding recomputed (BR-DEM-10); allocation consumed by shipment |
+| → Superseded | revision posted (BR-DEM-11) | counts zero; delivered carried to successor; pegged WO/MPS/allocation → PPIC notification |
+| → Cancelled | delivered = 0 | allocations released; pegged records notified |
+SO **line** status is derived: `OPEN` (any Firm/PartiallyFulfilled), `FULFILLED` (all active lines Fulfilled), `CANCELLED` (all Cancelled), `CLOSED` (manual short-close with reason and approval, outstanding written off as demand only — no inventory effect).
+
 ## Concurrency notes (all machines)
 - Commands carry `If-Match` (document version) and `Idempotency-Key`.
 - Transitions that post ledger legs lock balance rows in key order (BR-INV-05).

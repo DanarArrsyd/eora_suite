@@ -4,7 +4,6 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Bell, Building2, Calendar, ChevronDown, ChevronRight, ChevronsUpDown, LogOut, Menu, PanelLeft, Search, User, Warehouse } from 'lucide-react';
 import {
-  Badge,
   cn,
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +13,6 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  EmptyState,
   Field,
   IconButton,
   Kbd,
@@ -25,6 +23,7 @@ import {
   Select,
 } from '@eora/ui';
 import { ROLE_LABELS, type RoleKey, type TopbarContext } from '../navigation';
+import { NotificationCenter } from '../patterns/notifications';
 import { useShellSession } from './session';
 
 /* ===================== Breadcrumb ===================== */
@@ -246,8 +245,9 @@ export function TopbarOverflow({ context }: { context: TopbarContext | undefined
 
 /* ===================== Notification bell (panel list arrives in Phase 2) ===================== */
 export function NotificationBell({ actionCount }: { actionCount: number }) {
+  const [open, setOpen] = React.useState(false);
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         className="relative inline-grid size-9 place-items-center rounded-md text-ink-2 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-ring max-md:size-11"
         aria-label={actionCount ? `Notifications: ${actionCount} need action` : 'Notifications'}
@@ -257,15 +257,9 @@ export function NotificationBell({ actionCount }: { actionCount: number }) {
           <NumericBadge count={actionCount} label="need action" className="absolute -top-0.5 -right-1 shadow-[0_0_0_2px_var(--color-bg-surface)]" />
         ) : null}
       </PopoverTrigger>
-      <PopoverContent aria-label="Notifications" className="w-[min(400px,calc(100vw-16px))] p-0">
-        <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <h2 className="text-[15px] font-semibold">Notifications</h2>
-          <Badge tone="warning">Mock data</Badge>
-        </div>
-        <EmptyState
-          title={actionCount ? `${actionCount} item${actionCount === 1 ? '' : 's'} need your action` : 'Nothing needs your action'}
-          description="The notification list, filters and deep links are delivered in Phase 2 (Notification Center UI). Counts here come from the mock navigation adapter."
-        />
+      <PopoverContent aria-label="Notifications" className="w-[min(420px,calc(100vw-16px))] p-0">
+        <h2 className="m-0 border-b border-line px-4 pt-3 pb-2 text-[15px] font-semibold">Notifications</h2>
+        <NotificationCenter variant="panel" onNavigate={() => setOpen(false)} />
       </PopoverContent>
     </Popover>
   );

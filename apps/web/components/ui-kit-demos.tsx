@@ -29,7 +29,9 @@ import {
   MockDataLabel,
   Modal,
   ModalClose,
+  ModalBody,
   ModalContent,
+  ModalFooter,
   ModalTrigger,
   NumericBadge,
   Select,
@@ -143,16 +145,18 @@ export function UiKitDemos() {
             <ModalTrigger asChild>
               <Button>Open modal</Button>
             </ModalTrigger>
-            <ModalContent title="Submit for review" description="Confirm submitting the case for independent review." className="p-5">
-              <p className="mt-2 text-sm text-ink-2">The resolution goes to the Inventory Controller. You cannot approve your own case.</p>
-              <div className="mt-5 flex justify-end gap-2">
+            <ModalContent title="Submit for review" description="Confirm submitting the case for independent review.">
+              <ModalBody>
+                <p className="m-0 text-sm text-ink-2">The resolution goes to the Inventory Controller. You cannot approve your own case.</p>
+              </ModalBody>
+              <ModalFooter>
                 <ModalClose asChild>
                   <Button>Cancel</Button>
                 </ModalClose>
                 <ModalClose asChild>
                   <Button variant="primary">Submit</Button>
                 </ModalClose>
-              </div>
+              </ModalFooter>
             </ModalContent>
           </Modal>
           <Drawer>

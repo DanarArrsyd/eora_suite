@@ -2,7 +2,16 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
-const ROUTES = ['/ppic', '/ppic/control-tower', '/inventory/raw-material', '/system/ui-kit', '/does-not-exist'];
+const ROUTES = [
+  '/ppic',
+  '/ppic/control-tower',
+  '/inventory/raw-material',
+  '/system/ui-kit',
+  '/system/patterns',
+  '/system/examples/raw-material-lots',
+  '/system/notifications',
+  '/does-not-exist',
+];
 
 for (const [label, width] of [
   ['desktop', 1440],
