@@ -3,8 +3,8 @@
 | Domain | V1 minimum | Owns | Does NOT own |
 |---|---|---|---|
 | Core | Tenant/org/user/RBAC, approval, audit, notification, document, correction | Identity and platform policy | Operational stock |
-| Demand | Customer PO, Sales Order, forecast, Kanban/release, revisions, fulfillment references | Customer demand | Inventory balance |
-| Planning | BOM/routing versions, requirements, capacity checks, WO, PPIC Control Tower | WO and planning snapshot | QC disposition |
+| Demand | Customer PO registration, **Sales Order basic** (D-030: PO-to-SO mapping, delivery schedule, revision, status, partial fulfilment, outstanding qty), forecast, Kanban/release, revisions, fulfillment references | Customer demand | Inventory balance; full sales ERP (pricing, credit, quotations) |
+| Planning | BOM/routing versions, **basic MPS + basic MRP** (D-031: daily/weekly horizon, demand aggregation, FG availability, scheduled supply, net requirements, material availability, basic capacity check, planned production orders, WO release, plan revision, approval), WO, PPIC Control Tower | MPS versions, planned orders, WO and planning snapshot | QC disposition; APS optimisation, AI or fully automated scheduling |
 | Materials | Receiving reference, lot, reservation, issue/return, substitution approvals, custody | Material documents | Independent stock ledger |
 | Production | Runs, machine/dies/shift, actual consumption request, good/NG, downtime, process scrap | Production facts | Final FG availability |
 | Quality | Inspection, partial disposition, Hold/Rework/Accepted/Rejected | QC decisions | Warehouse putaway |

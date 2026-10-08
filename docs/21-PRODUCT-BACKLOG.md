@@ -9,8 +9,8 @@
 | E-02 RBAC & scopes | Core | role templates, permission catalogue, scope assignment, SoD-01/02 | SoD-03..06, break-glass, access review | — |
 | E-03 Audit & approval | Core | audit events, approval engine (policy table), maker-checker for reversal/adjustment | escalation/expiry, Data Correction Center UI | hash-chain audit (DF-02) |
 | E-04 Master data | Core/Planning | items, UOM, material specs, BOM/routing versions, CP/SY/NW versions, work centers, machines/dies, locations incl. virtual | import templates for master data | serial tracking |
-| E-05 Customer demand | Demand | customer PO + lines + revisions | forecast, kanban/release, netting (O-011) | blanket order advanced |
-| E-06 Work order | Planning | WO create/release/snapshot/close (BR-PLN-*) | basic capacity check, basic net requirements | MRP-lite, APS |
+| E-05 Customer demand | Demand | customer PO + lines + revisions | **Sales Order basic + PO-to-SO mapping (D-030, placement O-020)**, forecast, kanban/release, netting (O-011, O-019) | blanket order advanced, full sales ERP |
+| E-06 Work order & planning | Planning | WO create/release/snapshot/close (BR-PLN-*) | **basic MPS + basic MRP (D-031, placement O-020)**, basic capacity check, planned orders, plan approval | APS optimisation, AI scheduling (~~MRP-lite V2~~ superseded by D-031) |
 | E-07 Inventory ledger | Inventory | documents, legs, balances, allocations, negative-stock guard, idempotency, reversal, periods | stock count/blind count, period close UI | consignment/customer-owned (O-005) |
 | E-08 Materials | Materials | RM receipt (with BLOCKED option), issue, return, lot split/remnant | two-step custody, substitution approval, incoming release (O-013) | full procurement, incoming inspection |
 | E-09 Production | Production | run, measurement capture, Production Posting (all 6 categories), multi-shift | rework order, downtime, die stroke | IoT counters |
@@ -24,6 +24,7 @@
 | E-17 Import/Export/Print | Core | QueryDefinition + XLSX export for slice resources | import wizard, PDF templates, watermark, job center | document verification QR |
 | E-18 PWA Floor Mode | Web | responsive task views for issue, production posting, QC | installable PWA, scanner, offline drafts (O-009) | — |
 | E-19 Maintenance | Maintenance | — | assets/dies availability, breakdown, basic PM | predictive |
+| E-21 Frontend phases (D-033) | Web | Phase 1 foundation, Phase 2 shared patterns, Phase 3 Control Tower UI | Phase 4 reconciliation UI, Phase 5 PWA foundation | — |
 | E-20 Ops & quality gates | Platform | CI, arch tests, isolation tests, observability baseline | k6 scenarios W-01..W-11, backup/restore drill | — |
 
 ## R1 vertical slice — definition of done

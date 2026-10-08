@@ -38,3 +38,15 @@ Prototype QA at 1920/1440/1024/768/390/375 px (overflow, keyboard, states) recor
 **Consequences:** + Topbar, tables and navigation hold from 1920 to 375 px without page-level horizontal scroll (verified). − Compact density hides secondary sub-lines (available via tooltip/drawer). − Screen-reader and real-device testing still outstanding.
 
 **Status:** Accepted as refinement; production frontend still requires explicit owner approval.
+
+## Amendment 2 — Final approval adjustments (2026-10-08, D-027..D-029)
+- **Baseline:** prototype v2.1 approved with conditions as the official design baseline (D-027). Production frontend proceeds in phases (D-033, ADR-0011).
+- **Global search (D-028)** — supersedes Amendment 1 item 1 ("search icon below 1600 px"):
+  | Viewport | Search presentation |
+  |---|---|
+  | ≥ 1600 px | Full input (placeholder + `Ctrl K` hint) |
+  | 1440–1599 px | Compact input |
+  | 1200–1439 px | Compact input when the page declares no topbar context; icon when it does (layout density wins) |
+  | < 1200 px | Icon → search dialog |
+  `Ctrl+K` / `Cmd+K` everywhere. Permission-aware, tenant-scoped, keyboard accessible, debounced, loading/empty/error states.
+- **Density (D-029):** default Comfortable for new users; Compact may hide secondary descriptions only — never critical information, quantity/UOM or critical status. Secondary info stays reachable through the detail drawer or row expansion; tooltips are supplementary, never the only path. Supersedes the Amendment 1 note "secondary sub-lines move to tooltip".

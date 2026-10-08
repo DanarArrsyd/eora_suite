@@ -51,11 +51,13 @@ Left → right: (mobile) labelled **Menu** button · secondary-sidebar toggle ·
 **Responsive priority (D-026)** — items never hidden: current-page crumb, bell, profile, access to company/plant.
 | Width | Search | Breadcrumb | Page context | Company / plant | Profile |
 |---|---|---|---|---|---|
-| ≥ 1600 | input (260 px) with `Ctrl K` hint | full path | label + value | two-line switcher | avatar + name/role (≥ 1680) |
-| 1280–1599 | icon → command dialog | first › … › current (middle in tooltip) | label + value | two-line switcher | avatar |
-| 1024–1279 | icon | first › … › current | label + value | two-line switcher | avatar |
+| ≥ 1600 | full input (260 px) with `Ctrl K` hint | full path | label + value | two-line switcher | avatar + name/role (≥ 1680) |
+| 1440–1599 | compact input (~200 px) | first › … › current (middle in tooltip) | label + value | two-line switcher | avatar |
+| 1200–1439 | compact input if the page has no topbar context; otherwise icon | first › … › current | label + value | two-line switcher | avatar |
+| 1024–1199 | icon → search dialog | first › … › current | label + value | two-line switcher | avatar |
 | 768–1023 | icon | first › … › current | icon only (value in accessible name) | icon only | avatar |
 | < 768 | icon | current page only | inside overflow (building icon) | inside overflow | avatar |
+- Search strategy per **D-028** (supersedes the v2.1 rule "icon below 1600 px"). Entities: Customer PO, Sales Order, Work Order, Part Number, Material, Material Lot, Production Run, Inspection Lot, Delivery Order; debounced input (≈250 ms), loading/empty/error states.
 - **Command search** (`Ctrl/⌘ K`): modal dialog, combobox + listbox, grouped results (work orders, lots, POs, cases, pages), ↑/↓/Enter/Esc, results limited to records the user may view in the active tenant; focus returns to the trigger.
 - **Workspace switcher**: popover with company and plant selects (dependent), only assigned scopes listed; switching reloads data in the new scope and is audited.
 - **Page context** appears only where the page declares it (`data-context` / page config).
@@ -81,8 +83,8 @@ Rule: pages never declare menus; they declare `module`, `item` and breadcrumb on
 | Module | Groups → items |
 |---|---|
 | Dashboard | My Workspace → Overview, My Tasks, Approvals Inbox |
-| Demand | Customer Orders → Customer Purchase Orders, PO Revisions · Releases & Forecast → Forecast (R2), Kanban / Delivery Releases (R2), Demand Netting (R2, O-011) · Master Data → Customers, Customer Part Mapping |
-| PPIC / Planning | Overview → Control Tower, Planning Dashboard (R2) · Customer Demand → Customer Purchase Orders, Sales Orders (O-011), Forecast (R2), Delivery Schedules (R2) · Production Planning → Master Production Schedule (O-014), Work Orders, Capacity Planning (R2) · Material Control → Raw Material Availability, Coil / Sheet Conversion, Material Shortage · Production Monitoring → Work Order Progress, Daily Production Results, Pending Quality · Inventory Monitoring → Finished Goods Availability, Material at Production · Reconciliation → Material Consumption, Material Variance, Variance Investigation · Reports → Daily Finished Goods, Daily Delivery, Production Fulfillment (R2) |
+| Demand | Customer Orders → Customer Purchase Orders, PO Revisions · Releases & Forecast → Forecast (R2), Kanban / Delivery Releases (R2), Demand Netting (R2, netting rule O-011/O-019) · Master Data → Customers, Customer Part Mapping |
+| PPIC / Planning | Overview → Control Tower, Planning Dashboard (R2) · Customer Demand → Customer Purchase Orders, Sales Orders (R2, D-030), Forecast (R2), Delivery Schedules (R2) · Production Planning → Master Production Schedule (R2, D-031), Work Orders, Capacity Planning (R2) · Material Control → Raw Material Availability, Coil / Sheet Conversion, Material Shortage · Production Monitoring → Work Order Progress, Daily Production Results, Pending Quality · Inventory Monitoring → Finished Goods Availability, Material at Production · Reconciliation → Material Consumption, Material Variance, Variance Investigation · Reports → Daily Finished Goods, Daily Delivery, Production Fulfillment (R2) |
 | Materials | Receiving → RM Receipts, Incoming Release (R2, O-013) · Issue & Return → Material Issue, Custody Acceptance (R2), Material Return, Substitution Requests (R2) · Lots → Material Lots, Remnants |
 | Production | Execution → Production Runs, Run Reporting, Downtime (R2) · Output → Production Postings, Rework Orders (R2) · Reconciliation → Run Reconciliation, Measurements |
 | Quality | Inspection → Pending QC Queue, Inspection Lots, Hold Lots (R2) · Master Data → Defect Codes (R2), Sampling Plans (R2) |
@@ -93,7 +95,7 @@ Rule: pages never declare menus; they declare `module`, `item` and breadcrumb on
 | Traceability | Lot Trace → Backward Trace, Forward Trace, Genealogy Graph (R2) · Reconciliation → Reconciliation Cases |
 | Analytics | Insights → Dashboards (R2), Reports · Data Exchange → Export Center, Import Jobs (R2) |
 | Administration | Organization → Company, Plants & Warehouses, Work Centers · Access → Users, Roles & Permissions, Approval Policies · System → Audit Log, Notification Settings (R2), Tenant Settings |
-Label notes (O-017 approved, D-024): "Material Loss" → **Material Variance** for menus and general indicators; **Actual Material Loss** and **Physical Stock Discrepancy** remain as proven outcomes inside investigations and stock counts. "Finish Good" → **Finished Goods** everywhere. **Sales Orders (O-011)** and **Master Production Schedule (O-014)** stay *pending business decisions*: prototypes show a "Pending O-0xx" tag; production hides them until decided — neither approved nor removed.
+Label notes (O-017 approved, D-024): "Material Loss" → **Material Variance** for menus and general indicators; **Actual Material Loss** and **Physical Stock Discrepancy** remain as proven outcomes inside investigations and stock counts. "Finish Good" → **Finished Goods** everywhere. **Sales Orders** (D-030) and **Master Production Schedule** (D-031) are approved for V1 basic scope; release placement pending O-020 (proposed R2). ~~Pending O-011 / O-014 tags~~ removed.
 
 ## 8. Responsive behaviour
 | Width | Behaviour |

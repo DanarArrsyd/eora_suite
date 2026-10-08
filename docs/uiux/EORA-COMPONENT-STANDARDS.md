@@ -40,14 +40,14 @@ type FilterField =
 ## 5. EoraDataTable (TanStack Table) — one table for every module
 - `manualPagination`, `manualSorting`, `manualFiltering`; server returns rows + `meta {total|has_more, as_of, timezone}`. Never load all rows for client pagination.
 - Columns from QueryDefinition schema + page column defs (format only). Column visibility, order and width saved per user. Resizing on wide data tables only.
-- **Density presets** (Amendment 1, D-026) — a per-user preference applied to every table, switched from the table toolbar (`Comfortable | Compact`, `aria-pressed`):
+- **Density presets** (Amendment 1, D-026; default **Comfortable** for new users, D-029) — a per-user preference applied to every table. Compact never hides critical information, quantity/UOM or critical operational status; columns marked `critical` in the column definition are exempt from any compact-mode hiding. Usable with mouse, keyboard and touch, switched from the table toolbar (`Comfortable | Compact`, `aria-pressed`):
   | Token | Comfortable (default) | Compact |
   |---|---|---|
   | Row height | 44 px | 34 px |
   | Header height | 38 px | 32 px |
   | Cell padding x | 12 px | 10 px |
   | Body text | 13 px | 12.5 px |
-  | Secondary sub-line | visible (12 px) | hidden → full text in `title` / drawer |
+  | Secondary sub-line | visible (12 px) | hidden — reachable via detail drawer or row expansion (tooltip only as supplement, D-029) |
   | Status badge | 22 px | 20 px |
   | Row action buttons | 32 px | 28 px (spacing keeps ≥ 24 px target rule) |
   Rows never wrap: text columns are single-line with ellipsis + `title` (`text-col`, 200–280 px), so preset heights are exact (verified 44/34 px).

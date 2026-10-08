@@ -1,6 +1,6 @@
 # 06 — UX, Design System & Consistent Page Templates
 
-> **Updated 2026-10-08 (D-021, ADR-0010 + Amendment 1: D-024..D-026).** This file is now the **entry point**. The approved design system lives in `docs/uiux/`; each topic has exactly one canonical document. Do not restate rules here — link to them.
+> **Updated 2026-10-08 (D-021, D-027 official baseline, ADR-0010 + Amendments 1–2: D-024..D-029).** Frontend implementation: `docs/22-FRONTEND-ARCHITECTURE.md` (D-033). This file is now the **entry point**. The approved design system lives in `docs/uiux/`; each topic has exactly one canonical document. Do not restate rules here — link to them.
 
 | Need | Canonical document |
 |---|---|
@@ -26,6 +26,8 @@
 - ~~Additional components FloorNumpad, AsOfStamp as Ledger Ink styling~~ → replaced by the component list in EORA-COMPONENT-STANDARDS.md.
 - ~~Primary-sidebar amber attention dot and record-count menu pills~~ → actionable numeric badges only (D-025).
 - ~~`QuantityBreakdownCell` stacked mini-label cell~~ → grouped quantity columns (Amendment 1).
+- ~~Search icon-only below 1600 px (Amendment 1)~~ → responsive search strategy D-028 (Amendment 2).
+- ~~Compact density moves sub-lines to tooltip~~ → drawer/row expansion; tooltip never the only path (D-029).
 
 ## Mandatory frontend skill and visual quality gate
-See [EORA-DESIGN-CONSTITUTION.md §6](uiux/EORA-DESIGN-CONSTITUTION.md). Every frontend/UI task must review the approved EORA Design System and use relevant installed Caveman and Frontend Design skills; missing skills are reported, never claimed. No production frontend before explicit owner approval.
+See [EORA-DESIGN-CONSTITUTION.md §6](uiux/EORA-DESIGN-CONSTITUTION.md). Every frontend/UI task must review the approved EORA Design System and use relevant installed Caveman and Frontend Design skills; missing skills are reported, never claimed. Frontend work follows the phase gates in doc 22.

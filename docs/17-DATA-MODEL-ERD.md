@@ -70,9 +70,11 @@ erDiagram
 `items (type: RAW, SEMI_FINISHED, FINISHED, SCRAP, CONSUMABLE; base_uom; lot_controlled; inspection_required)`, `uoms`, `uom_conversions (item-specific, versioned)`, `material_specs (grade, thickness_mm, width_mm, density_g_cm3, nominal)`, `bom_versions/lines`, `routing_versions/operations (standard_yield SY, version, effective_from)`, `item_weights (NW, version)`, `conversion_profiles (item_id, input_form SHEET|COIL, inputs JSONB validated by formula_code schema, status DRAFT|VALIDATED|RETIRED, version, effective_from, validated_by)`, `customers`, `customer_items (customer part ↔ item)`.
 
 ### Demand
+`sales_order_headers`, `sales_order_lines (so_line ↔ po_line mapping, delivery schedule, revision, status, outstanding)`, `po_so_links` — added by D-030 (logical only; no migration).
 `customer_po_headers (revision)`, `customer_po_lines (qty, due_date, status, revision)`, `demand_releases (kanban/delivery call-off → po_line)`, `forecasts (item, bucket_start, qty, version)`, `demand_consumptions (forecast_id ↔ po_line_id, qty)` — supports BR-DEM-03 without double counting.
 
 ### Planning / Production
+`mps_versions (plant, horizon, bucket, status DRAFT|SUBMITTED|APPROVED|SUPERSEDED)`, `mps_lines (item, bucket, demand, available, scheduled_supply, net_requirement)`, `planned_orders (mps_line, qty, due, status)`, `material_requirements (planned_order, material item, qty material UOM)` — added by D-031 (logical only; no migration).
 `work_orders (item, qty, status, snapshot ids: bom_version, routing_version, conversion_profile_version, sy_version, nw_version)`, `wo_demand_links`, `production_runs (wo, work_center, machine, die, shift_id, production_date, operator, status, strokes_start/end)`, `run_measurements (run, lot, method, scale_id, gross, tare, net, counted_qty, evidence_file)`.
 
 ### Inventory ledger (authoritative)

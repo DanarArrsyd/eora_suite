@@ -1,6 +1,6 @@
 # EORA Suite V1 — Project Blueprint & Claude Code Handoff
 
-**Status:** Approval Gate AG-01..AG-12 decided (2026-10-08, see doc 13); specification finalization stage — **still not approved for production coding or migrations**. **Industry:** Discrete manufacturing (stamping, machining, fabrication, welding, assembly). **Product:** independent multi-tenant SaaS Manufacturing Operations Management (MOM). **Timezone default:** Asia/Jakarta, tenant-configurable. **Last consolidated:** 2026-10-08.
+**Status:** Specification and UI baseline approved (doc 13, D-027). **Frontend implementation authorized in phases** (D-033, doc 22) — currently Phase 1 Foundation. Backend, database migrations and business-rule changes are **not** authorized yet. **Industry:** Discrete manufacturing (stamping, machining, fabrication, welding, assembly). **Product:** independent multi-tenant SaaS Manufacturing Operations Management (MOM). **Timezone default:** Asia/Jakarta, tenant-configurable. **Last consolidated:** 2026-10-08.
 
 ## Read in this order
 1. `CLAUDE.md` for Claude Code; `AGENTS.md` for other coding agents.
@@ -10,7 +10,8 @@
 5. `docs/13-DECISION-REGISTER.md` and `docs/14-ACCEPTANCE-SCENARIOS.md`.
 6. `docs/adr/` (ADR-0001..0009), `docs/15-BUSINESS-RULE-CATALOG.md`, `docs/16-STATE-MACHINES.md`, `docs/17-DATA-MODEL-ERD.md`, `docs/18-RBAC-OWNERSHIP-MATRIX.md`, `docs/19-PPIC-CONTROL-TOWER-SPEC.md`, `docs/20-PERFORMANCE-WORKLOAD-MODEL.md`, `docs/21-PRODUCT-BACKLOG.md`.
 7. `docs/uiux/` — approved design system (canonical UI/UX source, D-021) and `design/mockups/` — Modern Corporate Blue prototypes (static, sample data) pending final approval. Superseded v1 prototypes in `design/mockups/_superseded-v1-ledger-ink/`.
-8. `prompts/CLAUDE-CODE-START.md` — copy/paste kickoff prompt.
+8. `docs/22-FRONTEND-ARCHITECTURE.md` + ADR-0011 — frontend structure, phase plan, quality gates; code in `apps/web` and `packages/*`.
+9. `prompts/CLAUDE-CODE-START.md` — copy/paste kickoff prompt.
 
 ## Non-negotiable distinctions
 - **No WIP module or WIP label in operational UI.** Issued but unconsumed stock remains **Material at Production**; actual intermediate products may be tracked as **Semi-Finished Material**. This is a terminology/product-design decision, **not** permission to hide physical balances or accounting obligations.

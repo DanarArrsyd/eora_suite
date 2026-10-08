@@ -45,7 +45,7 @@ window.EORA_NAV = {
       { label: 'Releases & Forecast', items: [
         { id: 'forecast', label: 'Forecast', icon: 'trending-up', release: 'R2' },
         { id: 'releases', label: 'Kanban / Delivery Releases', icon: 'calendar-check', release: 'R2' },
-        { id: 'netting', label: 'Demand Netting', icon: 'git-merge', release: 'R2', decision: 'O-011' },
+        { id: 'netting', label: 'Demand Netting', icon: 'git-merge', release: 'R2', decision: 'O-019' },
       ]},
       { label: 'Master Data', items: [
         { id: 'customers', label: 'Customers', icon: 'building', release: 'R1' },
@@ -59,12 +59,12 @@ window.EORA_NAV = {
       ]},
       { label: 'Customer Demand', items: [
         { id: 'ppic-po', label: 'Customer Purchase Orders', icon: 'file-text', release: 'R1' },
-        { id: 'sales-orders', label: 'Sales Orders', icon: 'file-check', release: 'R2', decision: 'O-011' },
+        { id: 'sales-orders', label: 'Sales Orders', icon: 'file-check', release: 'R2' },
         { id: 'ppic-forecast', label: 'Forecast', icon: 'trending-up', release: 'R2' },
         { id: 'delivery-schedules', label: 'Delivery Schedules', icon: 'calendar-check', release: 'R2' },
       ]},
       { label: 'Production Planning', items: [
-        { id: 'mps', label: 'Master Production Schedule', icon: 'calendar-days', release: 'R2', decision: 'O-014' },
+        { id: 'mps', label: 'Master Production Schedule', icon: 'calendar-days', release: 'R2' },
         { id: 'work-orders', label: 'Work Orders', icon: 'clipboard-list', release: 'R1' },
         { id: 'capacity', label: 'Capacity Planning', icon: 'gauge', release: 'R2' },
       ]},

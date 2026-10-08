@@ -40,6 +40,8 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 | BR-DEM-01 | Customer PO and supplier PO are distinct entities and numbering series. | Demand | DB | doc 00 | — |
 | BR-DEM-02 | PO revisions are versioned; released WOs referencing superseded lines raise PPIC notification, never silently change. | Demand/Planning | SVC + outbox | doc 01 | revision test |
 | BR-DEM-03 | Net demand never double counts: forecast quantity is consumed by firm PO lines in the same bucket; kanban/delivery release is a call-off of a firm/blanket line, not additional demand. *(bucket size OPEN O-011, proposed weekly)* | Demand | SVC | D-004, O-011 | #8 |
+| BR-DEM-05 *(PROPOSED, O-019)* | Sales Order line is the single demand record used for netting; a Customer PO line is its source document via PO-to-SO mapping and is never netted separately (prevents double counting, D-030). | Demand | SVC + DB unique mapping | D-030 | netting test |
+| BR-DEM-06 *(PROPOSED)* | Customer PO revision propagates to mapped SO lines as a new SO revision; released WOs/plan lines referencing the superseded revision raise a PPIC notification. | Demand/Planning | SVC + outbox | D-030 | revision test |
 | BR-DEM-04 | Delivered quantity reduces outstanding only via posted shipment lines. | Delivery | SVC | doc 01 | #18 |
 
 ## Planning / WO (PLN)
@@ -47,6 +49,10 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 |---|---|---|---|---|---|
 | BR-PLN-01 | WO release snapshots BOM, routing, conversion profile (`CP`), standard yield (`SY`) and net weight (`NW`) versions. | Planning | SVC | doc 01, ADR-0005 | snapshot test |
 | BR-PLN-02 | RM → estimated pcs is a planning estimate, never a ledger movement; shown with `ConversionBadge` status. | Planning | SVC/UI | doc 02 | #5 |
+| BR-PLN-04 *(PROPOSED)* | MPS is versioned per plant and horizon (daily/weekly buckets); only an **approved** MPS version can release WOs; revisions create a new version with approval history. | Planning | SVC + POL | D-031 | MPS version test |
+| BR-PLN-05 *(PROPOSED)* | Net production requirement per item/bucket = demand (netted per BR-DEM-03/05) − FG unrestricted available − QC released − scheduled supply (open WOs/planned orders) + safety stock policy; Pending QC excluded unless tenant policy says otherwise. Never posts inventory. | Planning | SVC | D-031, D-014 | netting golden test |
+| BR-PLN-06 *(PROPOSED)* | Basic MRP explodes planned orders through the effective BOM into material requirements in material UOM and compares with available material (unrestricted − allocations), never with estimated pcs. | Planning | SVC | D-031, doc 02 | MRP test |
+| BR-PLN-07 *(PROPOSED)* | Planned production orders are planning records; converting to a WO is an explicit release action with snapshot (BR-PLN-01). Basic capacity check warns, does not optimise. | Planning | SVC | D-031 | release test |
 | BR-PLN-03 | WO close requires: no open runs, no Material at Production allocated to the WO (returned, transferred, or approved exception), reconciliation indicators FINAL or case opened. *(exception rule OPEN O-015)* | Planning | SVC | O-015 | close test |
 
 ## Material issue, custody, return (ISS)
