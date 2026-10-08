@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#172554">
+<title>Mobile PWA · EORA</title>
+<link rel="stylesheet" href="assets/eora-tokens.css?v=10">
+<link rel="stylesheet" href="assets/eora-ui.css?v=10">
+<style>
+  body { background: var(--color-bg-workspace); }
+  .intro { max-width: 1720px; margin: 0 auto; padding: var(--space-6) var(--space-6) 0; }
+  .intro h1 { margin: 0; font-size: var(--fs-page-title); font-weight: 600; letter-spacing: -.015em; }
+  .intro p { margin: 6px 0 0; color: var(--color-text-secondary); max-width: 860px; }
+  .gallery { max-width: 1720px; margin: 0 auto; padding: var(--space-6); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-8) var(--space-6); }
+  figure { margin: 0; }
+  figcaption { margin-top: var(--space-3); font-size: 13px; color: var(--color-text-secondary); max-width: 360px; margin-left: auto; margin-right: auto; }
+  figcaption b { color: var(--color-text-primary); font-weight: 600; }
+
+  /* Device frame (presentation only) */
+  .device { width: 100%; max-width: 360px; height: 740px; margin: 0 auto; border-radius: 36px; border: 8px solid #0F172A; background: var(--color-bg-workspace); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-popover); position: relative; }
+  .sbar { height: 30px; flex: none; display: flex; justify-content: space-between; align-items: center; padding: 0 22px; font-size: 12px; font-weight: 600; color: #FFFFFF; background: var(--color-bg-sidebar-primary); font-variant-numeric: tabular-nums; }
+
+  /* Mobile app patterns (EoraMobileTaskView) */
+  .m-head { background: var(--color-bg-sidebar-primary); color: #FFFFFF; padding: 8px 16px 14px; flex: none; }
+  .m-head .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .m-head h2 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
+  .m-head .sub { font-size: 12.5px; color: #CBD5E1; margin-top: 2px; }
+  .m-head .ib { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; border: 0; background: rgba(255,255,255,.08); color: #FFFFFF; position: relative; }
+  .m-head .ib .badge-count { box-shadow: 0 0 0 2px var(--color-bg-sidebar-primary); }
+  .m-body { flex: 1; overflow-y: auto; padding: 14px 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .m-card { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: var(--radius-xl); padding: 14px; }
+  .m-card h3 { margin: 0; font-size: 15px; font-weight: 600; }
+  .m-sec { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: .05em; margin: 4px 2px -4px; }
+  .m-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .m-kv div span { display: block; font-size: 12px; color: var(--color-text-secondary); }
+  .m-kv div b { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .m-kv div b small { font-size: 12px; color: var(--color-text-secondary); font-weight: 500; margin-left: 2px; }
+  .progress { height: 8px; border-radius: 4px; background: var(--color-bg-hover); overflow: hidden; margin-top: 12px; }
+  .progress span { display: block; height: 100%; background: var(--color-primary); }
+  .task { display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: var(--radius-xl); padding: 12px; min-height: 64px; text-align: left; width: 100%; cursor: pointer; font: inherit; color: inherit; }
+  .task .ti-ico { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; }
+  .task .ti { font-size: 14.5px; font-weight: 600; }
+  .task .ts { font-size: 12.5px; color: var(--color-text-secondary); margin-top: 2px; }
+  .task .chev { color: var(--color-text-muted); }
+  .btn-m { width: 100%; min-height: var(--touch-mobile); border-radius: 10px; font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--color-border-strong); background: var(--color-bg-surface); color: var(--color-text-primary); cursor: pointer; }
+  .btn-m.primary { background: var(--color-primary); border-color: var(--color-primary); color: #FFFFFF; }
+  .btn-m.primary:hover { background: var(--color-primary-hover); }
+  .btn-m[disabled] { opacity: .5; cursor: not-allowed; }
+  .seg2 { display: grid; grid-template-columns: 1fr 1fr; background: var(--color-bg-hover); border-radius: 10px; padding: 3px; }
+  .seg2 button { min-height: 40px; border: 0; border-radius: 8px; background: none; font-size: 13.5px; font-weight: 600; color: var(--color-text-secondary); cursor: pointer; }
+  .seg2 button[aria-selected="true"] { background: var(--color-bg-surface); color: var(--color-text-primary); box-shadow: var(--shadow-card); }
+  .banner { display: flex; gap: 10px; align-items: flex-start; border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+  .banner b { font-weight: 600; }
+  .banner.warn { background: var(--color-warning-bg); color: var(--color-warning-fg); }
+  .banner.err { background: var(--color-danger-bg); color: var(--color-danger-fg); }
+  .banner.ok { background: var(--color-success-bg); color: var(--color-success-fg); }
+  .banner.info { background: var(--color-info-bg); color: var(--color-info-fg); }
+
+  /* Quantity stepper (EoraQuantityInput, mobile) */
+  .qty { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--color-border); }
+  .qty:last-child { border-bottom: 0; }
+  .qty .ql { font-size: 14px; font-weight: 600; }
+  .qty .qd { font-size: 12px; color: var(--color-text-secondary); }
+  .stepper { display: flex; align-items: center; border: 1px solid var(--color-border-control); border-radius: 10px; overflow: hidden; }
+  .stepper button { width: 44px; height: 46px; border: 0; background: var(--color-bg-subtle); color: var(--color-text-primary); cursor: pointer; display: grid; place-items: center; }
+  .stepper input { width: 78px; height: 46px; border: 0; border-left: 1px solid var(--color-border); border-right: 1px solid var(--color-border); text-align: center; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stepper input:focus { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
+  .unit { font-size: 12px; color: var(--color-text-secondary); text-align: right; margin-top: 2px; }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .steps div { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); padding-top: 6px; border-top: 3px solid var(--color-border); }
+  .steps .done { border-color: var(--color-success); color: var(--color-success-fg); }
+  .steps .now { border-color: var(--color-primary); color: var(--color-primary); }
+
+  /* Scanner */
+  .viewfinder { position: relative; height: 230px; border-radius: var(--radius-xl); background: #0F172A; display: grid; place-items: center; color: #CBD5E1; font-size: 13px; overflow: hidden; }
+  .viewfinder .frame { position: absolute; inset: 40px 50px; border-radius: 12px; }
+  .viewfinder .frame::before, .viewfinder .frame::after { content: ""; position: absolute; width: 28px; height: 28px; border: 3px solid #FFFFFF; }
+  .viewfinder .frame::before { top: 0; left: 0; border-right: 0; border-bottom: 0; border-radius: 8px 0 0 0; }
+  .viewfinder .frame::after { bottom: 0; right: 0; border-left: 0; border-top: 0; border-radius: 0 0 8px 0; }
+  .viewfinder .vf-text { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 12.5px; }
+
+  /* Bottom navigation */
+  .bnav { flex: none; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--color-bg-surface); border-top: 1px solid var(--color-border); padding: 4px 4px 10px; }
+  .bnav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; font-size: 11px; font-weight: 600; color: var(--color-text-secondary); text-decoration: none; position: relative; }
+  .bnav a[aria-current="page"] { color: var(--color-primary); }
+  .bnav a .icon { width: 22px; height: 22px; }
+  .bnav .scan, .bnav .scan[aria-current="page"] { color: #FFFFFF; }
+  .bnav .scan[aria-current="page"] span.l { color: var(--color-primary); }
+  .bnav .scan .fab { width: 48px; height: 48px; border-radius: 14px; background: var(--color-primary); display: grid; place-items: center; margin-top: -18px; box-shadow: 0 4px 12px rgba(53, 89, 199, .35); }
+  .bnav .scan span.l { color: var(--color-text-secondary); }
+  .bnav .nb { position: absolute; top: 4px; left: calc(50% + 4px); min-width: 16px; height: 16px; border-radius: 8px; background: var(--color-danger); color: #FFFFFF; font-size: 10px; line-height: 16px; text-align: center; padding: 0 4px; }
+
+  .list-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; padding: 0 2px; border-bottom: 1px solid var(--color-border); font-size: 14px; }
+  .list-row:last-child { border-bottom: 0; }
+  .list-row .lr-sub { font-size: 12px; color: var(--color-text-secondary); }
+  .switch { width: 46px; height: 28px; border-radius: 14px; background: var(--color-border-strong); border: 0; position: relative; cursor: pointer; flex: none; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #FFFFFF; transition: transform var(--dur-fast) var(--ease); box-shadow: var(--shadow-card); }
+  .switch[aria-checked="true"] { background: var(--color-primary); }
+  .switch[aria-checked="true"]::after { transform: translateX(18px); }
+  .notif-m { display: grid; grid-template-columns: 36px 1fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--color-border); }
+  .notif-m:last-child { border-bottom: 0; }
+  .notif-m .t { font-size: 14px; font-weight: 600; }
+  .notif-m .m { font-size: 12.5px; color: var(--color-text-secondary); margin-top: 2px; }
+  .notif-m .meta { display: flex; gap: 8px; align-items: center; margin-top: 6px; font-size: 12px; color: var(--color-text-secondary); }
+
+  @media (max-width: 1500px) { .gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 1100px) { .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 760px) { .gallery { grid-template-columns: minmax(0, 1fr); padding: var(--space-4); } .intro { padding: var(--space-4) var(--space-4) 0; } }
+  @media (max-width: 420px) { .device { border: 0; border-radius: 0; max-width: none; box-shadow: none; height: 760px; } .gallery { padding: 0; gap: var(--space-6); } figcaption { padding: 0 var(--space-4); } }
+</style>
+</head>
+<body>
+<div class="proto-note" role="note"><i data-lucide="flask-conical" class="icon" aria-hidden="true"></i><span><b>Mockup 03 · Mobile PWA</b> — same Modern Corporate Blue design system, mobile-specific navigation. SAMPLE DATA. Wired: steppers, QC split, material confirmation, tabs, toggles.</span><span style="margin-left:auto"><a href="index.html">All mockups</a></span></div>
+<div class="intro">
+  <h1>EORA mobile — operator, QC and warehouse</h1>
+  <p>Bottom navigation replaces the desktop dual sidebar. Scan is the central action. Inputs use steppers and numeric keypads (48 px targets). Offline work is always a draft; nothing shows as posted until the server confirms.</p>
+</div>
+
+<div class="gallery">
+
+  <!-- 1 MY SHIFT -->
+  <figure><div class="device">
+    <div class="sbar"><span>07:42</span><span>5G · 82%</span></div>
+    <div class="m-head"><div class="row"><div><h2>My Shift</h2><div class="sub">S1 07:00–15:00 · WC-PRESS1 · Plant A</div></div><button class="ib" type="button" aria-label="Notifications, 3 unread"><i data-lucide="bell" class="icon icon-lg" aria-hidden="true"></i><span class="badge-count">3</span></button></div></div>
+    <div class="m-body">
+      <div class="m-card">
+        <div style="display:flex;justify-content:space-between;align-items:center"><h3>WO-1201 · BRKT-310</h3><span class="badge badge-info">Running</span></div>
+        <div class="m-kv"><div><span>Target</span><b>2,400<small>pcs</small></b></div><div><span>Reported good</span><b>860<small>pcs</small></b></div><div><span>Material at production</span><b>702.4<small>kg</small></b></div><div><span>Die</span><b style="font-size:15px">D-310-B</b></div></div>
+        <div class="progress" role="progressbar" aria-valuenow="36" aria-valuemin="0" aria-valuemax="100" aria-label="Progress 36 percent"><span style="width:36%"></span></div>
+      </div>
+      <div class="m-sec">Needs you now</div>
+      <button class="task" type="button"><span class="ti-ico badge-danger"><i data-lucide="scale" class="icon icon-lg" aria-hidden="true"></i></span><span><div class="ti">Weigh remaining coil C-07</div><div class="ts">Consumption posted by difference · case RC-0043</div></span><i data-lucide="chevron-right" class="icon chev" aria-hidden="true"></i></button>
+      <button class="task" type="button"><span class="ti-ico badge-warning"><i data-lucide="hand" class="icon icon-lg" aria-hidden="true"></i></span><span><div class="ti">Confirm material C-10</div><div class="ts">700.0 kg issued by Materials · in transit</div></span><i data-lucide="chevron-right" class="icon chev" aria-hidden="true"></i></button>
+      <div class="m-sec">Shortcuts</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn-m" type="button"><i data-lucide="clipboard-pen" class="icon" aria-hidden="true"></i>Report output</button><button class="btn-m" type="button"><i data-lucide="timer-off" class="icon" aria-hidden="true"></i>Log downtime</button></div>
+    </div>
+    <nav class="bnav" aria-label="Main"><a href="#" aria-current="page"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+  </div><figcaption><b>1 · My Shift.</b> Current WO, progress and what blocks the shift. Material at Production is shown in kg, output in pcs.</figcaption></figure>
+
+  <!-- 2 MY TASKS -->
+  <figure><div class="device">
+    <div class="sbar"><span>07:44</span><span>5G · 82%</span></div>
+    <div class="m-head"><div class="row"><div><h2>My Tasks</h2><div class="sub">Assigned to you and your work center</div></div><button class="ib" type="button" aria-label="Filter tasks"><i data-lucide="sliders-horizontal" class="icon icon-lg" aria-hidden="true"></i></button></div></div>
+    <div class="m-body">
+      <div class="seg2" role="tablist" aria-label="Task status"><button role="tab" aria-selected="true" type="button">To do · 4</button><button role="tab" aria-selected="false" type="button">Done today · 6</button></div>
+      <button class="task" type="button"><span class="ti-ico badge-danger"><i data-lucide="scale" class="icon icon-lg" aria-hidden="true"></i></span><span><div class="ti">Weigh remaining coil C-07</div><div class="ts">Due now · blocks reconciliation</div></span><span class="badge badge-danger">Overdue</span></button>
+      <button class="task" type="button"><span class="ti-ico badge-warning"><i data-lucide="hand" class="icon icon-lg" aria-hidden="true"></i></span><span><div class="ti">Confirm material C-10</div><div class="ts">Issued 07:30 · 700.0 kg</div></span><span class="badge badge-warning">Waiting</span></button>
+      <button class="task" type="button"><span class="ti-ico badge-info"><i data-lucide="clipboard-pen" class="icon icon-lg" aria-hidden="true"></i></span><span><div class="ti">Report output RUN-1201-S1</div><div class="ts">At shift end · 15:00</div></span><span class="badge badge-neutral">Later</span></button>
+      <button class="task" type="button"><span class="ti-ico badge-info"><i data-lucide="clipboard-list" class="icon icon-lg" aria-hidden="true"></i></span><span><div class="ti">Stock count WC-PRESS1</div><div class="ts">Snapshot 14:30 · blind count</div></span><span class="badge badge-neutral">Later</span></button>
+    </div>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#" aria-current="page"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+  </div><figcaption><b>2 · My Tasks.</b> One list ordered by urgency; status as text badge, not colour alone.</figcaption></figure>
+
+  <!-- 3 SCAN -->
+  <figure><div class="device">
+    <div class="sbar"><span>07:46</span><span>5G · 81%</span></div>
+    <div class="m-head"><div class="row"><div><h2>Scan material</h2><div class="sub">Issue to WC-PRESS1 · WO-1201</div></div><button class="ib" type="button" aria-label="Flashlight"><i data-lucide="flashlight" class="icon icon-lg" aria-hidden="true"></i></button></div></div>
+    <div class="m-body">
+      <div class="viewfinder" role="img" aria-label="Camera preview"><div class="frame"></div><span class="vf-text">Point at lot QR or barcode</span></div>
+      <div class="field"><label for="manual">Or enter lot number</label><div style="display:flex;gap:8px"><input class="input" id="manual" value="C-12" style="height:48px;font-size:15px" autocomplete="off"><button class="btn-m" type="button" style="width:auto;padding:0 16px">Check</button></div></div>
+      <div class="banner err" role="alert"><i data-lucide="circle-x" class="icon icon-lg" aria-hidden="true"></i><div><b>Lot C-12 cannot be issued</b><br>Status is Blocked: incoming release pending. Nothing was posted.</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn-m" type="button">Scan another lot</button><button class="btn-m" type="button"><i data-lucide="message-square" class="icon" aria-hidden="true"></i>Ask Materials</button></div>
+      <div class="m-sec">Recent scans</div>
+      <div class="m-card" style="padding:4px 14px"><div class="list-row"><span><b>C-10</b><div class="lr-sub">SPCC 1.2 × 120 · 1,980.200 kg</div></span><span class="badge badge-success">Unrestricted</span></div><div class="list-row"><span><b>C-12</b><div class="lr-sub">SPCC 1.2 × 120 · 702.400 kg</div></span><span class="badge badge-danger">Blocked</span></div></div>
+    </div>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan" aria-current="page"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+  </div><figcaption><b>3 · Scan material.</b> Camera with manual fallback. Error recovery says what failed, that nothing was posted, and what to do next.</figcaption></figure>
+
+  <!-- 4 PRODUCTION REPORTING -->
+  <figure><div class="device">
+    <div class="sbar"><span>22:46</span><span>Wi-Fi · 64%</span></div>
+    <div class="m-head"><div class="row"><div><h2>Report output</h2><div class="sub">RUN-1182-S1 · BRKT-220 · S2</div></div><button class="ib" type="button" aria-label="Close"><i data-lucide="x" class="icon icon-lg" aria-hidden="true"></i></button></div></div>
+    <div class="m-body">
+      <div class="steps" aria-label="Steps"><div class="done">1 Measure</div><div class="now">2 Outputs</div><div>3 Review</div></div>
+      <div class="banner info"><i data-lucide="scale" class="icon icon-lg" aria-hidden="true"></i><div>Consumption <b>612.400 kg</b> from weighed remaining 87.600 kg. Not typed by hand.</div></div>
+      <div class="m-card" style="padding:4px 14px" id="outCard">
+        <div class="qty"><div><div class="ql">Good</div><div class="qd">→ QC area · Pending QC</div></div><div><div class="stepper"><button type="button" aria-label="Decrease good" data-d="-1"><i data-lucide="minus" class="icon" aria-hidden="true"></i></button><input inputmode="numeric" value="1620" aria-label="Good pieces" data-k="g"><button type="button" aria-label="Increase good" data-d="1"><i data-lucide="plus" class="icon" aria-hidden="true"></i></button></div><div class="unit">pcs</div></div></div>
+        <div class="qty"><div><div class="ql">NG reworkable</div><div class="qd">→ NG area · Rework</div></div><div><div class="stepper"><button type="button" aria-label="Decrease NG reworkable" data-d="-1"><i data-lucide="minus" class="icon" aria-hidden="true"></i></button><input inputmode="numeric" value="12" aria-label="NG reworkable pieces" data-k="nr"><button type="button" aria-label="Increase NG reworkable" data-d="1"><i data-lucide="plus" class="icon" aria-hidden="true"></i></button></div><div class="unit">pcs</div></div></div>
+        <div class="qty"><div><div class="ql">NG rejected</div><div class="qd">→ NG area · Rejected</div></div><div><div class="stepper"><button type="button" aria-label="Decrease NG rejected" data-d="-1"><i data-lucide="minus" class="icon" aria-hidden="true"></i></button><input inputmode="numeric" value="9" aria-label="NG rejected pieces" data-k="nj"><button type="button" aria-label="Increase NG rejected" data-d="1"><i data-lucide="plus" class="icon" aria-hidden="true"></i></button></div><div class="unit">pcs</div></div></div>
+        <div class="qty"><div><div class="ql">Process scrap</div><div class="qd">Weighed · 2 bins</div></div><div><div class="stepper"><button type="button" aria-label="Decrease scrap" data-d="-0.1"><i data-lucide="minus" class="icon" aria-hidden="true"></i></button><input inputmode="decimal" value="128.9" aria-label="Process scrap kilograms" data-k="s"><button type="button" aria-label="Increase scrap" data-d="0.1"><i data-lucide="plus" class="icon" aria-hidden="true"></i></button></div><div class="unit">kg</div></div></div>
+      </div>
+      <div class="banner" id="pcsCheck" role="status" style="background:var(--color-bg-surface);border:1px solid var(--color-border)"></div>
+      <button class="btn-m primary" type="button">Review before posting</button>
+    </div>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#" aria-current="page"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+  </div><figcaption><b>4 · Production reporting.</b> Measure first, then four output categories with their destination. Live check against theoretical pieces; over-reporting needs supervisor confirmation.</figcaption></figure>
+
+  <!-- 5 QUALITY INSPECTION -->
+  <figure><div class="device">
+    <div class="sbar"><span>09:14</span><span style="display:flex;align-items:center;gap:4px"><i data-lucide="wifi-off" class="icon" aria-hidden="true" style="width:13px;height:13px"></i>Offline</span></div>
+    <div class="m-head"><div class="row"><div><h2>Inspect lot</h2><div class="sub">IL-1182-01 · BRKT-220 · from RUN-1182-S1</div></div><button class="ib" type="button" aria-label="Defect codes"><i data-lucide="list" class="icon icon-lg" aria-hidden="true"></i></button></div></div>
+    <div class="m-body">
+      <div class="banner warn" role="status"><i data-lucide="wifi-off" class="icon icon-lg" aria-hidden="true"></i><div><b>Offline — saved as draft only.</b> Nothing is released until you reconnect and the server confirms.</div></div>
+      <div class="m-card"><div style="display:flex;justify-content:space-between"><span class="text-secondary" style="font-size:13px">Pending QC</span><span class="badge badge-warning">26 h</span></div><div style="font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px">1,620 <small style="font-size:14px;color:var(--color-text-secondary);font-weight:500">pcs</small></div><div class="hint">Reported by A. Wibowo — you cannot be the same person.</div></div>
+      <div class="m-card" style="padding:4px 14px" id="qcCard">
+        <div class="qty"><div><div class="ql">Accept</div><div class="qd">→ QC released, then FG receipt</div></div><div class="stepper"><button type="button" aria-label="Decrease accept" data-d="-100"><i data-lucide="minus" class="icon" aria-hidden="true"></i></button><input inputmode="numeric" value="1200" aria-label="Accept pieces" data-q="acc"><button type="button" aria-label="Increase accept" data-d="100"><i data-lucide="plus" class="icon" aria-hidden="true"></i></button></div></div>
+        <div class="qty"><div><div class="ql">Hold</div><div class="qd">Needs a decision later</div></div><div class="stepper"><button type="button" aria-label="Decrease hold" data-d="-10"><i data-lucide="minus" class="icon" aria-hidden="true"></i></button><input inputmode="numeric" value="40" aria-label="Hold pieces" data-q="hold"><button type="button" aria-label="Increase hold" data-d="10"><i data-lucide="plus" class="icon" aria-hidden="true"></i></button></div></div>
+        <div class="qty"><div><div class="ql">Rework / Reject</div><div class="qd">Defect code required</div></div><div class="stepper"><button type="button" aria-label="Decrease reject" data-d="-1"><i data-lucide="minus" class="icon" aria-hidden="true"></i></button><input inputmode="numeric" value="0" aria-label="Rework or reject pieces" data-q="rej"><button type="button" aria-label="Increase reject" data-d="1"><i data-lucide="plus" class="icon" aria-hidden="true"></i></button></div></div>
+      </div>
+      <div class="banner info" id="qcRemain" role="status"></div>
+      <button class="btn-m" type="button"><i data-lucide="save" class="icon" aria-hidden="true"></i>Save draft</button>
+      <button class="btn-m primary" type="button" disabled aria-describedby="offl">Submit disposition</button>
+      <span id="offl" class="hint" style="text-align:center">Submit is available when online.</span>
+    </div>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#" aria-current="page"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+  </div><figcaption><b>5 · Quality inspection (offline).</b> Partial disposition; the remainder stays Pending QC. Offline state is explicit; submit explains why it is disabled.</figcaption></figure>
+
+  <!-- 6 MATERIAL CONFIRMATION -->
+  <figure><div class="device">
+    <div class="sbar"><span>07:51</span><span>5G · 80%</span></div>
+    <div class="m-head"><div class="row"><div><h2>Confirm material</h2><div class="sub">Custody acceptance · MI-26-0731</div></div><button class="ib" type="button" aria-label="Close"><i data-lucide="x" class="icon icon-lg" aria-hidden="true"></i></button></div></div>
+    <div class="m-body" id="confirmBody">
+      <div class="m-card"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Lot C-10 · SPCC 1.2 × 120</h3><span class="badge badge-warning">In transit</span></div>
+        <div class="m-kv"><div><span>Issued by Materials</span><b>700.0<small>kg</small></b></div><div><span>To</span><b style="font-size:15px">WC-PRESS1</b></div><div><span>Issued by</span><b style="font-size:15px">M. Sari</b></div><div><span>For</span><b style="font-size:15px">WO-1201</b></div></div></div>
+      <div class="m-card"><div class="qty" style="border:0"><div><div class="ql">Received weight</div><div class="qd">Scale SC-02 at line side</div></div><div><div class="stepper"><button type="button" aria-label="Decrease weight" data-d="-0.1"><i data-lucide="minus" class="icon" aria-hidden="true"></i></button><input inputmode="decimal" value="700.0" aria-label="Received weight kilograms" id="rcvW"><button type="button" aria-label="Increase weight" data-d="0.1"><i data-lucide="plus" class="icon" aria-hidden="true"></i></button></div><div class="unit">kg</div></div></div>
+        <div class="hint" id="rcvHint">Matches issued quantity.</div></div>
+      <button class="btn-m primary" type="button" id="confirmBtn"><i data-lucide="check" class="icon" aria-hidden="true"></i>Confirm receipt</button>
+      <p class="hint" style="text-align:center;margin:0">Confirmation is posted by the server. A different weight opens a custody discrepancy case.</p>
+    </div>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#" aria-current="page"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+  </div><figcaption><b>6 · Material confirmation.</b> Two-step custody (tenant option). Tap Confirm to see the server-acknowledged result with document number.</figcaption></figure>
+
+  <!-- 7 INBOX -->
+  <figure><div class="device">
+    <div class="sbar"><span>09:20</span><span>5G · 79%</span></div>
+    <div class="m-head"><div class="row"><div><h2>Inbox</h2><div class="sub">3 unread · 2 need action</div></div><button class="ib" type="button" aria-label="Mark all as read"><i data-lucide="check-check" class="icon icon-lg" aria-hidden="true"></i></button></div></div>
+    <div class="m-body">
+      <div class="seg2" role="tablist" aria-label="Inbox filter"><button role="tab" aria-selected="true" type="button">All</button><button role="tab" aria-selected="false" type="button">Action required · 2</button></div>
+      <div class="m-card" style="padding:0 14px">
+        <div class="notif-m"><span class="notif-ico badge-warning"><i data-lucide="scale" class="icon" aria-hidden="true"></i></span><div><div class="t"><span class="unread-dot" aria-label="Unread"></span> Weigh remaining coil C-07</div><div class="m">Case RC-0043 needs a measurement</div><div class="meta"><span class="badge badge-warning">Action required</span>09:05</div></div></div>
+        <div class="notif-m"><span class="notif-ico badge-warning"><i data-lucide="hand" class="icon" aria-hidden="true"></i></span><div><div class="t"><span class="unread-dot" aria-label="Unread"></span> Material C-10 issued to you</div><div class="m">700.0 kg · confirm receipt</div><div class="meta"><span class="badge badge-warning">Action required</span>07:30</div></div></div>
+        <div class="notif-m"><span class="notif-ico badge-success"><i data-lucide="badge-check" class="icon" aria-hidden="true"></i></span><div><div class="t"><span class="unread-dot" aria-label="Unread"></span> QC released 300 pcs</div><div class="m">Lot O-1180-02 · moved to FG receipt queue</div><div class="meta"><span class="badge badge-neutral">Information</span>08:51</div></div></div>
+        <div class="notif-m"><span class="notif-ico badge-info"><i data-lucide="clipboard-list" class="icon" aria-hidden="true"></i></span><div><div class="t">WO-1201 released</div><div class="m">BRKT-310 · 2,400 pcs · die D-310-B</div><div class="meta"><span class="badge badge-neutral">Information</span>Yesterday</div></div></div>
+      </div>
+      <p class="hint" style="text-align:center;margin:0">Opening a notification re-checks your access. Push previews hide quantities by default.</p>
+    </div>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#" aria-current="page"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+  </div><figcaption><b>7 · Notification inbox.</b> Persistent inbox is the record; push is optional. Action required vs information is labelled.</figcaption></figure>
+
+  <!-- 8 PROFILE -->
+  <figure><div class="device">
+    <div class="sbar"><span>09:22</span><span>5G · 79%</span></div>
+    <div class="m-head"><div class="row"><div style="display:flex;gap:12px;align-items:center"><span class="avatar" style="width:44px;height:44px;font-size:15px">AW</span><div><h2>A. Wibowo</h2><div class="sub">Production Leader · Plant A</div></div></div></div></div>
+    <div class="m-body">
+      <div class="m-card" style="padding:4px 14px">
+        <div class="list-row"><span>Company<div class="lr-sub">PT Sample Manufaktur</div></span></div>
+        <div class="list-row"><span>Plant · work centers<div class="lr-sub">Plant A · WC-PRESS1, WC-PRESS3</div></span><button class="btn btn-sm" type="button">Switch</button></div>
+      </div>
+      <div class="m-sec">Notifications</div>
+      <div class="m-card" style="padding:4px 14px">
+        <div class="list-row"><span>Push on this device<div class="lr-sub">Optional. The in-app inbox always works.</div></span><button class="switch" type="button" role="switch" aria-checked="true" aria-label="Push notifications on this device"></button></div>
+        <div class="list-row"><span>Quiet hours<div class="lr-sub">22:00–06:00 · critical alerts still shown</div></span><button class="switch" type="button" role="switch" aria-checked="false" aria-label="Quiet hours"></button></div>
+      </div>
+      <div class="banner info"><i data-lucide="smartphone" class="icon icon-lg" aria-hidden="true"></i><div>On iPhone, add EORA to the Home Screen to receive push notifications.</div></div>
+      <div class="m-sec">This device</div>
+      <div class="m-card" style="padding:4px 14px">
+        <div class="list-row"><span>Offline drafts<div class="lr-sub">1 QC disposition · not posted</div></span><span class="badge badge-warning">1 draft</span></div>
+        <div class="list-row"><span>Signed in<div class="lr-sub">Since 06:58 · session ends 19:00</div></span></div>
+      </div>
+      <button class="btn-m" type="button" style="color:var(--color-danger-fg)"><i data-lucide="log-out" class="icon" aria-hidden="true"></i>Sign out</button>
+      <p class="hint" style="text-align:center;margin:0">Signing out deletes offline drafts on this device.</p>
+    </div>
+    <nav class="bnav" aria-label="Main"><a href="#"><i data-lucide="house" class="icon" aria-hidden="true"></i>Home</a><a href="#"><i data-lucide="list-checks" class="icon" aria-hidden="true"></i>Tasks</a><a href="#" class="scan"><span class="fab"><i data-lucide="scan-line" class="icon" aria-hidden="true"></i></span><span class="l">Scan</span></a><a href="#"><i data-lucide="inbox" class="icon" aria-hidden="true"></i><span class="nb">3</span>Inbox</a><a href="#" aria-current="page"><i data-lucide="circle-user" class="icon" aria-hidden="true"></i>Profile</a></nav>
+  </div><figcaption><b>8 · Profile.</b> Scope, push opt-in with iOS note, offline drafts and session. Sign-out warns about draft deletion.</figcaption></figure>
+</div>
+
+<div role="status" aria-live="polite" id="toast" hidden style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--color-text-primary);color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;z-index:90"></div>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" integrity="sha384-hJnF5AwidE18GSWTAGHv3ByzzvfNZ1Tcx5y1UUV3WkauuMCEzBJBMSwSt/PUPXnM" crossorigin="anonymous"></script>
+<script>
+  lucide.createIcons();
+  // generic steppers
+  document.querySelectorAll('.stepper').forEach(s => {
+    const input = s.querySelector('input');
+    s.querySelectorAll('button').forEach(bt => bt.addEventListener('click', () => {
+      const d = parseFloat(bt.dataset.d), dec = (bt.dataset.d.split('.')[1] || '').length;
+      const v = Math.max(0, (parseFloat(input.value) || 0) + d);
+      input.value = dec ? v.toFixed(dec) : String(Math.round(v)); input.dispatchEvent(new Event('input', { bubbles: true }));
+    }));
+  });
+  // production check
+  const out = document.getElementById('outCard'), pc = document.getElementById('pcsCheck');
+  const T = 1688;
+  function pcsCheck() {
+    const v = k => parseInt(out.querySelector(`[data-k="${k}"]`).value || '0', 10);
+    const pcs = v('g') + v('nr') + v('nj');
+    pc.innerHTML = pcs > T
+      ? `<i data-lucide="triangle-alert" class="icon icon-lg" aria-hidden="true" style="color:var(--color-danger)"></i><div><b>${pcs.toLocaleString('en-US')} pcs is above theoretical ${T.toLocaleString('en-US')}.</b> Check counts; posting will need supervisor confirmation.</div>`
+      : `<i data-lucide="calculator" class="icon icon-lg" aria-hidden="true" style="color:var(--color-text-secondary)"></i><div>Reported <b>${pcs.toLocaleString('en-US')} pcs</b> · theoretical <b>${T.toLocaleString('en-US')} pcs</b>. The difference goes to reconciliation, not stock.</div>`;
+    lucide.createIcons();
+  }
+  out.addEventListener('input', pcsCheck); pcsCheck();
+  // QC remaining
+  const qc = document.getElementById('qcCard'), qr = document.getElementById('qcRemain');
+  function qcCheck() {
+    const v = k => parseInt(qc.querySelector(`[data-q="${k}"]`).value || '0', 10);
+    const used = v('acc') + v('hold') + v('rej'), left = 1620 - used;
+    qr.className = 'banner ' + (left < 0 ? 'err' : 'info');
+    qr.innerHTML = left < 0 ? `<i data-lucide="circle-x" class="icon icon-lg" aria-hidden="true"></i><div><b>${(-left).toLocaleString('en-US')} pcs more than the lot.</b> Reduce a quantity.</div>`
+      : `<i data-lucide="hourglass" class="icon icon-lg" aria-hidden="true"></i><div><b>${left.toLocaleString('en-US')} pcs</b> stay Pending QC after this disposition.</div>`;
+    lucide.createIcons();
+  }
+  qc.addEventListener('input', qcCheck); qcCheck();
+  // material confirmation
+  const w = document.getElementById('rcvW'), hint = document.getElementById('rcvHint');
+  w.addEventListener('input', () => { const d = (parseFloat(w.value) || 0) - 700; hint.textContent = Math.abs(d) < 0.05 ? 'Matches issued quantity.' : `Differs by ${d > 0 ? '+' : ''}${d.toFixed(1)} kg — a custody discrepancy case will open.`; hint.style.color = Math.abs(d) < 0.05 ? '' : 'var(--color-warning-fg)'; });
+  document.getElementById('confirmBtn').addEventListener('click', e => {
+    const b = e.currentTarget; b.disabled = true; b.innerHTML = 'Posting…';
+    setTimeout(() => {
+      document.getElementById('confirmBody').innerHTML = `<div class="banner ok" role="status"><i data-lucide="circle-check" class="icon icon-lg" aria-hidden="true"></i><div><b>Confirmed by server</b><br>Document CA-26-0031 · ${w.value} kg now at WC-PRESS1 · 07:52</div></div>
+        <div class="m-card"><div class="m-kv"><div><span>Material at production</span><b>${w.value}<small>kg</small></b></div><div><span>Lot</span><b style="font-size:15px">C-10</b></div></div></div>
+        <button class="btn-m" type="button" onclick="location.reload()">Back to tasks</button>`;
+      lucide.createIcons();
+    }, 700);
+  });
+  // switches & segmented
+  document.querySelectorAll('.switch').forEach(s => s.addEventListener('click', () => s.setAttribute('aria-checked', String(s.getAttribute('aria-checked') !== 'true'))));
+  document.querySelectorAll('.seg2').forEach(g => g.querySelectorAll('button').forEach(bt => bt.addEventListener('click', () => g.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', String(x === bt))))));
+</script>
+</body>
+</html>

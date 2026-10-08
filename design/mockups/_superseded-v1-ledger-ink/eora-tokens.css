@@ -1,0 +1,73 @@
+/* EORA Suite — prototype design tokens (ADR-0009). Static mockup only; not production code. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700;800&display=swap');
+
+:root {
+  /* Ledger Ink — desktop */
+  --surface: #F6F4EF;
+  --surface-raised: #FBFAF7;
+  --ink: #1C2733;
+  --ink-2: #4A5562;
+  --ink-3: #6B7480;
+  --rule: #D8D3C8;
+  --rule-strong: #A9A296;
+  --accent: #B4441C;        /* exceptions + single primary action only */
+  --accent-ink: #FFFFFF;
+  --ok: #2F6B3F;
+  --warn: #8A5F00;
+  --stop: #A3231B;
+  --info: #24527A;
+  --focus: #1C2733;
+
+  --font-ui: 'IBM Plex Sans Condensed', 'Arial Narrow', sans-serif;
+  --font-num: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-floor: 'Barlow Semi Condensed', 'Arial Narrow', sans-serif;
+
+  --r-ctl: 2px;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+  --fs-xs: 12px; --fs-sm: 13px; --fs-md: 14px; --fs-lg: 17px; --fs-xl: 22px; --fs-2xl: 28px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface: #15191E; --surface-raised: #1B2026; --ink: #ECE8DF; --ink-2: #B9B4A9; --ink-3: #8D8A82;
+    --rule: #2C3238; --rule-strong: #4A5159; --accent: #E0693F; --ok: #6DB27E; --warn: #D9A53A; --stop: #E2685E; --info: #7FB0DA; --focus: #ECE8DF;
+  }
+}
+:root[data-theme="dark"] {
+  --surface: #15191E; --surface-raised: #1B2026; --ink: #ECE8DF; --ink-2: #B9B4A9; --ink-3: #8D8A82;
+  --rule: #2C3238; --rule-strong: #4A5159; --accent: #E0693F; --ok: #6DB27E; --warn: #D9A53A; --stop: #E2685E; --info: #7FB0DA; --focus: #ECE8DF;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--surface); color: var(--ink); font-family: var(--font-ui); font-size: var(--fs-md); line-height: 1.4; -webkit-font-smoothing: antialiased; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.uom { color: var(--ink-3); font-family: var(--font-ui); font-size: 0.85em; margin-left: 2px; }
+.muted { color: var(--ink-3); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Prototype banner — honest labelling of sample data */
+.proto-banner { background: var(--ink); color: var(--surface); font-size: var(--fs-xs); padding: 6px var(--sp-4); display: flex; gap: var(--sp-4); flex-wrap: wrap; justify-content: space-between; }
+.proto-banner a { color: inherit; }
+
+/* Status chip: glyph + text, never colour alone */
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); font-weight: 600; padding: 1px 6px; border: 1px solid currentColor; border-radius: var(--r-ctl); white-space: nowrap; line-height: 18px; }
+.chip::before { font-family: var(--font-num); font-weight: 600; }
+.chip.final { color: var(--ok); } .chip.final::before { content: "■"; }
+.chip.prov { color: var(--warn); } .chip.prov::before { content: "◧"; }
+.chip.nc { color: var(--ink-3); border-style: dashed; } .chip.nc::before { content: "□"; }
+.chip.stop { color: var(--stop); } .chip.stop::before { content: "▲"; }
+.chip.info { color: var(--info); } .chip.info::before { content: "●"; }
+.chip.plain { color: var(--ink-2); } .chip.plain::before { content: ""; }
+
+.btn { font: inherit; font-weight: 600; font-size: var(--fs-sm); color: var(--ink); background: transparent; border: 1px solid var(--rule-strong); border-radius: var(--r-ctl); padding: 6px 12px; cursor: pointer; min-height: 32px; }
+.btn:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn[disabled] { opacity: .55; cursor: not-allowed; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media print {
+  .proto-banner, .no-print { display: none !important; }
+  body { background: #fff; color: #000; }
+}

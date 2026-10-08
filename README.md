@@ -1,6 +1,6 @@
 # EORA Suite V1 — Project Blueprint & Claude Code Handoff
 
-**Status:** Planning baseline; not approved for coding. **Industry:** Discrete manufacturing (stamping, machining, fabrication, welding, assembly). **Product:** independent multi-tenant SaaS Manufacturing Operations Management (MOM). **Timezone default:** Asia/Jakarta, tenant-configurable. **Last consolidated:** 2026-10-08.
+**Status:** Approval Gate AG-01..AG-12 decided (2026-10-08, see doc 13); specification finalization stage — **still not approved for production coding or migrations**. **Industry:** Discrete manufacturing (stamping, machining, fabrication, welding, assembly). **Product:** independent multi-tenant SaaS Manufacturing Operations Management (MOM). **Timezone default:** Asia/Jakarta, tenant-configurable. **Last consolidated:** 2026-10-08.
 
 ## Read in this order
 1. `CLAUDE.md` for Claude Code; `AGENTS.md` for other coding agents.
@@ -8,7 +8,9 @@
 3. `docs/01-BUSINESS-PROCESS.md` and `docs/02-MATERIAL-CONVERSION-RECONCILIATION.md` — transaction correctness.
 4. `docs/03-MODULE-SPECIFICATIONS.md` through `docs/12-SAAS-OPERATIONS.md`.
 5. `docs/13-DECISION-REGISTER.md` and `docs/14-ACCEPTANCE-SCENARIOS.md`.
-6. `prompts/CLAUDE-CODE-START.md` — copy/paste kickoff prompt.
+6. `docs/adr/` (ADR-0001..0009), `docs/15-BUSINESS-RULE-CATALOG.md`, `docs/16-STATE-MACHINES.md`, `docs/17-DATA-MODEL-ERD.md`, `docs/18-RBAC-OWNERSHIP-MATRIX.md`, `docs/19-PPIC-CONTROL-TOWER-SPEC.md`, `docs/20-PERFORMANCE-WORKLOAD-MODEL.md`, `docs/21-PRODUCT-BACKLOG.md`.
+7. `docs/uiux/` — approved design system (canonical UI/UX source, D-021) and `design/mockups/` — Modern Corporate Blue prototypes (static, sample data) pending final approval. Superseded v1 prototypes in `design/mockups/_superseded-v1-ledger-ink/`.
+8. `prompts/CLAUDE-CODE-START.md` — copy/paste kickoff prompt.
 
 ## Non-negotiable distinctions
 - **No WIP module or WIP label in operational UI.** Issued but unconsumed stock remains **Material at Production**; actual intermediate products may be tracked as **Semi-Finished Material**. This is a terminology/product-design decision, **not** permission to hide physical balances or accounting obligations.
@@ -24,3 +26,5 @@ The `LEGACY-BLUEPRINT-REFERENCE.md` is preserved for context, but newer document
 
 ## Claude Code skill requirement
 Kickoff requires discovery and reading of installed **Caveman** and **Frontend** skills. See `CLAUDE.md` for the mandatory skill-use report and fallback if either skill is unavailable.
+
+**Every frontend/UI task must review the approved EORA Design System (`docs/uiux/`) and use relevant installed Caveman and Frontend Design skills.**

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EORA Mockups</title>
+<link rel="stylesheet" href="eora-tokens.css">
+<style>
+  main { max-width: 860px; margin: 0 auto; padding: var(--sp-6) var(--sp-5); }
+  h1 { font-size: var(--fs-2xl); margin: 0 0 4px; }
+  p { color: var(--ink-2); }
+  ol { list-style: none; padding: 0; margin: var(--sp-5) 0 0; border-top: 2px solid var(--ink); }
+  li { padding: var(--sp-4) 0; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 40px 1fr; gap: var(--sp-3); }
+  li .n { font-family: var(--font-num); color: var(--ink-3); }
+  li a { font-weight: 700; font-size: var(--fs-lg); color: var(--ink); }
+  li div p { margin: 4px 0 0; font-size: var(--fs-sm); }
+</style>
+</head>
+<body>
+<main>
+  <h1>EORA Suite V1 — hybrid UI prototypes</h1>
+  <p>Decision D-018 / ADR-0009: Desktop "Ledger Ink", Floor Mode "Andon Signal", MaterialFlowStrip from "Traceline". Static HTML, sample data, for owner review. <b>Final approval required before frontend implementation.</b></p>
+  <ol>
+    <li><span class="n">01</span><div><a href="01-control-tower-desktop.html">PPIC Control Tower — desktop</a><p>Exception queue first, MaterialFlowStrip with kg → pcs boundary, RM conversion certainty, daily FG receipt, delivery outstanding, notification inbox.</p></div></li>
+    <li><span class="n">02</span><div><a href="02-run-reconciliation-desktop.html">Run reconciliation &amp; variance case — desktop</a><p>Conservation line, GYV / PvS / UMV with formulas and finality, ledger legs, measurements, case workflow with separation of duties.</p></div></li>
+    <li><span class="n">03</span><div><a href="03-floor-mode-pwa.html">Floor Mode PWA — operator, leader, QC</a><p>Scan-first shift home, run report with measured consumption and six output categories, partial QC disposition while offline.</p></div></li>
+  </ol>
+</main>
+</body>
+</html>

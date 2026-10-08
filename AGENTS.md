@@ -8,5 +8,8 @@ Invariants: no operational WIP module/label; issued material remains Material at
 
 Prefer small, testable changes and document decisions in ADRs. See `docs/14-ACCEPTANCE-SCENARIOS.md` for required behavior.
 
+## Design system (D-021)
+Every frontend/UI task must review the approved EORA Design System in `docs/uiux/` (canonical; start with `EORA-DESIGN-CONSTITUTION.md`) and use relevant installed Caveman and Frontend Design skills. Single theme Modern Corporate Blue, Inter, dual sidebar desktop navigation from one config, PWA bottom navigation. ADR-0009 visuals are superseded by ADR-0010. No production frontend before owner approval of `design/mockups/`.
+
 ## Skill discovery and application
 At each task start, discover and read the **Caveman** and relevant **Frontend** skills if installed in the agent environment. Apply them to analysis/design and later implementation as appropriate; report exactly which skill instructions were found and read. Do not assume availability, fabricate invocation or bypass the approval gate. Follow the detailed procedure in `CLAUDE.md`.

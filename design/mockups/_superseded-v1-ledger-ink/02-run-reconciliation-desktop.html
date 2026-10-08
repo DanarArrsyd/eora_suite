@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run Reconciliation</title>
+<link rel="stylesheet" href="eora-tokens.css">
+<style>
+  main { max-width: 1320px; margin: 0 auto; padding: var(--sp-5); }
+  .crumbs { font-size: var(--fs-xs); color: var(--ink-3); }
+  .crumbs a { color: var(--ink-2); }
+  .doc-head { display: grid; grid-template-columns: 1fr auto; gap: var(--sp-4); border-bottom: 2px solid var(--ink); padding: var(--sp-2) 0 var(--sp-3); align-items: end; }
+  .doc-head h1 { margin: 0; font-size: var(--fs-2xl); font-weight: 700; }
+  .facts { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-top: 6px; font-size: var(--fs-sm); color: var(--ink-2); }
+  .facts b { color: var(--ink); font-weight: 600; }
+  .head-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; justify-content: flex-end; }
+
+  /* Conservation line */
+  .conserve { margin-top: var(--sp-5); border: 1px solid var(--rule-strong); background: var(--surface-raised); padding: var(--sp-3) var(--sp-4); }
+  .conserve .cap { font-size: var(--fs-xs); color: var(--ink-3); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .eq { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-top: 6px; font-size: var(--fs-lg); }
+  .eq .term { display: inline-flex; flex-direction: column; }
+  .eq .term small { font-size: var(--fs-xs); color: var(--ink-3); font-family: var(--font-ui); }
+  .eq .op { font-family: var(--font-num); color: var(--ink-3); }
+  .eq .check { color: var(--ok); font-size: var(--fs-sm); font-weight: 600; margin-left: auto; }
+
+  .cols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: var(--sp-6); margin-top: var(--sp-5); }
+  h2 { font-size: var(--fs-lg); margin: 0; font-weight: 700; }
+  .sec-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--sp-3); border-bottom: 1px solid var(--ink); padding-bottom: 6px; }
+  .sub { font-size: var(--fs-xs); color: var(--ink-3); margin: 6px 0 var(--sp-3); }
+
+  /* Indicators */
+  .ind { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--rule-strong); }
+  .ind > div { padding: var(--sp-3) var(--sp-4); border-right: 1px solid var(--rule); }
+  .ind > div:last-child { border-right: 0; }
+  .ind .name { font-weight: 700; font-size: var(--fs-sm); }
+  .ind .q { font-size: var(--fs-xs); color: var(--ink-3); min-height: 32px; }
+  .ind .val { font-size: var(--fs-2xl); margin: 6px 0 2px; }
+  .ind .pct { font-size: var(--fs-sm); color: var(--ink-2); }
+  .ind .formula { overflow-wrap: anywhere; font-family: var(--font-num); font-size: 11.5px; color: var(--ink-2); margin-top: 8px; border-top: 1px dashed var(--rule); padding-top: 6px; line-height: 1.5; }
+  .ind .tol { font-size: var(--fs-xs); margin-top: 6px; }
+  .ind .breach { color: var(--stop); font-weight: 600; }
+  .ind .within { color: var(--ok); font-weight: 600; }
+  .note-final { font-size: var(--fs-xs); color: var(--ink-2); margin-top: 8px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+  th { text-align: left; font-weight: 600; color: var(--ink-2); font-size: var(--fs-xs); padding: 8px 8px 6px; border-bottom: 1px solid var(--rule-strong); white-space: nowrap; }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  td.r, th.r { text-align: right; }
+  .neg { color: var(--ink); }
+  .tbl-wrap { overflow-x: auto; }
+  .legend { font-size: var(--fs-xs); color: var(--ink-3); margin-top: 6px; }
+
+  .ev { list-style: none; padding: 0; margin: 0; }
+  .ev li { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--rule); font-size: var(--fs-sm); }
+  .ev .by { font-size: var(--fs-xs); color: var(--ink-3); }
+
+  /* Case panel */
+  .case { border: 1px solid var(--rule-strong); background: var(--surface-raised); }
+  .case header { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--rule); }
+  .case header b { font-size: var(--fs-lg); }
+  .steps { list-style: none; margin: 0; padding: var(--sp-3) var(--sp-4); counter-reset: s; }
+  .steps li { position: relative; padding: 0 0 12px 22px; font-size: var(--fs-sm); color: var(--ink-3); }
+  .steps li::before { content: "○"; position: absolute; left: 0; top: 0; font-family: var(--font-num); }
+  .steps li.done { color: var(--ink-2); } .steps li.done::before { content: "●"; color: var(--ink-2); }
+  .steps li.now { color: var(--ink); font-weight: 700; } .steps li.now::before { content: "◉"; color: var(--accent); }
+  .steps .m { display: block; font-weight: 400; font-size: var(--fs-xs); color: var(--ink-3); }
+  .case form { padding: 0 var(--sp-4) var(--sp-4); }
+  .field { margin-top: var(--sp-3); }
+  .field label { display: block; font-size: var(--fs-xs); font-weight: 600; color: var(--ink-2); margin-bottom: 4px; }
+  .field select, .field textarea { width: 100%; font: inherit; font-size: var(--fs-sm); color: var(--ink); background: var(--surface); border: 1px solid var(--rule-strong); border-radius: var(--r-ctl); padding: 6px 8px; }
+  .field textarea { min-height: 72px; resize: vertical; }
+  .hint { font-size: var(--fs-xs); color: var(--ink-3); margin-top: 4px; }
+  .sod { font-size: var(--fs-xs); border-top: 1px solid var(--rule); margin-top: var(--sp-3); padding-top: var(--sp-2); color: var(--ink-2); }
+  .form-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); flex-wrap: wrap; }
+
+  .audit { margin-top: var(--sp-5); }
+  .audit ol { list-style: none; padding: 0; margin: 0; font-size: var(--fs-xs); }
+  .audit li { padding: 5px 0; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 92px 1fr; gap: 8px; }
+  .audit .num { color: var(--ink-2); }
+
+  @media (max-width: 1100px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 760px) {
+    main { padding: var(--sp-4); }
+    .doc-head { grid-template-columns: 1fr; }
+    .head-actions { justify-content: flex-start; }
+    .ind { grid-template-columns: 1fr; }
+    .ind > div { border-right: 0; border-bottom: 1px solid var(--rule); }
+  }
+  @media print { .head-actions, .case form { display: none; } .cols { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="proto-banner" role="note">
+  <span><b>SUPERSEDED (ADR-0009 → ADR-0010) ·</b> <b>Prototype 2 of 3</b> · Desktop "Ledger Ink" · Run reconciliation &amp; variance case · SAMPLE DATA (coil example from doc 02).</span>
+  <span>Wired: resolution form validation, print. Not wired: posting, approval submission. · <a href="index.html">All mockups</a></span>
+</div>
+<main>
+  <div class="crumbs"><a href="01-control-tower-desktop.html">Control Tower</a> / Production / WO-1182 / Run</div>
+  <div class="doc-head">
+    <div>
+      <h1>RUN-1182-S1 <span class="chip plain" style="vertical-align:middle">Run closed</span></h1>
+      <div class="facts">
+        <span>WO <b>WO-1182</b> · BRKT-220 Bracket Seat LH</span>
+        <span>Work center <b>WC-PRESS1</b> · Die <b>D-220-A</b></span>
+        <span>Production date <b>07 Oct 2026 · S2</b> (15:00–23:00 WIB)</span>
+        <span>Leader <b>A. Wibowo</b></span>
+        <span>Snapshot CP <b>v3</b> · SY <b>v2 (0.97)</b> · NW <b>v4 (0.290 kg)</b></span>
+      </div>
+    </div>
+    <div class="head-actions">
+      <button class="btn" type="button" onclick="window.print()">Print</button>
+      <button class="btn" type="button" disabled title="Prototype — not wired">Export XLSX</button>
+      <button class="btn" type="button" disabled title="Prototype — not wired">Trace lot C-07</button>
+    </div>
+  </div>
+
+  <div class="conserve" role="group" aria-label="Material conservation for lot C-07">
+    <div class="cap"><span>Lot <b class="num">C-07</b> · SPCC 1.2 × 120 coil · at WC-PRESS1 · this WO allocation</span><span>All terms in kg, measured · ledger documents linked below</span></div>
+    <div class="eq">
+      <span class="term"><span class="num">700.000</span><small>Issued (MI-26-0712)</small></span>
+      <span class="op">=</span>
+      <span class="term"><span class="num">612.400</span><small>Consumed (weighed remaining)</small></span>
+      <span class="op">+</span>
+      <span class="term"><span class="num">47.600</span><small>At Production, parent lot</small></span>
+      <span class="op">+</span>
+      <span class="term"><span class="num">40.000</span><small>Remnant C-07-R1 (split)</small></span>
+      <span class="op">+</span>
+      <span class="term"><span class="num">0.000</span><small>Returned to RM</small></span>
+      <span class="check">■ Balanced — no unconsumed material counted as variance</span>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <section aria-labelledby="ind-h">
+        <div class="sec-head"><h2 id="ind-h">Variance indicators</h2><span class="muted" style="font-size:var(--fs-xs)">ADR-0005 · calc v2 · 07 Oct 23:05 WIB</span></div>
+        <p class="sub">Three separate questions. None of these figures is a confirmed physical discrepancy; that requires a stock count.</p>
+        <div class="ind">
+          <div>
+            <div class="name">Gross Yield Variance</div>
+            <div class="q">Pieces the consumed coil should yield that no reported piece accounts for</div>
+            <div class="val num">47<span class="uom">pcs</span></div>
+            <div class="pct num">2.78 % of theoretical</div>
+            <span class="chip final">Final</span>
+            <div class="formula">T = floor((541,755.1 − 1,500) / 320) × 1 = 1,688<br>accounted = 1,620 + 12 + 9 + 0 = 1,641<br>GYV = 1,688 − 1,641 = 47</div>
+            <div class="tol">Tolerance 20 pcs and 2.00 % (item BRKT-220) · <span class="breach">▲ Exceeded → case RC-0041</span></div>
+          </div>
+          <div>
+            <div class="name">Performance vs Standard</div>
+            <div class="q">Good pieces compared with the standard expectation</div>
+            <div class="val num">−17<span class="uom">pcs</span></div>
+            <div class="pct num">−1.04 % vs expected good</div>
+            <span class="chip final">Final</span>
+            <div class="formula">E = floor(1,688 × 0.97) = 1,637<br>PvS = 1,620 − 1,637 = −17<br>NG not subtracted again (in SY)</div>
+            <div class="tol muted">KPI only · no case trigger configured</div>
+          </div>
+          <div>
+            <div class="name">Unexplained Material Variance</div>
+            <div class="q">Consumed mass not explained by piece mass and weighed scrap</div>
+            <div class="val num">7.6<span class="uom">kg</span></div>
+            <div class="pct num">1.24 % of consumed</div>
+            <span class="chip final">Final</span>
+            <div class="formula">pieces = 1,641 × 0.290 = 475.890<br>scrap weighed = 128.900<br>UMV = 612.400 − 604.790 = 7.610</div>
+            <div class="tol">Tolerance 10.0 kg and 1.50 % · <span class="within">■ Within</span></div>
+          </div>
+        </div>
+        <p class="note-final">Final because: run closed · consumption weighed (no by-difference line) · CP v3 validated · scrap weighed twice · NG classification confirmed by QC 07 Oct 23:40 · no pending reversal. A reversal of any document below returns all three to Provisional and keeps this version in history.</p>
+      </section>
+
+      <section aria-labelledby="leg-h" style="margin-top:var(--sp-6)">
+        <div class="sec-head"><h2 id="leg-h">Ledger legs — Production Posting PP-26-1182-01</h2><span class="muted" style="font-size:var(--fs-xs)">Posted 07 Oct 23:02 · immutable</span></div>
+        <p class="sub">Input leaves Material at Production once. Every output is its own leg; remnant and return are separate documents.</p>
+        <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>#</th><th>From</th><th>To</th><th>Item · lot</th><th>Status</th><th class="r">Qty</th><th>Evidence</th></tr></thead>
+          <tbody>
+            <tr><td class="num">1</td><td>WC-PRESS1 at production</td><td>Consumed</td><td>SPCC-1.2×120 · C-07</td><td>—</td><td class="r num">612.400<span class="uom">kg</span></td><td>Weighed remaining 87.600 kg · SC-02</td></tr>
+            <tr><td class="num">2</td><td>Produced</td><td>QC Area</td><td>BRKT-220 · O-1182-01</td><td><span class="chip prov">Pending QC</span></td><td class="r num">1,620<span class="uom">pcs</span></td><td>Count by leader</td></tr>
+            <tr><td class="num">3</td><td>Produced</td><td>NG Area</td><td>BRKT-220 · O-1182-01</td><td><span class="chip info">Rework</span></td><td class="r num">12<span class="uom">pcs</span></td><td>Burr, defect D-03</td></tr>
+            <tr><td class="num">4</td><td>Produced</td><td>NG Area</td><td>BRKT-220 · O-1182-01</td><td><span class="chip stop">Rejected</span></td><td class="r num">9<span class="uom">pcs</span></td><td>Crack, defect D-11</td></tr>
+            <tr><td class="num">5</td><td>Produced</td><td>Scrap Yard</td><td>SCRAP-SPCC</td><td>—</td><td class="r num">128.900<span class="uom">kg</span></td><td>Skeleton + head/tail · 2 weighings</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="legend">Related: MI-26-0712 issue 700.000 kg · LS-26-0088 split C-07 → C-07-R1 40.000 kg · Stroke counter D-220-A 412,118 → 413,808 (1,690 strokes; 2 above theoretical, within counter tolerance).</div>
+      </section>
+
+      <section aria-labelledby="evi-h" style="margin-top:var(--sp-6)">
+        <div class="sec-head"><h2 id="evi-h">Measurements</h2><span class="muted" style="font-size:var(--fs-xs)">Scale SC-02 resolution 0.1 kg</span></div>
+        <ul class="ev">
+          <li><span>Remaining coil C-07 weighed: gross 102.4, tare 14.8 → <b class="num">87.600 kg</b></span><span class="by">A. Wibowo · 22:41</span></li>
+          <li><span>Remnant cut C-07-R1: <b class="num">40.000 kg</b>, length 35.4 m</span><span class="by">A. Wibowo · 22:48 · accepted by Materials 22:55</span></li>
+          <li><span>Scrap bin 1: <b class="num">71.300 kg</b> · bin 2: <b class="num">57.600 kg</b></span><span class="by">S. Hidayat · 22:50</span></li>
+        </ul>
+      </section>
+    </div>
+
+    <aside aria-labelledby="case-h">
+      <div class="case">
+        <header><div class="muted" style="font-size:var(--fs-xs)">Reconciliation case</div><b id="case-h">RC-0041 · Variance breach</b><div class="muted" style="font-size:var(--fs-xs);margin-top:2px">Owner Supervisor Press (Y. Santoso) · due 12 Oct</div></header>
+        <ol class="steps">
+          <li class="done">Reconciliation required<span class="m">Auto · 07 Oct 23:05</span></li>
+          <li class="done">Investigation open<span class="m">Y. Santoso · 08 Oct 07:20</span></li>
+          <li class="now">Evidence collected<span class="m">Downtime log + scale records attached</span></li>
+          <li>Reviewed<span class="m">Reviewer must not be the owner</span></li>
+          <li>Approved resolution</li>
+          <li>Closed</li>
+        </ol>
+        <form id="resForm" novalidate>
+          <div class="field">
+            <label for="rtype">Proposed resolution</label>
+            <select id="rtype" required>
+              <option value="">Select…</option>
+              <option>Measurement error</option>
+              <option>Unreported output (late posting)</option>
+              <option>Standard incorrect (new CP/SY/NW version)</option>
+              <option>Process loss explained (reason code)</option>
+              <option>Physical discrepancy — requires stock count</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="rnote">Explanation and evidence reference</label>
+            <textarea id="rnote" required aria-describedby="rnote-hint" placeholder="What caused the 47 pcs, which evidence supports it"></textarea>
+            <div class="hint" id="rnote-hint">Minimum 20 characters. The final text is stored in the immutable audit trail.</div>
+            <div class="hint" id="rerr" role="alert" style="color:var(--stop)"></div>
+          </div>
+          <div class="sod">Separation of duties: you are the case owner, so review and approval will be routed to Inventory Controller and an approver other than you.</div>
+          <div class="form-actions">
+            <button class="btn primary" type="submit">Submit for review</button>
+            <button class="btn" type="button" disabled title="Prototype — not wired">Attach file</button>
+          </div>
+        </form>
+      </div>
+
+      <section class="audit" aria-labelledby="aud-h">
+        <div class="sec-head"><h2 id="aud-h" style="font-size:var(--fs-md)">Audit</h2></div>
+        <ol>
+          <li><span class="num">08 Oct 07:20</span><span>Case assigned to Y. Santoso by system policy (plant A, press)</span></li>
+          <li><span class="num">07 Oct 23:40</span><span>QC confirmed NG split 12 rework / 9 rejected (QC-INS R. Dewi)</span></li>
+          <li><span class="num">07 Oct 23:05</span><span>Variance calc v2 Final; GYV breach</span></li>
+          <li><span class="num">07 Oct 23:02</span><span>PP-26-1182-01 posted (A. Wibowo), key 7f3c…</span></li>
+        </ol>
+      </section>
+    </aside>
+  </div>
+</main>
+<script>
+  document.getElementById('resForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const t = document.getElementById('rtype'), n = document.getElementById('rnote'), err = document.getElementById('rerr');
+    const msgs = [];
+    if (!t.value) msgs.push('Choose a proposed resolution.');
+    if (n.value.trim().length < 20) msgs.push('Explanation needs at least 20 characters.');
+    t.setAttribute('aria-invalid', String(!t.value));
+    n.setAttribute('aria-invalid', String(n.value.trim().length < 20));
+    err.textContent = msgs.length ? msgs.join(' ') : 'Prototype: would submit to review queue (not sent).';
+    err.style.color = msgs.length ? 'var(--stop)' : 'var(--ok)';
+    if (msgs.length) (t.value ? n : t).focus();
+  });
+</script>
+</body>
+</html>

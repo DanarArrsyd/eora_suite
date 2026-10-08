@@ -22,10 +22,17 @@ You are acting as principal manufacturing systems business analyst, solution arc
 
 ## Stack baseline (subject to ADR and compatibility check)
 - Monorepo: pnpm workspaces + Turborepo for TS packages; Laravel app as separate workspace/app (do not force PHP into pnpm package management).
-- Web/PWA: Next.js + React + TypeScript, Tailwind, shadcn/ui/Radix, TanStack Table/Query/Virtual, React Hook Form + Zod.
+- Web/PWA: Next.js + React + TypeScript, Tailwind, shadcn/ui/Radix, TanStack Table/Query/Virtual, React Hook Form + Zod, Lucide icons.
 - API: Laravel modular monolith, PostgreSQL, Redis queues/Horizon, Reverb, S3-compatible storage, transactional outbox.
 - Tests: Pest/PHPUnit, Vitest, Playwright, k6; quality: Pint, PHPStan/Larastan, ESLint, Prettier; CI: GitHub Actions, Docker.
 - Prefer stable supported versions, pin dependencies and record ADRs; avoid unnecessary microservices, speculative infra and premature optimization.
+
+## Approved design system (D-021, ADR-0010)
+- **Every frontend/UI task must review the approved EORA Design System and use relevant installed Caveman and Frontend Design skills.** If a skill is not available, report it; never claim to have used it.
+- Canonical UI/UX source: `docs/uiux/` (start with `EORA-DESIGN-CONSTITUTION.md`). Direction: **EORA Modern Corporate Enterprise Workspace**, single theme **Modern Corporate Blue** (no dark mode/theme switching), **Inter** typography, **dual sidebar** desktop navigation from one central navigation config, PWA bottom navigation. Prototypes: `design/mockups/`.
+- Owner decisions override conflicting skill defaults (e.g. skills discouraging Inter/Lucide or defaulting to dark mode); record such conflicts in the Skill Usage Report.
+- ADR-0009 (Ledger Ink / Andon Signal) is SUPERSEDED; do not reuse its visuals.
+- Production frontend implementation still requires explicit owner approval of the mockups (O-016).
 
 ## Shared UI and quality rules
 - Reuse `EoraFilterBar`, `EoraDataTable`, `EoraForm`, status badges, approvals, notifications, import wizard, report viewer. Schema-driven filters; URL-synced state; server-side pagination/filter/sort; permission-aware export using the same query scope.

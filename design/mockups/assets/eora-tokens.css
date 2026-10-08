@@ -1,0 +1,108 @@
+/* =====================================================================
+   EORA Suite — Design Tokens · Theme "Modern Corporate Blue" (single theme)
+   Canonical spec: docs/uiux/EORA-DESIGN-TOKENS.md  ·  Decision D-021 / ADR-0010
+   Prototype file for mockups. Production maps 1:1 to Tailwind @theme + shadcn CSS variables.
+   No dark mode, no theme switching (owner decision).
+   ===================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ---- Brand palette (raw, do not use directly in components) ---- */
+  --blue-950: #172554;   /* primary sidebar */
+  --blue-700: #3559C7;   /* primary accent */
+  --blue-800: #2948A8;   /* primary hover */
+  --blue-50:  #EFF6FF;   /* active menu background */
+  --blue-100: #DBEAFE;
+  --slate-50: #F8FAFC;
+  --slate-100:#F1F5F9;
+  --slate-200:#E2E8F0;
+  --slate-300:#CBD5E1;
+  --slate-400:#94A3B8;
+  --slate-450:#7F8EA3;   /* added: control border ≥3:1 (WCAG 1.4.11) */
+  --slate-500:#64748B;
+  --slate-600:#475569;
+  --slate-800:#1E293B;
+
+  /* ---- Semantic: surfaces ---- */
+  --color-bg-workspace: var(--slate-50);
+  --color-bg-surface: #FFFFFF;
+  --color-bg-subtle: var(--slate-50);        /* table header, section header */
+  --color-bg-hover: var(--slate-100);        /* row/menu hover (bg only, never text bg for secondary text) */
+  --color-bg-selected: var(--blue-50);
+  --color-bg-sidebar-primary: var(--blue-950);
+  --color-bg-sidebar-secondary: #FFFFFF;
+  --color-bg-overlay: rgba(15, 23, 42, .40);
+
+  /* ---- Semantic: text ---- */
+  --color-text-primary: var(--slate-800);    /* 14.63:1 on white */
+  --color-text-secondary: var(--slate-500);  /* 4.76:1 on white, 4.55:1 on workspace */
+  --color-text-muted: var(--slate-400);      /* 2.56:1 — disabled text & decorative only, never information */
+  --color-text-on-primary: #FFFFFF;          /* 6.17:1 on accent */
+  --color-text-link: var(--blue-700);
+  --color-text-sidebar: #CBD5E1;             /* 9.90:1 on sidebar */
+  --color-text-sidebar-active: #FFFFFF;
+
+  /* ---- Semantic: borders ---- */
+  --color-border: var(--slate-200);          /* layout separators (decorative, exempt) */
+  --color-border-control: var(--slate-450);  /* input/select/checkbox outline 3.33:1 */
+  --color-border-strong: var(--slate-300);
+  --color-focus-ring: var(--blue-700);
+
+  /* ---- Semantic: action ---- */
+  --color-primary: var(--blue-700);
+  --color-primary-hover: var(--blue-800);
+  --color-primary-subtle: var(--blue-50);
+
+  /* ---- Semantic: status (solid = icons/strokes, fg/bg = badges) ---- */
+  --color-success: #15803D;  --color-success-fg: #166534; --color-success-bg: #DCFCE7;
+  --color-warning: #B45309;  --color-warning-fg: #92400E; --color-warning-bg: #FEF3C7;
+  --color-danger:  #DC2626;  --color-danger-fg:  #991B1B; --color-danger-bg:  #FEE2E2;
+  --color-info:    #2563EB;  --color-info-fg:    #1D4ED8; --color-info-bg:    #DBEAFE;
+  --color-neutral-fg: var(--slate-600); --color-neutral-bg: var(--slate-100);
+
+  /* ---- Data-viz (single-hue + status; max 4 series) ---- */
+  --viz-1: var(--blue-700); --viz-2: #93A8E6; --viz-3: var(--slate-400); --viz-risk: var(--color-danger);
+
+  /* ---- Typography ---- */
+  --font-sans: 'Inter', Arial, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;   /* technical codes only, selective */
+  --fs-page-title: 24px;  --lh-page-title: 32px;  /* 24–28 semibold */
+  --fs-section: 16px;     --lh-section: 24px;     /* 16–18 semibold */
+  --fs-body: 14px;        --lh-body: 20px;
+  --fs-table: 13px;       --lh-table: 18px;
+  --fs-label: 13px;
+  --fs-support: 12px;     --lh-support: 16px;
+  --fs-kpi: 28px;         --lh-kpi: 34px;
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+
+  /* ---- Spacing (4px grid) ---- */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+
+  /* ---- Radius ---- */
+  --radius-sm: 4px;   /* badges, checkboxes */
+  --radius-md: 6px;   /* inputs, buttons */
+  --radius-lg: 8px;   /* cards, panels, menus */
+  --radius-xl: 12px;  /* mobile sheets */
+
+  /* ---- Elevation (hierarchy only) ---- */
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, .05);
+  --shadow-popover: 0 8px 24px rgba(15, 23, 42, .12), 0 2px 6px rgba(15, 23, 42, .06);
+  --shadow-drawer: -8px 0 24px rgba(15, 23, 42, .10);
+
+  /* ---- Layout ---- */
+  --shell-primary-w: 64px;
+  --shell-secondary-w: 248px;
+  --shell-topbar-h: 56px;
+  --control-h: 36px;       /* desktop controls */
+  --control-h-sm: 32px;
+  --row-h: 44px;           /* table row */
+  --touch-min: 44px;       /* desktop/tablet touch */
+  --touch-mobile: 48px;    /* PWA minimum */
+
+  /* ---- Motion ---- */
+  --dur-fast: 120ms; --dur-base: 180ms; --ease: cubic-bezier(.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}

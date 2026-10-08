@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en" data-floor="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Floor Mode PWA</title>
+<link rel="stylesheet" href="eora-tokens.css">
+<style>
+  /* Andon Signal floor tokens (ADR-0009) */
+  [data-floor="light"] { --f-bg: #E9EAE6; --f-card: #F7F7F4; --f-ink: #111316; --f-ink2: #43484E; --f-rule: #B9BBB5; --f-ok: #1F6B37; --f-warn: #8A5F00; --f-stop: #A3231B; --f-act: #B4441C; --f-act-ink: #FFFFFF; }
+  [data-floor="dark"]  { --f-bg: #16181B; --f-card: #1F2226; --f-ink: #F2F2EF; --f-ink2: #B5B8B2; --f-rule: #34383D; --f-ok: #63C27F; --f-warn: #E3B042; --f-stop: #F0776C; --f-act: #E0693F; --f-act-ink: #16181B; }
+
+  body { background: var(--surface); }
+  .intro { max-width: 1240px; margin: 0 auto; padding: var(--sp-5) var(--sp-5) 0; display: flex; justify-content: space-between; align-items: flex-end; gap: var(--sp-4); flex-wrap: wrap; }
+  .intro h1 { margin: 0; font-size: var(--fs-2xl); }
+  .intro p { margin: 4px 0 0; color: var(--ink-2); font-size: var(--fs-sm); max-width: 720px; }
+  .phones { max-width: 1240px; margin: 0 auto; padding: var(--sp-5); display: grid; grid-template-columns: repeat(3, minmax(300px, 1fr)); gap: var(--sp-6); }
+  figure { margin: 0; }
+  figcaption { font-size: var(--fs-sm); color: var(--ink-2); margin-top: var(--sp-3); }
+  figcaption b { color: var(--ink); }
+
+  .phone { width: 100%; max-width: 380px; aspect-ratio: 390 / 820; border: 10px solid #22262B; border-radius: 34px; overflow: hidden; background: var(--f-bg); color: var(--f-ink); font-family: var(--font-floor); display: flex; flex-direction: column; margin: 0 auto; }
+  .status { display: flex; justify-content: space-between; font-size: 12px; padding: 8px 18px 4px; color: var(--f-ink2); font-family: var(--font-num); }
+  .appbar { display: flex; justify-content: space-between; align-items: center; padding: 6px 16px 10px; border-bottom: 2px solid var(--f-ink); }
+  .appbar .t { font-weight: 800; font-size: 20px; letter-spacing: .01em; }
+  .appbar .ctx { font-size: 13px; color: var(--f-ink2); font-weight: 600; }
+  .inbox { font: inherit; font-weight: 700; font-size: 15px; background: none; color: var(--f-ink); border: 2px solid var(--f-ink); border-radius: 6px; min-height: 44px; padding: 0 10px; }
+  .inbox span { font-family: var(--font-num); background: var(--f-act); color: var(--f-act-ink); border-radius: 3px; padding: 0 5px; margin-left: 6px; font-size: 13px; }
+  .body { flex: 1; overflow: auto; padding: 12px 14px 16px; }
+  .net { margin: 0 0 10px; padding: 8px 10px; border: 2px dashed var(--f-warn); color: var(--f-ink); font-size: 14px; font-weight: 600; border-radius: 6px; }
+  .net b { color: var(--f-warn); }
+
+  .scan { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 64px; font: inherit; font-weight: 800; font-size: 20px; background: var(--f-ink); color: var(--f-bg); border: 0; border-radius: 6px; cursor: pointer; }
+  .manual { display: block; text-align: center; margin: 8px 0 14px; font-size: 15px; font-weight: 600; color: var(--f-ink); }
+  .h { font-size: 13px; font-weight: 700; color: var(--f-ink2); margin: 14px 0 6px; letter-spacing: .02em; }
+  .task { display: grid; grid-template-columns: 8px 1fr auto; gap: 10px; background: var(--f-card); border: 1px solid var(--f-rule); border-radius: 6px; padding: 12px 12px 12px 0; margin-bottom: 8px; min-height: 64px; align-items: center; }
+  .task .bar { align-self: stretch; border-radius: 6px 0 0 6px; }
+  .task.stop .bar { background: var(--f-stop); } .task.warn .bar { background: var(--f-warn); } .task.ok .bar { background: var(--f-ok); }
+  .task .ti { font-weight: 700; font-size: 17px; }
+  .task .ts { font-size: 14px; color: var(--f-ink2); margin-top: 2px; }
+  .task .state { font-size: 13px; font-weight: 800; text-align: right; }
+  .task.stop .state { color: var(--f-stop); } .task.warn .state { color: var(--f-warn); } .task.ok .state { color: var(--f-ok); }
+  .glyph { font-family: var(--font-num); }
+
+  .navbar { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 2px solid var(--f-ink); background: var(--f-card); }
+  .navbar a { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 58px; font-weight: 700; font-size: 14px; color: var(--f-ink2); text-decoration: none; }
+  .navbar a[aria-current="page"] { color: var(--f-ink); box-shadow: inset 0 3px 0 var(--f-act); }
+
+  /* Wizard */
+  .stepper { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 12px; }
+  .stepper div { font-size: 13px; font-weight: 700; color: var(--f-ink2); border-top: 4px solid var(--f-rule); padding-top: 4px; }
+  .stepper .done { border-color: var(--f-ink2); } .stepper .now { border-color: var(--f-act); color: var(--f-ink); }
+  .ctxcard { background: var(--f-card); border: 1px solid var(--f-rule); border-radius: 6px; padding: 10px 12px; font-size: 15px; }
+  .ctxcard b { font-size: 17px; }
+  .out { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--f-rule); }
+  .out .l { font-weight: 700; font-size: 16px; }
+  .out .d { font-size: 13px; color: var(--f-ink2); }
+  .out .v { font-family: var(--font-num); font-size: 22px; font-weight: 600; text-align: right; min-width: 108px; padding: 6px 8px; border: 2px solid var(--f-rule); border-radius: 6px; background: var(--f-card); }
+  .out .v.sel { border-color: var(--f-ink); }
+  .out .v small { font-family: var(--font-floor); font-size: 13px; color: var(--f-ink2); margin-left: 3px; }
+  .ev { font-size: 12px; color: var(--f-ink2); }
+  .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 12px; }
+  .pad button { font-family: var(--font-num); font-size: 22px; min-height: 52px; background: var(--f-card); color: var(--f-ink); border: 1px solid var(--f-rule); border-radius: 6px; cursor: pointer; }
+  .cta { width: 100%; min-height: 60px; margin-top: 12px; font: inherit; font-weight: 800; font-size: 19px; background: var(--f-act); color: var(--f-act-ink); border: 0; border-radius: 6px; cursor: pointer; }
+  .sec { width: 100%; min-height: 56px; margin-top: 8px; font: inherit; font-weight: 700; font-size: 17px; background: transparent; color: var(--f-ink); border: 2px solid var(--f-ink); border-radius: 6px; }
+  .check { margin-top: 10px; padding: 10px 12px; border-radius: 6px; background: var(--f-card); border: 1px solid var(--f-rule); font-size: 14px; }
+  .check b { font-family: var(--font-num); }
+
+  /* QC */
+  .qty-big { font-family: var(--font-num); font-size: 40px; font-weight: 600; line-height: 1; }
+  .qty-big small { font-family: var(--font-floor); font-size: 16px; color: var(--f-ink2); }
+  .disp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .disp button { min-height: 72px; font: inherit; font-weight: 800; font-size: 17px; border-radius: 6px; cursor: pointer; text-align: left; padding: 8px 12px; background: var(--f-card); color: var(--f-ink); border: 2px solid var(--f-rule); }
+  .disp button span { display: block; font-family: var(--font-num); font-size: 20px; font-weight: 600; margin-top: 2px; }
+  .disp .acc { border-color: var(--f-ok); } .disp .rej { border-color: var(--f-stop); } .disp .hold, .disp .rw { border-color: var(--f-warn); }
+  .remain { margin-top: 10px; font-size: 15px; font-weight: 700; }
+  .pending { margin-top: 10px; border: 2px solid var(--f-warn); border-radius: 6px; padding: 10px 12px; font-size: 14px; }
+  .pending b { color: var(--f-warn); }
+
+  @media (max-width: 1100px) { .phones { grid-template-columns: 1fr; } }
+  @media (max-width: 480px) {
+    .phones { padding: var(--sp-4); }
+    .phone { border-width: 0; border-radius: 0; aspect-ratio: auto; min-height: 760px; }
+  }
+</style>
+</head>
+<body>
+<div class="proto-banner" role="note">
+  <span><b>SUPERSEDED (ADR-0009 → ADR-0010) ·</b> <b>Prototype 3 of 3</b> · Floor Mode PWA "Andon Signal" + MaterialFlowStrip as stepper · SAMPLE DATA.</span>
+  <span>Wired: theme toggle, numpad entry, QC split. Not wired: camera scan, posting. · <a href="index.html">All mockups</a></span>
+</div>
+<div class="intro">
+  <div>
+    <h1>Floor Mode — operator, leader, QC</h1>
+    <p>Large numerals, 56 px+ targets, state always shown as text plus glyph and colour. Light concrete theme by default; graphite for line-side screens. Posting always needs the server; offline work stays a draft.</p>
+  </div>
+  <button class="btn" id="floorTheme" type="button" aria-pressed="false">Graphite theme</button>
+</div>
+
+<div class="phones">
+  <!-- Screen A: My Shift -->
+  <figure>
+    <div class="phone">
+      <div class="status"><span>07:42</span><span>Plant A · WIB</span></div>
+      <div class="appbar"><div><div class="t">My Shift</div><div class="ctx">S1 07:00–15:00 · WC-PRESS1</div></div><button class="inbox" type="button">Inbox<span>3</span></button></div>
+      <div class="body">
+        <button class="scan" type="button">▣ Scan lot / WO / bin</button>
+        <a class="manual" href="#">Enter code manually</a>
+        <div class="h">TO DO NOW</div>
+        <div class="task stop"><span class="bar"></span><div><div class="ti">Weigh remaining coil C-07</div><div class="ts">RUN-1190-S2 posted by difference · case RC-0043</div></div><div class="state"><span class="glyph">▲</span> Needed</div></div>
+        <div class="task warn"><span class="bar"></span><div><div class="ti">Accept material C-12</div><div class="ts">700.0 kg issued by Materials · in transit</div></div><div class="state"><span class="glyph">◧</span> Waiting</div></div>
+        <div class="h">THIS SHIFT</div>
+        <div class="task ok"><span class="bar"></span><div><div class="ti">WO-1201 · BRKT-310</div><div class="ts">Run planned 08:00 · die D-310-B ready</div></div><div class="state"><span class="glyph">■</span> Ready</div></div>
+        <div class="task ok"><span class="bar"></span><div><div class="ti">WO-1182 · BRKT-220</div><div class="ts">Production complete · 1,620 pcs Pending QC</div></div><div class="state"><span class="glyph">■</span> Done</div></div>
+      </div>
+      <nav class="navbar" aria-label="Floor navigation"><a href="#" aria-current="page">Shift</a><a href="#">Scan</a><a href="#">Tasks</a><a href="#">Me</a></nav>
+    </div>
+    <figcaption><b>A · My Shift.</b> Scan-first home. Tasks ordered by what blocks finality or delivery. Colour bar is redundant with the text state.</figcaption>
+  </figure>
+
+  <!-- Screen B: Production report -->
+  <figure>
+    <div class="phone">
+      <div class="status"><span>22:46</span><span>Plant A · WIB</span></div>
+      <div class="appbar"><div><div class="t">Report run</div><div class="ctx">RUN-1182-S1 · WC-PRESS1</div></div><button class="inbox" type="button">Inbox<span>3</span></button></div>
+      <div class="body">
+        <div class="stepper" aria-label="Steps"><div class="done">1 Measure</div><div class="now">2 Outputs</div><div>3 Review</div></div>
+        <div class="ctxcard"><b>C-07</b> SPCC 1.2×120 · issued <span class="num">700.0</span> kg<br><span class="ev">Remaining weighed 87.6 kg (SC-02) · remnant C-07-R1 40.0 kg split</span></div>
+        <div class="out"><div><div class="l">Good</div><div class="d">→ QC Area · Pending QC</div></div><button class="v sel num" data-k="good" type="button" aria-label="Good quantity">1,620<small>pcs</small></button></div>
+        <div class="out"><div><div class="l">NG reworkable</div><div class="d">→ NG Area · Rework</div></div><button class="v num" data-k="nr" type="button" aria-label="NG reworkable quantity">12<small>pcs</small></button></div>
+        <div class="out"><div><div class="l">NG rejected</div><div class="d">→ NG Area · Rejected</div></div><button class="v num" data-k="nj" type="button" aria-label="NG rejected quantity">9<small>pcs</small></button></div>
+        <div class="out"><div><div class="l">Process scrap</div><div class="d">weighed · skeleton + head/tail</div></div><button class="v num" data-k="scrap" type="button" aria-label="Scrap weight">128.9<small>kg</small></button></div>
+        <div class="pad" role="group" aria-label="Number pad">
+          <button type="button">1</button><button type="button">2</button><button type="button">3</button>
+          <button type="button">4</button><button type="button">5</button><button type="button">6</button>
+          <button type="button">7</button><button type="button">8</button><button type="button">9</button>
+          <button type="button">.</button><button type="button">0</button><button type="button" aria-label="Delete">⌫</button>
+        </div>
+        <div class="check" id="sumcheck">Pieces reported <b>1,641</b> · theoretical for 612.4 kg consumed <b>1,688</b> · difference goes to reconciliation, not stock.</div>
+        <button class="cta" type="button">Review before posting</button>
+      </div>
+      <nav class="navbar" aria-label="Floor navigation"><a href="#">Shift</a><a href="#">Scan</a><a href="#" aria-current="page">Tasks</a><a href="#">Me</a></nav>
+    </div>
+    <figcaption><b>B · Run report.</b> Measure first (remaining, remnant), then six output categories with their destination shown. Consumed is derived from the weighed remaining, never typed.</figcaption>
+  </figure>
+
+  <!-- Screen C: QC disposition -->
+  <figure>
+    <div class="phone">
+      <div class="status"><span>09:14</span><span>Plant A · WIB</span></div>
+      <div class="appbar"><div><div class="t">Inspect lot</div><div class="ctx">IL-1182-01 · BRKT-220</div></div><button class="inbox" type="button">Inbox<span>3</span></button></div>
+      <div class="body">
+        <div class="net" role="status">Offline — <b>draft only</b>. Nothing is released until the server confirms.</div>
+        <div class="ctxcard">Pending QC<br><span class="qty-big" id="pq">1,620<small> pcs</small></span><br><span class="ev">From RUN-1182-S1 · produced 07 Oct S2 · reported by A. Wibowo (you cannot be the same person)</span></div>
+        <div class="disp" role="group" aria-label="Disposition quantities">
+          <button class="acc" type="button" data-d="acc">■ Accept<span id="d-acc">0</span></button>
+          <button class="hold" type="button" data-d="hold">◧ Hold<span id="d-hold">0</span></button>
+          <button class="rw" type="button" data-d="rw">◧ Rework<span id="d-rw">0</span></button>
+          <button class="rej" type="button" data-d="rej">▲ Reject<span id="d-rej">0</span></button>
+        </div>
+        <div class="remain" id="remain" aria-live="polite">Still pending: <span class="num">1,620</span> pcs</div>
+        <div class="pending">Tap a disposition to add <b>100 pcs</b> (prototype). Accepted becomes <b>QC Released</b> — it is not FG stock until FG Receipt is posted.</div>
+        <button class="sec" type="button" id="resetQc">Reset split</button>
+        <button class="cta" type="button" disabled title="Offline — reconnect to submit">Submit when online</button>
+      </div>
+      <nav class="navbar" aria-label="Floor navigation"><a href="#">Shift</a><a href="#">Scan</a><a href="#" aria-current="page">Tasks</a><a href="#">Me</a></nav>
+    </div>
+    <figcaption><b>C · QC partial disposition, offline.</b> Partial split is normal; the remainder stays Pending QC. Offline state is explicit and the submit button says why it is disabled.</figcaption>
+  </figure>
+</div>
+
+<script>
+  // Theme
+  const tbtn = document.getElementById('floorTheme');
+  tbtn.addEventListener('click', () => {
+    const dark = document.documentElement.dataset.floor !== 'dark';
+    document.documentElement.dataset.floor = dark ? 'dark' : 'light';
+    tbtn.setAttribute('aria-pressed', String(dark));
+    tbtn.textContent = dark ? 'Concrete theme' : 'Graphite theme';
+  });
+  // Numpad edits the selected output field
+  let sel = document.querySelector('.out .v.sel');
+  const vals = { good: '1620', nr: '12', nj: '9', scrap: '128.9' };
+  const fmt = (k, v) => (k === 'scrap' ? v : Number(v || 0).toLocaleString('en-US'));
+  const unit = k => (k === 'scrap' ? 'kg' : 'pcs');
+  const render = () => {
+    document.querySelectorAll('.out .v').forEach(b => { b.innerHTML = fmt(b.dataset.k, vals[b.dataset.k]) + '<small>' + unit(b.dataset.k) + '</small>'; });
+    const pcs = ['good', 'nr', 'nj'].reduce((a, k) => a + Number(vals[k] || 0), 0);
+    document.getElementById('sumcheck').innerHTML = 'Pieces reported <b>' + pcs.toLocaleString('en-US') + '</b> · theoretical for 612.4 kg consumed <b>1,688</b> · ' +
+      (pcs > 1688 ? '<b style="color:var(--f-stop)">▲ over theoretical — supervisor confirmation required</b>' : 'difference goes to reconciliation, not stock.');
+  };
+  document.querySelectorAll('.out .v').forEach(b => b.addEventListener('click', () => { sel.classList.remove('sel'); sel = b; b.classList.add('sel'); vals[b.dataset.k] = ''; render(); }));
+  document.querySelectorAll('.pad button').forEach(p => p.addEventListener('click', () => {
+    const k = sel.dataset.k, key = p.textContent;
+    if (key === '⌫') vals[k] = vals[k].slice(0, -1);
+    else if (key === '.') { if (k === 'scrap' && !vals[k].includes('.')) vals[k] += '.'; }
+    else if (vals[k].length < 7) vals[k] += key;
+    render();
+  }));
+  // QC split
+  const total = 1620, d = { acc: 0, hold: 0, rw: 0, rej: 0 };
+  const qcRender = () => {
+    const used = d.acc + d.hold + d.rw + d.rej, left = total - used;
+    Object.keys(d).forEach(k => document.getElementById('d-' + k).textContent = d[k].toLocaleString('en-US'));
+    document.getElementById('remain').innerHTML = 'Still pending: <span class="num">' + left.toLocaleString('en-US') + '</span> pcs';
+  };
+  document.querySelectorAll('.disp button').forEach(b => b.addEventListener('click', () => {
+    const left = total - (d.acc + d.hold + d.rw + d.rej);
+    d[b.dataset.d] += Math.min(100, left); qcRender();
+  }));
+  document.getElementById('resetQc').addEventListener('click', () => { Object.keys(d).forEach(k => d[k] = 0); qcRender(); });
+</script>
+</body>
+</html>

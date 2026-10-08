@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run Reconciliation · EORA</title>
+<link rel="stylesheet" href="assets/eora-tokens.css?v=10">
+<link rel="stylesheet" href="assets/eora-ui.css?v=10">
+<style>
+  .header-card .dl { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--space-5); margin-top: var(--space-5); align-items: start; }
+  .stack { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+  .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid var(--color-border); }
+  .metrics.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .metric { padding: var(--space-4) var(--space-5); border-right: 1px solid var(--color-border); min-width: 0; }
+  .metric:last-child { border-right: 0; }
+  .metric .m-label { font-size: 12.5px; color: var(--color-text-secondary); font-weight: var(--fw-medium); display: flex; align-items: center; gap: 6px; }
+  .metric .m-value { font-size: 20px; line-height: 28px; font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; margin-top: 4px; white-space: nowrap; }
+  .metric .m-value small { font-size: 13px; color: var(--color-text-secondary); font-weight: var(--fw-medium); margin-left: 3px; }
+  .metric .m-sub { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  .compbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin: 0 var(--space-5) var(--space-4); background: var(--color-bg-hover); }
+  .compbar span { display: block; height: 100%; }
+  .balance { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; font-size: 13px; padding: var(--space-3) var(--space-5); border-top: 1px solid var(--color-border); background: var(--color-bg-subtle); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+  .balance .eq { font-variant-numeric: tabular-nums; color: var(--color-text-secondary); }
+  .ind-list { display: flex; flex-direction: column; }
+  .ind { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, .9fr) minmax(0, 1.1fr) auto; gap: var(--space-4); align-items: start; padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--color-border); }
+  .ind:last-child { border-bottom: 0; }
+  .ind-name { font-weight: var(--fw-semibold); font-size: 14px; }
+  .ind-q { font-size: 12.5px; color: var(--color-text-secondary); margin-top: 2px; }
+  .ind-val { font-size: 22px; line-height: 28px; font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ind-val small { font-size: 13px; color: var(--color-text-secondary); font-weight: var(--fw-medium); margin-left: 3px; }
+  .ind-pct { font-size: 12.5px; color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+  .ind-tol { font-size: 12.5px; color: var(--color-text-secondary); }
+  .ind-tol b { color: var(--color-text-primary); font-weight: var(--fw-medium); }
+  .ind .disclose { grid-column: 1 / -1; }
+  .calc { margin: var(--space-2) 0 0; padding: var(--space-3) var(--space-4); background: var(--color-bg-subtle); border-radius: var(--radius-md); font-size: 12.5px; line-height: 20px; font-variant-numeric: tabular-nums; }
+  .calc div { display: flex; justify-content: space-between; gap: var(--space-4); }
+  .calc .total { border-top: 1px solid var(--color-border-strong); margin-top: 4px; padding-top: 4px; font-weight: var(--fw-semibold); }
+  .finality { display: flex; gap: var(--space-2); align-items: flex-start; font-size: 12.5px; color: var(--color-text-secondary); padding: var(--space-3) var(--space-5); background: var(--color-bg-subtle); border-top: 1px solid var(--color-border); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+  .aside-card .card-body { display: flex; flex-direction: column; gap: var(--space-4); }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px var(--space-3); font-size: 13px; }
+  .kv dt { color: var(--color-text-secondary); }
+  .kv dd { margin: 0; font-weight: var(--fw-medium); }
+  .sod { display: flex; gap: var(--space-2); font-size: 12.5px; color: var(--color-info-fg); background: var(--color-info-bg); border-radius: var(--radius-md); padding: var(--space-3); }
+  .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+  .form-grid .full { grid-column: 1 / -1; }
+  .evidence { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+  .evidence li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border-bottom: 1px solid var(--color-border); font-size: 13px; }
+  .evidence li:last-child { border-bottom: 0; }
+  .approval { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+  .appr { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); font-size: 13px; }
+  .appr .who { font-weight: var(--fw-semibold); }
+  .appr .role { font-size: 12px; color: var(--color-text-secondary); }
+  .appr .badge { margin-top: var(--space-2); }
+  @media (max-width: 1365px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 1100px) { .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } .metrics.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } .metric { border-bottom: 1px solid var(--color-border); } .header-card .dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ind { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  @media (max-width: 767px) { .metrics, .metrics.four { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .ind { grid-template-columns: minmax(0, 1fr); } .form-grid, .approval { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body data-module="production" data-item="run-recon" data-crumbs="Production|Reconciliation|RUN-1182-S1" data-proto="<b>Mockup 02 · Production Run Reconciliation</b> — transaction detail layout. SAMPLE DATA (coil example from docs/02).">
+<main id="page" class="page">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">RUN-1182-S1 <span class="badge badge-neutral">Run closed</span><span class="badge badge-warning"><i data-lucide="search-check" class="icon" aria-hidden="true"></i>Case RC-0041 open</span></h1>
+      <p class="page-desc">Production run reconciliation for WO-1182. Posted documents are read-only; corrections go through reversal with approval.</p>
+    </div>
+    <div class="page-actions">
+      <button class="btn" type="button" onclick="window.print()"><i data-lucide="printer" class="icon" aria-hidden="true"></i>Print</button>
+      <div class="split"><button class="btn" type="button"><i data-lucide="download" class="icon" aria-hidden="true"></i>Export</button><button class="btn" type="button" aria-label="Export options"><i data-lucide="chevron-down" class="icon" aria-hidden="true"></i></button></div>
+      <button class="btn" type="button"><i data-lucide="git-branch" class="icon" aria-hidden="true"></i>Trace lot C-07</button>
+      <button class="icon-btn bordered" type="button" aria-label="More actions"><i data-lucide="ellipsis" class="icon" aria-hidden="true"></i></button>
+    </div>
+  </div>
+
+  <section class="card header-card" aria-label="Run header">
+    <div class="card-body">
+      <dl class="dl">
+        <div><dt>Work order</dt><dd><a href="#">WO-1182</a></dd></div>
+        <div><dt>Part number</dt><dd>BRKT-220 · Bracket Seat LH</dd></div>
+        <div><dt>Machine</dt><dd>WC-PRESS1 · 200 t press</dd></div>
+        <div><dt>Dies</dt><dd>D-220-A</dd></div>
+        <div><dt>Production date · shift</dt><dd>07 Oct 2026 · S2 (15:00–23:00 WIB)</dd></div>
+        <div><dt>Leader / operator</dt><dd>A. Wibowo / S. Hidayat</dd></div>
+        <div><dt>Production posting</dt><dd><a href="#">PP-26-1182-01</a> · posted 23:02</dd></div>
+        <div><dt>Standards snapshot</dt><dd>CP v3 · SY v2 (0.97) · NW v4</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <div class="tabs" role="tablist" aria-label="Run sections" style="margin-top:var(--space-5)">
+    <button class="tab" role="tab" aria-selected="true" aria-controls="p-sum" id="t-sum">Summary</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="p-leg" id="t-leg" tabindex="-1">Ledger postings <span class="count">5</span></button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="p-mea" id="t-mea" tabindex="-1">Measurements &amp; evidence <span class="count">4</span></button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="p-inv" id="t-inv" tabindex="-1">Investigation</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="p-aud" id="t-aud" tabindex="-1">Audit trail <span class="count">6</span></button>
+  </div>
+
+  <!-- SUMMARY -->
+  <div class="tabpanel" role="tabpanel" id="p-sum" aria-labelledby="t-sum">
+    <div class="layout">
+      <div class="stack">
+        <section class="card" aria-labelledby="mat-h">
+          <div class="card-head"><div><h2 class="card-title" id="mat-h">Material summary</h2><p class="card-sub">Lot C-07 · SPCC 1.2 × 120 coil · all quantities measured in kg</p></div><span class="badge badge-success"><i data-lucide="scale" class="icon" aria-hidden="true"></i>Consumption weighed</span></div>
+          <div class="metrics">
+            <div class="metric"><div class="m-label">Issued</div><div class="m-value">700.000<small>kg</small></div><div class="m-sub">MI-26-0712</div></div>
+            <div class="metric"><div class="m-label"><span class="swatch" style="background:var(--viz-1)"></span>Actual consumption</div><div class="m-value">612.400<small>kg</small></div><div class="m-sub">Weighed remaining · SC-02</div></div>
+            <div class="metric"><div class="m-label"><span class="swatch" style="background:var(--viz-2)"></span>Remaining at production</div><div class="m-value">47.600<small>kg</small></div><div class="m-sub">Still material stock</div></div>
+            <div class="metric"><div class="m-label"><span class="swatch" style="background:var(--viz-3)"></span>Remnant</div><div class="m-value">40.000<small>kg</small></div><div class="m-sub">Lot C-07-R1 · 35.4 m</div></div>
+            <div class="metric"><div class="m-label">Returned</div><div class="m-value">0.000<small>kg</small></div><div class="m-sub">No return posted</div></div>
+          </div>
+          <div class="compbar" role="img" aria-label="Issued 700 kg split: consumed 612.4, remaining 47.6, remnant 40.0, returned 0"><span style="width:87.49%;background:var(--viz-1)"></span><span style="width:6.8%;background:var(--viz-2)"></span><span style="width:5.71%;background:var(--viz-3)"></span></div>
+          <div class="balance"><span class="badge badge-success"><i data-lucide="circle-check" class="icon" aria-hidden="true"></i>Balanced</span><span class="eq">700.000 = 612.400 + 47.600 + 40.000 + 0.000 kg</span><span class="text-secondary">· Unconsumed material is never counted as variance.</span></div>
+        </section>
+
+        <section class="card" aria-labelledby="out-h">
+          <div class="card-head"><div><h2 class="card-title" id="out-h">Production summary</h2><p class="card-sub">Pieces and scrap weight are shown separately and never added together</p></div></div>
+          <div class="metrics four">
+            <div class="metric"><div class="m-label">Good output</div><div class="m-value">1,620<small>pcs</small></div><div class="m-sub"><span class="badge badge-warning">Pending QC</span></div></div>
+            <div class="metric"><div class="m-label">NG reworkable</div><div class="m-value">12<small>pcs</small></div><div class="m-sub">NG area · defect D-03 burr</div></div>
+            <div class="metric"><div class="m-label">NG rejected</div><div class="m-value">9<small>pcs</small></div><div class="m-sub">NG area · defect D-11 crack</div></div>
+            <div class="metric"><div class="m-label">Process scrap</div><div class="m-value">128.900<small>kg</small></div><div class="m-sub">Skeleton + head/tail · 2 weighings</div></div>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="var-h">
+          <div class="card-head"><div><h2 class="card-title" id="var-h">Variance analysis</h2><p class="card-sub">Three separate indicators. None is a confirmed physical discrepancy — that requires an approved stock count.</p></div><span class="badge badge-neutral">Calc v2 · 07 Oct 23:05</span></div>
+          <div class="ind-list">
+            <div class="ind">
+              <div><div class="ind-name">Gross Yield Variance</div><div class="ind-q">Theoretical pieces from consumed coil not accounted for by any reported piece</div></div>
+              <div><div class="ind-val">47<small>pcs</small></div><div class="ind-pct">2.78% of theoretical</div></div>
+              <div class="ind-tol">Tolerance <b>20 pcs and 2.00%</b><br><span class="badge badge-danger" style="margin-top:6px"><i data-lucide="triangle-alert" class="icon" aria-hidden="true"></i>Exceeded · case opened</span></div>
+              <div><span class="badge badge-success"><i data-lucide="lock" class="icon" aria-hidden="true"></i>Final</span></div>
+              <details class="disclose"><summary><i data-lucide="chevron-right" class="icon" aria-hidden="true"></i>Show calculation</summary>
+                <div class="calc"><div><span>Usable length = 612.400 kg × 10⁶ ÷ (7.85 × 1.2 × 120)</span><span>541,755.1 mm</span></div><div><span>Strokes = floor((541,755.1 − 1,500) ÷ 320)</span><span>1,688</span></div><div><span>Theoretical T = strokes × 1 cavity</span><span>1,688 pcs</span></div><div><span>Accounted = 1,620 + 12 + 9 + 0</span><span>1,641 pcs</span></div><div class="total"><span>GYV = T − accounted</span><span>47 pcs</span></div></div>
+              </details>
+            </div>
+            <div class="ind">
+              <div><div class="ind-name">Performance vs Standard</div><div class="ind-q">Good pieces compared with what the standard yield expects</div></div>
+              <div><div class="ind-val">−17<small>pcs</small></div><div class="ind-pct">−1.04% vs expected good</div></div>
+              <div class="ind-tol">KPI only<br><span class="badge badge-neutral" style="margin-top:6px">No case trigger configured</span></div>
+              <div><span class="badge badge-success"><i data-lucide="lock" class="icon" aria-hidden="true"></i>Final</span></div>
+              <details class="disclose"><summary><i data-lucide="chevron-right" class="icon" aria-hidden="true"></i>Show calculation</summary>
+                <div class="calc"><div><span>Expected good E = floor(1,688 × 0.97)</span><span>1,637 pcs</span></div><div class="total"><span>PvS = 1,620 − 1,637</span><span>−17 pcs</span></div><div><span>NG is not subtracted again: standard yield already includes expected NG.</span><span></span></div></div>
+              </details>
+            </div>
+            <div class="ind">
+              <div><div class="ind-name">Unexplained Material Variance</div><div class="ind-q">Consumed mass not explained by piece mass and weighed scrap</div></div>
+              <div><div class="ind-val">7.610<small>kg</small></div><div class="ind-pct">1.24% of consumed</div></div>
+              <div class="ind-tol">Tolerance <b>10.000 kg and 1.50%</b><br><span class="badge badge-success" style="margin-top:6px"><i data-lucide="circle-check" class="icon" aria-hidden="true"></i>Within</span></div>
+              <div><span class="badge badge-success"><i data-lucide="lock" class="icon" aria-hidden="true"></i>Final</span></div>
+              <details class="disclose"><summary><i data-lucide="chevron-right" class="icon" aria-hidden="true"></i>Show calculation</summary>
+                <div class="calc"><div><span>Piece mass = 1,641 × 0.290 kg</span><span>475.890 kg</span></div><div><span>Weighed scrap</span><span>128.900 kg</span></div><div class="total"><span>UMV = 612.400 − (475.890 + 128.900)</span><span>7.610 kg</span></div></div>
+              </details>
+            </div>
+          </div>
+          <div class="finality"><i data-lucide="info" class="icon" aria-hidden="true"></i><span>Final because the run is closed, consumption is weighed, CP v3 is validated, scrap is weighed, NG split is confirmed by QC and no reversal is pending. A reversal of any included document returns these to Provisional and keeps this version in history.</span></div>
+        </section>
+      </div>
+
+      <aside class="stack" aria-label="Investigation case">
+        <section class="card aside-card" aria-labelledby="case-h">
+          <div class="card-head"><div><h2 class="card-title" id="case-h">Case RC-0041</h2><p class="card-sub">Variance breach · Gross Yield Variance</p></div><span class="badge badge-warning">Evidence collected</span></div>
+          <div class="card-body">
+            <dl class="kv"><dt>Responsible PIC</dt><dd>Y. Santoso · Supervisor Press</dd><dt>Reason code</dt><dd style="color:var(--color-text-secondary);font-weight:400">Not set yet</dd><dt>Due</dt><dd>Mon 12 Oct 2026</dd><dt>Evidence</dt><dd>3 files</dd></dl>
+            <ol class="timeline" aria-label="Case progress">
+              <li class="done"><span class="tl-dot"></span><div class="tl-title">Reconciliation required</div><div class="tl-meta">System · 07 Oct 23:05</div></li>
+              <li class="done"><span class="tl-dot"></span><div class="tl-title">Investigation open</div><div class="tl-meta">Y. Santoso · 08 Oct 07:20</div></li>
+              <li class="current"><span class="tl-dot"></span><div class="tl-title">Evidence collected</div><div class="tl-meta">Downtime log and scale records attached</div></li>
+              <li class="pending"><span class="tl-dot"></span><div class="tl-title">Reviewed</div><div class="tl-meta">Inventory Controller</div></li>
+              <li class="pending"><span class="tl-dot"></span><div class="tl-title">Approved resolution</div></li>
+              <li class="pending"><span class="tl-dot"></span><div class="tl-title">Closed</div></li>
+            </ol>
+            <div class="sod"><i data-lucide="shield-check" class="icon" aria-hidden="true"></i><span>Separation of duties: the case owner cannot review or approve this case.</span></div>
+            <button class="btn btn-primary" type="button" id="goInv">Continue investigation</button>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <!-- LEDGER -->
+  <div class="tabpanel" role="tabpanel" id="p-leg" aria-labelledby="t-leg" hidden>
+    <section class="card" style="margin-top:var(--space-5)">
+      <div class="card-head"><div><h2 class="card-title">Production posting PP-26-1182-01</h2><p class="card-sub">Input leaves Material at Production once; each output is its own ledger line. Posted 07 Oct 23:02 · immutable.</p></div><button class="btn btn-sm" type="button"><i data-lucide="rotate-ccw" class="icon" aria-hidden="true"></i>Request reversal</button></div>
+      <div class="table-wrap"><table class="dt">
+        <thead><tr><th scope="col" class="num">#</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Item · lot</th><th scope="col">Stock status</th><th scope="col" class="num">Quantity</th><th scope="col">Evidence</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>Material at Production · WC-PRESS1</td><td>Consumed</td><td>SPCC 1.2 × 120 · <a class="id" href="#">C-07</a></td><td>—</td><td class="num">612.400<span class="uom">kg</span></td><td>Weighed remaining 87.600 kg</td></tr>
+          <tr><td class="num">2</td><td>Produced</td><td>QC area</td><td>BRKT-220 · <a class="id" href="#">O-1182-01</a></td><td><span class="badge badge-warning">Pending QC</span></td><td class="num">1,620<span class="uom">pcs</span></td><td>Count by leader</td></tr>
+          <tr><td class="num">3</td><td>Produced</td><td>NG area</td><td>BRKT-220 · <a class="id" href="#">O-1182-01</a></td><td><span class="badge badge-info">Rework</span></td><td class="num">12<span class="uom">pcs</span></td><td>Defect D-03</td></tr>
+          <tr><td class="num">4</td><td>Produced</td><td>NG area</td><td>BRKT-220 · <a class="id" href="#">O-1182-01</a></td><td><span class="badge badge-danger">Rejected</span></td><td class="num">9<span class="uom">pcs</span></td><td>Defect D-11</td></tr>
+          <tr><td class="num">5</td><td>Produced</td><td>Scrap yard</td><td>SCRAP-SPCC</td><td><span class="badge badge-success">Unrestricted</span></td><td class="num">128.900<span class="uom">kg</span></td><td>2 weighings</td></tr>
+        </tbody>
+      </table></div>
+      <p class="hint" style="padding:var(--space-3) var(--space-5)">Related documents: MI-26-0712 issue 700.000 kg · LS-26-0088 lot split C-07 → C-07-R1 40.000 kg.</p>
+    </section>
+  </div>
+
+  <!-- MEASUREMENTS -->
+  <div class="tabpanel" role="tabpanel" id="p-mea" aria-labelledby="t-mea" hidden>
+    <section class="card" style="margin-top:var(--space-5)">
+      <div class="card-head"><div><h2 class="card-title">Measurements &amp; evidence</h2><p class="card-sub">Scale SC-02 · resolution 0.1 kg · calibration valid to 31 Dec 2026</p></div></div>
+      <div class="table-wrap"><table class="dt">
+        <thead><tr><th scope="col">Measured</th><th scope="col">Method</th><th scope="col" class="num">Gross</th><th scope="col" class="num">Tare</th><th scope="col" class="num">Net</th><th scope="col">By · time</th><th scope="col">Evidence</th></tr></thead>
+        <tbody>
+          <tr><td>Remaining coil C-07</td><td>Weighed remaining</td><td class="num">102.400<span class="uom">kg</span></td><td class="num">14.800<span class="uom">kg</span></td><td class="num">87.600<span class="uom">kg</span></td><td>A. Wibowo · 22:41</td><td><a href="#">Scale ticket</a></td></tr>
+          <tr><td>Remnant C-07-R1</td><td>Weighed + length</td><td class="num">40.000<span class="uom">kg</span></td><td class="num">0.000<span class="uom">kg</span></td><td class="num">40.000<span class="uom">kg</span></td><td>A. Wibowo · 22:48</td><td><a href="#">Photo</a></td></tr>
+          <tr><td>Scrap bin 1</td><td>Weighed</td><td class="num">79.100<span class="uom">kg</span></td><td class="num">7.800<span class="uom">kg</span></td><td class="num">71.300<span class="uom">kg</span></td><td>S. Hidayat · 22:50</td><td><a href="#">Scale ticket</a></td></tr>
+          <tr><td>Scrap bin 2</td><td>Weighed</td><td class="num">65.400<span class="uom">kg</span></td><td class="num">7.800<span class="uom">kg</span></td><td class="num">57.600<span class="uom">kg</span></td><td>S. Hidayat · 22:52</td><td><a href="#">Scale ticket</a></td></tr>
+        </tbody>
+      </table></div>
+      <p class="hint" style="padding:var(--space-3) var(--space-5)">Stroke counter D-220-A: 412,118 → 413,808 (1,690 strokes vs 1,688 theoretical).</p>
+    </section>
+  </div>
+
+  <!-- INVESTIGATION -->
+  <div class="tabpanel" role="tabpanel" id="p-inv" aria-labelledby="t-inv" hidden>
+    <div class="layout">
+      <section class="card">
+        <div class="card-head"><div><h2 class="card-title">Investigation · RC-0041</h2><p class="card-sub">Propose a resolution. Review and approval are done by other people.</p></div></div>
+        <form class="card-body" id="resForm" novalidate>
+          <div class="form-grid">
+            <div class="field"><label for="reason">Reason code <span aria-hidden="true" style="color:var(--color-danger-fg)">*</span></label>
+              <select class="select" id="reason" required aria-describedby="reason-err"><option value="">Select reason code</option><option>Measurement error</option><option>Unreported output (late posting)</option><option>Standard incorrect (new CP/SY/NW version)</option><option>Process loss explained</option><option>Physical discrepancy — requires stock count</option></select>
+              <span class="error-text" id="reason-err" hidden><i data-lucide="circle-alert" class="icon" aria-hidden="true"></i>Choose a reason code.</span></div>
+            <div class="field"><label for="pic">Responsible PIC</label><select class="select" id="pic"><option>Y. Santoso · Supervisor Press</option></select></div>
+            <div class="field full"><label for="note">Explanation <span aria-hidden="true" style="color:var(--color-danger-fg)">*</span></label>
+              <textarea class="textarea" id="note" required aria-describedby="note-hint note-err" placeholder="What caused the 47 pcs and which evidence supports it"></textarea>
+              <span class="hint" id="note-hint">At least 20 characters. Stored permanently in the audit trail.</span>
+              <span class="error-text" id="note-err" hidden><i data-lucide="circle-alert" class="icon" aria-hidden="true"></i>Explanation needs at least 20 characters.</span></div>
+            <div class="field full"><span class="field-label">Evidence</span>
+              <ul class="evidence">
+                <li><i data-lucide="file-text" class="icon" aria-hidden="true"></i><span style="flex:1">Downtime log WC-PRESS1 07 Oct S2.pdf</span><span class="hint">182 KB</span></li>
+                <li><i data-lucide="image" class="icon" aria-hidden="true"></i><span style="flex:1">Scale ticket SC-02-22-41.jpg</span><span class="hint">640 KB</span></li>
+                <li><i data-lucide="image" class="icon" aria-hidden="true"></i><span style="flex:1">Scrap bins photo.jpg</span><span class="hint">1.2 MB</span></li>
+              </ul>
+              <div><button class="btn btn-sm" type="button"><i data-lucide="paperclip" class="icon" aria-hidden="true"></i>Attach file</button></div></div>
+          </div>
+          <div style="display:flex;gap:var(--space-2);justify-content:flex-end;margin-top:var(--space-5)"><button class="btn" type="button">Save draft</button><button class="btn btn-primary" type="submit">Submit for review</button></div>
+        </form>
+      </section>
+      <section class="card">
+        <div class="card-head"><div><h2 class="card-title">Approval</h2><p class="card-sub">Policy: variance case · plant A</p></div></div>
+        <div class="card-body">
+          <div class="approval" style="grid-template-columns:minmax(0,1fr)">
+            <div class="appr"><div class="who">Y. Santoso</div><div class="role">Owner · proposes resolution</div><span class="badge badge-info">In progress</span></div>
+            <div class="appr"><div class="who">D. Lestari</div><div class="role">Reviewer · Inventory Controller</div><span class="badge badge-neutral">Waiting</span></div>
+            <div class="appr"><div class="who">H. Gunawan</div><div class="role">Approver · Plant Manager · step-up sign-in</div><span class="badge badge-neutral">Waiting</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- AUDIT -->
+  <div class="tabpanel" role="tabpanel" id="p-aud" aria-labelledby="t-aud" hidden>
+    <section class="card" style="margin-top:var(--space-5)">
+      <div class="card-head"><div><h2 class="card-title">Audit trail</h2><p class="card-sub">Immutable · newest first · times in WIB</p></div><button class="btn btn-sm" type="button"><i data-lucide="download" class="icon" aria-hidden="true"></i>Export audit</button></div>
+      <div class="card-body">
+        <ol class="timeline">
+          <li class="done"><span class="tl-dot"></span><div class="tl-title">Case assigned to Y. Santoso</div><div class="tl-meta">System policy · 08 Oct 07:20</div></li>
+          <li class="done"><span class="tl-dot"></span><div class="tl-title">QC confirmed NG split 12 rework / 9 rejected</div><div class="tl-meta">R. Dewi · 07 Oct 23:40</div></li>
+          <li class="done"><span class="tl-dot"></span><div class="tl-title">Variance calculation v2 final · GYV breach · case RC-0041 opened</div><div class="tl-meta">System · 07 Oct 23:05</div></li>
+          <li class="done"><span class="tl-dot"></span><div class="tl-title">Production posting PP-26-1182-01 posted</div><div class="tl-meta">A. Wibowo · 07 Oct 23:02 · idempotency key 7f3c…</div></li>
+          <li class="done"><span class="tl-dot"></span><div class="tl-title">Lot split C-07 → C-07-R1 (40.000 kg) accepted by Materials</div><div class="tl-meta">M. Sari · 07 Oct 22:55</div></li>
+          <li class="done"><span class="tl-dot"></span><div class="tl-title">Material issue MI-26-0712 posted (700.000 kg)</div><div class="tl-meta">M. Sari · 07 Oct 14:58</div></li>
+        </ol>
+      </div>
+    </section>
+  </div>
+</main>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" integrity="sha384-hJnF5AwidE18GSWTAGHv3ByzzvfNZ1Tcx5y1UUV3WkauuMCEzBJBMSwSt/PUPXnM" crossorigin="anonymous"></script>
+<script src="assets/eora-nav.config.js?v=10"></script>
+<script src="assets/eora-shell.js?v=10"></script>
+<script src="assets/eora-page.js?v=10"></script>
+<script>
+  document.getElementById('goInv').addEventListener('click', () => { const t = document.getElementById('t-inv'); t.click(); t.focus(); });
+  document.getElementById('resForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const r = document.getElementById('reason'), n = document.getElementById('note');
+    const rBad = !r.value, nBad = n.value.trim().length < 20;
+    r.setAttribute('aria-invalid', String(rBad)); n.setAttribute('aria-invalid', String(nBad));
+    document.getElementById('reason-err').hidden = !rBad; document.getElementById('note-err').hidden = !nBad;
+    if (rBad) return r.focus(); if (nBad) return n.focus();
+    EORA.toast('Prototype: resolution would be submitted to D. Lestari for review.');
+  });
+</script>
+</body>
+</html>

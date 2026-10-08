@@ -1,0 +1,82 @@
+# 18 — RBAC Matrix and Data Ownership
+
+Roles are **default templates** a tenant may copy and adjust (doc 05); permissions are the enforced unit. Every grant is evaluated with scope `tenant + company + plant + (warehouse | work_center)`. Approval thresholds remain owner input (O-007).
+
+Legend: **V** view · **C** create/edit draft · **S** submit · **P** post/execute · **A** approve (maker ≠ checker) · **R** request reversal/correction · **X** export · — none. Scope column = default data scope of the template.
+
+## 1. Role templates
+| Code | Role | Default scope |
+|---|---|---|
+| PSA | Platform Super Admin (vendor) | platform only; no tenant data |
+| CSA | Company Super Admin | tenant/company |
+| MAD | Module Admin | tenant, assigned modules |
+| PPC | PPIC Planner | plant |
+| MAT | Materials PIC (RM warehouse) | plant + assigned warehouses |
+| PRL | Production Leader | plant + assigned work centers |
+| OPR | Production Operator | assigned work centers, own runs |
+| QCI | Quality Inspector | plant |
+| QCS | Quality Supervisor | plant |
+| FGW | FG Warehouse | plant + FG warehouses |
+| DLV | Delivery | plant |
+| INV | Inventory Controller | plant |
+| APR | Approver (add-on role) | as assigned |
+| AUD | Auditor/Viewer | tenant read-only |
+
+## 2. Permission matrix (core vertical slice)
+| Permission (resource.action) | CSA | PPC | MAT | PRL | OPR | QCI | QCS | FGW | DLV | INV | AUD |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| demand.po | V | VCS P(revise) | V | — | — | — | — | V | V | — | V |
+| planning.wo | V | VCSP | V | V | V(own WC) | V | V | V | V | V | V |
+| planning.control_tower | V | V X | V | V | — | V | V | V | V | V | V |
+| materials.issue | V | V | VCSP | V (accept custody P) | — | — | — | — | — | V | V |
+| materials.return | V | V | VP (receive) | VCS | VC | — | — | — | — | V | V |
+| production.run | V | V | V | VCSP | VCS (own) | V | V | — | — | V | V |
+| production.posting (consume/output/scrap) | V | V | V | VCSP | VCS | V | V | — | — | V | V |
+| production.lot_split (remnant) | V | V | V (accept) | VCSP | VC | — | — | — | — | V | V |
+| quality.inspection | V | V | — | V | — | VCSP | VCSP | V | — | V | V |
+| quality.disposition.release | V | V | — | — | — | P (≤ threshold) | P A | V | — | V | V |
+| warehouse.fg_receipt | V | V | — | — | — | V | V | VCSP | V | V | V |
+| delivery.allocate/pick/ship | V | V | — | — | — | — | — | VP (pick) | VCSP | V | V |
+| inventory.stock_count | V | V | VC (count) | VC (count WC) | — | — | — | VC (count) | — | VCSPA | V |
+| inventory.adjustment | R A | — | R | R | — | — | — | R | — | VCS R | V |
+| inventory.reversal | R A | R | R | R | — | R | R | R | R | R A | V |
+| inventory.period.close | A | — | — | — | — | — | — | — | — | VP | V |
+| inventory.period.reopen | R | — | — | — | — | — | — | — | — | — | V |
+| recon.case | V A | V | V | VC (evidence) | — | V | V | — | — | VCS A | V |
+| core.approval (any) | A | — | — | — | — | — | A(QC) | — | — | A | — |
+| core.users_roles | VCP | — | — | — | — | — | — | — | — | — | V |
+| core.audit | V X | — | — | — | — | — | — | — | — | V | V X |
+| exchange.export (per resource) | X | X | X | X | — | X | X | X | X | X | X |
+| exchange.import (per template) | P A | C S | C S | — | — | — | — | — | — | C S | — |
+
+APR role adds `A` on configured entities; it never adds `P` on the same document it approves.
+
+## 3. Separation-of-duties rules (enforced in policy layer)
+| SoD-ID | Conflict | Rule |
+|---|---|---|
+| SoD-01 | Production output reporter vs QC release of same lot | different user (BR-QC-03) |
+| SoD-02 | Adjustment/reversal maker vs approver | different user, step-up auth (BR-APR-01) |
+| SoD-03 | Stock counter vs count variance approver | different user (BR-CNT-03) |
+| SoD-04 | Issuer vs custody acceptor (two-step) | different user (BR-ISS-03) |
+| SoD-05 | Case owner vs case reviewer/approver | different users (doc 16 §7) |
+| SoD-06 | Role administrator granting self elevated rights | blocked; second CSA approval |
+Break-glass: time-boxed grant, reason, approver, auto-expiry, full audit (doc 05).
+
+## 4. Data ownership matrix (who writes, who reads)
+| Entity | Owning module (sole writer) | Writes via | Readers | Cross-module change path |
+|---|---|---|---|---|
+| Customer PO, releases, forecast, demand consumption | Demand | Demand services | Planning, Delivery, Analytics | event `demand.changed` |
+| Work Order, planning snapshots | Planning | Planning services | Production, Materials, Quality, Analytics | `wo.*` events |
+| Conversion profiles, SY, NW (engineering data) | Planning (Engineering master) | versioned master data service | Production, Reconciliation | versioning only, no retro edit |
+| Material issue/return/custody documents | Materials | Materials services → Inventory posting contract | Production, Inventory, Analytics | `materials.issued` |
+| Production runs, measurements, postings (facts) | Production | Production services → Inventory posting contract | Quality, Reconciliation, Analytics | `production.output_posted` |
+| Inspection lots, dispositions | Quality | Quality services → Inventory status movement | Warehouse, Planning, Analytics | `qc.disposed` |
+| FG receipt, putaway, pick, handling units | Warehouse | Warehouse services → Inventory posting contract | Delivery, Planning | `fg.received` |
+| Delivery orders, shipments | Delivery | Delivery services → Inventory posting contract | Demand (outstanding), Analytics | `shipment.posted` |
+| Ledger, balances, allocations, periods, counts, adjustments | **Inventory** | `InventoryPostingService` only | all (read) | — |
+| Genealogy edges | Inventory (written with posting) | posting service | Traceability | — |
+| Variance results, recon cases | Traceability (Reconciliation) | Reconciliation service | Planning, Production, Analytics | `recon.case_opened` |
+| Users, roles, approvals, audit, notifications, files, import/export jobs | Core | Core services | all (scoped) | — |
+| Read models / dashboards | Analytics | outbox consumers (rebuildable) | all (scoped) | never written by users |
+
+Rule: no module writes another module's tables; cross-module reads use contracts/query definitions; cross-module **read** permission never implies **post** permission (doc 03).

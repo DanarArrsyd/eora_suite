@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EORA Mockups</title>
+<link rel="stylesheet" href="assets/eora-tokens.css?v=10">
+<link rel="stylesheet" href="assets/eora-ui.css?v=10">
+<style>
+  main { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-6); }
+  h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -.02em; }
+  .lead { color: var(--color-text-secondary); margin: 8px 0 0; max-width: 760px; }
+  .list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); margin-top: var(--space-6); }
+  .item { display: grid; grid-template-rows: auto 1fr; overflow: hidden; color: inherit; }
+  .item:hover { text-decoration: none; border-color: var(--color-primary); }
+  .item img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; object-position: top left; border-bottom: 1px solid var(--color-border); display: block; background: var(--color-bg-subtle); }
+  .item .card-body { display: flex; flex-direction: column; gap: 6px; }
+  .item h2 { margin: 0; font-size: 16px; font-weight: 600; }
+  .item p { margin: 0; color: var(--color-text-secondary); font-size: 13.5px; }
+  h3 { font-size: 18px; font-weight: 600; margin: var(--space-10) 0 var(--space-2); }
+  table.cmp { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+  .cmp th, .cmp td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+  .cmp th { background: var(--color-bg-subtle); font-size: 12px; color: var(--color-text-secondary); font-weight: 600; }
+  .cmp td:first-child { font-weight: 500; white-space: nowrap; }
+  @media (max-width: 760px) { .list { grid-template-columns: minmax(0, 1fr); } main { padding: var(--space-5) var(--space-4); } .cmp td:first-child { white-space: normal; } }
+</style>
+</head>
+<body>
+<div class="proto-note" role="note"><i data-lucide="flask-conical" class="icon" aria-hidden="true"></i><span><b>EORA Suite V1 — UI prototypes</b> · Modern Corporate Blue (D-021 / ADR-0010) · static HTML with SAMPLE DATA · pending owner approval before production frontend.</span></div>
+<main>
+  <h1>EORA Modern Corporate Enterprise Workspace</h1>
+  <p class="lead">Dual sidebar navigation, one theme, Inter typography, shared components. All four mockups use the same token file, component CSS and centralized navigation config.</p>
+  <div class="list">
+    <a class="card item" href="01-control-tower-desktop.html"><img src="screenshots/01-control-tower-desktop-1440.png" alt="PPIC Control Tower at 1440 px"><div class="card-body"><h2>01 · PPIC Control Tower</h2><p>Decision KPIs, MaterialFlowStrip with kg → pcs boundary, exceptions, due vs supply chart, stage detail tabs.</p></div></a>
+    <a class="card item" href="02-run-reconciliation-desktop.html"><img src="screenshots/02-run-reconciliation-desktop-1440.png" alt="Production run reconciliation at 1440 px"><div class="card-body"><h2>02 · Production Run Reconciliation</h2><p>Transaction header, material and production summaries, three variance indicators with progressive disclosure, case and approval.</p></div></a>
+    <a class="card item" href="03-mobile-pwa.html"><img src="screenshots/03-mobile-pwa-1920.png" alt="Eight mobile PWA screens"><div class="card-body"><h2>03 · Mobile PWA</h2><p>My Shift, Tasks, Scan, Production reporting, QC inspection, Material confirmation, Inbox, Profile.</p></div></a>
+    <a class="card item" href="04-raw-material-list.html"><img src="screenshots/04-raw-material-list-1440.png" alt="Raw material list at 1440 px"><div class="card-body"><h2>04 · EoraEnterprisePage list template</h2><p>Reference layout: view-by tabs, search toolbar, segmented filter, compound stock cell, pagination, drawer, states.</p></div></a>
+  </div>
+
+  <h3>Before vs after</h3>
+  <p class="lead" style="margin-bottom:var(--space-4)">Previous direction kept for comparison: <a href="_superseded-v1-ledger-ink/index.html">Superseded v1 “Ledger Ink / Andon Signal”</a>.</p>
+  <table class="cmp">
+    <thead><tr><th scope="col">Aspect</th><th scope="col">Before (ADR-0009, superseded)</th><th scope="col">After (ADR-0010)</th></tr></thead>
+    <tbody>
+      <tr><td>Navigation</td><td>Single text rail, flat list, links to nowhere</td><td>Primary icon sidebar (13 modules) + grouped secondary sidebar from one config; RBAC demo; counts</td></tr>
+      <tr><td>Typography</td><td>IBM Plex Sans Condensed + IBM Plex Mono for every number; Barlow on mobile</td><td>Inter everywhere; tabular numerals in tables; monospace only for location codes</td></tr>
+      <tr><td>Theme</td><td>Paper/oxide desktop, graphite/concrete mobile, dark toggles</td><td>One theme: Modern Corporate Blue, semantic tokens, contrast-checked</td></tr>
+      <tr><td>Topbar</td><td>Context selects mixed with theme toggle</td><td>Breadcrumb, permission-aware search, period, company/plant switcher, bell, profile</td></tr>
+      <tr><td>Lists</td><td>Hand-written tables per page</td><td>EoraEnterprisePage: view-by tabs, toolbar, segmented filter, data table, pagination, drawer, states</td></tr>
+      <tr><td>Control Tower</td><td>Hairline “ledger” sections, text-heavy</td><td>4 decision KPIs, grouped flow bands, exceptions table, one chart that answers a question, tabbed detail</td></tr>
+      <tr><td>Reconciliation</td><td>One long technical report</td><td>Tabs, section cards, formulas behind “Show calculation”, case panel with timeline and approval</td></tr>
+      <tr><td>Mobile</td><td>3 screens, terminal-like</td><td>8 screens, bottom nav with central Scan, steppers, offline and error recovery states</td></tr>
+      <tr><td>Business rules</td><td colspan="2">Unchanged: no WIP, issue ≠ consumption, kg/pcs never summed, Pending QC ≠ FG, three variance indicators, no “loss” label without stock count, server-confirmed posting.</td></tr>
+    </tbody>
+  </table>
+</main>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" integrity="sha384-hJnF5AwidE18GSWTAGHv3ByzzvfNZ1Tcx5y1UUV3WkauuMCEzBJBMSwSt/PUPXnM" crossorigin="anonymous"></script>
+<script>lucide.createIcons();</script>
+</body>
+</html>

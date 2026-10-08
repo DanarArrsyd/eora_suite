@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PPIC Control Tower</title>
+<link rel="stylesheet" href="eora-tokens.css">
+<style>
+  .shell { display: grid; grid-template-columns: 196px minmax(0, 1fr); min-height: 100vh; }
+  .rail { border-right: 1px solid var(--rule); padding: var(--sp-4) 0; background: var(--surface); }
+  .brand { padding: 0 var(--sp-4) var(--sp-4); border-bottom: 1px solid var(--rule); margin-bottom: var(--sp-3); }
+  .brand b { display: block; font-size: var(--fs-lg); letter-spacing: .02em; }
+  .brand span { font-size: var(--fs-xs); color: var(--ink-3); }
+  .rail nav a { display: block; padding: 6px var(--sp-4); color: var(--ink-2); text-decoration: none; font-weight: 500; border-left: 3px solid transparent; }
+  .rail nav a[aria-current="page"] { color: var(--ink); border-left-color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); font-weight: 600; }
+  .rail nav a:hover { color: var(--ink); }
+  .rail .grp { font-size: var(--fs-xs); color: var(--ink-3); padding: var(--sp-3) var(--sp-4) 2px; text-transform: none; font-weight: 600; }
+
+  .ctx { display: flex; align-items: center; gap: var(--sp-4); padding: 8px var(--sp-5); border-bottom: 1px solid var(--rule); flex-wrap: wrap; font-size: var(--fs-sm); }
+  .ctx .sel { display: inline-flex; gap: 6px; align-items: baseline; }
+  .ctx .sel label { color: var(--ink-3); }
+  .ctx select { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--rule); border-radius: var(--r-ctl); padding: 3px 6px; }
+  .ctx .spacer { flex: 1; }
+  .bell { position: relative; }
+  .bell .count { font-family: var(--font-num); font-size: 11px; background: var(--accent); color: #fff; border-radius: 2px; padding: 0 4px; margin-left: 6px; }
+
+  main { padding: var(--sp-5); max-width: 1440px; }
+  .page-head { display: flex; align-items: flex-end; gap: var(--sp-4); justify-content: space-between; flex-wrap: wrap; border-bottom: 2px solid var(--ink); padding-bottom: var(--sp-3); }
+  .page-head h1 { font-size: var(--fs-2xl); margin: 0; font-weight: 700; letter-spacing: -.01em; }
+  .page-head .sub { color: var(--ink-2); font-size: var(--fs-sm); margin-top: 2px; }
+  .asof { font-size: var(--fs-xs); color: var(--ink-2); text-align: right; }
+  .asof .num { color: var(--ink); }
+
+  /* MaterialFlowStrip */
+  .flow { margin: var(--sp-5) 0 var(--sp-2); }
+  .flow-caption { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--ink-3); margin-bottom: 6px; flex-wrap: wrap; gap: var(--sp-2); }
+  .strip { display: grid; grid-template-columns: repeat(2, 1fr) 28px repeat(4, 1fr); border: 1px solid var(--rule-strong); background: var(--surface-raised); }
+  .stage { appearance: none; text-align: left; font: inherit; color: inherit; background: transparent; border: 0; border-right: 1px solid var(--rule); padding: 10px 12px 12px; cursor: pointer; position: relative; min-height: 86px; }
+  .stage:last-child { border-right: 0; }
+  .stage .lbl { font-size: var(--fs-xs); color: var(--ink-2); font-weight: 600; }
+  .stage .q { font-size: var(--fs-xl); margin-top: 4px; display: block; }
+  .stage .meta { font-size: var(--fs-xs); color: var(--ink-3); margin-top: 2px; }
+  .stage[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 7%, transparent); box-shadow: inset 0 -3px 0 var(--ink); }
+  .stage .blocked { color: var(--warn); font-weight: 600; }
+  .boundary { display: grid; place-items: center; border-right: 1px solid var(--rule); background: repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--ink) 8%, transparent) 5px 6px); }
+  .boundary span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 10px; color: var(--ink-2); font-weight: 600; letter-spacing: .04em; }
+  .flow-note { font-size: var(--fs-xs); color: var(--ink-3); margin-top: 6px; }
+
+  .grid2 { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: var(--sp-6); margin-top: var(--sp-5); }
+  section h2 { font-size: var(--fs-lg); margin: 0 0 2px; font-weight: 700; }
+  section .q-sub { font-size: var(--fs-xs); color: var(--ink-3); margin-bottom: var(--sp-3); }
+  .sec-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--sp-3); border-bottom: 1px solid var(--ink); padding-bottom: 6px; margin-bottom: 0; }
+
+  /* Exception queue */
+  .xq { list-style: none; margin: 0; padding: 0; }
+  .xq li { display: grid; grid-template-columns: 22px 1fr auto; gap: var(--sp-3); padding: 10px 0; border-bottom: 1px solid var(--rule); }
+  .xq li[hidden] { display: none; }
+  .xq .rank { font-family: var(--font-num); color: var(--ink-3); font-size: var(--fs-xs); padding-top: 2px; }
+  .xq .what { font-weight: 600; }
+  .xq .why { font-size: var(--fs-sm); color: var(--ink-2); margin-top: 2px; }
+  .xq .src { font-size: var(--fs-xs); color: var(--ink-3); margin-top: 4px; }
+  .xq .act { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .xq a { color: var(--ink); }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+  th { text-align: left; font-weight: 600; color: var(--ink-2); font-size: var(--fs-xs); padding: 8px 8px 6px; border-bottom: 1px solid var(--rule-strong); white-space: nowrap; vertical-align: bottom; }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  td.r, th.r { text-align: right; }
+  td.num, td.r { white-space: nowrap; }
+  tbody tr:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+  .missing { font-size: var(--fs-xs); color: var(--ink-3); display: block; margin-top: 2px; }
+  .alt { font-size: var(--fs-xs); color: var(--ink-3); }
+  .tbl-wrap { overflow-x: auto; }
+
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6); margin-top: var(--sp-6); }
+
+  /* Notification panel */
+  .panel { position: fixed; top: 74px; right: 20px; width: 380px; max-width: calc(100vw - 32px); background: var(--surface-raised); border: 1px solid var(--rule-strong); box-shadow: 0 10px 30px rgba(20, 24, 30, .18); z-index: 10; }
+  .panel[hidden] { display: none; }
+  .panel header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--rule); }
+  .tabs button { font: inherit; font-size: var(--fs-sm); background: none; border: 0; padding: 8px 14px; color: var(--ink-2); cursor: pointer; border-bottom: 2px solid transparent; }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+  .notes { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow: auto; }
+  .notes li { padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+  .notes li.unread .t { font-weight: 700; }
+  .notes .t { font-size: var(--fs-sm); }
+  .notes .m { font-size: var(--fs-xs); color: var(--ink-3); margin-top: 3px; }
+  .panel footer { padding: 8px 14px; font-size: var(--fs-xs); color: var(--ink-3); }
+
+  @media (max-width: 1100px) { .grid2, .grid3 { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 860px) {
+    .shell { grid-template-columns: minmax(0, 1fr); }
+    .rail { border-right: 0; border-bottom: 1px solid var(--rule); padding: var(--sp-2) 0; }
+    .rail nav { display: flex; overflow-x: auto; }
+    .rail .grp, .brand span { display: none; }
+    .rail nav a { border-left: 0; border-bottom: 3px solid transparent; white-space: nowrap; }
+    .rail nav a[aria-current="page"] { border-bottom-color: var(--ink); }
+    .strip { grid-template-columns: 1fr 1fr; }
+    .boundary { grid-column: 1 / -1; min-height: 26px; }
+    .boundary span { writing-mode: horizontal-tb; transform: none; }
+    main { padding: var(--sp-4); }
+  }
+</style>
+</head>
+<body>
+<div class="proto-banner" role="note">
+  <span><b>SUPERSEDED (ADR-0009 → ADR-0010) ·</b> <b>Prototype 1 of 3</b> · Desktop "Ledger Ink" + MaterialFlowStrip · All figures are SAMPLE DATA for review, not operational data.</span>
+  <span>Wired: stage filter, bell panel, theme. Not wired: links, buttons marked "prototype". · <a href="index.html">All mockups</a></span>
+</div>
+<div class="shell">
+  <aside class="rail" aria-label="Main navigation">
+    <div class="brand"><b>EORA</b><span>PT Sample Stamping · Plant A</span></div>
+    <nav>
+      <div class="grp">Planning</div>
+      <a href="#" aria-current="page">Control Tower</a>
+      <a href="#">Work Orders</a>
+      <a href="#">Customer Demand</a>
+      <div class="grp">Operations</div>
+      <a href="#">Materials</a>
+      <a href="02-run-reconciliation-desktop.html">Production</a>
+      <a href="#">Quality</a>
+      <a href="#">FG Warehouse</a>
+      <a href="#">Delivery</a>
+      <div class="grp">Control</div>
+      <a href="#">Inventory Ledger</a>
+      <a href="#">Material Variance</a>
+      <a href="#">Traceability</a>
+      <a href="#">Approvals</a>
+    </nav>
+  </aside>
+
+  <div>
+    <div class="ctx" role="region" aria-label="Context">
+      <span class="sel"><label for="plant">Plant</label><select id="plant"><option>Plant A — Cikarang</option></select></span>
+      <span class="sel"><label for="pdate">Production date</label><select id="pdate"><option>Thu 08 Oct 2026</option></select></span>
+      <span class="sel"><label for="shift">Shift</label><select id="shift"><option>All shifts</option><option>S1 07:00–15:00</option></select></span>
+      <span class="muted">Times in WIB (UTC+7)</span>
+      <span class="spacer"></span>
+      <button class="btn" id="themeBtn" type="button" aria-label="Toggle colour theme">Theme</button>
+      <button class="btn bell" id="bellBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="bellPanel">Inbox<span class="count" aria-label="5 unread">5</span></button>
+      <span class="muted">R. Pratama · PPIC</span>
+    </div>
+
+    <main>
+      <div class="page-head">
+        <div>
+          <h1>PPIC Control Tower</h1>
+          <div class="sub">Part <b>BRKT-220</b> Bracket Seat LH · Customer <b>CUST-04</b> · Material SPCC 1.2 × 120 coil</div>
+        </div>
+        <div class="asof">Read model as of <span class="num">09:40</span> WIB · lag <span class="num">2</span> min<br><span class="muted">Ledger high-water mark MV-88,412,055</span></div>
+      </div>
+
+      <div class="flow">
+        <div class="flow-caption">
+          <span>Material flow for BRKT-220 — select a stage to filter the exception queue</span>
+          <span>Quantities never summed across the kg → pcs boundary</span>
+        </div>
+        <div class="strip" role="group" aria-label="Material flow stages">
+          <button class="stage" type="button" aria-pressed="false" data-stage="rm"><span class="lbl">RM Unrestricted</span><span class="q num">6,810.7<span class="uom">kg</span></span><span class="meta">3 coils · 2 calculated, 1 provisional</span></button>
+          <button class="stage" type="button" aria-pressed="false" data-stage="prod"><span class="lbl">Material at Production</span><span class="q num">87.6<span class="uom">kg</span></span><span class="meta">WC-PRESS1 · lot C-07</span></button>
+          <div class="boundary" aria-hidden="true"><span>TRANSFORMATION · kg → pcs</span></div>
+          <button class="stage" type="button" aria-pressed="false" data-stage="qc"><span class="lbl">Pending QC</span><span class="q num">1,620<span class="uom">pcs</span></span><span class="meta blocked">Not available · oldest 26 h</span></button>
+          <button class="stage" type="button" aria-pressed="false" data-stage="rel"><span class="lbl">QC Released, not received</span><span class="q num">300<span class="uom">pcs</span></span><span class="meta">Awaiting FG receipt</span></button>
+          <button class="stage" type="button" aria-pressed="false" data-stage="fg"><span class="lbl">FG Unrestricted</span><span class="q num">2,140<span class="uom">pcs</span></span><span class="meta">1,200 allocated · 940 free</span></button>
+          <button class="stage" type="button" aria-pressed="false" data-stage="ship"><span class="lbl">Shipped today</span><span class="q num">1,200<span class="uom">pcs</span></span><span class="meta">DO-26-1009 · partial</span></button>
+        </div>
+        <div class="flow-note">NG Reworkable 12 pcs and NG Rejected 9 pcs are held in NG Area and excluded from every stage above.</div>
+      </div>
+
+      <div class="grid2">
+        <section aria-labelledby="xq-h">
+          <div class="sec-head"><div><h2 id="xq-h">Needs action</h2></div><span class="muted" id="xq-filter">All stages · 6 items</span></div>
+          <div class="q-sub" style="margin-top:6px">Ranked by delivery impact (due date × quantity). Each item opens its source record.</div>
+          <ol class="xq">
+            <li data-stage="fg qc"><span class="rank">1</span>
+              <div><div class="what">Delivery at risk — PO-24-0918 line 2, due Sat 10 Oct</div>
+                <div class="why">Outstanding <span class="num">3,000</span> pcs; projected <span class="num">2,440</span> pcs (FG <span class="num">2,140</span> incl. <span class="num">1,200</span> allocated to this line + QC released <span class="num">300</span>) → gap <span class="num">560</span> pcs. Pending QC <span class="num">1,620</span> pcs excluded until inspected.</div>
+                <div class="src">CT-8 · net demand per weekly bucket · forecast consumed by PO</div></div>
+              <div class="act"><span class="chip stop">At risk</span><a href="#">Open demand line</a></div></li>
+            <li data-stage="qc"><span class="rank">2</span>
+              <div><div class="what">Pending QC over 24 h — IL-1182-01</div>
+                <div class="why"><span class="num">1,620</span> pcs from RUN-1182-S1, produced 07 Oct S2. Inspector not assigned.</div>
+                <div class="src">CT-3 · SLA 24 h (tenant setting)</div></div>
+              <div class="act"><span class="chip prov">26 h</span><a href="#">Open inspection lot</a></div></li>
+            <li data-stage="prod"><span class="rank">3</span>
+              <div><div class="what">Variance tolerance exceeded — RUN-1182-S1</div>
+                <div class="why">Gross Yield Variance <span class="num">47</span> pcs (<span class="num">2.78</span>%) FINAL, tolerance 20 pcs and 2.00 %. Case RC-0041 open, owner Supervisor Press.</div>
+                <div class="src">CT-6 · not a confirmed physical discrepancy</div></div>
+              <div class="act"><span class="chip final">Final</span><a href="02-run-reconciliation-desktop.html">Open reconciliation</a></div></li>
+            <li data-stage="prod"><span class="rank">4</span>
+              <div><div class="what">Unmeasured consumption — RUN-1190-S2</div>
+                <div class="why">Consumption posted by difference (no weighing). Indicators stay provisional; case RC-0043 opened automatically.</div>
+                <div class="src">ADR-0003 · weigh remaining coil to finalize</div></div>
+              <div class="act"><span class="chip prov">Provisional</span><a href="#">Open case</a></div></li>
+            <li data-stage="rm"><span class="rank">5</span>
+              <div><div class="what">Estimate not calculable — coil C-11, needed by WO-1201</div>
+                <div class="why">Planned for BRKT-310. Missing inputs: pitch unit, density.</div>
+                <div class="src">CT-1 · conversion profile BRKT-310 v2 is Draft</div></div>
+              <div class="act"><span class="chip nc">Not calculable</span><a href="#">Open conversion profile</a></div></li>
+            <li data-stage="prod"><span class="rank">6</span>
+              <div><div class="what">Material idle at production — WC-PRESS3, sheet lot S-207</div>
+                <div class="why"><span class="num">22</span> sheets at work center for <span class="num">51</span> h, no active run. Allocation WO-1176 completed.</div>
+                <div class="src">CT-2 · idle threshold 48 h</div></div>
+              <div class="act"><span class="chip info">Idle</span><a href="#">Request return</a></div></li>
+          </ol>
+        </section>
+
+        <section aria-labelledby="rm-h">
+          <div class="sec-head"><div><h2 id="rm-h">RM coil &amp; sheet → estimated pcs</h2></div><span class="muted">Planning estimate, not stock</span></div>
+          <div class="q-sub" style="margin-top:6px">Is there enough material for released WOs, and how certain is each estimate?</div>
+          <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Lot</th><th>Form · spec</th><th class="r">Available</th><th>Basis</th><th class="r">Est. pcs</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td class="num">C-08</td><td>Coil · SPCC 1.2×120</td><td class="r num">2,450.0<span class="uom">kg</span></td><td>Mill cert · CP v3</td><td class="r num">6,564–6,768</td><td><span class="chip final">Calculated</span></td></tr>
+              <tr><td class="num">C-09</td><td>Coil · SPCC 1.2×120</td><td class="r num">2,380.5<span class="uom">kg</span></td><td>Nominal · CP v3</td><td class="r num">6,378–6,576</td><td><span class="chip prov">Provisional</span><span class="missing">No mill cert; nominal thickness</span></td></tr>
+              <tr><td class="num">C-10</td><td>Coil · SPCC 1.2×120</td><td class="r num">1,980.2<span class="uom">kg</span></td><td>Mill cert · CP v3</td><td class="r num">5,304–5,469</td><td><span class="chip final">Calculated</span></td></tr>
+              <tr><td class="num">C-11</td><td>Coil · SPCC 1.6×150</td><td class="r num">3,120.0<span class="uom">kg</span></td><td>CP v2 Draft</td><td class="r muted">—</td><td><span class="chip nc">Not calculable</span><span class="missing">Missing: pitch unit, density</span></td></tr>
+              <tr><td class="num">S-210</td><td>Sheet · SPHC 2.0×1219×2438</td><td class="r num">120<span class="uom">sheet</span></td><td>CP v1</td><td class="r num">1,164–1,200<br><span class="alt">BRKT-118 only</span></td><td><span class="chip final">Calculated</span></td></tr>
+              <tr><td class="num">S-211</td><td>Sheet · SPHC 2.0×1219×2438</td><td class="r num">80<span class="uom">sheet</span></td><td>2 alternative parts</td><td class="r num">BRKT-118: 776–800<br>PLT-040: 1,164–1,200</td><td><span class="chip final">Calculated</span><span class="missing">Alternatives — never summed</span></td></tr>
+            </tbody>
+            <tfoot><tr><td colspan="2"><b>Total coil SPCC 1.2×120</b></td><td class="r num"><b>6,810.7</b><span class="uom">kg</span></td><td colspan="3" class="muted">pcs not totalled across lots of differing certainty</td></tr></tfoot>
+          </table>
+          </div>
+        </section>
+      </div>
+
+      <div class="grid3">
+        <section aria-labelledby="fg-h">
+          <div class="sec-head"><h2 id="fg-h">Daily FG receipt</h2><span class="muted">Production date, shift cut-off 07:00</span></div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>Date · shift</th><th class="r">Good posted</th><th class="r">QC released</th><th class="r">FG received</th><th class="r">Released, not received</th></tr></thead>
+            <tbody>
+              <tr><td>06 Oct · S1</td><td class="r num">1,540</td><td class="r num">1,540</td><td class="r num">1,540</td><td class="r num">0</td></tr>
+              <tr><td>06 Oct · S2</td><td class="r num">1,602</td><td class="r num">1,580</td><td class="r num">1,580</td><td class="r num">0</td></tr>
+              <tr><td>07 Oct · S1</td><td class="r num">1,488</td><td class="r num">1,488</td><td class="r num">1,188</td><td class="r num">300</td></tr>
+              <tr><td>07 Oct · S2</td><td class="r num">1,620</td><td class="r num">0</td><td class="r num">0</td><td class="r num">0</td></tr>
+            </tbody>
+          </table></div>
+        </section>
+        <section aria-labelledby="dl-h">
+          <div class="sec-head"><h2 id="dl-h">Delivery &amp; outstanding</h2><span class="muted">Shipped = posted shipments only</span></div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>Due</th><th>PO line / release</th><th class="r">Due qty</th><th class="r">Shipped</th><th class="r">Outstanding</th><th>Risk</th></tr></thead>
+            <tbody>
+              <tr><td>08 Oct</td><td class="num">PO-24-0918/1 · KB-0331</td><td class="r num">1,200</td><td class="r num">1,200</td><td class="r num">0</td><td><span class="chip final">Shipped</span></td></tr>
+              <tr><td>10 Oct</td><td class="num">PO-24-0918/2</td><td class="r num">3,000</td><td class="r num">0</td><td class="r num">3,000</td><td><span class="chip stop">Gap 560</span></td></tr>
+              <tr><td>14 Oct</td><td class="num">PO-24-0931/1</td><td class="r num">2,400</td><td class="r num">0</td><td class="r num">2,400</td><td><span class="chip plain">Covered by WO-1201</span></td></tr>
+            </tbody>
+          </table></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="panel" id="bellPanel" role="dialog" aria-label="Notification inbox" hidden>
+  <header><b>Inbox</b><button class="btn" type="button" id="bellClose">Close</button></header>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-f="all">All</button>
+    <button role="tab" aria-selected="false" data-f="act">Action required</button>
+    <button role="tab" aria-selected="false" data-f="unread">Unread</button>
+  </div>
+  <ul class="notes">
+    <li class="unread" data-act="1"><div class="t">Approval needed: stock adjustment ADJ-0092 (−4.2 kg, WC-PRESS1)</div><div class="m">Inventory · requested by D. Lestari · 09:32 · opens review screen, not one-tap approve</div></li>
+    <li class="unread" data-act="1"><div class="t">Case RC-0041 assigned to your team</div><div class="m">Reconciliation · RUN-1182-S1 · 09:05</div></li>
+    <li class="unread"><div class="t">QC released 300 pcs, lot O-1180-02</div><div class="m">Quality → FG Warehouse · 08:51</div></li>
+    <li class="unread"><div class="t">Customer PO-24-0931 revised (rev 2)</div><div class="m">Demand · 08:12 · line 1 due date moved 12 → 14 Oct</div></li>
+    <li class="unread"><div class="t">Export ready: CT-5 Delivery, 08 Oct</div><div class="m">Exchange · link expires in 24 h</div></li>
+    <li><div class="t">Material issued: C-07 700.0 kg to WC-PRESS1</div><div class="m">Materials · 07 Oct 14:58</div></li>
+  </ul>
+  <footer>Push is optional; this inbox is the record. Access is re-checked when an item is opened.</footer>
+</div>
+
+<script>
+  // Stage filter
+  const stages = document.querySelectorAll('.stage');
+  const items = document.querySelectorAll('.xq li');
+  const label = document.getElementById('xq-filter');
+  stages.forEach(b => b.addEventListener('click', () => {
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    stages.forEach(s => s.setAttribute('aria-pressed', 'false'));
+    let n = 0;
+    items.forEach(li => {
+      const show = !on || li.dataset.stage.split(' ').includes(b.dataset.stage);
+      li.hidden = !show; if (show) n++;
+    });
+    if (on) b.setAttribute('aria-pressed', 'true');
+    label.textContent = (on ? b.querySelector('.lbl').textContent : 'All stages') + ' · ' + n + (n === 1 ? ' item' : ' items');
+  }));
+  // Bell panel
+  const bellBtn = document.getElementById('bellBtn'), panel = document.getElementById('bellPanel');
+  const setPanel = open => { panel.hidden = !open; bellBtn.setAttribute('aria-expanded', String(open)); if (open) panel.querySelector('[role=tab]').focus(); else bellBtn.focus(); };
+  bellBtn.addEventListener('click', () => setPanel(panel.hidden));
+  document.getElementById('bellClose').addEventListener('click', () => setPanel(false));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !panel.hidden) setPanel(false); });
+  panel.querySelectorAll('[role=tab]').forEach(t => t.addEventListener('click', () => {
+    panel.querySelectorAll('[role=tab]').forEach(x => x.setAttribute('aria-selected', 'false'));
+    t.setAttribute('aria-selected', 'true');
+    panel.querySelectorAll('.notes li').forEach(li => {
+      li.hidden = (t.dataset.f === 'act' && !li.dataset.act) || (t.dataset.f === 'unread' && !li.classList.contains('unread'));
+    });
+  }));
+  // Theme
+  document.getElementById('themeBtn').addEventListener('click', () => {
+    const r = document.documentElement, dark = r.dataset.theme === 'dark' || (!r.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    r.dataset.theme = dark ? 'light' : 'dark';
+  });
+</script>
+</body>
+</html>

@@ -1,6 +1,8 @@
 # 07 — Mobile PWA, Eventing & Notification Center
 
 ## PWA
+> UI patterns: see `docs/uiux/EORA-PAGE-TEMPLATES.md` §5 (mobile task template, D-021).
+
 Installable over HTTPS with manifest/service worker; role-based home, My Tasks, My Shift, Scan, Transaction Wizard, Approvals, Inbox, Profile/Device. Camera scan with permission and manual fallback. Responsive, accessible, supports degraded connectivity. Offline drafts permitted only for approved non-posted forms; critical stock/quality/delivery posting requires server confirmation and revalidation. Display pending sync/conflict state clearly.
 
 ## Reliable event pipeline

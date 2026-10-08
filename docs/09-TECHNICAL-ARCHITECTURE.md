@@ -3,6 +3,8 @@
 ## Baseline
 Modular monolith API (Laravel), Next.js TypeScript web/PWA, PostgreSQL, Redis queues/Horizon, Reverb realtime, S3-compatible storage; Docker for local and deploy; pnpm/Turborepo for JS workspaces; OpenAPI generated typed client; modular bounded contexts. Stable supported versions, pin lockfiles and record ADRs.
 
+> **Update 2026-10-08:** Next.js + Laravel + Sanctum cookie auth decided (D-016). Same-origin topology, cookie/CSRF/CORS strategy: ADR-0006. Runtime (queues, outbox, realtime, storage, version pinning): ADR-0007 (Proposed). Workload model: `20-PERFORMANCE-WORKLOAD-MODEL.md`.
+
 ## Request flow
 Client → CDN/WAF/load balancer → Next.js app / Laravel API → domain application service → scoped authorization + validation → DB transaction (ledger/projections + outbox) → fast response → workers (notification, export, aggregates). Do not block stock posting on PDF or push. Critical writes use idempotency key, row locks/optimistic version, unique constraints and transaction retry policy.
 
