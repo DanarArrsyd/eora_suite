@@ -59,7 +59,7 @@ erDiagram
 | `plants` | tenant_id, id, company_id, code, timezone, shift_calendar_id | |
 | `warehouses`, `locations` | tenant_id, id, plant_id, `location_type` (ADR-0002 §3), work_center_id nullable | virtual locations seeded per plant |
 | `work_centers`, `machines`, `dies` | tenant_id, id, plant_id, die stroke counters | |
-| `users` | id, email, name, status | global identity profile; secrets (password hash, MFA) in schema `auth`, not readable by the runtime role (doc 25 §2.2, proposed) |
+| `users` | id, display_name, locale, email_display | global profile only; login identity (normalized email, account status) and credentials live in `auth.identities`, reachable only through reviewed definer functions — never by the business runtime role (doc 25 §2.1–§2.2, proposed) |
 | `memberships` | tenant_id, id, user_id, status | user ↔ tenant |
 | `roles`, `permissions`, `role_permissions` | tenant_id (roles), permission key | permission catalogue global |
 | `role_assignments` | tenant_id, membership_id, role_id, scope_type (`company/plant/warehouse/work_center`), scope_id | data scope (doc 18) |

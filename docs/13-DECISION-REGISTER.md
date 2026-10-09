@@ -147,6 +147,7 @@ These were proposed in the audit and are required to make D-009..D-019 implement
 ## Change log
 | Date | Change | Owner | Affected |
 |---|---|---|---|
+| 2026-10-09 | Doc 25 v4 security remediation of the PR #2 Codex P1 findings (no new decision): login lookup without context via `auth.identities`; invitation/reset secrets issued only by a separate delivery role and consumed only by the web auth role (`eora_app` has no auth privilege); durable post-rollback `security_events`; ADR-0001 Amendment 1 role list updated | Product owner (approval of remediation), Claude Code (record) | docs 13, 17, 25, ADR-0001 |
 | 2026-10-09 | D-053: B0 completed (`c19be09`, run 37942703992); B1 architecture review (doc 25 v3) and B2 scope review (doc 26 v2) recorded as proposals; ADR-0001 Amendment 1; O-003 options documented | Product owner (decision), Claude Code (record) | CLAUDE.md, AGENTS.md, README, docs 11, 13, 17, 25, 26, ADR-0001 |
 | 2026-10-09 | B0 remediation after owner local validation (no new decision): compose init SQL via `configs.content` (no host bind mount), forced test environment + test-database guard, empty `.env` in the dev image with `artisan serve --no-reload`, CI regression steps | Product owner (approval), Claude Code (record) | compose.yaml, apps/api, docs 10, .github/workflows/ci.yml |
 | 2026-10-09 | D-051 initial push done, CI fix + B0 authorized (B1 not authorized); D-052 B0 versions | Product owner (decision), Claude Code (record) | CLAUDE.md, AGENTS.md, README, docs 09, 10, 11, 24, ADR-0007, apps/api |
