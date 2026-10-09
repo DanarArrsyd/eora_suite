@@ -10,6 +10,7 @@ use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -23,6 +24,9 @@ final class ProblemDetails
 {
     public const TYPE_BASE = 'https://errors.eora.app/';
 
+    /** Policy reasons are never echoed: they can reveal permission names, scopes or other tenants' records. */
+    private const array FORBIDDEN = ['status' => 403, 'code' => 'FORBIDDEN', 'title' => 'Forbidden', 'detail' => null];
+
     /**
      * @return array{status: int, code: string, title: string, detail: string|null, errors?: array<string, array<int, string>>}
      */
@@ -34,13 +38,18 @@ final class ProblemDetails
                 'detail' => 'One or more fields are invalid.', 'errors' => $e->errors(),
             ],
             $e instanceof AuthenticationException => ['status' => 401, 'code' => 'UNAUTHENTICATED', 'title' => 'Authentication required', 'detail' => null],
-            $e instanceof AuthorizationException => ['status' => 403, 'code' => 'FORBIDDEN', 'title' => 'Forbidden', 'detail' => null],
+            // Laravel prepares AuthorizationException as AccessDeniedHttpException (or a plain HttpException for
+            // denyWithStatus/denyAsNotFound) before this renderer runs; the status mapping below covers both.
+            $e instanceof AuthorizationException, $e instanceof AccessDeniedHttpException => self::FORBIDDEN,
             $e instanceof ThrottleRequestsException => ['status' => 429, 'code' => 'RATE_LIMITED', 'title' => 'Too many requests', 'detail' => null],
             $e instanceof NotFoundHttpException => ['status' => 404, 'code' => 'NOT_FOUND', 'title' => 'Not found', 'detail' => null],
             $e instanceof MethodNotAllowedHttpException => ['status' => 405, 'code' => 'METHOD_NOT_ALLOWED', 'title' => 'Method not allowed', 'detail' => null],
-            $e instanceof HttpExceptionInterface && $e->getStatusCode() < 500 => [
-                'status' => $e->getStatusCode(), 'code' => 'MALFORMED_REQUEST', 'title' => 'Request rejected', 'detail' => null,
-            ],
+            $e instanceof HttpExceptionInterface && $e->getStatusCode() < 500 => match ($e->getStatusCode()) {
+                401 => ['status' => 401, 'code' => 'UNAUTHENTICATED', 'title' => 'Authentication required', 'detail' => null],
+                403 => self::FORBIDDEN,
+                404 => ['status' => 404, 'code' => 'NOT_FOUND', 'title' => 'Not found', 'detail' => null],
+                default => ['status' => $e->getStatusCode(), 'code' => 'MALFORMED_REQUEST', 'title' => 'Request rejected', 'detail' => null],
+            },
             default => [
                 'status' => $e instanceof HttpExceptionInterface ? $e->getStatusCode() : 500,
                 'code' => 'INTERNAL_ERROR',
