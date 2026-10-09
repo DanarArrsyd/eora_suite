@@ -59,7 +59,7 @@ erDiagram
 | `plants` | tenant_id, id, company_id, code, timezone, shift_calendar_id | |
 | `warehouses`, `locations` | tenant_id, id, plant_id, `location_type` (ADR-0002 §3), work_center_id nullable | virtual locations seeded per plant |
 | `work_centers`, `machines`, `dies` | tenant_id, id, plant_id, die stroke counters | |
-| `users` | id, email, mfa | global identity |
+| `users` | id, email, name, status | global identity profile; secrets (password hash, MFA) in schema `auth`, not readable by the runtime role (doc 25 §2.2, proposed) |
 | `memberships` | tenant_id, id, user_id, status | user ↔ tenant |
 | `roles`, `permissions`, `role_permissions` | tenant_id (roles), permission key | permission catalogue global |
 | `role_assignments` | tenant_id, membership_id, role_id, scope_type (`company/plant/warehouse/work_center`), scope_id | data scope (doc 18) |
@@ -108,10 +108,12 @@ erDiagram
 ### Read models (rebuildable, Analytics-owned)
 `rm_conversion_view (per lot: on-hand, CP status, est pcs range)`, `pending_qc_aging`, `daily_fg_receipt (production_date, shift)`, `daily_delivery_outstanding`, `material_variance_summary`, `flow_strip_snapshot (scope, stage, qty, uom, as_of)`. Each row carries `as_of` and source high-water mark (last ledger movement id).
 
+> **2026-10-09 (D-053, review status):** B1 tenancy/identity refinements are in doc 25 (architecture review); B2 master-data and routing additions — `routings` header, `process_types`, operation machines/tools/inspections, `die_items`, effective ranges, BOM–routing map per version pair — are in doc 26 (scope review). Both are PROPOSED and not part of the approved logical model until the owner approves them.
+
 ## 3. Tenant isolation checklist (per table)
 1. `tenant_id NOT NULL`, leading column of every index used by queries.
 2. Composite FK to every tenant parent.
-3. `ENABLE` + `FORCE ROW LEVEL SECURITY` with `tenant_id = current_setting('app.tenant_id', true)::uuid` for USING and WITH CHECK.
+3. `ENABLE` + `FORCE ROW LEVEL SECURITY` with `tenant_id = (SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid)` for USING and WITH CHECK (ADR-0001 Amendment 1: a reset context is `''`, not NULL).
 4. Application role: no table ownership, no BYPASSRLS; ledger tables without UPDATE/DELETE.
 5. Included in automated isolation suite (ADR-0001 T-ISO-01..05).
 
@@ -189,7 +191,7 @@ SO line 1—n schedule lines (D-034); Customer PO line 1—1 SO line (unique map
 - Outbox: partial `outbox_events (created_at) WHERE dispatched_at IS NULL` (relay with `FOR UPDATE SKIP LOCKED`).
 - Inbox: `inbox_notifications (tenant_id, user_id, read_at, created_at DESC)`.
 - Keyset pagination indexes match each QueryDefinition default sort (e.g. `(tenant_id, plant_id, requirement_date, id)`); OFFSET only for small master data (ADR-0008 §4).
-- RLS columns indexed; policy uses `(select current_setting('app.tenant_id', true))::uuid` so the setting is evaluated once per statement.
+- RLS columns indexed; policy uses `(SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid)` so the setting is evaluated once per statement and a reset context fails closed (ADR-0001 Amendment 1).
 
 ### 6.6 Tenant isolation strategy (summary; normative ADR-0001)
 Shared DB, `tenant_id` + composite FKs on **every** tenant table (audit of §2/§6.2: all listed tenant tables comply; platform tables without tenant_id: `tenants`, `users`, `permissions` catalogue); RLS enabled + forced, fail-closed when context unset; transaction-local context (`set_config(..., true)`) compatible with transaction pooling; plant/warehouse scope enforced in the application policy layer (not RLS) to keep policies simple and fast; isolation suite T-ISO-01..05 mandatory in CI.
