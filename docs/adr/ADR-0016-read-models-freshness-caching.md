@@ -1,6 +1,6 @@
 # ADR-0016 — Read models, KPI freshness and caching
 
-- **Status:** Proposed (Phase 3.5) · **Date:** 2026-10-09
+- **Status:** Accepted as baseline (D-045) · **Date:** 2026-10-09
 
 ## Context
 Control Tower KPIs and aggregates must be fast (doc 20 W-03) yet traceable to the ledger and honest about staleness.

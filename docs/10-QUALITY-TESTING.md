@@ -15,7 +15,7 @@ Approved business rule, acceptance scenarios, permission coverage, API schema, U
 ## Acceptance test strategy for the backend (Phase 3.5, PROPOSED)
 | Layer | Tooling | Scope | Gate |
 |---|---|---|---|
-| Domain unit | Pest | rule objects (BR-*), formulas (doc 02, ADR-0005, BR-DEM, doc 23) with the doc 14 numbers as golden cases | 100 % of BR-* with a test id |
+| Domain unit | Pest | rule objects (BR-*), formulas (doc 02, ADR-0005, BR-DEM, doc 23) with the doc 14 numbers as golden cases; **mandatory MPS regression doc 23 #65 (F-1 680 pcs, D-046)** | 100 % of BR-* with a test id |
 | Posting engine integration | Pest + real PostgreSQL (Testcontainers/Docker) | every row of the posting matrix (doc 04): preconditions, legs, balances, idempotent replay, reversal, period closed | all 13 transaction types |
 | Concurrency | Pest parallel processes / k6 | doc 20 §8 risks: oversell, deadlock, duplicate replay, numbering | zero duplicates, zero negative balances |
 | Tenant isolation | Pest + pooler | ADR-0001 T-ISO-01..05 | must pass on every PR |

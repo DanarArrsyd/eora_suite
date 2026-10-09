@@ -1,6 +1,6 @@
 # 24 — API Contract Specification
 
-**Status:** PROPOSED (Phase 3.5, D-042) · Decision basis: ADR-0006 (topology/auth), ADR-0008 (+ Amendment 1, QueryDefinition), ADR-0013 (API conventions, proposed). Canonical for endpoint shapes, query grammar, error model and frontend compatibility. No backend exists yet; nothing here is implemented.
+**Status:** APPROVED as backend baseline (D-045); tooling APPROVED WITH CONDITIONS (D-047) · Decision basis: ADR-0006 (topology/auth), ADR-0008 (+ Amendment 1, QueryDefinition), ADR-0013 (API conventions, proposed). Canonical for endpoint shapes, query grammar, error model and frontend compatibility. No backend exists yet; implementation follows the slice plan in doc 11.
 
 ## 1. Principles
 1. **Backend is the source of truth** for every business number (stock, outstanding, estimates, indicators, risk, KPIs). The frontend presents, formats, interacts and navigates (authorized); it never computes stock or variance.
@@ -10,7 +10,7 @@
 
 ## 2. Versioning and documentation
 - Path versioning `/api/v1/…`; additive changes only within v1 (new optional fields, new resources); breaking changes → `/api/v2` with a deprecation window and `Deprecation`/`Sunset` headers.
-- **OpenAPI 3.1** generated code-first from Laravel (proposed Scramble, O-030) and published per build; CI fails on undocumented breaking diffs (`oasdiff`).
+- **OpenAPI 3.1** generated code-first from Laravel (Scramble, D-047 — versions/compatibility verified before installation) and published per build; CI fails on undocumented breaking diffs (`oasdiff`).
 - Typed client generated into `packages/api-client` (proposed `openapi-typescript` + `openapi-fetch`); `ListSource<T>` adapters wrap it, so pattern components never call `fetch` directly.
 
 ## 3. Query resources (ADR-0008)

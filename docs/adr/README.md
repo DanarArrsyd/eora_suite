@@ -15,10 +15,10 @@ Format: Nygard (Context / Decision / Consequences) plus Verification. Status val
 | [0009](ADR-0009-ui-direction-design-system.md) | Hybrid UI direction and design system | **Superseded by ADR-0010** | D-018 (superseded) |
 | [0010](ADR-0010-modern-corporate-ui.md) | Modern Corporate Enterprise Workspace (+ Amendments 1–2) | Accepted; official baseline (D-027) | D-021, D-024..D-029 |
 | [0011](ADR-0011-frontend-architecture.md) | Frontend architecture and phased implementation | Accepted | D-033 |
-| [0012](ADR-0012-business-calendar-time-model.md) | Business calendar, production date and time model | Accepted (rule) / Proposed (implementation) | D-044 |
-| [0013](ADR-0013-api-contract-conventions.md) | API contract conventions | Proposed | D-042, O-030 |
-| [0014](ADR-0014-inventory-posting-engine.md) | Inventory posting engine implementation | Proposed | refines ADR-0002; O-031, O-032 |
-| [0015](ADR-0015-supply-classification-and-netting.md) | Supply classification and MPS netting | Accepted (classes, D-043) / Proposed (netting, O-022..O-029) | D-043 |
-| [0016](ADR-0016-read-models-freshness-caching.md) | Read models, KPI freshness and caching | Proposed | D-042 |
+| [0012](ADR-0012-business-calendar-time-model.md) | Business calendar, production date and time model | Accepted | D-044, D-045 |
+| [0013](ADR-0013-api-contract-conventions.md) | API contract conventions | Accepted (tooling with conditions) | D-045, D-047 |
+| [0014](ADR-0014-inventory-posting-engine.md) | Inventory posting engine implementation | Accepted | D-045, D-048, D-049 |
+| [0015](ADR-0015-supply-classification-and-netting.md) | Supply classification and MPS netting | Accepted | D-043, D-046 |
+| [0016](ADR-0016-read-models-freshness-caching.md) | Read models, KPI freshness and caching | Accepted | D-045 |
 
-Only ADR-0011 authorizes implementation, and only phased frontend work (D-033). ADR-0012..0016 (Phase 3.5) are design records; they do not authorize backend code (D-042). Backend, schema, migrations and business-rule changes still require explicit owner approval.
+Only ADR-0011 authorizes implementation, and only phased frontend work (D-033). ADR-0012..0016 are the approved backend baseline (D-045); backend code proceeds only slice by slice with explicit owner approval. Backend, schema, migrations and business-rule changes still require explicit owner approval.

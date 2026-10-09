@@ -1,6 +1,6 @@
 # ADR-0013 — API contract conventions (versioning, OpenAPI, errors, idempotency)
 
-- **Status:** Proposed (Phase 3.5, D-042) · **Date:** 2026-10-09
+- **Status:** Accepted with conditions for tooling (D-047: verify versions/compatibility before installing Scramble + openapi-typescript); conventions accepted as baseline with Phase 3.5 (D-045) · **Date:** 2026-10-09
 
 ## Context
 Phase 1–3 frontend components consume typed `ListSource` / command adapters. The backend must expose contracts that keep the shared components unchanged and make every business number server-owned.

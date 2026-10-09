@@ -1,6 +1,6 @@
 # ADR-0012 — Business calendar, production date and time model
 
-- **Status:** Accepted for the calendar rule and definitions (D-044); implementation details (tables, versioning) Proposed · **Date:** 2026-10-09
+- **Status:** Accepted (D-044 rule; implementation design accepted as Phase 3.5 baseline, D-045) · **Date:** 2026-10-09
 
 ## Context
 Netting is weekly (D-041) while deliveries are daily; shifts cross midnight; plants may sit in different timezones. Without explicit time concepts, production date, weekly buckets and period checks drift from the shop-floor reality.

@@ -1,6 +1,6 @@
 # ADR-0015 — Supply classification and MPS netting method
 
-- **Status:** Supply classes **Accepted** (D-043); netting method **Proposed** (gates G-MPS-1..8, O-022..O-029) · **Date:** 2026-10-09
+- **Status:** Accepted — supply classes (D-043) and netting method (D-046, with conditions on safety stock status and BOM fields) · **Date:** 2026-10-09
 
 ## Context
 Planning, delivery promise and Control Tower risk must not treat projected or unproven quantities as stock. The PROPOSED BR-PLN-05 wording netted per bucket and double counted supply (doc 23 §4).

@@ -1,6 +1,6 @@
 # 23 — Basic MPS Planning Specification (R1)
 
-**Status:** scope DECIDED (D-031, D-035); bucket and calendar DECIDED (D-041, D-044); supply classes DECIDED (D-043); BR-PLN-04..07 **PROPOSED** — reviewed in §4–§8 (Phase 3.5), not approved · **Canonical for:** MPS buckets, calendar and demand inputs. Formulas live in doc 15 (do not restate them elsewhere). No backend or schema is authorized yet (D-037).
+**Status:** scope DECIDED (D-031, D-035); bucket and calendar DECIDED (D-041, D-044); supply classes DECIDED (D-043); BR-PLN-04..08 **APPROVED / APPROVED WITH CONDITIONS (D-046, 2026-10-09)** — review in §4–§8 kept as rationale · **Canonical for:** MPS buckets, calendar and demand inputs. Formulas live in doc 15 (do not restate them elsewhere). No backend or schema is authorized yet (D-037).
 
 ## 1. Scope (R1, D-031 / D-035)
 Demand aggregation, daily/weekly horizon, FG availability, scheduled production supply, net production requirement, basic material and capacity check, planned order → WO linkage, plan revision and approval. Out of R1: APS optimisation, automated scheduling, advanced daily planning (R2).
@@ -27,7 +27,7 @@ MPS versions and lines per BR-PLN-04; requirement records are **derived** and pe
 ## 5. UI in Phase 3
 The Control Tower shows the **weekly demand view** (firm outstanding, forecast, net forecast, outstanding demand for planning, Unscheduled Blanket Balance, exceptions) as read-only mock data (doc 19 CT-9). The net production requirement (BR-PLN-05) is **not** shown as a final KPI while it is PROPOSED.
 
-## 4. Phase 3.5 review of BR-PLN-04..07 (status stays PROPOSED)
+## 4. Phase 3.5 review of BR-PLN-04..07 (rationale; outcome approved by D-046)
 Notation (per plant `p`, FG item `i`, ISO week bucket `b`, all quantities in **pcs of item i** unless stated):
 `D(b)` outstanding demand for planning (BR-DEM-07/08) · `OH` FG on-hand UNRESTRICTED in FG_WAREHOUSE (class A before allocations) · `AL_out` allocations of that FG to demand **outside** the planning horizon/scope · `QR(b)` QC released not yet received with expected FG-receipt date in b (class B) · `WR(b)` remaining output of released WOs due in b = max(0, WO qty − good posted) (class B) · `PO(b)` firm planned orders already approved in an earlier MPS version due in b (class B) · `PQ` Pending QC (class C, not netted) · `SS` safety stock (O-023, default 0).
 
@@ -90,19 +90,23 @@ Daily protection (F-5): W42 demand includes DSL-2 due Tue 13 Oct; the 780 planne
 - **#58 Daily due-date protection:** planned order due date = earliest uncovered daily due date in the bucket.
 - **#59 Plant scope:** FG in plant B is not supply for plant A.
 - **#60 MRP in material UOM:** planned 1,000 pcs × BOM gross 0.318 kg/pc = 318.000 kg requirement compared with RM UNRESTRICTED − other allocations; estimated pcs never used.
+- **#65 F-1 regression (required unit test, D-046):** PART-A sample of §6 must give NR 780 / 300 / 250 = 1,330 pcs; the per-bucket formula result 650 (680 short) must be impossible.
+- **#66 Receipt after due date:** a WO receipt dated Thu does not cover a Tue due in the same bucket; Tue shows a daily shortage and the planned order due date is Tue minus production lead time.
+- **#67 Safety stock status:** item without policy shows safety stock 0 with status `NOT CONFIGURED`; configuring 50 for item + plant raises the opening deduction by 50.
+- **#68 Scrap allowance once:** BOM quantity per pc already including a 3 % scrap allowance is not multiplied by the yield factor again.
 - **#61 Approved version only:** release from a DRAFT MPS line is rejected; manual WO path requires reason + approval and is flagged.
 
 ## 8. Approval gates for the owner
 | Gate | Question | Proposed default |
 |---|---|---|
-| G-MPS-1 (O-022) | Time-phased PAB with OH − AL_out opening | Approve |
-| G-MPS-2 (O-023) | Safety stock in R1 | 0 until per-item policy |
-| G-MPS-3 (O-024) | Pending QC display beside NR, never netted | Approve |
-| G-MPS-4 (O-025) | Lot-for-lot; due date = earliest uncovered daily due | Approve |
-| G-MPS-5 (O-026) | BOM gross qty per piece in material UOM for MRP | Approve with engineering validation |
-| G-MPS-6 (O-027) | Manual WO outside MPS with reason + approval | Approve |
-| G-MPS-7 (O-028) | Capacity calendar + std cycle time, warning only | Approve |
-| G-MPS-8 (O-029) | Netting per plant; no cross-plant supply in R1 | Approve |
+| G-MPS-1 (O-022) | Time-phased PAB with OH − AL_out opening | **APPROVED** (D-046); F-1 680 pcs unit test required |
+| G-MPS-2 (O-023) | Safety stock in R1 | **APPROVED WITH CONDITIONS**: default 0 shown as `NOT CONFIGURED`; per item + plant |
+| G-MPS-3 (O-024) | Pending QC display beside NR, never netted | **APPROVED** |
+| G-MPS-4 (O-025) | Lot-for-lot; earliest uncovered daily due | **APPROVED** + receipt after due never satisfies it; lead time considered |
+| G-MPS-5 (O-026) | BOM gross qty per piece in material UOM | **APPROVED WITH CONDITIONS**: BOM line fields, scrap/yield applied once, engineering approval |
+| G-MPS-6 (O-027) | Manual WO outside MPS | **APPROVED**: reason code, responsible user, approval, audit, planning-exception ref |
+| G-MPS-7 (O-028) | Capacity warning | **APPROVED**: machine + dies availability, shift calendar, std cycle time |
+| G-MPS-8 (O-029) | Netting per plant | **APPROVED**; inter-plant only via authorized MAT_TRANSFER |
 
 ## 9. Open items
 - Confirm BR-PLN-04..07 (PROPOSED) through gates G-MPS-1..8 before MPS backend work.

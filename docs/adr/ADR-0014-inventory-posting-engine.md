@@ -1,6 +1,6 @@
 # ADR-0014 — Inventory posting engine implementation
 
-- **Status:** Proposed (refines Accepted ADR-0002; no rule change) · **Date:** 2026-10-09
+- **Status:** Accepted as baseline (D-045); MAT_TRANSFER D-048; numbering D-049 (no gapless promise; drafts use UUID/draft reference, official number at posting) · **Date:** 2026-10-09
 
 ## Context
 ADR-0002 fixes the ledger semantics. Phase 3.5 needs an implementable engine: one service, deterministic locking, idempotency, numbering, outbox and audit in one transaction.
