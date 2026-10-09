@@ -1,5 +1,6 @@
 # Frontend quality gates (docs/22-FRONTEND-ARCHITECTURE.md §4).
-# Not yet exercised on GitHub: the repository has not been pushed (owner decision).
+# Runs on GitHub-hosted runners since the initial push (D-050). pnpm is invoked via npx (no global install),
+# so setup-node must not try to resolve a pnpm binary for its package-manager cache.
 name: ci
 
 on:
@@ -28,6 +29,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
       - name: Install
         run: $PNPM install --frozen-lockfile
       - name: Format
