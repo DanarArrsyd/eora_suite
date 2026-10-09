@@ -1,0 +1,232 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "EORA Suite API",
+        "version": "1.0.0-b0",
+        "description": "EORA Suite API v1 (doc 24, ADR-0013). Errors are RFC 9457 problem+json; quantities are decimal strings. B0 exposes health endpoints only."
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8000/api/v1",
+            "description": "Same origin"
+        }
+    ],
+    "paths": {
+        "/health": {
+            "get": {
+                "operationId": "v1.health.live",
+                "summary": "Liveness: the application process is up",
+                "tags": [
+                    "Health"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "const": "ok"
+                                        },
+                                        "service": {
+                                            "type": "string"
+                                        },
+                                        "time": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "status",
+                                        "service",
+                                        "time"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/health/ready": {
+            "get": {
+                "operationId": "v1.health.ready",
+                "description": "A degraded dependency is an expected answer, not an error: 503 with the same body shape and `status: degraded`.\n`version` (ok) and `error` (fail) are omitted in production.",
+                "summary": "Readiness: dependencies (PostgreSQL, Redis) are reachable",
+                "tags": [
+                    "Health"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "All dependencies are reachable.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "const": "ok"
+                                        },
+                                        "checks": {
+                                            "type": "object",
+                                            "properties": {
+                                                "database": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "status": {
+                                                            "type": "string",
+                                                            "enum": [
+                                                                "ok",
+                                                                "fail"
+                                                            ]
+                                                        },
+                                                        "latencyMs": {
+                                                            "type": "number"
+                                                        },
+                                                        "version": {
+                                                            "type": "string"
+                                                        },
+                                                        "error": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "status",
+                                                        "latencyMs"
+                                                    ]
+                                                },
+                                                "redis": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "status": {
+                                                            "type": "string",
+                                                            "enum": [
+                                                                "ok",
+                                                                "fail"
+                                                            ]
+                                                        },
+                                                        "latencyMs": {
+                                                            "type": "number"
+                                                        },
+                                                        "version": {
+                                                            "type": "string"
+                                                        },
+                                                        "error": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "status",
+                                                        "latencyMs"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "database",
+                                                "redis"
+                                            ]
+                                        },
+                                        "time": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "status",
+                                        "checks",
+                                        "time"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "At least one dependency failed; the body says which.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "const": "degraded"
+                                        },
+                                        "checks": {
+                                            "type": "object",
+                                            "properties": {
+                                                "database": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "status": {
+                                                            "type": "string",
+                                                            "enum": [
+                                                                "ok",
+                                                                "fail"
+                                                            ]
+                                                        },
+                                                        "latencyMs": {
+                                                            "type": "number"
+                                                        },
+                                                        "version": {
+                                                            "type": "string"
+                                                        },
+                                                        "error": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "status",
+                                                        "latencyMs"
+                                                    ]
+                                                },
+                                                "redis": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "status": {
+                                                            "type": "string",
+                                                            "enum": [
+                                                                "ok",
+                                                                "fail"
+                                                            ]
+                                                        },
+                                                        "latencyMs": {
+                                                            "type": "number"
+                                                        },
+                                                        "version": {
+                                                            "type": "string"
+                                                        },
+                                                        "error": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "status",
+                                                        "latencyMs"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "database",
+                                                "redis"
+                                            ]
+                                        },
+                                        "time": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "status",
+                                        "checks",
+                                        "time"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,76 @@
+# EORA Suite — local development services (B0). Secrets come from ./.env (gitignored); see .env.example.
+# Usage: cp .env.example .env && fill values, then `docker compose up -d --build --wait`.
+name: eora
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${EORA_DB_DATABASE:-eora}
+      POSTGRES_USER: ${EORA_DB_USERNAME:-eora}
+      POSTGRES_PASSWORD: ${EORA_DB_PASSWORD:?set EORA_DB_PASSWORD in .env}
+    ports:
+      - '127.0.0.1:${EORA_DB_HOST_PORT:-5432}:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql
+    # Init SQL ships inline (no host bind mount), so it works wherever the repo lives — Docker Desktop
+    # only shares /Users, /Volumes, /private, /tmp and /var/folders by default. Runs on a fresh volume only.
+    configs:
+      - source: postgres-init-test-db
+        target: /docker-entrypoint-initdb.d/01-test-database.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:8.6-alpine
+    command: ['redis-server', '--appendonly', 'no', '--save', '']
+    ports:
+      - '127.0.0.1:${EORA_REDIS_HOST_PORT:-6380}:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ./apps/api
+    environment:
+      APP_NAME: 'EORA Suite API'
+      APP_ENV: local
+      APP_DEBUG: 'true'
+      APP_KEY: ${EORA_APP_KEY:?set EORA_APP_KEY in .env}
+      APP_URL: http://localhost:8000
+      LOG_CHANNEL: stack
+      LOG_STACK: json
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_DATABASE: ${EORA_DB_DATABASE:-eora}
+      DB_USERNAME: ${EORA_DB_USERNAME:-eora}
+      DB_PASSWORD: ${EORA_DB_PASSWORD}
+      REDIS_CLIENT: predis
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: array
+    ports:
+      - '127.0.0.1:${EORA_API_HOST_PORT:-8000}:8000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+configs:
+  postgres-init-test-db:
+    # Local/CI only: separate database for automated tests (phpunit.xml forces DB_DATABASE=eora_test).
+    content: |
+      CREATE DATABASE eora_test;
+
+volumes:
+  pgdata:

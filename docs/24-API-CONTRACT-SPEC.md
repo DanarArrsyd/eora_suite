@@ -13,6 +13,8 @@
 - **OpenAPI 3.1** generated code-first from Laravel (Scramble, D-047 — versions/compatibility verified before installation) and published per build; CI fails on undocumented breaking diffs (`oasdiff`).
 - Typed client generated into `packages/api-client` (proposed `openapi-typescript` + `openapi-fetch`); `ListSource<T>` adapters wrap it, so pattern components never call `fetch` directly.
 
+**B0 implementation:** Scramble 0.13.45 exports OpenAPI 3.1 to `packages/api-client/openapi.json` (`composer openapi:export`); `@eora/api-client` generates `schema.d.ts` with openapi-typescript 7.13.0 and exposes `createApiClient()` (openapi-fetch 0.17.0, same-origin `/api/v1`, `credentials: 'include'`) plus the `ProblemDetails` type; CI fails on spec or type drift. Error codes added in B0: `METHOD_NOT_ALLOWED` (405), `INTERNAL_ERROR` (500). Problem schemas are not yet emitted into the spec (Scramble extension planned with B1); the TS type is hand-written to match §5.
+
 ## 3. Query resources (ADR-0008)
 | Endpoint | Purpose |
 |---|---|

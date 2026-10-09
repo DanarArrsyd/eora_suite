@@ -26,3 +26,9 @@ Approved business rule, acceptance scenarios, permission coverage, API schema, U
 | Performance | k6 W-01..W-11 | doc 20 | SLOs accepted only after review (P-005) |
 Seed data: synthetic generator (doc 20 §6) plus the doc 02/14 worked examples as named fixtures; never customer data.
 
+## B0 backend test foundation (implemented 2026-10-09)
+- Pest 5 suites: `Unit`, `Feature`, `Arch` (no debug calls, strict types and final controllers in `App\Platform`, platform never depends on modules) and the `integration` group (real PostgreSQL + Redis; CI services / Docker Compose).
+- Tests always run on PostgreSQL (never SQLite); `composer test:unit` excludes `integration` when services are not running.
+- **Test database safety (B0 remediation):** `phpunit.xml` forces `APP_ENV=testing`, `DB_CONNECTION=pgsql`, `DB_DATABASE=eora_test`, empty `DB_URL`, array cache/session, sync queue and null log, as both `<env force>` and `<server force>` (Laravel reads `$_SERVER` first, and the CLI copies the process environment there). `tests/Support/TestDatabaseGuard.php`, called from `Tests\TestCase::createApplication()`, refuses to boot unless `APP_ENV=testing`, no `DB_URL` and the database name ends in `_test` — before any trait or test touches the database. `failOnWarning` is on.
+- CI jobs: `frontend` (unchanged), `backend` (composer validate + audit, Pint, Larastan level 8, boot, migrate, Pest, OpenAPI + typed-client drift), `docker` (compose config, `up --wait`, health/readiness, init SQL created `eora_test`, Pest inside the api container with the dev `eora` table OIDs unchanged).
+

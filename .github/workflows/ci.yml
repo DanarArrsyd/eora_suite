@@ -1,4 +1,4 @@
-# Frontend quality gates (docs/22-FRONTEND-ARCHITECTURE.md §4).
+# Quality gates: frontend (docs/22 §4), backend B0 foundation (docs/10, doc 11 B0) and Docker Compose validation.
 # Runs on GitHub-hosted runners since the initial push (D-050). pnpm is invoked via npx (no global install),
 # so setup-node must not try to resolve a pnpm binary for its package-manager cache.
 name: ci
@@ -48,3 +48,116 @@ jobs:
       - name: E2E (responsive, accessibility, keyboard, media preferences)
         working-directory: apps/web
         run: npx playwright test --workers=2
+
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      # Ephemeral CI-only credentials for the throwaway service containers below (not a secret).
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: eora_test
+      DB_USERNAME: eora
+      DB_PASSWORD: ci-only-throwaway
+      REDIS_CLIENT: predis
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: '6379'
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: eora_test
+          POSTGRES_USER: eora
+          POSTGRES_PASSWORD: ci-only-throwaway
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U eora -d eora_test" --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:8.6-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, intl, bcmath, zip
+          coverage: none
+          tools: composer:v2
+      - name: Validate composer.json and lock
+        run: composer validate --strict
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Dependency audit
+        run: composer audit
+      - name: Prepare environment
+        run: cp .env.example .env && php artisan key:generate --ansi
+      - name: Format (Pint)
+        run: vendor/bin/pint --test
+      - name: Static analysis (Larastan level 8)
+        run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+      - name: Application boot
+        run: php artisan about --only=environment && php artisan route:list --path=api
+      - name: Migrations (infrastructure only)
+        run: php artisan migrate --force
+      - name: Tests (unit, feature, architecture, integration)
+        run: vendor/bin/pest
+      - name: OpenAPI drift check
+        run: |
+          composer openapi:export
+          git diff --exit-code -- ../../packages/api-client/openapi.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Typed client drift check
+        working-directory: packages/api-client
+        run: |
+          npx -y openapi-typescript@7.13.0 openapi.json -o src/schema.d.ts
+          git diff --exit-code -- src/schema.d.ts
+
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EORA_DB_PASSWORD: ci-only-throwaway
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate compose file
+        run: |
+          echo "EORA_APP_KEY=base64:$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          EORA_APP_KEY=placeholder docker compose config --quiet
+      - name: Start services and wait for health
+        run: docker compose up -d --build --wait --wait-timeout 300
+      - name: API health checks
+        run: |
+          curl -fsS http://127.0.0.1:8000/api/v1/health
+          curl -fsS http://127.0.0.1:8000/api/v1/health/ready | tee ready.json
+          grep -q '"status":"ok"' ready.json
+      - name: Init SQL created the test database (fresh volume)
+        run: |
+          docker compose exec -T postgres psql -U eora -d postgres -Atc \
+            "select datname from pg_database where datname = 'eora_test'" | grep -qx eora_test
+      - name: Backend tests inside the api container never touch the dev database
+        # The container sets APP_ENV=local and DB_DATABASE=eora; phpunit.xml must force the test config.
+        # migrate:fresh would recreate the eora tables, so their OIDs must not change.
+        run: |
+          docker compose exec -T api php artisan migrate --force
+          q="select string_agg(c.relname || ':' || c.oid, ',' order by c.relname) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r'"
+          before=$(docker compose exec -T postgres psql -U eora -d eora -Atc "$q")
+          docker compose exec -T api vendor/bin/pest
+          after=$(docker compose exec -T postgres psql -U eora -d eora -Atc "$q")
+          echo "eora tables before: $before"
+          echo "eora tables after:  $after"
+          test -n "$before" && test "$before" = "$after"
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Stop services
+        if: always()
+        run: docker compose down -v

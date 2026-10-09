@@ -3,7 +3,19 @@ import nextTs from 'eslint-config-next/typescript';
 
 /** ESLint 9 flat config for all TypeScript workspaces (doc 22 §4). */
 const config = [
-  { ignores: ['**/node_modules/**', '**/.next/**', '**/next-env.d.ts', 'design/**', 'docs/**', '**/playwright-report/**', '**/test-results/**'] },
+  {
+    ignores: [
+      '**/node_modules/**',
+      '**/.next/**',
+      '**/next-env.d.ts',
+      'design/**',
+      'docs/**',
+      '**/playwright-report/**',
+      '**/test-results/**',
+      'apps/api/**',
+      'packages/api-client/src/schema.d.ts',
+    ],
+  },
   ...nextVitals,
   ...nextTs,
   {

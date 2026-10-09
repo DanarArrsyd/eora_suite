@@ -1,6 +1,6 @@
 # ADR-0007 — Platform runtime: modules, queues, outbox, realtime, storage, versions
 
-- **Status:** Proposed (P-001 remainder, P-005) · **Date:** 2026-10-08 · Becomes Accepted after Foundation-stage compatibility check.
+- **Status:** Accepted for the B0 foundation scope (D-052, 2026-10-09: versions checked); Reverb, S3 storage and Horizon remain Proposed until their slices · **Date:** 2026-10-08 (updated 2026-10-09)
 
 ## Context
 D-016 fixes Next.js + Laravel + Sanctum and D-009 fixes PostgreSQL. Remaining runtime choices (Redis/Horizon, Reverb, S3-compatible storage, Docker, versions) were proposed in the baseline and need a compatibility/version check before acceptance.
@@ -22,3 +22,18 @@ D-016 fixes Next.js + Laravel + Sanctum and D-009 fixes PostgreSQL. Remaining ru
 
 ## Verification
 Arch test blocks cross-module internal imports; outbox duplicate delivery yields one inbox notification (doc 14 #14); Redis flush during load test loses no domain event; version table filled before Accepted.
+
+## Version table (B0, D-052 — verified 2026-10-09)
+| Component | Version | Support note |
+|---|---|---|
+| PHP | 8.4 (CI/Docker, platform ≥ 8.4.12); 8.5 verified locally | 8.4 active support to end 2026, security to end 2028 |
+| Laravel | 13.33.0 | Laravel 13 bug fixes/security per Laravel policy |
+| Pest / PHPUnit | 5.2.1 / 13.3.4 | |
+| Larastan / Pint | 3.12.2 / 1.32.1 | |
+| Predis | 3.6.1 | pure-PHP Redis client |
+| Scramble | 0.13.45 | OpenAPI 3.1, Laravel ^10–^13 |
+| openapi-typescript / openapi-fetch | 7.13.0 / 0.17.0 | |
+| PostgreSQL | 18 (`postgres:18-alpine`) | supported to Nov 2030 |
+| Redis | 8.6 (`redis:8.6-alpine`) | |
+| Node.js | 24 LTS (`.nvmrc`) | |
+
