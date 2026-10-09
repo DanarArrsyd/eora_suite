@@ -20,6 +20,15 @@ docker compose up -d --build --wait
 ```bash
 curl -fsS http://127.0.0.1:8000/api/v1/health/ready
 ```
+Notes for Docker Desktop on macOS:
+- The `docker` CLI lives in `~/.docker/bin` (add it to `PATH` if the shell does not find it).
+- The PostgreSQL init SQL (creates `eora_test`) ships inline in `compose.yaml` (`configs.content`), so no host folder has to be
+  shared with Docker Desktop. It runs only when the `eora_pgdata` volume is created; an existing volume keeps its data.
+- To exercise a fresh initialisation without touching development data, use a separate project and ports, e.g.
+  `EORA_DB_HOST_PORT=55432 EORA_REDIS_HOST_PORT=56380 EORA_API_HOST_PORT=58000 docker compose -p eora_freshcheck up -d --wait`.
+- `docker compose down` keeps volumes; `down -v` deletes the database volume — never run it on the development project
+  without meaning to.
+
 Option B — PHP on the host, services in Docker:
 ```bash
 docker compose up -d --wait postgres redis
@@ -38,6 +47,13 @@ composer check
 ```
 Runs `pint --test`, `phpstan analyse` (level 8) and `pest` (unit, feature, architecture, integration). Without PostgreSQL/Redis
 running, use `composer test:unit` (excludes the `integration` group).
+
+Tests always use the `eora_test` database: `phpunit.xml` forces the test configuration over the process environment, and
+`tests/Support/TestDatabaseGuard.php` aborts the run before any query if the target is not a `*_test` database (or `APP_ENV` is
+not `testing`, or `DB_URL` is set). Running the suite inside the api container is therefore safe:
+```bash
+docker compose exec api vendor/bin/pest
+```
 
 ## Endpoints (B0)
 | Method | Path | Purpose |

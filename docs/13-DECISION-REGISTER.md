@@ -146,6 +146,7 @@ These were proposed in the audit and are required to make D-009..D-019 implement
 ## Change log
 | Date | Change | Owner | Affected |
 |---|---|---|---|
+| 2026-10-09 | B0 remediation after owner local validation (no new decision): compose init SQL via `configs.content` (no host bind mount), forced test environment + test-database guard, empty `.env` in the dev image with `artisan serve --no-reload`, CI regression steps | Product owner (approval), Claude Code (record) | compose.yaml, apps/api, docs 10, .github/workflows/ci.yml |
 | 2026-10-09 | D-051 initial push done, CI fix + B0 authorized (B1 not authorized); D-052 B0 versions | Product owner (decision), Claude Code (record) | CLAUDE.md, AGENTS.md, README, docs 09, 10, 11, 24, ADR-0007, apps/api |
 | 2026-10-09 | Phase 3.5 approved (D-045); MPS gates D-046 (O-022..O-029 superseded); OpenAPI tooling D-047; MAT_TRANSFER D-048; numbering D-049; GitHub private repository + initial push D-050; open-decision dependency table | Product owner (decision), Claude Code (record) | CLAUDE.md, AGENTS.md, README, docs 04, 10, 11, 14, 15, 23, 24, ADR-0013..0015 |
 | 2026-10-09 | Phase 3 approved, Phase 3.5 authorized (D-042); Pending QC supply policy D-043; business calendar D-044; Phase 3.5 open items O-022..O-032 (all PROPOSED defaults, owner gates) | Product owner (decision), Claude Code (record) | CLAUDE.md, AGENTS.md, docs 02, 04, 05, 09, 10, 11, 15, 17, 18, 20, 21, 23, 24, ADR-0012..0016 |

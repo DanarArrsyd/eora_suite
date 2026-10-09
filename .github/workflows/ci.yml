@@ -139,6 +139,22 @@ jobs:
           curl -fsS http://127.0.0.1:8000/api/v1/health
           curl -fsS http://127.0.0.1:8000/api/v1/health/ready | tee ready.json
           grep -q '"status":"ok"' ready.json
+      - name: Init SQL created the test database (fresh volume)
+        run: |
+          docker compose exec -T postgres psql -U eora -d postgres -Atc \
+            "select datname from pg_database where datname = 'eora_test'" | grep -qx eora_test
+      - name: Backend tests inside the api container never touch the dev database
+        # The container sets APP_ENV=local and DB_DATABASE=eora; phpunit.xml must force the test config.
+        # migrate:fresh would recreate the eora tables, so their OIDs must not change.
+        run: |
+          docker compose exec -T api php artisan migrate --force
+          q="select string_agg(c.relname || ':' || c.oid, ',' order by c.relname) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r'"
+          before=$(docker compose exec -T postgres psql -U eora -d eora -Atc "$q")
+          docker compose exec -T api vendor/bin/pest
+          after=$(docker compose exec -T postgres psql -U eora -d eora -Atc "$q")
+          echo "eora tables before: $before"
+          echo "eora tables after:  $after"
+          test -n "$before" && test "$before" = "$after"
       - name: Logs on failure
         if: failure()
         run: docker compose logs --no-color
