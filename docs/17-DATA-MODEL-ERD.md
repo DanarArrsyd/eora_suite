@@ -108,7 +108,7 @@ erDiagram
 ### Read models (rebuildable, Analytics-owned)
 `rm_conversion_view (per lot: on-hand, CP status, est pcs range)`, `pending_qc_aging`, `daily_fg_receipt (production_date, shift)`, `daily_delivery_outstanding`, `material_variance_summary`, `flow_strip_snapshot (scope, stage, qty, uom, as_of)`. Each row carries `as_of` and source high-water mark (last ledger movement id).
 
-> **2026-10-09 (D-053, review status):** B1 tenancy/identity refinements are in doc 25 (architecture review); B2 master-data and routing additions — `routings` header, `process_types`, operation machines/tools/inspections, `die_items`, effective ranges, BOM–routing map per version pair — are in doc 26 (scope review). Both are PROPOSED and not part of the approved logical model until the owner approves them.
+> **2026-10-09 (D-053, review status):** B1 tenancy/identity refinements are in doc 25 (architecture review); B2 master-data and routing additions — `routings` header, `process_types`, operation machines/tools/inspections, `die_items`, effective ranges, BOM–routing map per version pair, and the B6 `consumption_line_allocations` entity (one consume leg per lot per posting allocated to several WO material lines; BR-OUT-01 unchanged; owner-approved direction) — are in doc 26 (planning only). Both are PROPOSED and not part of the approved logical model until the owner approves them.
 
 ## 3. Tenant isolation checklist (per table)
 1. `tenant_id NOT NULL`, leading column of every index used by queries.
