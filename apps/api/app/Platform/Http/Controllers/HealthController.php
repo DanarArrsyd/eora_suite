@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Platform\Http\Controllers;
 
 use App\Platform\Health\HealthChecker;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -30,8 +31,11 @@ final class HealthController
     /**
      * Readiness: dependencies (PostgreSQL, Redis) are reachable.
      *
-     * @response array{status: 'ok'|'degraded', checks: array{database: array{status: string, latencyMs: float}, redis: array{status: string, latencyMs: float}}, time: string}
+     * A degraded dependency is an expected answer, not an error: 503 with the same body shape and `status: degraded`.
+     * `version` (ok) and `error` (fail) are omitted in production.
      */
+    #[Response(200, 'All dependencies are reachable.', type: "array{status: 'ok', checks: array{database: array{status: 'ok'|'fail', latencyMs: float, version?: string, error?: string}, redis: array{status: 'ok'|'fail', latencyMs: float, version?: string, error?: string}}, time: string}")]
+    #[Response(503, 'At least one dependency failed; the body says which.', type: "array{status: 'degraded', checks: array{database: array{status: 'ok'|'fail', latencyMs: float, version?: string, error?: string}, redis: array{status: 'ok'|'fail', latencyMs: float, version?: string, error?: string}}, time: string}")]
     public function ready(HealthChecker $checker): JsonResponse
     {
         $checks = ['database' => $checker->database(), 'redis' => $checker->redis()];

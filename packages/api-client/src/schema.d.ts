@@ -28,7 +28,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Readiness: dependencies (PostgreSQL, Redis) are reachable */
+        /**
+         * Readiness: dependencies (PostgreSQL, Redis) are reachable
+         * @description A degraded dependency is an expected answer, not an error: 503 with the same body shape and `status: degraded`.
+         *     `version` (ok) and `error` (fail) are omitted in production.
+         */
         get: operations["v1.health.ready"];
         put?: never;
         post?: never;
@@ -83,22 +87,58 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description All dependencies are reachable. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        /** @enum {string} */
-                        status: "ok" | "degraded";
+                        /** @constant */
+                        status: "ok";
                         checks: {
                             database: {
-                                status: string;
+                                /** @enum {string} */
+                                status: "ok" | "fail";
                                 latencyMs: number;
+                                version?: string;
+                                error?: string;
                             };
                             redis: {
-                                status: string;
+                                /** @enum {string} */
+                                status: "ok" | "fail";
                                 latencyMs: number;
+                                version?: string;
+                                error?: string;
+                            };
+                        };
+                        time: string;
+                    };
+                };
+            };
+            /** @description At least one dependency failed; the body says which. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        status: "degraded";
+                        checks: {
+                            database: {
+                                /** @enum {string} */
+                                status: "ok" | "fail";
+                                latencyMs: number;
+                                version?: string;
+                                error?: string;
+                            };
+                            redis: {
+                                /** @enum {string} */
+                                status: "ok" | "fail";
+                                latencyMs: number;
+                                version?: string;
+                                error?: string;
                             };
                         };
                         time: string;
