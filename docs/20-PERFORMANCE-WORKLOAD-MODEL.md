@@ -68,3 +68,18 @@ Planning figure: **~60–80 read requests/s sustained, ~200/s burst**, read:writ
 
 ## 7. Capacity levers (apply only if measurements require)
 Indexes with `tenant_id` leading; monthly partitioning of `inventory_movements`; read replicas for Control Tower read models; Octane for API; separate worker pools (postings-adjacent, notifications, exports); closure table for genealogy.
+
+## 8. Concurrency risk register (Phase 3.5)
+| Risk | Where | Mitigation | Test |
+|---|---|---|---|
+| Double issue / oversell of one lot | issue, consumption, allocation, shipment | `FOR UPDATE` on balance rows in key order; `CHECK (qty >= 0)`; allocation check under the same lock | doc 14 #10, W-07 |
+| Deadlock between multi-lot postings | production posting with several input lots, transfers | deterministic lock order (balance key sort), single transaction, bounded retry on `40P01` | W-02, deadlock injection test |
+| Duplicate posting on retry / double click | all commands | `Idempotency-Key` unique per tenant + stored response | #15, replay test |
+| Lost update on drafts | documents, MPS lines | `version` + `If-Match` → 412 | optimistic-lock test |
+| Projection drift | `stock_balances` vs ledger | same-transaction update + nightly verification | BR-INV-11 rebuild test |
+| Outbox double delivery | notifications, read models | idempotent consumers (`processed_events`) | #14, W-06 |
+| Document number gaps/duplicates | numbering | counter row locked inside the posting transaction (O-032) | concurrency numbering test |
+| Long transactions holding locks | imports, recalculation | chunking, `statement_timeout`/`lock_timeout`, no external I/O in transactions | W-04 |
+| Tenant context leak via pooler | all | transaction-local context, fail-closed RLS | T-ISO-03, W-08 |
+| Read-model stampede on dashboard | CT-0 | Redis cache per scope hash + single-flight recompute | W-03 |
+

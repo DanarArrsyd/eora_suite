@@ -85,7 +85,7 @@ Filters add: indicator status, breach only, case status, cause code. Drill: run 
 Grain: part × FG location × lot. On-hand UNRESTRICTED, allocated (by delivery line), available, QC_RELEASED-not-received shown separately as "incoming from QC".
 
 ### CT-8 Shortage & Delivery Risk
-Grain: Delivery Schedule Line by due date (D-034). Projection: `available FG + QC_RELEASED + planned output of released WOs before due date − allocations − earlier demand`; `PENDING_QC × expected acceptance` is **not projected in R1** because no expected-acceptance policy is approved — Pending QC is shown as its own column only (Phase 3 decision recorded here; owner may approve a policy later). Risk is evaluated per due date even when the weekly bucket is covered (D-041, doc 14 #48). Each contribution shown as its own column; risk reason codes: `NO_WO`, `MATERIAL_SHORT`, `QC_BACKLOG`, `CAPACITY` (V1 basic), `NOT_CALCULABLE_CONVERSION`. Netting per BR-DEM-03.
+Grain: Delivery Schedule Line by due date (D-034). Projection: `available FG + QC_RELEASED + planned output of released WOs before due date − allocations − earlier demand`; Supply classes per **D-043**: FG available = class A (Firm Available); QC released not received and planned output of released WOs = class B (Projected, dated, with source and confidence); Pending QC = class C, shown as its own column, never projected or promised (no expected-acceptance rate in R1). Risk is evaluated per due date even when the weekly bucket is covered (D-041, doc 14 #48). Each contribution shown as its own column; risk reason codes: `NO_WO`, `MATERIAL_SHORT`, `QC_BACKLOG`, `CAPACITY` (V1 basic), `NOT_CALCULABLE_CONVERSION`. Netting per BR-DEM-03.
 
 ## 4. Data sources and refresh
 | Read model | Updated by | Max lag target |

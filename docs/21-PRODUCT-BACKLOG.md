@@ -25,6 +25,7 @@
 | E-18 PWA Floor Mode | Web | responsive task views for issue, production posting, QC | installable PWA, scanner, offline drafts (O-009) | — |
 | E-19 Maintenance | Maintenance | — | assets/dies availability, breakdown, basic PM | predictive |
 | E-21 Frontend phases (D-033) | Web | Phase 1 foundation (approved, D-036), Phase 2 shared patterns (approved, D-037), Phase 3 Control Tower UI (authorized, D-037) | Phase 4 reconciliation UI, Phase 5 PWA foundation | — |
+| E-22 Backend readiness (D-042) | Platform | Phase 3.5 design deliverables (docs 04, 17, 23, 24, ADR-0012..0016); backend slices B0–B10 (doc 11) after approval | — | — |
 | E-20 Ops & quality gates | Platform | CI, arch tests, isolation tests, observability baseline | k6 scenarios W-01..W-11, backup/restore drill | — |
 
 ## R1 vertical slice — definition of done

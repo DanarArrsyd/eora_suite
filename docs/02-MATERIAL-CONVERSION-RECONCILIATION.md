@@ -45,6 +45,38 @@ Illustrative fully specified example (sample values, not customer data): SPCC de
 - With `NW = 0.290 kg/pc` and weighed scrap 128.900 kg: **UMV = 612.400 − (1,641 × 0.290 + 128.900) = 7.610 kg (1.24%)**.
 - The 87.600 kg remaining stays Material at Production (or is returned/split as remnant); it is never variance. Do **not** label any difference as lost without investigation.
 
+## Reconciliation engine architecture (Phase 3.5, PROPOSED implementation design — formulas unchanged)
+```
+Production Posting / Return / Lot Split / QC reclassification / Reversal  (Inventory ledger, doc 04)
+        │ outbox events (document id, run, WO, lots)
+        ▼
+Reconciliation service (Traceability module)
+  1. build scope: run → WO → input lot (ADR-0005 scope)
+  2. collect inputs from the ledger only:
+       issued (MAT_ISSUE legs), consumed C + measurement method (consume legs),
+       remaining at production (balances at MAT_AT_PROD), returned (MAT_RETURN),
+       remnant split (LOT_SPLIT), outputs G / NR / NJ / O (produce legs), scrap S kg
+  3. resolve versioned engineering data at production date: CP (pitch+unit, cavity, layout,
+       thickness, width, density, head/tail), SY, NW, BOM version (cavity / parts per blank source)
+  4. compute T (doc 02 conversion), GYV, PvS, UMV (ADR-0005) on unrounded values; store
+       inputs_snapshot + formula_code + versions; status NOT_CALCULABLE / PROVISIONAL / FINAL
+  5. evaluate tolerance (tenant → plant → item → operation) on FINAL values; open/refresh case
+  6. append variance_results version (never update in place); emit recon.* events → read models
+```
+| Quantity | Source of truth | UOM / precision | Never confused with |
+|---|---|---|---|
+| Material Issued | `MAT_ISSUE` legs | kg (3 dp display, numeric(20,6) store) / sheet (integer) | consumption |
+| Actual Consumed `C` | consume legs + method | material UOM | issued; by-difference = PROVISIONAL |
+| Remaining Material | balance at `MAT_AT_PROD` | material UOM | variance (it is stock) |
+| Reusable Remnant | child lot from `LOT_SPLIT` | material UOM | output or consumption |
+| Returned | `MAT_RETURN` legs | material UOM | consumption |
+| Good / NG Reworkable / NG Rejected | produce legs | pcs (integer) | FG available (needs QC + FG receipt) |
+| Process Scrap `S` | scrap legs (weighed) | kg | variance |
+| GYV / PvS | variance_results | pcs, % (2 dp) | loss |
+| UMV | variance_results | kg, % | Physical Stock Discrepancy (stock count only) / Actual Material Loss (case outcome only) |
+Review notes (no rule change): pitch must carry a unit and positive value; cavity and parts-per-blank come from the BOM/die version effective at the production date; SY and NW are versioned and snapshotted at WO release (BR-PLN-01) while the engine uses the run's production-date versions only when the WO snapshot is absent (open point folded into O-026 review); rounding per ADR-0005 (floor for T and E, half-even display for kg); conversions between kg and sheet use the validated sheet weight of the material spec version; genealogy links input lots to output lots through the posting (doc 17 §4) so variance rolls up to input lot without summing alternative theoretical outputs.
+Triggers recompute only the affected scopes (idempotent by `(scope, source document version)`); a reversal re-opens FINAL to PROVISIONAL with history (BR-REC-05).
+
 ## Investigation workflow
 `Draft/Provisional → Reconciliation Required → Investigation Open → Evidence Collected → Reviewed → Approved Resolution → Closed` (with reopen/reversal policies). Thresholds configurable by tenant/plant/item/process and based on both absolute and relative variance; critical exceptions may block WO final close. Maker-checker for stock adjustments. Store cause code, owner, due date, attachments, measured quantities, before/after, approvals and ledger reference.
 

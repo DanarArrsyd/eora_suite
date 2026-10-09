@@ -92,7 +92,7 @@ erDiagram
 | `stock_counts`, `stock_count_lines` | snapshot qty, counted qty, blind flag | |
 
 ### Quality / Warehouse / Delivery
-`inspection_lots (lot_id, qty, status)`, `qc_dispositions (inspection_lot_id, outcome, qty, defect_code, document_id)`, `handling_units`, `pick_lists`, `delivery_orders`, `shipments`, `shipment_lines (po_line_id, release_id, qty, document_id)`.
+`inspection_lots (lot_id, qty, status)`, `inspection_results (inspection_lot_id, characteristic, measured_value, result)`, `qc_dispositions (inspection_lot_id, outcome, qty, defect_code, document_id)`, `quality_holds (lot_id, reason, raised_by, released_by)`, `handling_units (fg lot, qty, label_no)`, `pick_lists/pick_lines`, `packing_records`, `delivery_orders/lines (schedule_line_id)`, `shipments`, `shipment_lines (schedule_line_id, schedule_revision, lot_id, qty, uom, document_id)` — **corrected 2026-10-09**: the former `po_line_id, release_id` columns contradicted D-034; fulfilment references the Delivery Schedule Line and its revision only (D-038), `delivery_confirmations (shipment_id, pod_at, received_qty, signer, evidence_file)` — POD is a document fact, not a ledger movement.
 
 ### Production reconciliation
 | Table | Columns | Notes |
@@ -120,3 +120,77 @@ Backward trace (shipment → material): `shipment_lines.document_id` → movemen
 
 ## 5. Open physical questions (carry from doc 04)
 Serial tracking (V2), semi-finished part numbering (O-003), customer-owned/consignment (O-005), retention and data residency (O-008).
+
+## 6. Phase 3.5 — domain coverage, data dictionary, indexing (2026-10-09)
+### 6.1 Conceptual domain map (A–J of the Phase 3.5 brief)
+```mermaid
+flowchart LR
+  A[A Tenancy & access] --> B[B Master data]
+  B --> C[C Demand] --> D[D Planning]
+  B --> D
+  D --> E[E Materials] --> H[(H Inventory ledger)]
+  D --> F[F Production] --> H
+  F --> G[G Quality] --> H
+  H --> I[I FG & Delivery] --> C
+  H --> J[J Control: reconciliation, approval, audit, notification]
+  F --> J
+```
+Rule: only **H Inventory** writes ledger/balances/allocations; E, F, G, I submit posting commands (doc 04 §posting specification). C owns demand identity; D owns plans and WOs; J owns cases, approvals, audit, notifications.
+
+### 6.2 Entity catalogue (logical; ✓ = already in §2, + = added in Phase 3.5)
+| Domain | Entities |
+|---|---|
+| A Tenancy | ✓ tenants, companies, plants, warehouses, locations, users, memberships, roles, permissions, role_assignments (plant/warehouse/work-center scope); + `departments (tenant_id, plant_id, code)`; + `business_calendars (tenant_id, plant_id NULL = tenant default, timezone, week_start ISO_MONDAY, production_day_starts_at, effective_from)` and `calendar_exceptions (holiday/non-working days)` (D-044) |
+| B Master | ✓ items, uoms, uom_conversions, material_specs, bom_versions/lines, routing_versions/operations, item_weights, conversion_profiles, customers, customer_items, machines, dies, shifts; + `suppliers`, + `bom_lines.gross_qty_per (material UOM, O-026)`, + `routing_operations.std_cycle_seconds`, + `work_center_capacity (O-028)`, + `storage_bins` (FG bins under `locations`) |
+| C Demand | ✓ customer_po_headers/lines, sales_order_headers/lines (+ `blanket_qty`, `shipping_plant_id`), po_so_links, delivery_schedule_lines (customer release = schedule_type KANBAN_RELEASE), schedule_reallocations, demand_exceptions, forecasts, demand_consumptions; + `demand_requirements` is **not** a table — requirement records are `mps_requirement_pegs` (derived, BR-DEM-12); fulfilment allocation = `stock_allocations` (H) |
+| D Planning | ✓ mps_versions/lines/requirement_pegs, planned_orders, material_requirements, work_orders, wo_demand_links; + `wo_operations (wo, routing_operation, work_center, planned_qty, status)` |
+| E Materials | lots (coil identity = lot with form COIL and measured properties; sheet stock = lot with form SHEET), material reservation = `stock_allocations(demand_type WO)`, issue/transfer/return/split = inventory documents, Material at Production = balances at `MAT_AT_PROD` locations (no separate table), consumption = consume legs, remnant = child lot via `LOT_SPLIT`; + `substitution_approvals (item, substitute, scope customer/WO, valid_to, approved_by)` |
+| F Production | ✓ production_runs, run_measurements; output categories are produce legs (Good / NG Reworkable / NG Rejected / Process Scrap) — no separate quantity tables; + `downtime_events (run, reason_code, started_at, ended_at)`, + `rework_orders` |
+| G Quality | ✓ inspection_lots, qc_dispositions; + inspection_results, quality_holds (Pending QC and QC Release are **statuses** in the ledger, not tables) |
+| H Inventory | ✓ inventory_documents, inventory_movements, stock_balances, stock_allocations, genealogy_edges, stock_counts/lines, inventory_periods; stock adjustment = document type; period closing = `inventory_periods` + `period_close_runs (checks, snapshot hash)` |
+| I FG & Delivery | FG receipt = `FG_RECEIPT` document; FG lot = lot of FINISHED item; handling_units, pick_lists, packing_records, delivery_orders, shipments, shipment_lines (corrected), delivery_confirmations |
+| J Control | ✓ recon_scopes, variance_results, recon_cases, recon_case_evidence, approval_policies/requests/steps, audit_events, outbox_events, processed_events, inbox_notifications; + `correction_requests (target document, type REVERSAL|CLOSED_PERIOD_CORRECTION|MASTER_DATA, reason, status, approval_request_id)`; + `idempotency_records (tenant_id, key, request_hash, response, expires_at)` |
+No module keeps its own mutable stock total (D-003): every quantity screen reads `stock_balances` / read models derived from the ledger.
+
+### 6.3 Data dictionary — core tables (types are proposals for Foundation)
+| Table.column | Type | Null | Constraint / meaning |
+|---|---|---|---|
+| *all tenant tables*.id | `uuid` (UUIDv7) | no | PK; `UNIQUE (tenant_id, id)` for composite FKs |
+| *all*.tenant_id | `uuid` | no | RLS key; leading column of every index |
+| *all*.version | `integer` | no | optimistic concurrency (`If-Match`) on mutable rows |
+| inventory_documents.doc_type | `text` + CHECK | no | catalogue ADR-0002 (+ `MAT_TRANSFER`, O-031) |
+| inventory_documents.doc_no | `text` | no | `UNIQUE (tenant_id, plant_id, doc_type, doc_no)`; counter per tenant/plant/type/year (O-032) |
+| inventory_documents.status | `text` + CHECK | no | DRAFT, POSTED, REVERSED (REVERSED only via reversal document) |
+| inventory_documents.idempotency_key | `text` | no | `UNIQUE (tenant_id, idempotency_key)` |
+| inventory_documents.posted_at | `timestamptz` | yes | UTC instant (Transaction Timestamp) |
+| inventory_documents.production_date / calendar_date / shift_id / shift_date | `date` / `date` / `uuid` / `date` | posting: no | D-044 time model |
+| inventory_documents.reverses_document_id, correction_of_document_id | `uuid` | yes | composite FK to same table |
+| inventory_movements.qty_signed | `numeric(20,6)` | no | ≠ 0; discrete UOMs integer-valued (CHECK via uom scale) |
+| inventory_movements.stock_status | `text` + CHECK | no | DD-01 catalogue |
+| inventory_movements.measurement_method | `text` + CHECK | consume legs: no | ADR-0003 |
+| stock_balances.(balance key) | composite | no | PK `(tenant_id, plant_id, location_id, item_id, lot_id, stock_status, ownership, uom_id)`; `CHECK (qty >= 0)` |
+| stock_allocations.qty / status | `numeric(20,6)` / text | no | ACTIVE, CONSUMED, RELEASED; Σ ACTIVE ≤ on-hand (service, under balance lock) |
+| delivery_schedule_lines.required_qty | `numeric(20,6)` | no | > 0; UOM = SO line UOM |
+| delivery_schedule_lines.requirement_date | `date` | no | plant calendar, daily (D-041) |
+| sales_order_lines.blanket_qty | `numeric(20,6)` | yes | BR-DEM-14; history in `sales_order_line_revisions` |
+| mps_lines.(demand, opening_pab, projected_supply, net_requirement) | `numeric(20,6)` | no | pcs; snapshot ids + `as_of` |
+| variance_results.value / value_pct | `numeric(20,6)` / `numeric(9,4)` | yes when NOT_CALCULABLE | ADR-0005 rounding at display |
+| outbox_events.payload | `jsonb` | no | IDs + minimal data; no PII beyond need |
+
+### 6.4 Relationship analysis (cardinalities that carry rules)
+SO line 1—n schedule lines (D-034); Customer PO line 1—1 SO line (unique mapping); schedule line 1—n shipment lines (partial shipments), shipment line n—1 schedule line **revision** (D-038); forecast line n—n schedule lines via demand_consumptions (same bucket, customer + part + plant, D-040); WO n—n demand via wo_demand_links / pegs; lot 1—n child lots (remnant split); lot n—n lots via genealogy_edges (multi-lot, multi-WO); document 1—n legs; balance 1—n allocations; run 1—n variance_results (versioned) 0..1 active case.
+
+### 6.5 Indexing strategy (apply with EXPLAIN evidence; Postgres best-practice review)
+- Every FK column indexed with `tenant_id` leading (Postgres does not index FKs automatically).
+- Ledger: `inventory_movements (tenant_id, lot_id, id)`, `(tenant_id, document_id)`, `(tenant_id, plant_id, location_id, item_id)`; BRIN on `created_at` once monthly partitioning is enabled (doc 20).
+- Balances: PK covers lookups; partial index `stock_balances (tenant_id, plant_id, item_id) WHERE qty > 0` for availability screens.
+- Allocations: partial `stock_allocations (tenant_id, demand_type, demand_id) WHERE status = 'ACTIVE'`.
+- Demand: `delivery_schedule_lines (tenant_id, plant_id, requirement_date) WHERE status IN ('FIRM','PARTIALLY_FULFILLED')`; `(tenant_id, so_line_id, revision)`.
+- Outbox: partial `outbox_events (created_at) WHERE dispatched_at IS NULL` (relay with `FOR UPDATE SKIP LOCKED`).
+- Inbox: `inbox_notifications (tenant_id, user_id, read_at, created_at DESC)`.
+- Keyset pagination indexes match each QueryDefinition default sort (e.g. `(tenant_id, plant_id, requirement_date, id)`); OFFSET only for small master data (ADR-0008 §4).
+- RLS columns indexed; policy uses `(select current_setting('app.tenant_id', true))::uuid` so the setting is evaluated once per statement.
+
+### 6.6 Tenant isolation strategy (summary; normative ADR-0001)
+Shared DB, `tenant_id` + composite FKs on **every** tenant table (audit of §2/§6.2: all listed tenant tables comply; platform tables without tenant_id: `tenants`, `users`, `permissions` catalogue); RLS enabled + forced, fail-closed when context unset; transaction-local context (`set_config(..., true)`) compatible with transaction pooling; plant/warehouse scope enforced in the application policy layer (not RLS) to keep policies simple and fast; isolation suite T-ISO-01..05 mandatory in CI.
+

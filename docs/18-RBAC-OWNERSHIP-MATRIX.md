@@ -78,5 +78,26 @@ Break-glass: time-boxed grant, reason, approver, auto-expiry, full audit (doc 05
 | Variance results, recon cases | Traceability (Reconciliation) | Reconciliation service | Planning, Production, Analytics | `recon.case_opened` |
 | Users, roles, approvals, audit, notifications, files, import/export jobs | Core | Core services | all (scoped) | — |
 | Read models / dashboards | Analytics | outbox consumers (rebuildable) | all (scoped) | never written by users |
+| Sales orders, schedule lines, reallocations, demand exceptions *(added 2026-10-09)* | Demand | Demand services | Planning, Delivery, Analytics | `demand.schedule_changed`, `demand.exception_opened` |
+| MPS versions/lines/pegs, planned orders, material requirements | Planning | Planning services | Production, Materials, Analytics | `mps.approved`, `planned_order.released` |
+| Business calendars (tenant default, plant override) | Core | calendar service (versioned) | all | `calendar.changed` (rebuild buckets) |
+| Substitution approvals | Materials (engineering approval) | Materials services | Production, Planning | `substitution.approved` |
+| Downtime events, rework orders | Production | Production services | Planning, Maintenance, Analytics | `production.downtime_recorded` |
+| Inspection results, quality holds | Quality | Quality services | Production, Planning | `qc.hold_raised` |
+| Delivery confirmations (POD) | Delivery | Delivery services | Demand, Analytics | `delivery.confirmed` |
+| Correction requests, idempotency records | Core | Core services | owning module of target | `correction.approved` → owning module executes reversal |
 
 Rule: no module writes another module's tables; cross-module reads use contracts/query definitions; cross-module **read** permission never implies **post** permission (doc 03).
+
+## 5. Phase 3.5 additions (2026-10-09, PROPOSED until backend approval)
+| Permission (resource.action) | CSA | PPC | MAT | PRL | QCI | QCS | FGW | DLV | INV | AUD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| demand.sales_order / schedule | V | VCSP | — | — | — | — | V | V | — | V |
+| demand.reallocation (D-038) | V | VCS (P after confirmation) | — | — | — | — | — | — | — | V |
+| demand.exception | V | VCP (resolve) | — | — | — | — | — | V | — | V |
+| planning.mps | V A | VCS (preparer ≠ approver, SoD-07) | V | V | — | — | — | — | — | V |
+| planning.planned_order.release | V | VCP | V | V | — | — | — | — | — | V |
+| core.calendar | VCP | V | V | V | V | V | V | V | V | V |
+SoD-07 *(proposed)*: MPS preparer cannot approve the same MPS version.
+Evaluation order for every request: authenticated session → active tenant membership (session) → permission in any role assignment → **scope match** (assignment scope contains the record's company/plant/warehouse/work center) → resource policy (state, SoD, thresholds) → RLS backstop. List endpoints apply the scope as query predicates (QueryDefinition), never as post-filtering.
+
