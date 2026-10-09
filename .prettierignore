@@ -9,3 +9,8 @@ prompts/
 coverage
 test-results
 playwright-report
+# Laravel API is formatted by Pint (apps/api/pint.json)
+apps/api
+# Generated from the API (composer openapi:export + pnpm generate)
+packages/api-client/openapi.json
+packages/api-client/src/schema.d.ts
