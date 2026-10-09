@@ -13,7 +13,11 @@ services:
       - '127.0.0.1:${EORA_DB_HOST_PORT:-5432}:5432'
     volumes:
       - pgdata:/var/lib/postgresql
-      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    # Init SQL ships inline (no host bind mount), so it works wherever the repo lives — Docker Desktop
+    # only shares /Users, /Volumes, /private, /tmp and /var/folders by default. Runs on a fresh volume only.
+    configs:
+      - source: postgres-init-test-db
+        target: /docker-entrypoint-initdb.d/01-test-database.sql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
       interval: 5s
@@ -61,6 +65,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+configs:
+  postgres-init-test-db:
+    # Local/CI only: separate database for automated tests (phpunit.xml forces DB_DATABASE=eora_test).
+    content: |
+      CREATE DATABASE eora_test;
 
 volumes:
   pgdata:
