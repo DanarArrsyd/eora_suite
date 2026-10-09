@@ -25,8 +25,8 @@ Epic → story (`As [role], I need [capability], so [outcome]`) → business rul
 Each slice ends with tests (doc 10), migration + rollback plan, docs update and an owner review; local commits only.
 | Slice | Content | Depends on | Exit |
 |---|---|---|---|
-| B0 Foundation | Laravel app skeleton in `apps/api`, versions pinned (ADR-0007), Docker Compose (PostgreSQL, PgBouncer, Redis), CI jobs (Pint, PHPStan, Pest, arch tests), OpenAPI pipeline (ADR-0013) | approval of D-042 deliverables, O-030 | green CI, isolation harness ready |
-| B1 Tenancy & access | tenants/companies/plants/memberships/roles/scopes, Sanctum session + CSRF, TenantTransaction + RLS, audit, rate limits, business calendars (ADR-0012) | B0 | T-ISO-01..05 green |
+| B0 Foundation **(authorized D-051; implemented on `feat/b0-backend-foundation`, PR pending owner review)** | Laravel 13 in `apps/api`, versions pinned (D-052), Docker Compose (PostgreSQL 18, Redis 8.6, API), health/readiness, problem+json, correlation ids, JSON logs, CI jobs (Pint, Larastan, Pest incl. arch + integration, OpenAPI/typed-client drift, Docker health), Scramble → `packages/api-client` | D-045, D-047 | green CI on GitHub; PgBouncer and the tenant isolation harness move to B1 (they need tenant context) |
+| B1 Tenancy & access **(NOT authorized yet, D-051)** | tenants/companies/plants/memberships/roles/scopes, Sanctum session + CSRF, TenantTransaction + RLS, audit, rate limits, business calendars (ADR-0012) | B0 | T-ISO-01..05 green |
 | B2 Master data | items, UOM, specs, BOM (+ gross qty per, O-026), routings, conversion profiles, SY/NW versions, customers, suppliers, work centers, locations | B1 | import templates for master data |
 | B3 Inventory posting engine | documents, legs, balances, allocations, genealogy, periods, numbering, idempotency, reversal (ADR-0014) — posting matrix rows 1–13 | B2 | posting-matrix + concurrency suites green |
 | B4 Demand | Customer PO, SO header/lines, schedule lines, reallocation + exceptions (D-038), blanket (D-039), forecast + consumption (D-040) | B2 | doc 14 #28–#50 green |

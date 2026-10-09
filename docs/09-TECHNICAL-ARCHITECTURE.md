@@ -41,6 +41,8 @@ Modules: Core, Demand, Planning, Materials, Production, Quality, **Inventory (on
 
 **Background jobs (Horizon queues):** `outbox-relay` (SKIP LOCKED), `projections`, `notifications`, `exports`, `imports`, `maintenance` (nightly reconciliation). Every job carries tenant + actor; job middleware opens the tenant transaction (ADR-0001 §7).
 
+**B0 status (2026-10-09):** `apps/api` implements `app/Platform` (correlation id middleware, problem+json renderer, health checker/controller) and the empty `app/Modules` convention with architecture tests; `routes/api.php` exposes `/api/v1/health` and `/api/v1/health/ready`; JSON log channel on stderr with Laravel Context (`correlation_id`). Setup: `apps/api/README.md`.
+
 ## Performance & scalability plan (Phase 3.5)
 | Area | Strategy |
 |---|---|
