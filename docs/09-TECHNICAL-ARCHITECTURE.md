@@ -47,7 +47,7 @@ Modules: Core, Demand, Planning, Materials, Production, Quality, **Inventory (on
 | Area | Strategy |
 |---|---|
 | PostgreSQL | tenant-leading composite indexes (doc 17 §6.5), EXPLAIN for every QueryDefinition before release, `pg_stat_statements` monitoring, autovacuum tuning for ledger/outbox, monthly partitioning of `inventory_movements`/`audit_events` when volume justifies (doc 20) |
-| Connection pooling | PgBouncer **transaction mode**; tenant context is transaction-local (ADR-0001) so pooling is safe; Laravel PDO with emulated prepares (or pooler prepared-statement support) to avoid server-side prepared statement clashes; pool sized from cores, not users |
+| Connection pooling | PgBouncer **transaction mode**; tenant context is transaction-local (ADR-0001) so pooling is safe; native server-side prepared statements through PgBouncer ≥ 1.21 `max_prepared_statements` (emulated prepares rejected: client-side interpolation widens SQL-injection impact — doc 25 D-B1-09, proposed); pool sized from cores, not users |
 | Hot-row contention | posting locks balance rows in deterministic order, short transactions, bounded retries; W-07 hot-lot test; allocation checks under the same lock |
 | Caching (Redis) | only read-model query results and schema/options; key = `t:{tenant}:{resource}:{scopeHash}:{querySignature}`; TTL ≤ freshness threshold; invalidated by outbox events per resource; never cache ledger balances for posting decisions |
 | Read models | Control Tower overview and aggregates from projectors (lag target p95 < 2 min); detail lists from live QueryDefinitions with keyset pagination |

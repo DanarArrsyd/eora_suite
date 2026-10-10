@@ -1,6 +1,6 @@
 # EORA Suite V1 — Project Blueprint & Claude Code Handoff
 
-**Status:** Specification and UI baseline approved (doc 13, D-027). **Frontend implementation authorized in phases** (D-033, doc 22) — Phases 1–3 approved (Control Tower frontend on typed mocks). **Phase 3.5 Backend Architecture & Data Contract Readiness approved** (D-045) as the backend baseline; backend slices (doc 11) start only with explicit owner approval per slice — **B0 Foundation** authorized (D-051, `apps/api`), **B1 not authorized**. Source: private GitHub repository `DanarArrsyd/eora_suite`, branch `main` (D-050). **Industry:** Discrete manufacturing (stamping, machining, fabrication, welding, assembly). **Product:** independent multi-tenant SaaS Manufacturing Operations Management (MOM). **Timezone default:** Asia/Jakarta, tenant-configurable. **Last consolidated:** 2026-10-09.
+**Status:** Specification and UI baseline approved (doc 13, D-027). **Frontend implementation authorized in phases** (D-033, doc 22) — Phases 1–3 approved (Control Tower frontend on typed mocks). **Phase 3.5 Backend Architecture & Data Contract Readiness approved** (D-045) as the backend baseline; backend slices (doc 11) start only with explicit owner approval per slice — **B0 Foundation completed** (D-053, `apps/api`, merged `c19be09`); **B1** in architecture review (doc 25) and **B2** in scope review (doc 26) — **not authorized for implementation**. Source: private GitHub repository `DanarArrsyd/eora_suite`, branch `main` (D-050). **Industry:** Discrete manufacturing (stamping, machining, fabrication, welding, assembly). **Product:** independent multi-tenant SaaS Manufacturing Operations Management (MOM). **Timezone default:** Asia/Jakarta, tenant-configurable. **Last consolidated:** 2026-10-09.
 
 ## Read in this order
 1. `CLAUDE.md` for Claude Code; `AGENTS.md` for other coding agents.
@@ -12,7 +12,8 @@
 7. `docs/uiux/` — approved design system (canonical UI/UX source, D-021) and `design/mockups/` — Modern Corporate Blue prototypes (static, sample data) pending final approval. Superseded v1 prototypes in `design/mockups/_superseded-v1-ledger-ink/`.
 8. `docs/22-FRONTEND-ARCHITECTURE.md` + ADR-0011 — frontend structure, phase plan, quality gates; code in `apps/web` and `packages/*`.
 9. `apps/api/README.md` — Laravel API (B0 foundation): versions, Docker Compose, quality commands, OpenAPI → `packages/api-client`.
-10. `prompts/CLAUDE-CODE-START.md` — copy/paste kickoff prompt.
+10. `docs/25-B1-TENANCY-SECURITY-PLAN.md` (B1 architecture review) and `docs/26-B2-MASTER-DATA-ROUTING-ADDENDUM.md` (B2 scope review) — proposals, not authorized for implementation (D-053).
+11. `prompts/CLAUDE-CODE-START.md` — copy/paste kickoff prompt.
 
 ## Non-negotiable distinctions
 - **No WIP module or WIP label in operational UI.** Issued but unconsumed stock remains **Material at Production**; actual intermediate products may be tracked as **Semi-Finished Material**. This is a terminology/product-design decision, **not** permission to hide physical balances or accounting obligations.
