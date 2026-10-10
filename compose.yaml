@@ -24,7 +24,6 @@ x-api-env: &api-env
   QUEUE_CONNECTION: redis
   SESSION_DRIVER: array
 
-
 services:
   postgres:
     image: postgres:18-alpine
