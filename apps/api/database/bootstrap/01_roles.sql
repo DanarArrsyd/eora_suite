@@ -2,6 +2,7 @@
 -- superuser, connected to database "postgres". Idempotent: creates missing roles, re-asserts attributes, passwords,
 -- memberships and per-role settings on every run. Passwords arrive as psql variables over stdin, never as files/args.
 \set ON_ERROR_STOP on
+SET client_min_messages = warning;
 -- Keep the password-bearing statements below out of every log and statistics view (D-056 P-06).
 SET log_statement = 'none';
 SET log_min_duration_statement = -1;

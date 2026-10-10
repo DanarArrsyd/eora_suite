@@ -2,6 +2,7 @@
 -- Run by bootstrap.sh as the bootstrap superuser, connected to the target database. Idempotent.
 -- Tables are created later by migrations as eora_owner; definer-owned objects by the versioned definer scripts.
 \set ON_ERROR_STOP on
+SET client_min_messages = warning;
 SET log_statement = 'none';
 
 SELECT format('ALTER DATABASE %I OWNER TO eora_owner', current_database()) \gexec

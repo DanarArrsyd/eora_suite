@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\SecurityBaseline;
 
@@ -10,7 +11,7 @@ use Tests\Support\SecurityBaseline;
  * `migrate --database=pgsql_owner`; fails the build on any drift from the reviewed baseline.
  */
 
-function owner(): Illuminate\Database\Connection
+function owner(): Connection
 {
     return DB::connection('pgsql_owner');
 }

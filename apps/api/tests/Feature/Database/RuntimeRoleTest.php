@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 // Group B/C bootstrap check (doc 25 §11): the application's default connection is the real runtime role.
@@ -21,4 +22,4 @@ it('cannot create objects, read the migrations table or reach definer schemas as
     'use auth schema' => 'select count(*) from auth.no_such_table',
     'use ctx schema' => 'select count(*) from ctx.no_such_table',
     'create schema' => 'create schema evil',
-])->throws(Illuminate\Database\QueryException::class, 'permission denied')->group('integration');
+])->throws(QueryException::class, 'permission denied')->group('integration');

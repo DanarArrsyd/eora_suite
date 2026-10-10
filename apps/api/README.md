@@ -13,12 +13,19 @@ Option A — everything in Docker (recommended):
 ```bash
 cp .env.example .env
 ```
-Fill `EORA_DB_PASSWORD` and `EORA_APP_KEY` in the repository-root `.env`, then:
+Fill `EORA_DB_PASSWORD` (bootstrap superuser) and `EORA_APP_KEY` in the repository-root `.env`, add the role passwords, then start:
+```bash
+sh scripts/ensure-dev-secrets.sh
+```
 ```bash
 docker compose up -d --build --wait
 ```
 ```bash
 curl -fsS http://127.0.0.1:8000/api/v1/health/ready
+```
+Migrations run as the migrations owner, never as the runtime role:
+```bash
+docker compose exec api php artisan migrate --database=pgsql_owner
 ```
 Notes for Docker Desktop on macOS:
 - The `docker` CLI lives in `~/.docker/bin` (add it to `PATH` if the shell does not find it).
@@ -36,9 +43,9 @@ docker compose up -d --wait postgres redis
 ```bash
 cd apps/api && cp .env.example .env && composer install && php artisan key:generate
 ```
-Set `DB_PASSWORD` in `apps/api/.env` to the same value as `EORA_DB_PASSWORD`, then:
+Set `DB_PASSWORD` (= `EORA_DB_APP_PASSWORD`) and `DB_OWNER_PASSWORD` (= `EORA_DB_OWNER_PASSWORD`) in `apps/api/.env`, then:
 ```bash
-php artisan migrate && php artisan serve
+php artisan migrate --database=pgsql_owner && php artisan serve
 ```
 
 ## Quality commands (apps/api)
@@ -54,6 +61,21 @@ not `testing`, or `DB_URL` is set). Running the suite inside the api container i
 ```bash
 docker compose exec api vendor/bin/pest
 ```
+
+## Database roles (M1 / B1 step 1, doc 25 §5.1, D-057)
+| Role | Login | Used by |
+|---|---|---|
+| bootstrap superuser (`EORA_DB_USERNAME`) | yes | `db-bootstrap` service only (roles, schemas, extensions) |
+| `eora_owner` | yes | migrations (`--database=pgsql_owner`) and group A schema tests |
+| `eora_app` | yes | every request and job (default connection); no superuser, no BYPASSRLS, owns nothing |
+| `eora_auth_web`, `eora_auth_delivery`, `eora_provisioner`, `eora_relay` | yes | auth, secret delivery, provisioning, outbox relay (later M1 steps) |
+| `eora_auth_definer`, `eora_prov_definer`, `eora_outbox_definer`, `eora_ctx_verifier` | **no** | owners of reviewed `SECURITY DEFINER` code |
+
+`database/bootstrap/bootstrap.sh` is idempotent: it creates missing roles, re-asserts their attributes, passwords and
+hardening (`log_parameter_max_length = 0`, timeouts), hands objects created by the superuser to `eora_owner`, and creates
+the definer-owned schemas. It never drops anything. Docker Compose runs it before the API starts.
+The image links `pdo_pgsql` against libpq ≥ 17 from apt.postgresql.org (native prepares through PgBouncer, D-056 P-05).
+Tests refuse non-`*_test` databases and non-local hosts (`EORA_TEST_DB_HOST_ALLOW` overrides the host list).
 
 ## Endpoints (B0)
 | Method | Path | Purpose |
