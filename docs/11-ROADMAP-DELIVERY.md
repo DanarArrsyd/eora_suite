@@ -36,6 +36,19 @@ Each slice ends with tests (doc 10), migration + rollback plan, docs update and 
 | B8 Reconciliation | engine (doc 02), variance results, cases, approvals | B6 | ADR-0005 checks green |
 | B9 Read models & Control Tower API | `ct.*` resources, freshness, cache (ADR-0016); frontend adapters swap mocks for the typed client | B4–B8 | CT screens on real data, parity tests |
 | B10 Hardening | k6 W-01..W-11, backup/restore drill, security review | B9 | pilot readiness review |
-Open-decision dependencies per slice: register "Remaining OPEN decisions" table (doc 13) — O-007 → B1/B3/B7, O-012 → B8, O-013 → B6, O-015 → B5/B6, O-021 → pilot release. Slices build these as configuration without defaults until the owner decides.
+Open-decision dependencies per slice: register "Remaining OPEN decisions" table (doc 13). O-003, O-007, O-012, O-013 and O-015 were decided on 2026-10-11 (D-059..D-063); O-021 → pilot release; other open items carry deadlines (D-065).
+
+## Milestone order (D-054, 2026-10-11)
+The slices above are delivered in this milestone order; R1 scope (D-035) is unchanged. Each milestone needs one owner approval (one-page scope + acceptance) and ends with a running demo, resettable scenario seeders and a UAT script based on doc 14.
+| Milestone | Slices | Owner can try |
+|---|---|---|
+| M0 Decisions | — (doc 27, D-054..D-065) | — |
+| M1 Access | B1 | login, users, roles, tenant/plant context |
+| M2 Core master data | B2 | items, UOM, BOM, routing, customers, suppliers, work centers, locations |
+| M3 Ledger | B3 | receipts and movements with correct balances and reversal |
+| M4 Thin end-to-end flow | B4, B6, B7 (thin), manual WO (G-MPS-6) | PO/SO → WO → issue → production → QC → FG → shipment |
+| M5 Usable | B5 basic MPS/MRP, B8 basic reconciliation, B9 partial (Control Tower on real data), demo data | full R1 vertical slice (doc 21 DoD) on demo data |
+| M6 Online staging | production image (libpq ≥ 17 via PGDG, D-056), hosting (O-008), backup, monitoring | browser/phone access |
+| M7+ | remaining R1 features, B10 hardening | iterative |
 Source control: GitHub `DanarArrsyd/eora_suite` (private), branch `main` (D-050); pushes only on owner instruction; CI results reported only after a GitHub runner finishes.
 

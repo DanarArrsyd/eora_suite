@@ -113,7 +113,7 @@ erDiagram
 ## 3. Tenant isolation checklist (per table)
 1. `tenant_id NOT NULL`, leading column of every index used by queries.
 2. Composite FK to every tenant parent.
-3. `ENABLE` + `FORCE ROW LEVEL SECURITY` with `tenant_id = (SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid)` for USING and WITH CHECK (ADR-0001 Amendment 1: a reset context is `''`, not NULL).
+3. `ENABLE` + `FORCE ROW LEVEL SECURITY` with `tenant_id = (SELECT c.tenant FROM ctx_api.context() c)` for USING and WITH CHECK — signed tenant context (ADR-0001 Amendment 2, D-055); invalid, unset or reset context → NULL → no rows. The GUC form of Amendment 1 is only the documented rollback body.
 4. Application role: no table ownership, no BYPASSRLS; ledger tables without UPDATE/DELETE.
 5. Included in automated isolation suite (ADR-0001 T-ISO-01..05).
 
@@ -121,7 +121,7 @@ erDiagram
 Backward trace (shipment → material): `shipment_lines.document_id` → movements(lot) → `genealogy_edges` (to_lot = FG lot) recursively → RM lot → receipt document → supplier ref. Forward trace inverse. Implemented as recursive CTE with depth limit and tenant filter; materialized closure table only if performance tests (doc 20 W-09) require.
 
 ## 5. Open physical questions (carry from doc 04)
-Serial tracking (V2), semi-finished part numbering (O-003), customer-owned/consignment (O-005), retention and data residency (O-008).
+Serial tracking (V2), semi-finished part numbering (decided D-059: Option M default, `<PART>-<STAGE>`), customer-owned/consignment (O-005), retention and data residency (O-008).
 
 ## 6. Phase 3.5 — domain coverage, data dictionary, indexing (2026-10-09)
 ### 6.1 Conceptual domain map (A–J of the Phase 3.5 brief)
@@ -191,7 +191,7 @@ SO line 1—n schedule lines (D-034); Customer PO line 1—1 SO line (unique map
 - Outbox: partial `outbox_events (created_at) WHERE dispatched_at IS NULL` (relay with `FOR UPDATE SKIP LOCKED`).
 - Inbox: `inbox_notifications (tenant_id, user_id, read_at, created_at DESC)`.
 - Keyset pagination indexes match each QueryDefinition default sort (e.g. `(tenant_id, plant_id, requirement_date, id)`); OFFSET only for small master data (ADR-0008 §4).
-- RLS columns indexed; policy uses `(SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid)` so the setting is evaluated once per statement and a reset context fails closed (ADR-0001 Amendment 1).
+- RLS columns indexed; policy uses `(SELECT c.tenant FROM ctx_api.context() c)` so the verifier runs once per RLS table reference (InitPlan) and an invalid or reset context fails closed (ADR-0001 Amendment 2).
 
 ### 6.6 Tenant isolation strategy (summary; normative ADR-0001)
 Shared DB, `tenant_id` + composite FKs on **every** tenant table (audit of §2/§6.2: all listed tenant tables comply; platform tables without tenant_id: `tenants`, `users`, `permissions` catalogue); RLS enabled + forced, fail-closed when context unset; transaction-local context (`set_config(..., true)`) compatible with transaction pooling; plant/warehouse scope enforced in the application policy layer (not RLS) to keep policies simple and fast; isolation suite T-ISO-01..05 mandatory in CI.

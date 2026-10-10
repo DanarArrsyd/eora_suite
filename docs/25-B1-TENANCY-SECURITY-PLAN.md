@@ -1,6 +1,7 @@
 # 25 — B1 Multi-Tenancy & Security: Architecture Review
 
-**Status:** ARCHITECTURE REVIEW v17 (2026-10-10; PR #2 closeout — throttle serialization). Owner approved the **direction** as the basis for final documentation review (D-053). **Implementation NOT authorized**: no code, migrations, authentication, tenant isolation, RBAC or RLS until explicit owner approval of B1 and of the decisions in §17.
+**Status:** ARCHITECTURE REVIEW v18 (2026-10-11): owner decisions recorded — D-B1-24 **APPROVED** (Option B-opt, D-055, §5.5 rewritten), PoC findings adopted (D-056), all §17 decisions approved as recommended (D-057), O-007 decided (D-060). **Implementation is milestone M1** and needs the M1 scope approval (D-054); no code or migrations before that.
+**v17 status (history):** ARCHITECTURE REVIEW v17 (2026-10-10; PR #2 closeout — throttle serialization). Owner approved the **direction** as the basis for final documentation review (D-053). **Implementation NOT authorized**: no code, migrations, authentication, tenant isolation, RBAC or RLS until explicit owner approval of B1 and of the decisions in §17.
 **Basis (unchanged):** ADR-0001 (+ Amendment 1, D-053), ADR-0006, ADR-0007, ADR-0012, ADR-0013; docs 05, 17, 18, 24; doc 11 B1 slice (exit: T-ISO-01..05 green).
 **Starting point:** B0 COMPLETED — PR #1 merged as `c19be09`, post-merge CI run 37942703992 green.
 **Priority:** tenant isolation > authorization scope > authentication/session > audit > convenience.
@@ -130,7 +131,7 @@ Order (three independent steps, each idempotent; no external I/O inside a transa
 |---|---|---|
 | `memberships` | enable + force | P1 all: `tenant_id = ctx_tenant`; P2 SELECT: `ctx_tenant IS NULL AND user_id = ctx_user` |
 | `tenants` | enable + force | SELECT: `id = ctx_tenant` or (`ctx_tenant IS NULL` and member via `memberships`); INSERT/status UPDATE only `TO eora_provisioner` |
-`ctx_tenant` / `ctx_user` = `(SELECT NULLIF(current_setting('app.tenant_id' | 'app.user_id', true), '')::uuid)`.
+`ctx_tenant` / `ctx_user` = `(SELECT c.tenant | c.actor FROM ctx_api.context() c)` — signed context (§5.5, D-055); a tenant-less picker token yields `ctx_tenant` NULL with `ctx_user` set. *(v17 and earlier: GUC form `(SELECT NULLIF(current_setting('app.tenant_id' | 'app.user_id', true), '')::uuid)`, now the rollback body only.)*
 
 ### 2.7 Definer-function rules
 Owner `eora_auth_definer` (NOLOGIN, owns only `auth` objects); `SECURITY DEFINER` + `SET search_path = ''`; all identifiers schema-qualified incl. `pg_catalog`; `REVOKE ALL ON FUNCTION … FROM PUBLIC` then `GRANT EXECUTE` to exactly one role each (table in §2.1); no dynamic SQL; inputs length-checked; functions return no more than documented; every function covered by abuse-case tests (§12); allowlist enforced by the schema guard (§5.4).
@@ -223,7 +224,7 @@ Applies to `auth.reset_requests` (one per reset request) and `auth.invitations` 
 Terminal: `CONSUMED`, `ACCEPTED`, `EXPIRED`, `CANCELLED`, and `DELIVERY_FAILED` for a reset request (an invitation in `DELIVERY_FAILED` can be re-issued by an explicit admin resend).
 
 ## 3. Role and permission architecture
-- Global: `permissions`, `role_templates`, `role_template_permissions` — template content is O-007 (OPEN); only the bootstrap administrator role is needed for provisioning (D-B1-16).
+- Global: `permissions`, `role_templates`, `role_template_permissions` — template content = doc 18 §1 (D-060); only the bootstrap administrator role is needed for provisioning (D-B1-16).
 - Tenant: `roles`, `role_permissions`, `role_assignments` (scope columns + CHECK + composite FKs, `valid_from/valid_until`, `granted_by`, `grant_reason`).
 - Evaluation (doc 18 §5); responses `403 FORBIDDEN`, `403 SCOPE_FORBIDDEN`, `404 NOT_FOUND` for foreign/out-of-scope ids. No `Gate::before` shortcut; Platform Super Admin has no tenant path (O-007).
 
@@ -244,7 +245,7 @@ Password **change** for a signed-in user in B1 = the same email-confirmed reset 
 | `eora_prov_definer` | **no** | schemas `prov`, `prov_api` | owner only (provisioning registry) |
 | `eora_outbox_definer` | **no** | `outbox_api` functions; column grants on `outbox_events` per §6.4 (SELECT: `id, tenant_id, status, claim_token, claimed_until, attempts, max_attempts, next_attempt_at`; UPDATE: `status, claim_token, claimed_until, attempts, next_attempt_at, last_error_code, dispatched_at, dead_at`) through policies `TO eora_outbox_definer` | owner only (outbox claim, R-30, R-33) |
 | `eora_relay` | yes | nothing | `EXECUTE` on `outbox_api.claim_events`, `complete_event`, `fail_event` only; no table privilege | outbox relay process (also holds `eora_app` credentials for handlers) |
-| `eora_ctx_verifier` | **no** | schemas `ctx` (key table) and `ctx_api` (verification functions) | owner only — **PoC scope, D-B1-24** |
+| `eora_ctx_verifier` | **no** | schemas `ctx` (key table) and `ctx_api` (verification functions) | owner only — signed tenant context, D-B1-24 approved (D-055) |
 No role is a member of `eora_owner` or `eora_auth_definer`; `REVOKE ALL ON SCHEMA public, auth, auth_api FROM PUBLIC`.
 
 ### 5.2 Tenant-owned tables
@@ -252,31 +253,32 @@ No role is a member of `eora_owner` or `eora_auth_definer`; `REVOKE ALL ON SCHEM
 ALTER TABLE plants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plants FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON plants
-  USING      (tenant_id = (SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid))
-  WITH CHECK (tenant_id = (SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid));
+  USING      (tenant_id = (SELECT c.tenant FROM ctx_api.context() c))
+  WITH CHECK (tenant_id = (SELECT c.tenant FROM ctx_api.context() c));
+-- v17 and earlier: (SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid) — ADR-0001 Amendment 1, now the rollback body only
 ```
 
-**Threat-model note (R-17):** `app.tenant_id` / `app.user_id` are ordinary custom settings — any session can set them. Context-based RLS therefore contains **application bugs** (a missing filter, a wrong join, an unscoped job), not an attacker who can run arbitrary SQL. SQL-injection defence is: parameterized statements only (native prepared statements, D-B1-09), static/arch checks banning raw SQL with input, least-privilege roles (§2.1) so injected SQL cannot reach credentials, and the optional signed context of D-B1-24.
+**Threat-model note (R-17):** `app.tenant_id` / `app.user_id` are ordinary custom settings — any session can set them. Context-based RLS therefore contains **application bugs** (a missing filter, a wrong join, an unscoped job), not an attacker who can run arbitrary SQL. SQL-injection defence is: parameterized statements only (native prepared statements, D-B1-09), static/arch checks banning raw SQL with input, least-privilege roles (§2.1) so injected SQL cannot reach credentials, and the signed context of D-B1-24 (approved 2026-10-11, D-055), which removes the forgery path described here.
 
-### 5.5 Signed tenant context — PoC design (D-B1-24: PREFERRED FOR PoC, IMPLEMENTATION PENDING APPROVAL)
-Nothing in this section is approved for implementation or production. If the PoC fails, **no automatic fallback** is introduced: the outcome is reported and the owner decides (Option A stays the documented baseline only by explicit decision).
+### 5.5 Signed tenant context (D-B1-24: APPROVED 2026-10-11, D-055 — Option B-opt; normative ADR-0001 Amendment 2)
+Approved after the security PoC (`poc/d-b1-24-signed-context` @ `c806f57`) and its optimization phase (`poc/d-b1-24-optimization` @ `34949ba`, report `poc/ctx/evidence/opt/REPORT-OPTIMIZATION.md`). Implemented in milestone M1 after its scope approval. Rollback to GUC semantics happens only by explicit owner decision, never automatically.
 | Aspect | Design |
 |---|---|
 | Threat model | Attacker executes SQL as `eora_app` inside a request/job transaction (SQL injection) or the app has a scoping bug. Option A (GUC + RLS) contains bugs only; Option B prevents forging another tenant's context. Out of scope: compromise of the PHP process or its secrets (it holds the key), DB superuser/owner compromise. |
 | Trust boundary | PHP runtime (web + workers) **signs**; PostgreSQL **verifies**; injected SQL can read the current token but has no key. |
-| Schemas & roles | `ctx` (table `ctx.keys(kid, key bytea, not_after)`) and `ctx_api` (functions) owned by NOLOGIN `eora_ctx_verifier`; `REVOKE ALL ON SCHEMA ctx FROM PUBLIC` (no login role has `USAGE`); `ctx_api`: `USAGE` + `EXECUTE` only for `eora_app` (inherited by `eora_provisioner`) and for `eora_lifecycle_definer` (its definer functions call `ctx_api.user_id()`/`tenant_id()` while running as that role; doc 26 §2.4a); auth roles need none. `auth` / `auth_api` untouched (R-22). |
+| Schemas & roles | `ctx` (table `ctx.keys(kid, key bytea, not_after)`) and `ctx_api` (functions) owned by NOLOGIN `eora_ctx_verifier`; `REVOKE ALL ON SCHEMA ctx FROM PUBLIC` (no login role has `USAGE`); `ctx_api`: the table-owning role gets `USAGE` only (needed to create policies, no `EXECUTE`; D-056 P-02); `USAGE` + `EXECUTE` only for `eora_app` (inherited by `eora_provisioner`) and for `eora_lifecycle_definer` (its definer functions call `ctx_api.user_id()`/`tenant_id()` while running as that role; doc 26 §2.4a); auth roles need none. `auth` / `auth_api` untouched (R-22). |
 | Key ownership | 256-bit HMAC key from the secrets manager (D-B1-22), injected into app/worker env; the same key loaded into `ctx.keys` by the deployment job (owner credentials); `kid` in every token; two keys valid during rotation; rotation = add new kid → deploy app signing with it → remove old kid after max token lifetime. |
-| Transaction binding | After `BEGIN`, the app reads `pg_backend_pid()` and `transaction_timestamp()` (one round-trip). Token payload: `kid, tenant_id, user_id, pid, xact_ts, exp`; signature `HMAC-SHA256(key, payload)`; set via bound parameter `set_config('app.ctx', $1, true)`. |
-| Verification | `ctx_api.tenant_id()` / `ctx_api.user_id()`: `SECURITY DEFINER`, `STABLE`, `PARALLEL SAFE` where allowed, no arguments, `SET search_path = ''`, schema-qualified `pgcrypto` calls; checks kid known and not expired, HMAC equal, `pid = pg_backend_pid()`, `xact_ts = transaction_timestamp()`, `exp > now()`; any failure → NULL. |
-| Fail-closed | Policies `tenant_id = (SELECT ctx_api.tenant_id())`: NULL → no rows, inserts violate WITH CHECK. A bad token never widens access. |
+| Transaction binding | `BEGIN` and the binding read (`pg_backend_pid()`, transaction start in µs) travel as **one** constant simple-protocol statement (no parameters, nothing secret; dedicated method of the custom connection, never a general emulation switch), so context setup costs the same round trips as Option A. Token payload: `kid, tenant_id, user_id, pid, xact_ts, exp`; signature `HMAC-SHA256(key, payload)`; set via bound parameter `set_config('app.ctx', $1, true)`. |
+| Verification | One PL/pgSQL function `ctx_api.context()` → `(tenant, actor)` (PoC name `ctx_v2`): `SECURITY DEFINER`, `STABLE`, **`PARALLEL RESTRICTED` (mandatory, D-056 P-01: a SAFE wrapper evaluated in a parallel worker sees the worker pid)**, no arguments, `SET search_path = ''`, schema-qualified `pgcrypto` calls. Order: shape check (length, `.` before 64 lowercase hex) → active key by `kid` → HMAC over the raw payload → only an authentic payload is parsed → `pid = pg_backend_pid()`, `xact_us` = transaction start, `exp > now()`. Any failure → NULLs. A tenant-less picker token yields tenant NULL with the actor. No separate `tenant_id()`/`user_id()` wrappers (each would add a definer call). |
+| Fail-closed | Policies `tenant_id = (SELECT c.tenant FROM ctx_api.context() c)`; actor-bound checks `(tenant_id, actor) = (SELECT c.tenant, c.actor FROM ctx_api.context() c)`. NULL → no rows, inserts violate WITH CHECK. A bad token never widens access. |
 | Replay & expiry | Token valid only in the same backend **and** the same transaction (pid + start timestamp); `exp` ≤ maximum request/job duration (D-B1-11). Reuse in a later transaction or another connection → NULL. |
 | Tenant switching | Context is rebuilt from the server session for every transaction; switching tenant regenerates the session (§4); no token outlives its transaction. |
 | Queue workers | Job middleware signs with the job's tenant/actor; workers hold the key; context flushed per job (§6.3). |
 | PgBouncer | Token is transaction-local and the pid is stable within a transaction in transaction-pooling mode; a later transaction on another server connection carries no token. |
-| SQL-injection limits | Injected SQL can still read/write the **current** tenant's data (inherent); it can read the current token (no gain); it must not see other sessions' tokens: bound parameters keep tokens out of `pg_stat_activity.query` text (native prepares, D-B1-09); `log_parameter_max_length = 0` for the runtime roles. |
-| Performance | +1 round-trip per transaction; one HMAC per statement (initplan evaluated once per statement). PoC target: p95 overhead < 2 % on W-01..W-03 (doc 20). |
-| Rollback | Policies reference only `ctx_api.tenant_id()`; replacing its body is a single migration — **executed only by explicit owner decision**, never automatically. |
-**Mandatory verification plan PoC-CTX-01..13** (not to be run before separate approval):
+| SQL-injection limits | Injected SQL can still read/write the **current** tenant's data (inherent); it can read the current token (no gain); it must not see other sessions' tokens: bound parameters keep tokens out of `pg_stat_activity.query` text (native prepares, D-B1-09); `log_parameter_max_length = 0` and `log_parameter_max_length_on_error = 0` for the runtime roles (D-056 P-03; PoC-CTX-03 proved a role without it logs the token). Native prepares need libpq ≥ 17 (D-056 P-05). |
+| Performance | **Budget (D-055, replaces the PoC target p95 < 2 %):** ≤ 0.3 ms p95 per transaction and ≤ 15 µs per RLS table reference at the database level; CI regression gate. Measured (optimization phase): verifier 10.6 µs/evaluation (original 66.6), +17.3 vs 5.3 µs per RLS table reference (A), context setup +28 µs via PgBouncer, W-01/W-02 p95 +0.16–0.27 ms, W-03 within noise. Verifier evaluated once per RLS table reference (InitPlan). |
+| Rollback | Policies reference only `ctx_api.context()`; replacing its body with GUC semantics is a single migration (rehearsed, PoC-CTX-12) — **executed only by explicit owner decision**, never automatically. |
+**Verification plan PoC-CTX-01..13 (+05b, +14)** — executed 2026-10-10/11 on isolated PoC environments; all security tests PASS on the optimized variant; PoC-CTX-11 replaced by the absolute budget (D-055). In M1 these become the T-CTX suite:
 | ID | Verification | Pass criterion |
 |---|---|---|
 | PoC-CTX-01 | forged/random token via `set_config('app.ctx', …, true)` | 0 rows; inserts rejected |
@@ -291,13 +293,15 @@ Nothing in this section is approved for implementation or production. If the PoC
 | PoC-CTX-10 | `EXPLAIN (ANALYZE)` of representative queries | verifier evaluated once per statement (initplan) |
 | PoC-CTX-11 | benchmark W-01..W-03 vs Option A baseline | p95 overhead < 2 % (else report, no automatic change) |
 | PoC-CTX-12 | rollback migration rehearsal in a throw-away database | isolation suite green after rollback; rehearsal only |
-| PoC-CTX-13 | Laravel PDO native prepares through PgBouncer ≥ 1.21 (`max_prepared_statements`) | all suites green, no prepared-statement errors |
+| PoC-CTX-13 | Laravel PDO native prepares through PgBouncer ≥ 1.21 (`max_prepared_statements`) | all suites green, no prepared-statement errors (libpq ≥ 17; libpq 15 fails — D-056 P-05) |
+| PoC-CTX-05b | forced parallel query with the verifier | full tenant count (RESTRICTED) |
+| PoC-CTX-14 | valid token, row naming another actor or tenant in an actor-bound WITH CHECK | only own tenant + own actor accepted |
 
 ### 5.3 Platform tables
 `tenants`, `memberships` §2.6; `users` §2.2; `permissions`, `role_templates*` SELECT; `security_events` §8; `auth.*` definer-only.
 
 ### 5.4 Schema guard (group A)
-Fails if: a `tenant_id` table lacks forced RLS + policy; any LOGIN role owns objects or has `rolsuper`/`rolbypassrls`; a `SECURITY DEFINER` function is off the allowlist, lacks `search_path=''`, is owned by anyone but `eora_auth_definer` (auth), `eora_prov_definer` (prov), `eora_outbox_definer` (outbox_api), `eora_lifecycle_definer` (B2 routing lifecycle, doc 26 §2.4a — implementation blocked until a trustworthy actor context is approved) or `eora_ctx_verifier` (ctx, PoC), or is executable by `PUBLIC` or by a role other than the one listed in §2.1; `eora_app` has any privilege on `auth`/`auth_api`; `security_events`/`audit_events` updatable or deletable by a runtime role; grants differ from the approved matrix.
+Fails if: a `tenant_id` table lacks forced RLS + policy; any LOGIN role owns objects or has `rolsuper`/`rolbypassrls`; a `SECURITY DEFINER` function is off the allowlist, lacks `search_path=''`, is owned by anyone but `eora_auth_definer` (auth), `eora_prov_definer` (prov), `eora_outbox_definer` (outbox_api), `eora_lifecycle_definer` (B2 routing lifecycle, doc 26 §2.4a — unblocked by D-055) or `eora_ctx_verifier` (ctx/ctx_api, D-055), or is executable by `PUBLIC` or by a role other than the one listed in §2.1; `eora_app` has any privilege on `auth`/`auth_api`; `security_events`/`audit_events` updatable or deletable by a runtime role; grants differ from the approved matrix.
 
 ## 6. Request lifecycle and TenantTransaction
 ### 6.1 Middleware order
@@ -564,7 +568,7 @@ Bootstrap of B and C: for every connection, `rolsuper = false AND rolbypassrls =
 | T-ISO-01..05, 02b; T-MEM-01; T-TEN-01; T-USR-02; T-CTX-01..05; T-PROV-01..07; T-AUTH/SESS/CSRF/COOKIE/CORS/RBAC/ESC/CONC/RATE/AUD/PRIV | B/C | as v3 (T-ISO-01 now asserts the `security_events` row of §8) | as v3 |
 
 ## 13. Privilege-escalation prevention
-Grantor ⊇ grantee; SoD-06 self-elevation blocked until O-007 thresholds exist; protected columns never mass-assignable; tenant/plant only from session; regeneration on privilege change; `roles_version` cache keys; break-glass time-boxed; no platform → tenant path; runtime roles cannot `SET ROLE`; credential issuance and consumption held by different roles; definer functions with `search_path=''` and one grantee each.
+Grantor ⊇ grantee; SoD-06 self-elevation always blocked (no thresholds in early V1, D-060); protected columns never mass-assignable; tenant/plant only from session; regeneration on privilege change; `roles_version` cache keys; break-glass time-boxed; no platform → tenant path; runtime roles cannot `SET ROLE`; credential issuance and consumption held by different roles; definer functions with `search_path=''` and one grantee each.
 
 ## 14. Risk register
 | Risk | Today | Mitigation | Test |
@@ -597,7 +601,7 @@ Grantor ⊇ grantee; SoD-06 self-elevation blocked until O-007 thresholds exist;
 6. Docs updated (ADR-0001/0006, docs 05, 17, 18, 24, register). B2 not started.
 
 ## 16. Recommended B1 implementation sequence (after approval; each step its own commit/PR section)
-0. (Separate approval) Security PoC: PoC-CTX-01..13 in a throw-away environment; report before any B1 decision on D-B1-24.
+0. ~~(Separate approval) Security PoC~~ → done 2026-10-10/11; D-B1-24 approved (D-055).
 1. DB bootstrap script: roles (§5.1), schemas, grants; Compose/CI switch away from the superuser; group A harness + schema guard.
 2. Tenancy tables (`tenants`, `companies`, `plants`, calendars) with forced RLS; group C isolation tests T-ISO-02/02b.
 3. `TenantContext`, `TenantTransaction`, middleware priority, job middleware, PgBouncer in Compose/CI; T-ISO-03/04, T-CTX.
@@ -617,7 +621,7 @@ Grantor ⊇ grantee; SoD-06 self-elevation blocked until O-007 thresholds exist;
 | **C. Security PoC required before coding** | PoC-CTX-01..13 (D-B1-24); native prepares through PgBouncer (PoC-CTX-13 / D-B1-09); DB-level abuse suites for auth definer functions (T-ABUSE, T-RST, T-IDN, T-SEVA, T-DLV) as the first B1 deliverable |
 | **D. Operational parameters** | D-B1-05, 06, 07, 11, 21 (incl. lease 2 min, 5 attempts, backoff 1/5/15/60 min), 22 |
 | **E. Safely deferred** | D-B1-12 (retention), MFA delivery in B1.1 (before pilot) |
-| **OPEN (untouched)** | O-003, O-007, O-012, O-013, O-015, O-021 |
+| **OPEN** | O-021 only (O-003, O-007, O-012, O-013, O-015 decided 2026-10-11, D-059..D-063) |
 
 Nothing below is decided until the owner approves it. Numbers are recommendations with rationale.
 
@@ -639,7 +643,7 @@ Nothing below is decided until the owner approves it. Numbers are recommendation
 | D-B1-19 | Membership activation | ACTIVE on acceptance of an admin-created invitation | onboarding flow undefined |
 | D-B1-23 | Password change in B1 | no direct change function; signed-in users change passwords through the email-confirmed reset flow; direct change returns with MFA step-up in B1.1 only with a DB-verifiable proof (one-time step-up secret issued by the delivery path or verified TOTP) | without this decision the removed `set_own_password` would be re-introduced unsafely |
 | D-B1-23b | Where password verification happens | **(a) recommended:** argon2id in PHP, `login_lookup` returns the hash of a non-locked known email (residual §2.2); (b) DB-side `pgcrypto` bcrypt verification (`attempt_login(email, password)` → outcome; no hash ever leaves the DB) — removes the residual but moves ~250 ms CPU per login to PostgreSQL (shift-start login bursts) and sends plaintext passwords to the DB (needs TLS and parameter-logging disabled for the role) | choosing late changes the identity schema |
-| D-B1-24 | Signed tenant context | **PREFERRED FOR PoC — IMPLEMENTATION PENDING APPROVAL** (owner, 2026-10-09). Design §5.5 (`ctx`, `ctx_api`, `eora_ctx_verifier`); PoC-CTX-01..13 mandatory before any implementation decision; no automatic fallback if the PoC fails | without it RLS contains bugs only; SQL injection as `eora_app` could cross tenants and parameterized-only rules carry all the weight |
+| D-B1-24 | Signed tenant context | **APPROVED 2026-10-11 (D-055): Option B-opt with absolute budget** (history: preferred for PoC, owner 2026-10-09). Design §5.5 (`ctx`, `ctx_api`, `eora_ctx_verifier`); PoC-CTX-01..13 mandatory before any implementation decision; no automatic fallback if the PoC fails | without it RLS contains bugs only; SQL injection as `eora_app` could cross tenants and parameterized-only rules carry all the weight |
 | D-B1-25 | Privileged classification for reset notifications (R-26, R-44) | **privileged = effective sensitive permissions** of the user's currently valid role assignments in that tenant (proposed set: tenant administration `core.users_roles`, any approval `*.A`, reversal/adjustment permissions — exact permission list follows O-007); **recipients = (ACTIVE members of that tenant holding tenant administration) ∪ (the reset account owner with an ACTIVE membership in that tenant)**, deduplicated by user | without it the notifier cannot decide whom to protect |
 | D-B1-20 | Security-event durability | buffered post-transaction flush + log + retry job (§8) | denied-access audit lost (T-ISO-01 fails) |
 
@@ -661,7 +665,7 @@ Nothing below is decided until the owner approves it. Numbers are recommendation
 | D-B1-17 | (merged into D-B1-20) | — | — | — |
 | MFA delivery (part of D-B1-04) | B1.1 | privileged accounts protected by password + lockout until then | account takeover by password compromise | before pilot |
 
-**Still OPEN, not decided here:** O-007 (approval thresholds, role-template content beyond D-B1-16, support impersonation), O-012, O-013, O-015, O-021.
+**2026-10-11:** all decisions in this section were approved as recommended (D-057); O-007 decided by D-060; O-021 stays OPEN.
 
 ## 18. Code dependencies found during review (not implemented here)
 | Dependency | Slice |

@@ -1,6 +1,6 @@
 # 18 — RBAC Matrix and Data Ownership
 
-Roles are **default templates** a tenant may copy and adjust (doc 05); permissions are the enforced unit. Every grant is evaluated with scope `tenant + company + plant + (warehouse | work_center)`. Approval thresholds remain owner input (O-007).
+Roles are **default templates** a tenant may copy and adjust (doc 05); permissions are the enforced unit. Every grant is evaluated with scope `tenant + company + plant + (warehouse | work_center)`. **D-060 (2026-10-11):** the templates in §1 are the default role templates; no quantity thresholds in early V1 — every sensitive action (reversal, adjustment, QC release beyond policy, version approvals) requires an independent second approver; thresholds become tenant configuration later; no vendor-support impersonation in V1.
 
 Legend: **V** view · **C** create/edit draft · **S** submit · **P** post/execute · **A** approve (maker ≠ checker) · **R** request reversal/correction · **X** export · — none. Scope column = default data scope of the template.
 

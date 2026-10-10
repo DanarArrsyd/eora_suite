@@ -9,7 +9,7 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 | BR-TEN-02 | Tenant context comes from session membership, never from client input. | Core | SVC/POL | DD-07 | T-ISO-01 |
 | BR-TEN-03 | DB tenant context set transaction-locally; unset context returns no rows. | Core | DB | D-009 | T-ISO-03 |
 | BR-TEN-04 | Jobs, files, cache keys, channels, exports, notifications carry and check `tenant_id`. | Core | SVC | D-009 | T-ISO-04/05, #12 |
-| BR-TEN-05 | Platform admin has no default access to tenant operational data; support access requires tenant-approved, time-boxed, audited grant. *(policy detail OPEN O-007)* | Core | POL | doc 05 | — |
+| BR-TEN-05 | Platform admin has no default access to tenant operational data; support access requires tenant-approved, time-boxed, audited grant: in V1 a temporary membership granted by a tenant administrator; no vendor impersonation *(D-060)*. | Core | POL | doc 05 | — |
 
 ## Ledger & stock (INV)
 | ID | Rule | Owner | Enforce | Source | Test |
@@ -69,7 +69,7 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 | BR-PLN-06 *(APPROVED with conditions, D-046 G-MPS-5/8)* | Basic MRP explodes planned orders through the **approved, effective BOM version** into gross material requirements (BOM line: material, quantity per finished pc, material UOM, conversion profile, scrap/yield allowance applied exactly once, effective date, engineering approval) in material UOM with UOM precision/rounding, and compares per plant with available material (unrestricted − allocations), never with estimated pcs; no new conversion formula without business validation. | Planning | SVC | D-031, doc 02 | MRP test |
 | BR-PLN-07 *(APPROVED, D-046 G-MPS-7)* | Planned production orders are planning records; converting to a WO is an explicit release action with snapshot (BR-PLN-01). Basic capacity check (machine availability, shift calendar, standard cycle time, basic resource capacity, dies availability where relevant) shows clear conflicts as warnings, never optimises. | Planning | SVC | D-031 | release test |
 | BR-PLN-08 *(APPROVED, D-046 G-MPS-6/8)* | Manual WO outside MPS requires reason code, responsible user, permission, approval per policy, audit and a planning-exception reference; it follows material, capacity and inventory rules unless an official exception is approved. Netting is per plant; no automatic cross-plant supply; inter-plant moves only via authorized `MAT_TRANSFER` (D-048). | Planning | SVC + POL | D-046, D-048 | doc 23 #61, #66 |
-| BR-PLN-03 | WO close requires: no open runs, no Material at Production allocated to the WO (returned, transferred, or approved exception), reconciliation indicators FINAL or case opened. *(exception rule OPEN O-015)* | Planning | SVC | O-015 | close test |
+| BR-PLN-03 | WO close requires: no open runs, no Material at Production allocated to the WO (returned, transferred, or approved exception), reconciliation indicators FINAL or case opened. Remaining Material at Production must be returned, transferred to another WO allocation, or closed with an approved exception (independent approver, reason code, audit) *(D-063)*. | Planning | SVC | D-063 | close test |
 
 ## Material issue, custody, return (ISS)
 | ID | Rule | Owner | Enforce | Source | Test |
@@ -79,7 +79,7 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 | BR-ISS-03 | When tenant enables two-step custody, issue lands in `CUSTODY_TRANSIT`; Production acceptance moves it to `MAT_AT_PROD`; partial acceptance creates a discrepancy case. | Materials/Production | SVC | D-013 | custody test |
 | BR-ISS-04 | Only lots with status `UNRESTRICTED` and approved spec can be issued; substitution requires approved substitution record (scope: item, customer, WO). | Materials | SVC + POL | doc 01 | #9 |
 | BR-ISS-05 | Return `MAT_AT_PROD → RM_WAREHOUSE` requires measured quantity (weight/count). | Materials | SVC | D-010 | return test |
-| BR-ISS-06 | RM receipt for items requiring incoming release posts as `BLOCKED` until released. *(scope OPEN O-013)* | Materials/Quality | SVC | O-013 | — |
+| BR-ISS-06 | RM receipt for items requiring incoming release posts as `BLOCKED` until released manually; full incoming inspection is out of V1 *(D-062)*. | Materials/Quality | SVC | D-062 | — |
 
 ## Consumption (CON)
 | ID | Rule | Owner | Enforce | Source | Test |
@@ -99,6 +99,7 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 | BR-OUT-05 | Reusable Remnant = lot split to child lot with measured qty and dimensions; conserves quantity. | Production/Materials | SVC | DD-04 | #22 |
 | BR-OUT-06 | Rework Order consumes `REWORK` pcs and produces Good (→ PENDING_QC) and/or Rejected; genealogy preserved. | Production/Quality | SVC | D-011 | rework test |
 | BR-OUT-07 | Over-reporting guard: if reported pcs exceed `T` by more than tenant guard (default 0%), posting requires supervisor confirmation. | Production | SVC | doc 02 | over-report test |
+| BR-OUT-08 | At most one regular Production Posting per (run, production date, shift): unique key `(tenant_id, run_id, production_date, shift_id)` for regular postings; corrections and reversals are exempt and reference the original posting. | Production | DB + SVC | D-058 (D-B2-12) | duplicate-posting test |
 
 ## Quality & FG (QC / FG)
 | ID | Rule | Owner | Enforce | Source | Test |
@@ -106,6 +107,7 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 | BR-QC-01 | Uninspected quantity cannot be released; partial disposition splits the inspection lot. | Quality | SVC | doc 01 | #6 |
 | BR-QC-02 | QC disposition outcomes: `PENDING_QC → QC_RELEASED / HOLD / REWORK / REJECTED`; `HOLD → PENDING_QC / REJECTED`. | Quality | SVC | D-014 | state tests |
 | BR-QC-03 | The person who reported production output cannot release QC for the same lot (SoD). | Core/Quality | POL | doc 05 | SoD test |
+| BR-QC-04 | A tenant may configure a separate quarantine location under Quality custody for `REJECTED` and `HOLD` quantities; the move is an inventory transfer (status unchanged). Without that configuration D-014/DD-01 applies (QC Area, Production custody until disposition). | Quality/Inventory | SVC | D-064 | quarantine test |
 | BR-FG-01 | FG Receipt is a separate transaction `QC_AREA/QC_RELEASED → FG_WAREHOUSE/UNRESTRICTED`; QC accept alone never changes FG stock. | Warehouse/Inventory | SVC | D-014 | #7 |
 | BR-FG-02 | Only `UNRESTRICTED` FG minus allocations is available for picking/shipment. | Warehouse | SVC | D-014 | delivery concurrency |
 | BR-FG-03 | Shipment posts `FG/STAGING → V_CUSTOMER` against Delivery Schedule Lines of SO lines (BR-DEM-09, D-034); partial shipments allowed; over-shipment blocked unless tenant tolerance. | Delivery | SVC | doc 01 | #18 |
@@ -115,7 +117,7 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 |---|---|---|---|---|---|
 | BR-REC-01 | Three indicators GYV, PvS, UMV calculated per ADR-0005 with status NOT_CALCULABLE/PROVISIONAL/FINAL. | Traceability (Reconciliation) | SVC | D-012 | #2–#5, #23 |
 | BR-REC-02 | Three distinct terms (D-024): **Unexplained Material Variance** (calculated indicator, never called loss); **Actual Material Loss** (only when an investigation proves physical loss — evidence, approval, stock adjustment, case resolution `ACTUAL_MATERIAL_LOSS_CONFIRMED`); **Physical Stock Discrepancy** (counted minus book from an approved stock count, resolution `PHYSICAL_DISCREPANCY_CONFIRMED`). Menus and general indicators use "Material Variance". | All UI/reports | UI + report templates review | doc 02, D-024 | copy review |
-| BR-REC-03 | Tolerance breach (abs AND %) on FINAL indicator opens case; without configuration strict default *(OPEN O-012)*. | Traceability | SVC | ADR-0005 | tolerance test |
+| BR-REC-03 | Tolerance breach (abs AND %) on FINAL indicator opens case; without configuration the strict default applies: any non-zero unexplained FINAL variance opens a case *(D-061)*. | Traceability | SVC | ADR-0005 | tolerance test |
 | BR-REC-04 | Case cannot be closed without FINAL indicator or approved exception; resolution by cause code, optional adjustment with maker-checker. | Traceability/Inventory | SVC + POL | doc 02 | case test |
 | BR-REC-05 | Reversal of an included document reopens indicators to PROVISIONAL with versioned history. | Traceability | SVC | ADR-0005 | reversal test |
 
