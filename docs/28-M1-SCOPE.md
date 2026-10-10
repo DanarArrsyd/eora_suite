@@ -1,6 +1,6 @@
 # 28 — M1 Scope: Access (B1) — lembar persetujuan
 
-**Status:** PROPOSAL, menunggu persetujuan owner (D-054: satu approval per milestone). Belum ada kode sebelum disetujui.
+**Status:** **DISETUJUI 2026-10-11 (D-066)** — owner: "Setuju scope M1". Implementasi di `feat/m1-access`.
 **Basis:** doc 25 v18 (§15 acceptance, §16 urutan), ADR-0001 Amendment 2, D-055..D-057, D-060, doc 18 §1, doc 22, `docs/uiux/`.
 **Tujuan M1:** Anda bisa **login, memilih tenant/plant, mengundang user, memberi role, reset password dan logout** di aplikasi yang berjalan, di atas fondasi isolasi tenant yang sudah terbukti di PoC.
 
@@ -51,4 +51,4 @@
 - Berhenti hanya bila ada temuan keamanan atau keputusan baru yang benar-benar dibutuhkan. Hal-hal lain dikerjakan sampai demo.
 - Ukuran: **milestone terbesar** di roadmap (fondasi keamanan). Tidak ada tanggal yang dijanjikan.
 
-**Pilihan owner:** ☐ Setuju scope M1 ☐ Ubah: …
+**Pilihan owner:** ☑ Setuju scope M1 (2026-10-11)
