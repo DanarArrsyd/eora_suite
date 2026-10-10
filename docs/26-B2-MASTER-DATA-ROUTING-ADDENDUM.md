@@ -1,6 +1,7 @@
 # 26 — B2 Manufacturing Master Data & Routing: Scope Addendum
 
-**Status:** SCOPE REVIEW v13 (2026-10-10; owner: B2 — **planning only**, D-053) — analysis only. **B2 is not authorized**; no migrations, API or UI. Depends on B1 (doc 25), itself not authorized.
+**Status:** SCOPE REVIEW v14 (2026-10-11): §11 decisions approved (D-058), O-003 decided (D-059), D-B2-15 unblocked (D-055). **Implementation is milestone M2** and needs the M2 scope approval (D-054); no migrations, API or UI before that. Depends on B1 (doc 25, milestone M1).
+**v13 status (2026-10-10):** SCOPE REVIEW v13 (owner: B2 — planning only, D-053).
 **v2 corrections (owner review):** a component may legitimately appear on several BOM lines / operations; the consumption point belongs to the **BOM line**, resolved per (BOM version, routing version) pair through an approved map — `op_seq` numbers carry no meaning across routings; double consumption is prevented by transaction rules, idempotency and actual source references, not by forbidding repeated components (§2.5, §3); O-003 options documented in §3A.
 **v3 corrections (PR #2 review, owner-approved remediation):** consumption allocation model (`consumption_line_allocations`, owner-approved direction Option A — BR-OUT-01 unchanged) for several requirement lines served by one consume leg; posting uniqueness no longer attributed to BR-PER-04 (which governs production date/shift) — proposed separately as D-B2-12; inclusive `effective_to`; failed-import revalidation.
 **v4 correction (PR #2 review, owner-approved):** an open-ended approved version can be closed only by the restricted APPROVED → SUPERSEDED lifecycle transition of §2.4a; no generic update of approved versions.
@@ -71,14 +72,14 @@ Approving v(n+1) of a routing is one service command, executed in **one transact
 6. Audit events for both versions (before/after hash); COMMIT. The inclusive exclusion constraint (`'[]'`) is checked at statement end and protects the result.
 **Database guard:** a trigger on `routing_versions` rejects every UPDATE of an `APPROVED` or `SUPERSEDED` row except this transition: only `status` (`APPROVED → SUPERSEDED`), `effective_to` (from NULL or a later date to a date ≥ `effective_from`), `superseded_by_version_id`, `superseded_at` may change, and only when the statement runs **inside the lifecycle function**, proven by `current_user = 'eora_lifecycle_definer'`: the function `lifecycle_api.approve_routing_version(version_id)` is `SECURITY DEFINER`, owned by the NOLOGIN role `eora_lifecycle_definer`, `SET search_path = ''`, schema-qualified, `EXECUTE` granted to `eora_app` only. Runtime roles cannot become that role (no membership, no `SET ROLE`, NOLOGIN), so the condition cannot be forged; custom settings (`app.*` or any GUC) play **no** part in the authorization. Operations, standards, `effective_from` and machine/tool/inspection children of approved versions can never be updated — not even by the lifecycle function; there is no generic UPDATE path.
 - **Inside the function, in this order, all in one transaction** (the Laravel policy check stays as the first line, but the DB function never relies on it):
-  1. **Trusted actor and tenant:** `actor := ctx_api.user_id()`, `tenant := ctx_api.tenant_id()` (signed context, doc 25 §5.5); NULL → reject. `app.user_id`, `app.tenant_id` or any other custom setting are **never** accepted as proof.
+  1. **Trusted actor and tenant:** `SELECT c.actor, c.tenant INTO actor, tenant FROM ctx_api.context() c` (signed context, doc 25 §5.5, D-055); NULL → reject. `app.user_id`, `app.tenant_id` or any other custom setting are **never** accepted as proof.
   2. **Active membership:** an `ACTIVE` membership of `actor` in `tenant` (and the tenant `ACTIVE`).
   3. **Effective permission and scope:** a currently valid `role_assignment` of that membership (`valid_from ≤ now() < valid_until` or open) whose role grants the routing-approval permission (proposed code `master.routing.approve`; final catalogue entry and template mapping per D-B2-06 / O-007) **and** whose scope contains the routing's plant (`TENANT`, `COMPANY` = the plant's company, or `PLANT` = the routing's plant).
   4. **Maker ≠ checker:** `actor ≠ prepared_by` of the new version (SoD-08 proposed).
   5. **Lifecycle validity:** routing lock (`FOR UPDATE`), version locks, new version `SUBMITTED`, effectivity and retroactivity checks (D-B2-14).
   6. Supersession updates and approval, both audit rows (actor = trusted actor); COMMIT.
-  - `eora_lifecycle_definer` needs `USAGE` on schema `ctx_api` and `EXECUTE` on `ctx_api.user_id()`/`ctx_api.tenant_id()` (granted with the D-B1-24 implementation, doc 25 §5.5).
-  - The definer reads `memberships`, `role_assignments`, `role_permissions`, `plants` only through tenant policies equal to `eora_app`'s (`tenant_id = ctx_api.tenant_id()`), with column grants limited to the columns these checks use; it never widens tenant scope.
+  - `eora_lifecycle_definer` needs `USAGE` on schema `ctx_api` and `EXECUTE` on `ctx_api.context()` (granted with the D-B1-24 implementation, doc 25 §5.5).
+  - The definer reads `memberships`, `role_assignments`, `role_permissions`, `plants` only through tenant policies equal to `eora_app`'s (`tenant_id = (SELECT c.tenant FROM ctx_api.context() c)`), with column grants limited to the columns these checks use; it never widens tenant scope.
 - **Approver identity:** only the trusted actor of step 1; the function never accepts an approver id parameter.
 - **Implementation gate (owner, 2026-10-09):** implementing `lifecycle_api.approve_routing_version` — or any elevated database approval function — is **BLOCKED** until D-B1-24 (signed tenant context) passes PoC-CTX-01..13 and is approved for implementation, or the owner approves an alternative actor context proven equally unforgeable. There is **no automatic fallback** to `app.user_id` or other forgeable settings; if neither is approved, routing approval cannot use the elevated path and B2 must stop at this point for an owner decision.
 - The role is added to the schema-guard allowlist of definer owners (doc 25 §5.4).
@@ -124,7 +125,7 @@ Canonical rule ADR-0004: input material leaves stock **once**, in the consumptio
 7. **Planned ≠ actual:** consuming more or less than planned is a variance for reconciliation (doc 02, ADR-0005), not a validation error — physical measurement governs (ADR-0003).
 8. **Option M chains** (semi-finished stage items) must be acyclic: an item may not transitively consume itself (validated at BOM approval).
 
-## 3A. O-003 intermediate quantities — options (OPEN, owner decision before B5)
+## 3A. O-003 intermediate quantities — options (DECIDED 2026-10-11, D-059: Option M default, Option S per item)
 No WIP module, menu or label in either option (D-002).
 | | **Option S — single item, operation count points** | **Option M — semi-finished item per stage** |
 |---|---|---|
@@ -138,7 +139,7 @@ No WIP module, menu or label in either option (D-002).
 | B5 impact | WO per FG part with all operations; capacity per operation | WO (or WO chain) per stage item; MRP explodes stage BOMs; planning of each stage |
 | B6 impact | runs per WO operation; posting consumes at mapped ops, produces at final op | each stage run posts consume (previous stage item) + produce (stage item) |
 | Variance (doc 02) | per WO across operations | per stage + rolled up via genealogy |
-B2 supports both (per item if the owner wants a mix). **No policy is set here.**
+B2 supports both per item. **Policy (D-059):** Option M is the default; Option S may be configured per item for short in-line routings.
 
 ## 4. Output, QC and FG statuses stay distinct (master data only sets flags)
 | Concept | Where it lives | B2 contribution |
@@ -217,9 +218,9 @@ erDiagram
 | Dependency | Why |
 |---|---|
 | B1 tenancy, RLS, RBAC, audit | every B2 table is tenant-owned; approvals need roles; imports need audit |
-| Approval mechanism (O-007 thresholds OPEN) | routing/BOM approval; until thresholds exist, every version approval requires a second user (no default threshold invented) |
+| Approval mechanism (D-060) | routing/BOM approval: every version approval requires an independent second user; no thresholds in early V1 |
 | Calendars (B1) | not needed for effective dates (plain dates) but for WO release later |
-| O-003 (OPEN) | intermediate representation (Option S vs M) — B2 supports both; B5/B6 need the decision |
+| O-003 (decided D-059) | Option M default, Option S allowed per item — B2 supports both |
 | O-026 | BOM gross qty per material UOM |
 | D-046 / O-028 | `work_center_capacity`, `std_cycle_seconds` (warning-only capacity) |
 
@@ -260,7 +261,7 @@ erDiagram
 | B2-AT-33 (E) | preparer approves own version | rejected (maker ≠ checker) |
 | B2-AT-34 (F) | authorized checker (active membership, permission, matching plant scope, not the preparer) approves v2 | success: atomic supersession, audit rows with the trusted actor, WO snapshots unchanged |
 | B2-AT-35 (G) | direct SQL as `eora_app`: UPDATE approved version, or call the function with a forged/absent signed context | UPDATE rejected by the trigger; function rejects (no trusted actor) |
-| B2-AT-36 (H) | signed-context verification fails (expired, wrong pid/transaction, unknown kid, bad HMAC) | `ctx_api.user_id()` returns NULL → rejected, nothing changed |
+| B2-AT-36 (H) | signed-context verification fails (expired, wrong pid/transaction, unknown kid, bad HMAC) | `ctx_api.context()` returns NULL actor → rejected, nothing changed |
 | B2-AT-37 | Plant P1 routing operation requires die D-200 located in plant P2 (same tenant, die linked to the item) | rejected by service and trigger; not shown as available |
 | B2-AT-38 | Die of another tenant referenced by id or code (UI, API, import) | FK/RLS violation / "unknown reference" |
 | B2-AT-39 | Die D-100 moved from P1 to P2 by an audited master-data update after routing v1 (P1) was approved | move recorded in `audit_events`; v1 stays readable; v1 shows "tooling not available in plant"; approving a new P1 version referencing D-100 is rejected |
@@ -330,14 +331,14 @@ erDiagram
 | D-B2-01 *(revised)* | Consumption point model | (a) approved BOM–routing map per version pair; (b) BOM line bound to one routing version's `op_seq`; (c) operation-level material lists in the routing | (a): supports alternate routings and renumbered operations, allows repeated components, keeps BOM and routing independently versioned; cost = one more approval artefact per pair |
 | D-B2-02 | Standard yield level | per routing version vs per operation (+ combination rule) | per routing version (doc 02 PvS formula today); per-operation yields need a rule change → would be a new decision |
 | D-B2-04 | Alternate routings in V1 | primary only vs primary + alternates | allow alternates, choose at WO release (B5) — needs (a) above |
-| D-B2-15 | Elevated routing-approval implementation gate | **BLOCKED** until D-B1-24 is approved for implementation (after PoC) or an equally unforgeable actor context is approved; no fallback (§2.4a) |
+| D-B2-15 | Elevated routing-approval implementation gate | ~~BLOCKED until D-B1-24 is approved~~ → **unblocked 2026-10-11** (D-B1-24 approved, D-055) |
 | D-B2-06 | Routing/BOM/map approval | maker ≠ checker (proposed SoD-08); approver role | maker ≠ checker; approver role from doc 18 once O-007 decided; until then any second user with the approve permission |
 | D-B2-07 | Import partial commit | all-or-nothing vs valid rows only, per template | all-or-nothing for routings, BOMs, maps (consistency); valid-rows-only for items, customers, customer parts (volume) |
 
 ### 11.3 Can be deferred safely
 | ID | Decision | Why safe | Needed by |
 |---|---|---|---|
-| D-B2-03 | O-003 Option S / M | B2 supports both; no posting in B2 | before B5 design |
+| D-B2-03 | O-003 Option S / M | **decided D-059** (M default, S per item) | — |
 | D-B2-11 | Outside processing (subcontract operations) | not in V1 scope today | V2 or explicit owner request |
 
 ### 11.4 Recorded direction and new proposal (v3)
@@ -346,4 +347,4 @@ erDiagram
 | D-B2-13 | Consumption allocation model (`consumption_line_allocations`, §3 point 3a) — Option A, BR-OUT-01 unchanged | **owner-approved design direction (2026-10-09)**; logical design only; B6 implementation needs separate approval |
 | D-B2-14 | Retroactive routing effectivity (v(n+1) effective before its approval date) | **requires owner decision**; recommendation: not allowed in V1 (prevents silent change of standards for already-planned dates); corrections via a new version from today |
 | D-B2-12 | Posting source uniqueness: "at most one regular Production Posting per (run, shift)" as an enforced invariant (today a state-machine note in doc 16 §3) vs idempotency key + source reference only | **requires owner decision**; recommendation: unique key `(tenant_id, run_id, production_date, shift_id)` for regular postings, corrections/reversals exempt — a **new** canonical rule, therefore not added automatically |
-OPEN items untouched: O-003 (input to D-B2-03), O-007, O-012, O-013, O-015, O-021.
+**2026-10-11:** all §11 decisions approved as recommended (D-058); O-003, O-007, O-012, O-013, O-015 decided (D-059..D-063); O-021 stays OPEN.

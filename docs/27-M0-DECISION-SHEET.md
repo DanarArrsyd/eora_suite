@@ -1,6 +1,6 @@
 # 27 — M0 Decision Sheet (lembar keputusan owner)
 
-**Status:** PROPOSAL, untuk diputuskan owner. Belum ada keputusan yang berlaku sampai owner menjawab. Setelah disetujui, setiap keputusan dicatat di `13-DECISION-REGISTER.md` (D-0xx) dan dokumen terkait di-update.
+**Status:** **DIPUTUSKAN 2026-10-11.** Jawaban owner: "Setuju semua rekomendasi, D-B1-24 opsi 1, P-05 PGDG". Keputusan tercatat di `13-DECISION-REGISTER.md` sebagai D-054..D-065. Kolom pilihan di bawah dipertahankan sebagai riwayat.
 **Tanggal:** 2026-10-11 · **Basis:** `main` @ `a103e24`; PoC D-B1-24 (`poc/d-b1-24-signed-context` @ `c806f57`, `poc/d-b1-24-optimization` @ `34949ba`).
 **Tujuan:** menutup semua keputusan yang memblokir milestone M1–M5 dalam satu sesi, supaya implementasi bisa berjalan tanpa berhenti di tengah slice.
 

@@ -56,7 +56,7 @@ stateDiagram-v2
   Reported --> Reporting: add correction posting (before close)
   Closed --> [*]
 ```
-Production Posting document: `Draft → Posted → (Reversed)`. Post = one atomic transformation (ADR-0004): consume legs (measured, BR-CON-01..03), produce legs Good/NG Rework/NG Rejected/Scrap. Lot Split (remnant) and Material Return are separate documents posted before measured remaining is recorded. Multi-shift run: one posting per shift (BR-PER-04). Event `production.output_posted` → Quality (if PENDING_QC), PPIC.
+Production Posting document: `Draft → Posted → (Reversed)`. Post = one atomic transformation (ADR-0004): consume legs (measured, BR-CON-01..03), produce legs Good/NG Rework/NG Rejected/Scrap. Lot Split (remnant) and Material Return are separate documents posted before measured remaining is recorded. Multi-shift run: one posting per shift (BR-PER-04); one regular posting per (run, production date, shift) is enforced by a unique key (BR-OUT-08, D-058). Event `production.output_posted` → Quality (if PENDING_QC), PPIC.
 
 ## 4. Inspection Lot (Quality)
 ```mermaid
