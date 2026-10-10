@@ -35,9 +35,33 @@ services:
       timeout: 3s
       retries: 20
 
+  # One-shot, idempotent role/schema bootstrap (doc 25 §5.1/§9 step 0, D-057). Only this service holds the bootstrap
+  # superuser credentials; the API connects as eora_app and migrates as eora_owner. Never drops anything.
+  db-bootstrap:
+    build:
+      context: ./apps/api
+    image: eora-api:dev
+    entrypoint: ['sh', 'database/bootstrap/bootstrap.sh']
+    restart: 'no'
+    environment:
+      PGHOST: postgres
+      PGUSER: ${EORA_DB_USERNAME:-eora}
+      PGPASSWORD: ${EORA_DB_PASSWORD}
+      EORA_BOOTSTRAP_DATABASES: ${EORA_DB_DATABASE:-eora} eora_test
+      EORA_DB_OWNER_PASSWORD: ${EORA_DB_OWNER_PASSWORD:?set EORA_DB_OWNER_PASSWORD in .env (scripts/ensure-dev-secrets.sh)}
+      EORA_DB_APP_PASSWORD: ${EORA_DB_APP_PASSWORD:?set EORA_DB_APP_PASSWORD in .env}
+      EORA_DB_AUTH_WEB_PASSWORD: ${EORA_DB_AUTH_WEB_PASSWORD:?set EORA_DB_AUTH_WEB_PASSWORD in .env}
+      EORA_DB_AUTH_DELIVERY_PASSWORD: ${EORA_DB_AUTH_DELIVERY_PASSWORD:?set EORA_DB_AUTH_DELIVERY_PASSWORD in .env}
+      EORA_DB_PROVISIONER_PASSWORD: ${EORA_DB_PROVISIONER_PASSWORD:?set EORA_DB_PROVISIONER_PASSWORD in .env}
+      EORA_DB_RELAY_PASSWORD: ${EORA_DB_RELAY_PASSWORD:?set EORA_DB_RELAY_PASSWORD in .env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: ./apps/api
+    image: eora-api:dev
     environment:
       APP_NAME: 'EORA Suite API'
       APP_ENV: local
@@ -50,8 +74,11 @@ services:
       DB_HOST: postgres
       DB_PORT: '5432'
       DB_DATABASE: ${EORA_DB_DATABASE:-eora}
-      DB_USERNAME: ${EORA_DB_USERNAME:-eora}
-      DB_PASSWORD: ${EORA_DB_PASSWORD}
+      # runtime role (never the bootstrap superuser); migrations: php artisan migrate --database=pgsql_owner
+      DB_USERNAME: eora_app
+      DB_PASSWORD: ${EORA_DB_APP_PASSWORD}
+      DB_OWNER_USERNAME: eora_owner
+      DB_OWNER_PASSWORD: ${EORA_DB_OWNER_PASSWORD}
       REDIS_CLIENT: predis
       REDIS_HOST: redis
       REDIS_PORT: '6379'
@@ -61,8 +88,8 @@ services:
     ports:
       - '127.0.0.1:${EORA_API_HOST_PORT:-8000}:8000'
     depends_on:
-      postgres:
-        condition: service_healthy
+      db-bootstrap:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 

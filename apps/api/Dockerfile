@@ -1,9 +1,21 @@
 # Development image for the EORA API (B0). Not a production image (production build is a later slice).
 FROM php:8.4-cli-bookworm
 
+# libpq comes from the official PostgreSQL repository (apt.postgresql.org): pdo_pgsql must be compiled against
+# libpq >= 17 so prepared statements are closed at protocol level and work through PgBouncer transaction pooling
+# (D-056 P-05; Debian bookworm ships libpq 15, which closes them with SQL DEALLOCATE and aborts the transaction).
+# postgresql-client provides psql for the idempotent database bootstrap (database/bootstrap).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq-dev libzip-dev libicu-dev unzip git curl \
+    && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+       > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends libpq-dev postgresql-client-18 libzip-dev libicu-dev unzip git \
     && docker-php-ext-install pdo_pgsql zip intl bcmath \
+    && libpq_major=$(php -i | sed -n 's/^PostgreSQL(libpq) Version => \([0-9]*\).*/\1/p' | head -n 1) \
+    && test "$libpq_major" -ge 17 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
