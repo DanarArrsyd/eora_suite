@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\SchemaGuard;
 use Tests\Support\SecurityBaseline;
 
 /*
@@ -99,16 +100,10 @@ it('hardens runtime roles: no parameter logging and bounded timeouts', function 
     }
 })->group('integration', 'schema');
 
-it('matches the reviewed SECURITY DEFINER allowlist exactly', function () {
-    // Extension-owned functions are excluded (pgcrypto in schema ext has no definers anyway).
-    $definers = column(
-        "select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-          where p.prosecdef and n.nspname not in ('pg_catalog', 'information_schema')
-            and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
-          order by 1",
-    );
+it('matches the reviewed SECURITY DEFINER allowlist exactly: signature, owner and EXECUTE grantees', function () {
+    ['actual' => $actual, 'expected' => $expected] = SchemaGuard::definers(owner());
 
-    expect($definers)->toBe(SecurityBaseline::DEFINER_FUNCTIONS);
+    expect($actual)->toBe($expected);
 })->group('integration', 'schema');
 
 it('requires an empty search_path, a NOLOGIN definer owner and no PUBLIC execute on every definer', function () {
@@ -124,15 +119,33 @@ it('requires an empty search_path, a NOLOGIN definer owner and no PUBLIC execute
     expect($offenders)->toBe([]);
 })->group('integration', 'schema');
 
-it('forces row level security on every table with a tenant_id column', function () {
-    $unprotected = column(
-        "select c.oid::regclass::text from pg_class c join pg_namespace n on n.oid = c.relnamespace
-          where c.relkind in ('r', 'p') and n.nspname = 'public'
-            and exists (select 1 from pg_attribute a where a.attrelid = c.oid and a.attname = 'tenant_id' and not a.attisdropped)
-            and not (c.relrowsecurity and c.relforcerowsecurity)",
-    );
+it('forces RLS on every tenant table with policies that bind tenant_id to the signed context', function () {
+    expect(SchemaGuard::tenantPolicyViolations(owner()))->toBe([]);
+})->group('integration', 'schema');
 
-    expect($unprotected)->toBe([]);
+it('detects unsafe tenant tables: missing policy, USING (true), unforced RLS (guard self-test)', function () {
+    $connection = owner();
+    $connection->beginTransaction();
+
+    try {
+        $connection->statement('create table public.guard_probe_nopolicy (tenant_id uuid not null)');
+        $connection->statement('alter table public.guard_probe_nopolicy enable row level security, force row level security');
+        $connection->statement('create table public.guard_probe_open (tenant_id uuid not null)');
+        $connection->statement('alter table public.guard_probe_open enable row level security, force row level security');
+        $connection->statement('create policy wide_open on public.guard_probe_open using (true)');
+        $connection->statement('create table public.guard_probe_unforced (tenant_id uuid not null)');
+        $connection->statement('alter table public.guard_probe_unforced enable row level security');
+
+        $violations = SchemaGuard::tenantPolicyViolations($connection);
+    } finally {
+        $connection->rollBack();
+    }
+
+    expect($violations)
+        ->toContain('guard_probe_nopolicy: no policy (the table would be unusable or rely on an unreviewed path)')
+        ->toContain('guard_probe_open.wide_open: USING does not bind tenant_id to ctx_api.context()')
+        ->toContain('guard_probe_open.wide_open: WITH CHECK does not bind tenant_id to ctx_api.context()')
+        ->toContain('guard_probe_unforced: row level security not enabled and forced');
 })->group('integration', 'schema');
 
 it('gives PUBLIC no privilege on the database or on any EORA schema', function () {

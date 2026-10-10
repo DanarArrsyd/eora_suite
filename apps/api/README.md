@@ -23,9 +23,14 @@ docker compose up -d --build --wait
 ```bash
 curl -fsS http://127.0.0.1:8000/api/v1/health/ready
 ```
-Migrations run as the migrations owner, never as the runtime role:
+Migrations run as the migrations owner in the one-shot `db-migrate` service (it also runs automatically on `up`); the
+long-running API container holds only the runtime role's credentials (doc 25 §10):
 ```bash
-docker compose exec api php artisan migrate --database=pgsql_owner
+docker compose run --rm db-migrate
+```
+Backend tests (they need the owner for the group A schema guard, so they run in the same one-shot container):
+```bash
+docker compose run --rm --entrypoint vendor/bin/pest db-migrate
 ```
 Notes for Docker Desktop on macOS:
 - The `docker` CLI lives in `~/.docker/bin` (add it to `PATH` if the shell does not find it).
@@ -57,16 +62,13 @@ running, use `composer test:unit` (excludes the `integration` group).
 
 Tests always use the `eora_test` database: `phpunit.xml` forces the test configuration over the process environment, and
 `tests/Support/TestDatabaseGuard.php` aborts the run before any query if the target is not a `*_test` database (or `APP_ENV` is
-not `testing`, or `DB_URL` is set). Running the suite inside the api container is therefore safe:
-```bash
-docker compose exec api vendor/bin/pest
-```
+not `testing`, or `DB_URL` is set). Running the suite in the `db-migrate` container (see above) is therefore safe.
 
 ## Database roles (M1 / B1 step 1, doc 25 §5.1, D-057)
 | Role | Login | Used by |
 |---|---|---|
 | bootstrap superuser (`EORA_DB_USERNAME`) | yes | `db-bootstrap` service only (roles, schemas, extensions) |
-| `eora_owner` | yes | migrations (`--database=pgsql_owner`) and group A schema tests |
+| `eora_owner` | yes | migrations and group A schema tests — credentials only in the one-shot `db-migrate` service, never in the API container |
 | `eora_app` | yes | every request and job (default connection); no superuser, no BYPASSRLS, owns nothing |
 | `eora_auth_web`, `eora_auth_delivery`, `eora_provisioner`, `eora_relay` | yes | auth, secret delivery, provisioning, outbox relay (later M1 steps) |
 | `eora_auth_definer`, `eora_prov_definer`, `eora_outbox_definer`, `eora_ctx_verifier` | **no** | owners of reviewed `SECURITY DEFINER` code |
