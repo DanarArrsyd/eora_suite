@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /*
- * Performance budget of the signed context (D-055, replaces the PoC's p95 < 2 % target): at the database level
+ * Performance budget of the signed context (D-055, replaces the PoC's p95 < 2 % target; CI ceiling D-067): at the database level
  * ≤ 15 µs per RLS table reference and ≤ 0.3 ms p95 added per transaction compared with Option A (GUC context).
  * Medians/percentiles over interleaved runs keep host noise out of the verdict.
  */
@@ -34,7 +34,11 @@ it('keeps the verifier at or below 15 µs per evaluation (server side)', functio
         return ['verifier' => $verifier[2], 'baseline' => $baseline[2]];
     });
 
-    expect($runs['verifier'] - $runs['baseline'])->toBeLessThanOrEqual(15.0);
+    // D-067: 15 µs on reference hardware (dev/staging); shared CI runners (~1.6x slower CPU) use a 25 µs regression
+    // ceiling, set through EORA_PERF_VERIFIER_BUDGET_US in the workflow.
+    $budget = (float) (getenv('EORA_PERF_VERIFIER_BUDGET_US') ?: 15.0);
+
+    expect($runs['verifier'] - $runs['baseline'])->toBeLessThanOrEqual($budget);
 })->group('integration', 'perf');
 
 it('adds at most 0.3 ms p95 per transaction compared with Option A (plain setting) context setup', function () {
