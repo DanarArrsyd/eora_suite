@@ -8,6 +8,7 @@ use App\Platform\Auth\AuthSession;
 use App\Platform\Auth\PasswordHasher;
 use App\Platform\Auth\SessionExpiredException;
 use App\Platform\Database\EoraPostgresConnection;
+use App\Platform\Exceptions\DomainProblem;
 use App\Platform\Security\SecurityEvent;
 use App\Platform\Security\SecurityEventRecorder;
 use App\Platform\Security\SecurityHasher;
@@ -22,7 +23,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use stdClass;
-use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
 
@@ -204,7 +204,7 @@ final class AuthController
             Log::error('invitation_activation_failed_unrecorded', ['membership_id' => $accepted->membership_id, 'tenant_id' => $accepted->tenant_id, 'error' => class_basename($e)]);
         }
 
-        throw new ConflictHttpException('Invitation accepted but the membership could not be activated.');
+        throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Membership not activated', 'Your invitation was accepted but the membership could not be activated. Please contact your administrator.');
     }
 
     private function requireSession(): string
