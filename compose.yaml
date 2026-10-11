@@ -29,6 +29,8 @@ x-api-env: &api-env
   # signed tenant context (D-055): same key as loaded into ctx.keys by db-bootstrap
   EORA_CTX_SIGNING_KID: kid1
   EORA_CTX_SIGNING_KEY: ${EORA_CTX_KEY_KID1:?set EORA_CTX_KEY_KID1 in .env (scripts/ensure-dev-secrets.sh)}
+  # keyed hashes in security events (D-B1-22)
+  EORA_PEPPER_KEY: ${EORA_PEPPER_KEY:?set EORA_PEPPER_KEY in .env (scripts/ensure-dev-secrets.sh)}
 
 services:
   postgres:
