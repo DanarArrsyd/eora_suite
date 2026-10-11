@@ -8,6 +8,8 @@ use App\Platform\Auth\AuthSession;
 use App\Platform\Auth\PasswordHasher;
 use App\Platform\Auth\SessionExpiredException;
 use App\Platform\Database\EoraPostgresConnection;
+use App\Platform\Security\SecurityEvent;
+use App\Platform\Security\SecurityEventRecorder;
 use App\Platform\Security\SecurityHasher;
 use App\Platform\Tenancy\TenantContext;
 use App\Platform\Tenancy\TenantTransaction;
@@ -17,9 +19,12 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use stdClass;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Throwable;
 
 /**
  * Authentication endpoints (doc 25 §2.2, §2.4, §4; ADR-0006). Credentials are only ever touched through the
@@ -173,12 +178,33 @@ final class AuthController
             throw ValidationException::withMessages(['token' => 'This invitation link is invalid or has expired.']);
         }
 
-        $this->transaction->run(new TenantContext((string) $accepted->tenant_id, (string) $accepted->user_id), fn (EoraPostgresConnection $db) => $db->update(
-            "update memberships set status = 'ACTIVE', activated_at = now() where id = ? and status = 'INVITED'",
-            [$accepted->membership_id],
-        ));
+        // The invitation is consumed (and the first password set) in the auth transaction; activation runs as the user in
+        // the tenant. Retried once (doc 25 §2.4); a membership already ACTIVE counts as done.
+        $context = new TenantContext((string) $accepted->tenant_id, (string) $accepted->user_id);
+        for ($attempt = 1; $attempt <= 2; $attempt++) {
+            try {
+                $status = $this->transaction->run($context, function (EoraPostgresConnection $db) use ($accepted): ?string {
+                    $db->update("update memberships set status = 'ACTIVE', activated_at = now() where id = ? and status = 'INVITED'", [$accepted->membership_id]);
 
-        return response()->noContent();
+                    return $db->selectOne('select status from memberships where id = ?', [$accepted->membership_id])->status ?? null;
+                });
+                if ($status === 'ACTIVE') {
+                    return response()->noContent();
+                }
+            } catch (Throwable $e) {
+                Log::warning('invitation_activation_attempt_failed', ['membership_id' => $accepted->membership_id, 'attempt' => $attempt, 'error' => class_basename($e)]);
+            }
+        }
+
+        // Still not active (e.g. revoked concurrently, or the database refused twice): leave a durable trace for the
+        // tenant's administrators and tell the invitee to contact them — never a false success.
+        try {
+            SecurityEventRecorder::write($this->transaction, $context, [new SecurityEvent('invitation.activation_failed', resource: 'memberships', requestedId: str_replace('-', '', (string) $accepted->membership_id), httpStatus: 409)]);
+        } catch (Throwable $e) {
+            Log::error('invitation_activation_failed_unrecorded', ['membership_id' => $accepted->membership_id, 'tenant_id' => $accepted->tenant_id, 'error' => class_basename($e)]);
+        }
+
+        throw new ConflictHttpException('Invitation accepted but the membership could not be activated.');
     }
 
     private function requireSession(): string

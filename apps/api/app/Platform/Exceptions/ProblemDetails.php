@@ -52,6 +52,7 @@ final class ProblemDetails
             $e instanceof HttpExceptionInterface && $e->getStatusCode() < 500 => match ($e->getStatusCode()) {
                 401 => ['status' => 401, 'code' => 'UNAUTHENTICATED', 'title' => 'Authentication required', 'detail' => null],
                 403 => self::FORBIDDEN,
+                409 => ['status' => 409, 'code' => 'CONFLICT', 'title' => 'Conflict', 'detail' => 'The request could not be completed in the current state. Contact your administrator if it persists.'],
                 419 => ['status' => 419, 'code' => 'CSRF_TOKEN_MISMATCH', 'title' => 'Security token expired', 'detail' => null],
                 404 => ['status' => 404, 'code' => 'NOT_FOUND', 'title' => 'Not found', 'detail' => null],
                 default => ['status' => $e->getStatusCode(), 'code' => 'MALFORMED_REQUEST', 'title' => 'Request rejected', 'detail' => null],
