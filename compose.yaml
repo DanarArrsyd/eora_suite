@@ -107,6 +107,7 @@ services:
   #   docker compose run --rm --entrypoint vendor/bin/pest db-migrate     (tests; phpunit.xml forces eora_test)
   db-migrate:
     image: eora-api:dev
+    pull_policy: never # image built by the api service
     entrypoint: ['php', 'artisan', 'migrate', '--database=pgsql_owner', '--force']
     restart: 'no'
     environment:
@@ -152,9 +153,13 @@ services:
     image: eora-api:dev
     entrypoint: ['php', 'artisan', 'eora:deliver-invitations']
     restart: unless-stopped
-    # no HTTP server in this process: the image's HTTP healthcheck does not apply
+    pull_policy: never # image built by the api service
+    # no HTTP server in this process: healthy = the worker process (PID 1) is alive; compose --wait needs a check
     healthcheck:
-      disable: true
+      test: ['CMD-SHELL', 'kill -0 1']
+      interval: 10s
+      timeout: 3s
+      retries: 3
     environment:
       <<: *api-env
       DB_HOST: postgres
