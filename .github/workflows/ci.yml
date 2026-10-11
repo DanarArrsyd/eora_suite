@@ -67,6 +67,10 @@ jobs:
       DB_PASSWORD: ci-only-throwaway-app-0000000000
       DB_OWNER_USERNAME: eora_owner
       DB_OWNER_PASSWORD: ci-only-throwaway-owner-00000000
+      DB_PROVISIONER_PASSWORD: ci-only-throwaway-prov-000000000
+      # throwaway signed-context key (D-055), CI only; the same value is loaded into ctx.keys by the bootstrap step
+      EORA_CTX_SIGNING_KID: kid1
+      EORA_CTX_SIGNING_KEY: c1000000c1000000c1000000c1000000c1000000c1000000c1000000c1000000
       REDIS_CLIENT: predis
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: '6379'
@@ -107,6 +111,7 @@ jobs:
           EORA_DB_AUTH_DELIVERY_PASSWORD: ci-only-throwaway-delivery-00000
           EORA_DB_PROVISIONER_PASSWORD: ci-only-throwaway-prov-000000000
           EORA_DB_RELAY_PASSWORD: ci-only-throwaway-relay-00000000
+          EORA_CTX_KEYS: kid1:c1000000c1000000c1000000c1000000c1000000c1000000c1000000c1000000
         run: |
           sh database/bootstrap/bootstrap.sh
           sh database/bootstrap/bootstrap.sh   # idempotency: a second run must succeed and change nothing harmful
@@ -155,6 +160,7 @@ jobs:
       EORA_DB_AUTH_DELIVERY_PASSWORD: ci-only-throwaway-delivery-00000
       EORA_DB_PROVISIONER_PASSWORD: ci-only-throwaway-prov-000000000
       EORA_DB_RELAY_PASSWORD: ci-only-throwaway-relay-00000000
+      EORA_CTX_KEY_KID1: c1000000c1000000c1000000c1000000c1000000c1000000c1000000c1000000
     steps:
       - uses: actions/checkout@v5
       - name: Validate compose file
