@@ -182,3 +182,41 @@ it('keeps profiles to self and tenant members and never lets the runtime role to
     expect(fn () => app(TenantTransaction::class)->run($ctx, fn (EoraPostgresConnection $db) => $db->update('update users set credential_version = 99 where id = ?', [$ids['user']])))
         ->toThrow(QueryException::class, 'permission denied');
 })->group('integration', 'identity');
+
+it('T-INV: a membership revoked after the link was sent cannot be accepted, and the link is closed for good', function () {
+    $email = IdentityFixtures::email();
+    $ids = IdentityFixtures::invite($this->t, $email);
+    $d = deliverFor($email);
+
+    app(TenantTransaction::class)->run(TenantContext::forTenant($this->t['tenant'], $this->t['actor']), fn (EoraPostgresConnection $db) => $db->update(
+        "update memberships set status = 'REVOKED' where id = ?", [$ids['membership']],
+    ));
+    expect(IdentityFixtures::accept($d['secret']))->toBeNull();
+
+    // even if the membership were reinstated as INVITED, the cancelled link stays unusable
+    app(TenantTransaction::class)->run(TenantContext::forTenant($this->t['tenant'], $this->t['actor']), fn (EoraPostgresConnection $db) => $db->update(
+        "update memberships set status = 'INVITED' where id = ?", [$ids['membership']],
+    ));
+    expect(IdentityFixtures::accept($d['secret']))->toBeNull();
+})->group('integration', 'identity');
+
+it('T-INV: a success acknowledgement before any secret was issued is rejected and leaves the delivery reclaimable', function () {
+    $email = IdentityFixtures::email();
+    IdentityFixtures::invite($this->t, $email);
+    $delivery = DB::connection('pgsql_delivery');
+    $delivery->select('select auth_api.claim_invitation_dispatch(?, ?)', ['w', 100]);
+    do {
+        $claim = $delivery->selectOne('select * from auth_api.claim_delivery(?)', ['w']);
+        if ($claim !== null && $claim->delivery_id !== null && $claim->recipient !== $email) {
+            $delivery->select('select auth_api.mark_delivery_result(?, ?, false, ?)', [$claim->delivery_id, $claim->claim_token, 'SKIPPED']);
+        }
+    } while ($claim !== null && $claim->delivery_id !== null && $claim->recipient !== $email);
+
+    expect(fn () => $delivery->select('select auth_api.mark_delivery_result(?, ?, true, null)', [$claim->delivery_id, $claim->claim_token]))
+        ->toThrow(QueryException::class, 'no secret issued under this claim');
+
+    // the claim is still current: issuing and acknowledging now works and the link is usable
+    $secret = $delivery->selectOne('select auth_api.issue_invitation_secret(?, ?) as s', [$claim->delivery_id, $claim->claim_token])->s;
+    $delivery->select('select auth_api.mark_delivery_result(?, ?, true, null)', [$claim->delivery_id, $claim->claim_token]);
+    expect(IdentityFixtures::accept($secret))->not->toBeNull();
+})->group('integration', 'identity');

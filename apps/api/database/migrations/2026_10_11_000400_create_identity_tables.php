@@ -116,6 +116,8 @@ return new class extends Migration
             REVOKE ALL ON security_events FROM eora_auth_definer;
             DROP POLICY definer_insert ON security_events;
             DROP POLICY tenant_picker_read ON tenants;
+            DROP POLICY profile_read ON users;
+            DROP POLICY definer_delete_orphan ON users;
             DROP TABLE invitation_dispatch_requests;
             DROP TABLE memberships;
             DROP TABLE users;

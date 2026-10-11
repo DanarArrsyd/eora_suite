@@ -46,13 +46,18 @@ final class IdentityFixtures
     {
         $delivery = DB::connection('pgsql_delivery');
         $delivery->select('select auth_api.claim_invitation_dispatch(?, ?)', ['test-worker', 100]);
-        $claim = $delivery->selectOne('select * from auth_api.claim_delivery(?)', ['test-worker']);
 
-        if ($claim === null || $claim->delivery_id === null) {
-            return null;
-        }
+        do {
+            $claim = $delivery->selectOne('select * from auth_api.claim_delivery(?)', ['test-worker']);
 
-        $secret = (string) $delivery->selectOne('select auth_api.issue_invitation_secret(?, ?) as s', [$claim->delivery_id, $claim->claim_token])->s;
+            if ($claim === null || $claim->delivery_id === null) {
+                return null;
+            }
+
+            // like the worker: NULL = the target is gone, the delivery was cancelled; take the next one
+            $secret = $delivery->selectOne('select auth_api.issue_invitation_secret(?, ?) as s', [$claim->delivery_id, $claim->claim_token])->s;
+        } while ($secret === null);
+        $secret = (string) $secret;
 
         if ($acknowledge) {
             $delivery->select('select auth_api.mark_delivery_result(?, ?, true, null)', [$claim->delivery_id, $claim->claim_token]);

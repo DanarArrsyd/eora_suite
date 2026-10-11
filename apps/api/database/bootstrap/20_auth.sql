@@ -107,26 +107,33 @@ BEGIN
 END
 $fn$;
 
--- identity + profile in one transaction; random UUIDv4 (R-20); same answer for new and existing emails
+-- identity + profile in one transaction; random UUIDv4 (R-20); same answer for new and existing emails.
+-- Concurrent first creation of one email is idempotent: the unique email decides, the loser re-reads the winner.
+-- Above the creation cap it returns NULL (the caller refuses) so the capped event commits instead of rolling back.
 CREATE OR REPLACE FUNCTION auth.ensure_identity(email text, source text) RETURNS uuid
 LANGUAGE plpgsql SET search_path = '' AS $fn$
 DECLARE
   e text := auth.normalize_email(email);
   uid uuid;
 BEGIN
-  SELECT i.user_id INTO uid FROM auth.identities i WHERE i.email_normalized = e FOR UPDATE;
+  UPDATE auth.identities SET last_invited_at = pg_catalog.now() WHERE email_normalized = e RETURNING user_id INTO uid;
   IF uid IS NOT NULL THEN
-    UPDATE auth.identities SET last_invited_at = pg_catalog.now() WHERE user_id = uid;
     RETURN uid;
   END IF;
   -- platform-wide cap on newly created identities (tunable; per-inviter limits live at the HTTP layer)
   IF NOT auth.take_token('identity_creation', interval '1 hour', 500) THEN
     INSERT INTO public.security_events (id, occurred_at, source, action, detail_code)
     VALUES (pg_catalog.gen_random_uuid(), pg_catalog.now(), source, 'identity.creation_capped', 'CAP_REACHED');
-    RAISE EXCEPTION 'identity creation capped' USING ERRCODE = '53400';
+    RETURN NULL;
   END IF;
-  uid := pg_catalog.gen_random_uuid();
-  INSERT INTO auth.identities (user_id, email_normalized) VALUES (uid, e);
+  INSERT INTO auth.identities (user_id, email_normalized) VALUES (pg_catalog.gen_random_uuid(), e)
+  ON CONFLICT (email_normalized) DO NOTHING
+  RETURNING user_id INTO uid;
+  IF uid IS NULL THEN
+    -- a concurrent call created it first: return that identity (its profile exists, created atomically with it)
+    UPDATE auth.identities SET last_invited_at = pg_catalog.now() WHERE email_normalized = e RETURNING user_id INTO uid;
+    RETURN uid;
+  END IF;
   INSERT INTO public.users (id, display_name, email_display, locale)
   VALUES (uid, pg_catalog.split_part(e, '@', 1), e, 'en');
   RETURN uid;
@@ -335,10 +342,17 @@ BEGIN
   END IF;
   SELECT * INTO inv FROM auth.invitations WHERE membership_id = q.membership_id FOR UPDATE;
   SELECT mm.status, mm.tenant_id, mm.user_id INTO m FROM public.memberships mm WHERE mm.id = q.membership_id;
-  IF inv.current_delivery_id IS DISTINCT FROM q.id OR inv.status NOT IN ('PENDING', 'ISSUED', 'SENT', 'DELIVERY_FAILED')
+  IF inv.membership_id IS NULL OR inv.current_delivery_id IS DISTINCT FROM q.id
+     OR inv.status NOT IN ('PENDING', 'ISSUED', 'SENT', 'DELIVERY_FAILED')
      OR m.status IS DISTINCT FROM 'INVITED' OR m.tenant_id <> inv.tenant_id OR m.user_id <> inv.user_id
      OR NOT EXISTS (SELECT 1 FROM auth.identities i WHERE i.user_id = inv.user_id AND i.status = 'ACTIVE') THEN
-    RAISE EXCEPTION 'invitation not issuable' USING ERRCODE = '55000';
+    -- target no longer valid (doc 25 §2.9): cancel this delivery (and the invitation if it is the current one) and
+    -- tell the worker there is nothing to send
+    UPDATE auth.delivery_queue SET status = 'CANCELLED', claim_token = NULL, updated_at = pg_catalog.now() WHERE id = q.id;
+    UPDATE auth.invitations SET status = 'CANCELLED', updated_at = pg_catalog.now()
+     WHERE auth.invitations.membership_id = q.membership_id AND current_delivery_id = q.id
+       AND status IN ('PENDING', 'ISSUED', 'SENT', 'DELIVERY_FAILED');
+    RETURN NULL;
   END IF;
   secret := ext.gen_random_bytes(32);
   UPDATE auth.invitations
@@ -367,12 +381,16 @@ BEGIN
     RAISE EXCEPTION 'stale or invalid claim' USING ERRCODE = '55000';
   END IF;
   IF ok THEN
-    UPDATE auth.delivery_queue SET status = 'SENT', claim_token = NULL, updated_at = pg_catalog.now() WHERE id = q.id;
+    -- success only for the secret issued under this claim: delivery and secret become SENT together, or neither
     IF q.kind = 'INVITATION' THEN
       UPDATE auth.invitations SET status = 'SENT', updated_at = pg_catalog.now()
        WHERE membership_id = q.membership_id AND current_delivery_id = q.id AND status = 'ISSUED'
-         AND secret_generation = q.secret_generation_issued;
+         AND q.secret_generation_issued IS NOT NULL AND secret_generation = q.secret_generation_issued;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'no secret issued under this claim' USING ERRCODE = '55000';
+      END IF;
     END IF;
+    UPDATE auth.delivery_queue SET status = 'SENT', claim_token = NULL, updated_at = pg_catalog.now() WHERE id = q.id;
   ELSE
     -- backoff 1 / 5 / 15 / 60 minutes (D-B1-21); the secret stays ISSUED (unusable) and is rotated on the next claim
     UPDATE auth.delivery_queue
@@ -393,12 +411,21 @@ BEGIN
   IF secret IS NULL OR secret !~ '^[0-9a-f]{64}$' OR new_hash IS NULL OR new_hash NOT LIKE '$argon2id$%' OR pg_catalog.length(new_hash) > 256 THEN
     RETURN;
   END IF;
-  UPDATE auth.invitations i SET status = 'ACCEPTED', updated_at = pg_catalog.now()
+  SELECT i.user_id, i.tenant_id, i.membership_id INTO inv FROM auth.invitations i
    WHERE i.secret_hash = pg_catalog.sha256(pg_catalog.decode(secret, 'hex')) AND i.status = 'SENT' AND i.expires_at > pg_catalog.now()
-  RETURNING i.user_id, i.tenant_id, i.membership_id INTO inv;
+   FOR UPDATE;
   IF NOT FOUND THEN
     RETURN; -- uniform failure: unknown, unsent, expired or replayed
   END IF;
+  -- re-validate at use (doc 25 §2.8): the membership must still be INVITED and the identity ACTIVE; a revoked or
+  -- suspended membership closes the invitation for good and returns the same uniform failure
+  IF NOT EXISTS (SELECT 1 FROM public.memberships m
+                  WHERE m.tenant_id = inv.tenant_id AND m.id = inv.membership_id AND m.user_id = inv.user_id AND m.status = 'INVITED')
+     OR NOT EXISTS (SELECT 1 FROM auth.identities i WHERE i.user_id = inv.user_id AND i.status = 'ACTIVE') THEN
+    UPDATE auth.invitations SET status = 'CANCELLED', updated_at = pg_catalog.now() WHERE auth.invitations.membership_id = inv.membership_id;
+    RETURN;
+  END IF;
+  UPDATE auth.invitations SET status = 'ACCEPTED', updated_at = pg_catalog.now() WHERE auth.invitations.membership_id = inv.membership_id;
   -- the first password is set only through an accepted invitation (doc 25 §2.4); an existing password is kept
   UPDATE auth.identities SET password_hash = new_hash, password_changed_at = pg_catalog.now()
    WHERE auth.identities.user_id = inv.user_id AND password_hash IS NULL AND status = 'ACTIVE';
