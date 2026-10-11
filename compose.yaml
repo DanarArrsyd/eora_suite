@@ -2,6 +2,28 @@
 # Usage: cp .env.example .env && fill values, then `docker compose up -d --build --wait`.
 name: eora
 
+x-api-env: &api-env
+  APP_NAME: 'EORA Suite API'
+  APP_ENV: local
+  APP_DEBUG: 'true'
+  APP_KEY: ${EORA_APP_KEY:?set EORA_APP_KEY in .env}
+  APP_URL: http://localhost:8000
+  LOG_CHANNEL: stack
+  LOG_STACK: json
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: '5432'
+  DB_DATABASE: ${EORA_DB_DATABASE:-eora}
+  # runtime role (doc 25 §5.1) — never the bootstrap superuser or the migrations owner
+  DB_USERNAME: eora_app
+  DB_PASSWORD: ${EORA_DB_APP_PASSWORD}
+  REDIS_CLIENT: predis
+  REDIS_HOST: redis
+  REDIS_PORT: '6379'
+  CACHE_STORE: redis
+  QUEUE_CONNECTION: redis
+  SESSION_DRIVER: array
+
 services:
   postgres:
     image: postgres:18-alpine
@@ -35,36 +57,58 @@ services:
       timeout: 3s
       retries: 20
 
-  api:
+  # One-shot, idempotent role/schema bootstrap (doc 25 §5.1/§9 step 0, D-057). Only this service holds the bootstrap
+  # superuser credentials; the API connects as eora_app and migrates as eora_owner. Never drops anything.
+  db-bootstrap:
     build:
       context: ./apps/api
+    image: eora-api:dev
+    entrypoint: ['sh', 'database/bootstrap/bootstrap.sh']
+    restart: 'no'
     environment:
-      APP_NAME: 'EORA Suite API'
-      APP_ENV: local
-      APP_DEBUG: 'true'
-      APP_KEY: ${EORA_APP_KEY:?set EORA_APP_KEY in .env}
-      APP_URL: http://localhost:8000
-      LOG_CHANNEL: stack
-      LOG_STACK: json
-      DB_CONNECTION: pgsql
-      DB_HOST: postgres
-      DB_PORT: '5432'
-      DB_DATABASE: ${EORA_DB_DATABASE:-eora}
-      DB_USERNAME: ${EORA_DB_USERNAME:-eora}
-      DB_PASSWORD: ${EORA_DB_PASSWORD}
-      REDIS_CLIENT: predis
-      REDIS_HOST: redis
-      REDIS_PORT: '6379'
-      CACHE_STORE: redis
-      QUEUE_CONNECTION: redis
-      SESSION_DRIVER: array
-    ports:
-      - '127.0.0.1:${EORA_API_HOST_PORT:-8000}:8000'
+      PGHOST: postgres
+      PGUSER: ${EORA_DB_USERNAME:-eora}
+      PGPASSWORD: ${EORA_DB_PASSWORD}
+      EORA_BOOTSTRAP_DATABASES: ${EORA_DB_DATABASE:-eora} eora_test
+      EORA_DB_OWNER_PASSWORD: ${EORA_DB_OWNER_PASSWORD:?set EORA_DB_OWNER_PASSWORD in .env (scripts/ensure-dev-secrets.sh)}
+      EORA_DB_APP_PASSWORD: ${EORA_DB_APP_PASSWORD:?set EORA_DB_APP_PASSWORD in .env}
+      EORA_DB_AUTH_WEB_PASSWORD: ${EORA_DB_AUTH_WEB_PASSWORD:?set EORA_DB_AUTH_WEB_PASSWORD in .env}
+      EORA_DB_AUTH_DELIVERY_PASSWORD: ${EORA_DB_AUTH_DELIVERY_PASSWORD:?set EORA_DB_AUTH_DELIVERY_PASSWORD in .env}
+      EORA_DB_PROVISIONER_PASSWORD: ${EORA_DB_PROVISIONER_PASSWORD:?set EORA_DB_PROVISIONER_PASSWORD in .env}
+      EORA_DB_RELAY_PASSWORD: ${EORA_DB_RELAY_PASSWORD:?set EORA_DB_RELAY_PASSWORD in .env}
     depends_on:
       postgres:
         condition: service_healthy
+
+  # One-shot migrations as eora_owner (doc 25 §10: owner credentials only in the migration job's scope, never in the
+  # long-running API). Also the runner for the backend test suite, which needs the owner for group A schema tests:
+  #   docker compose run --rm db-migrate                                  (migrate the dev database)
+  #   docker compose run --rm --entrypoint vendor/bin/pest db-migrate     (tests; phpunit.xml forces eora_test)
+  db-migrate:
+    image: eora-api:dev
+    entrypoint: ['php', 'artisan', 'migrate', '--database=pgsql_owner', '--force']
+    restart: 'no'
+    environment:
+      <<: *api-env
+      DB_OWNER_USERNAME: eora_owner
+      DB_OWNER_PASSWORD: ${EORA_DB_OWNER_PASSWORD}
+    depends_on:
+      db-bootstrap:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
+
+  api:
+    build:
+      context: ./apps/api
+    image: eora-api:dev
+    # runtime role only (eora_app); no owner or superuser credentials in this container
+    environment: *api-env
+    ports:
+      - '127.0.0.1:${EORA_API_HOST_PORT:-8000}:8000'
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
 
 configs:
   postgres-init-test-db:

@@ -13,12 +13,24 @@ Option A — everything in Docker (recommended):
 ```bash
 cp .env.example .env
 ```
-Fill `EORA_DB_PASSWORD` and `EORA_APP_KEY` in the repository-root `.env`, then:
+Fill `EORA_DB_PASSWORD` (bootstrap superuser) and `EORA_APP_KEY` in the repository-root `.env`, add the role passwords, then start:
+```bash
+sh scripts/ensure-dev-secrets.sh
+```
 ```bash
 docker compose up -d --build --wait
 ```
 ```bash
 curl -fsS http://127.0.0.1:8000/api/v1/health/ready
+```
+Migrations run as the migrations owner in the one-shot `db-migrate` service (it also runs automatically on `up`); the
+long-running API container holds only the runtime role's credentials (doc 25 §10):
+```bash
+docker compose run --rm db-migrate
+```
+Backend tests (they need the owner for the group A schema guard, so they run in the same one-shot container):
+```bash
+docker compose run --rm --entrypoint vendor/bin/pest db-migrate
 ```
 Notes for Docker Desktop on macOS:
 - The `docker` CLI lives in `~/.docker/bin` (add it to `PATH` if the shell does not find it).
@@ -36,9 +48,9 @@ docker compose up -d --wait postgres redis
 ```bash
 cd apps/api && cp .env.example .env && composer install && php artisan key:generate
 ```
-Set `DB_PASSWORD` in `apps/api/.env` to the same value as `EORA_DB_PASSWORD`, then:
+Set `DB_PASSWORD` (= `EORA_DB_APP_PASSWORD`) and `DB_OWNER_PASSWORD` (= `EORA_DB_OWNER_PASSWORD`) in `apps/api/.env`, then:
 ```bash
-php artisan migrate && php artisan serve
+php artisan migrate --database=pgsql_owner && php artisan serve
 ```
 
 ## Quality commands (apps/api)
@@ -50,10 +62,22 @@ running, use `composer test:unit` (excludes the `integration` group).
 
 Tests always use the `eora_test` database: `phpunit.xml` forces the test configuration over the process environment, and
 `tests/Support/TestDatabaseGuard.php` aborts the run before any query if the target is not a `*_test` database (or `APP_ENV` is
-not `testing`, or `DB_URL` is set). Running the suite inside the api container is therefore safe:
-```bash
-docker compose exec api vendor/bin/pest
-```
+not `testing`, or `DB_URL` is set). Running the suite in the `db-migrate` container (see above) is therefore safe.
+
+## Database roles (M1 / B1 step 1, doc 25 §5.1, D-057)
+| Role | Login | Used by |
+|---|---|---|
+| bootstrap superuser (`EORA_DB_USERNAME`) | yes | `db-bootstrap` service only (roles, schemas, extensions) |
+| `eora_owner` | yes | migrations and group A schema tests — credentials only in the one-shot `db-migrate` service, never in the API container |
+| `eora_app` | yes | every request and job (default connection); no superuser, no BYPASSRLS, owns nothing |
+| `eora_auth_web`, `eora_auth_delivery`, `eora_provisioner`, `eora_relay` | yes | auth, secret delivery, provisioning, outbox relay (later M1 steps) |
+| `eora_auth_definer`, `eora_prov_definer`, `eora_outbox_definer`, `eora_ctx_verifier` | **no** | owners of reviewed `SECURITY DEFINER` code |
+
+`database/bootstrap/bootstrap.sh` is idempotent: it creates missing roles, re-asserts their attributes, passwords and
+hardening (`log_parameter_max_length = 0`, timeouts), hands objects created by the superuser to `eora_owner`, and creates
+the definer-owned schemas. It never drops anything. Docker Compose runs it before the API starts.
+The image links `pdo_pgsql` against libpq ≥ 17 from apt.postgresql.org (native prepares through PgBouncer, D-056 P-05).
+Tests refuse non-`*_test` databases and non-local hosts (`EORA_TEST_DB_HOST_ALLOW` overrides the host list).
 
 ## Endpoints (B0)
 | Method | Path | Purpose |

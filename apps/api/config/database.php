@@ -101,6 +101,24 @@ return [
             'connect_timeout' => env('DB_CONNECT_TIMEOUT', 3),
         ],
 
+        // Migrations owner (doc 25 §5.1, D-057): DDL and group A schema tests only — never used by requests or jobs.
+        // Run migrations with `php artisan migrate --database=pgsql_owner`.
+        'pgsql_owner' => [
+            'driver' => 'pgsql',
+            'url' => null,
+            'host' => env('DB_OWNER_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('DB_OWNER_PORT', env('DB_PORT', '5432')),
+            'database' => env('DB_DATABASE', 'laravel'),
+            'username' => env('DB_OWNER_USERNAME', 'eora_owner'),
+            'password' => env('DB_OWNER_PASSWORD', ''),
+            'charset' => env('DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => env('DB_SSLMODE', 'prefer'),
+            'connect_timeout' => env('DB_CONNECT_TIMEOUT', 3),
+        ],
+
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),

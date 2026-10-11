@@ -61,8 +61,12 @@ jobs:
       DB_HOST: 127.0.0.1
       DB_PORT: '5432'
       DB_DATABASE: eora_test
-      DB_USERNAME: eora
-      DB_PASSWORD: ci-only-throwaway
+      # runtime role and migrations owner created by the bootstrap step (doc 25 §5.1); the service superuser is used
+      # only by that step
+      DB_USERNAME: eora_app
+      DB_PASSWORD: ci-only-throwaway-app-0000000000
+      DB_OWNER_USERNAME: eora_owner
+      DB_OWNER_PASSWORD: ci-only-throwaway-owner-00000000
       REDIS_CLIENT: predis
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: '6379'
@@ -89,6 +93,23 @@ jobs:
           extensions: pdo_pgsql, intl, bcmath, zip
           coverage: none
           tools: composer:v2
+      - name: libpq version (diagnostic; native prepares through PgBouncer need >= 17, enforced in the docker job)
+        run: php -i | grep -m1 'PostgreSQL(libpq) Version' || true
+      - name: Database bootstrap (roles, schemas, base privileges)
+        env:
+          PGHOST: 127.0.0.1
+          PGUSER: eora
+          PGPASSWORD: ci-only-throwaway
+          EORA_BOOTSTRAP_DATABASES: eora_test
+          EORA_DB_OWNER_PASSWORD: ci-only-throwaway-owner-00000000
+          EORA_DB_APP_PASSWORD: ci-only-throwaway-app-0000000000
+          EORA_DB_AUTH_WEB_PASSWORD: ci-only-throwaway-authweb-000000
+          EORA_DB_AUTH_DELIVERY_PASSWORD: ci-only-throwaway-delivery-00000
+          EORA_DB_PROVISIONER_PASSWORD: ci-only-throwaway-prov-000000000
+          EORA_DB_RELAY_PASSWORD: ci-only-throwaway-relay-00000000
+        run: |
+          sh database/bootstrap/bootstrap.sh
+          sh database/bootstrap/bootstrap.sh   # idempotency: a second run must succeed and change nothing harmful
       - name: Validate composer.json and lock
         run: composer validate --strict
       - name: Install dependencies
@@ -103,8 +124,10 @@ jobs:
         run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
       - name: Application boot
         run: php artisan about --only=environment && php artisan route:list --path=api
-      - name: Migrations (infrastructure only)
-        run: php artisan migrate --force
+      - name: Migrations as the migrations owner, with a rollback round trip (doc 25 §10)
+        run: |
+          php artisan migrate --database=pgsql_owner --force
+          php artisan migrate:refresh --database=pgsql_owner --force
       - name: Tests (unit, feature, architecture, integration)
         run: vendor/bin/pest
       - name: OpenAPI drift check
@@ -126,6 +149,12 @@ jobs:
     timeout-minutes: 20
     env:
       EORA_DB_PASSWORD: ci-only-throwaway
+      EORA_DB_OWNER_PASSWORD: ci-only-throwaway-owner-00000000
+      EORA_DB_APP_PASSWORD: ci-only-throwaway-app-0000000000
+      EORA_DB_AUTH_WEB_PASSWORD: ci-only-throwaway-authweb-000000
+      EORA_DB_AUTH_DELIVERY_PASSWORD: ci-only-throwaway-delivery-00000
+      EORA_DB_PROVISIONER_PASSWORD: ci-only-throwaway-prov-000000000
+      EORA_DB_RELAY_PASSWORD: ci-only-throwaway-relay-00000000
     steps:
       - uses: actions/checkout@v5
       - name: Validate compose file
@@ -134,6 +163,11 @@ jobs:
           EORA_APP_KEY=placeholder docker compose config --quiet
       - name: Start services and wait for health
         run: docker compose up -d --build --wait --wait-timeout 300
+      - name: API image uses libpq >= 17 (D-056 P-05)
+        run: |
+          docker compose exec -T api php -i | grep -m1 'PostgreSQL(libpq) Version' | tee libpq.txt
+          major=$(sed -n 's/.*=> \([0-9]*\).*/\1/p' libpq.txt)
+          test "$major" -ge 17
       - name: API health checks
         run: |
           curl -fsS http://127.0.0.1:8000/api/v1/health
@@ -143,14 +177,16 @@ jobs:
         run: |
           docker compose exec -T postgres psql -U eora -d postgres -Atc \
             "select datname from pg_database where datname = 'eora_test'" | grep -qx eora_test
-      - name: Backend tests inside the api container never touch the dev database
+      - name: Backend tests in the one-shot migrate container never touch the dev database
         # The container sets APP_ENV=local and DB_DATABASE=eora; phpunit.xml must force the test config.
         # migrate:fresh would recreate the eora tables, so their OIDs must not change.
         run: |
-          docker compose exec -T api php artisan migrate --force
+          # the dev database was migrated by the one-shot db-migrate service during `up`; the owner credentials live
+          # only there (doc 25 §10), so test-database migrations and the suite run in that service's container too
           q="select string_agg(c.relname || ':' || c.oid, ',' order by c.relname) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r'"
           before=$(docker compose exec -T postgres psql -U eora -d eora -Atc "$q")
-          docker compose exec -T api vendor/bin/pest
+          docker compose run --rm -T -e DB_DATABASE=eora_test db-migrate
+          docker compose run --rm -T --entrypoint vendor/bin/pest db-migrate
           after=$(docker compose exec -T postgres psql -U eora -d eora -Atc "$q")
           echo "eora tables before: $before"
           echo "eora tables after:  $after"

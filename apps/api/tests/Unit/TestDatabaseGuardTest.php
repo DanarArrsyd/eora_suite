@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use Tests\Support\TestDatabaseGuard;
 
-$pgsql = fn (string $database, string $url = ''): array => ['driver' => 'pgsql', 'database' => $database, 'url' => $url];
+$pgsql = fn (string $database, string $url = '', string $host = '127.0.0.1'): array => ['driver' => 'pgsql', 'database' => $database, 'url' => $url, 'host' => $host];
 
 it('accepts the dedicated test database and its parallel-testing copies', function (string $database) use ($pgsql) {
     TestDatabaseGuard::assertSafe('testing', $pgsql($database));
@@ -33,4 +33,18 @@ it('never echoes the connection URL (it may hold credentials)', function () use 
         return;
     }
     $this->fail('Expected the guard to refuse a DB_URL.');
+});
+
+it('accepts only local Docker or CI database hosts by default', function (string $host) use ($pgsql) {
+    TestDatabaseGuard::assertSafe('testing', $pgsql('eora_test', host: $host));
+    expect(true)->toBeTrue();
+})->with(['127.0.0.1', 'localhost', 'postgres', 'pgbouncer']);
+
+it('refuses a remote database host even when the database name ends in _test', function () use ($pgsql) {
+    TestDatabaseGuard::assertSafe('testing', $pgsql('eora_test', host: 'db.prod.example.com'));
+})->throws(RuntimeException::class, 'not an allowed local test host');
+
+it('honours an explicit host allowlist override', function () use ($pgsql) {
+    TestDatabaseGuard::assertSafe('testing', $pgsql('eora_test', host: 'ci-db'), 'ci-db');
+    expect(true)->toBeTrue();
 });

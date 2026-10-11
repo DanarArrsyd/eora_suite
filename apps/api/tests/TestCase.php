@@ -15,10 +15,15 @@ abstract class TestCase extends BaseTestCase
         $app = parent::createApplication();
 
         $config = $app->make('config');
-        TestDatabaseGuard::assertSafe(
-            $app->environment(),
-            (array) $config->get('database.connections.'.$config->get('database.default')),
-        );
+        $allowedHosts = getenv('EORA_TEST_DB_HOST_ALLOW') ?: null;
+        // The runtime connection and the migrations-owner connection must both point at a local *_test database.
+        foreach ([(string) $config->get('database.default'), 'pgsql_owner'] as $name) {
+            TestDatabaseGuard::assertSafe(
+                $app->environment(),
+                (array) $config->get('database.connections.'.$name),
+                $allowedHosts,
+            );
+        }
 
         return $app;
     }

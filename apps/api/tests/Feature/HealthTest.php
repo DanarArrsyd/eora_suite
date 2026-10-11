@@ -61,8 +61,9 @@ it('reaches the real PostgreSQL and Redis services', function () {
         ->assertJsonPath('checks.redis.status', 'ok');
 })->group('integration');
 
-it('runs migrations against PostgreSQL', function () {
-    $this->artisan('migrate:fresh', ['--force' => true])->assertSuccessful();
-    expect(DB::getDriverName())->toBe('pgsql')
-        ->and(Schema::hasTable('migrations'))->toBeTrue();
+it('runs migrations against PostgreSQL as the migrations owner', function () {
+    // DDL belongs to eora_owner (doc 25 §5.1); the runtime role eora_app cannot create or drop tables.
+    $this->artisan('migrate:fresh', ['--database' => 'pgsql_owner', '--force' => true])->assertSuccessful();
+    expect(DB::connection('pgsql_owner')->getDriverName())->toBe('pgsql')
+        ->and(Schema::connection('pgsql_owner')->hasTable('migrations'))->toBeTrue();
 })->group('integration');
