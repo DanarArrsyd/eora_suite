@@ -276,7 +276,8 @@ Approved after the security PoC (`poc/d-b1-24-signed-context` @ `c806f57`) and i
 | Queue workers | Job middleware signs with the job's tenant/actor; workers hold the key; context flushed per job (§6.3). |
 | PgBouncer | Token is transaction-local and the pid is stable within a transaction in transaction-pooling mode; a later transaction on another server connection carries no token. |
 | SQL-injection limits | Injected SQL can still read/write the **current** tenant's data (inherent); it can read the current token (no gain); it must not see other sessions' tokens: bound parameters keep tokens out of `pg_stat_activity.query` text (native prepares, D-B1-09); `log_parameter_max_length = 0` and `log_parameter_max_length_on_error = 0` for the runtime roles (D-056 P-03; PoC-CTX-03 proved a role without it logs the token). Native prepares need libpq ≥ 17 (D-056 P-05). |
-| Performance | **Budget (D-055, replaces the PoC target p95 < 2 %):** ≤ 0.3 ms p95 per transaction and ≤ 15 µs per RLS table reference at the database level; CI regression gate. Measured (optimization phase): verifier 10.6 µs/evaluation (original 66.6), +17.3 vs 5.3 µs per RLS table reference (A), context setup +28 µs via PgBouncer, W-01/W-02 p95 +0.16–0.27 ms, W-03 within noise. Verifier evaluated once per RLS table reference (InitPlan). |
+| Performance | **Budget (D-055, replaces the PoC target p95 < 2 %):** ≤ 0.3 ms p95 per transaction and ≤ 15 µs per RLS table reference at the database level; CI regression gate (D-067: 15 µs on reference hardware, 25 µs ceiling on shared CI runners). Measured (optimization phase): verifier 10.6 µs/evaluation (original 66.6), +17.3 vs 5.3 µs per RLS table reference (A), context setup +28 µs via PgBouncer, W-01/W-02 p95 +0.16–0.27 ms, W-03 within noise. Verifier evaluated once per RLS table reference (InitPlan). |
+| Statistics | `ctx.keys` holds a few rows, so autovacuum never analyzes it; without statistics the key lookup cost the verifier ~18 µs instead of ~10 µs (measured 2026-10-11). The bootstrap runs `ANALYZE ctx.keys` after every key load (M1 step 2). |
 | Rollback | Policies reference only `ctx_api.context()`; replacing its body with GUC semantics is a single migration (rehearsed, PoC-CTX-12) — **executed only by explicit owner decision**, never automatically. |
 **Verification plan PoC-CTX-01..13 (+05b, +14)** — executed 2026-10-10/11 on isolated PoC environments; all security tests PASS on the optimized variant; PoC-CTX-11 replaced by the absolute budget (D-055). In M1 these become the T-CTX suite:
 | ID | Verification | Pass criterion |
@@ -602,9 +603,9 @@ Grantor ⊇ grantee; SoD-06 self-elevation always blocked (no thresholds in earl
 
 ## 16. Recommended B1 implementation sequence (after approval; each step its own commit/PR section)
 0. ~~(Separate approval) Security PoC~~ → done 2026-10-10/11; D-B1-24 approved (D-055).
-1. DB bootstrap script: roles (§5.1), schemas, grants; Compose/CI switch away from the superuser; group A harness + schema guard.
-2. Tenancy tables (`tenants`, `companies`, `plants`, calendars) with forced RLS; group C isolation tests T-ISO-02/02b.
-3. `TenantContext`, `TenantTransaction`, middleware priority, job middleware, PgBouncer in Compose/CI; T-ISO-03/04, T-CTX.
+1. ✅ *(M1 step 1, PR #5)* DB bootstrap script: roles (§5.1), schemas, grants; Compose/CI switch away from the superuser; group A harness + schema guard.
+2. ✅ *(M1 step 2: tenants, companies, plants; calendars follow with step 4)* Tenancy tables (`tenants`, `companies`, `plants`, calendars) with forced RLS; group C isolation tests T-ISO-02/02b.
+3. ✅ partly *(M1 step 2: `TenantContext`, `TenantTransaction`, signed context, PgBouncer in Compose/CI, T-ISO-03, T-CTX, D-055 performance gate; HTTP and job middleware follow with authentication)* `TenantContext`, `TenantTransaction`, middleware priority, job middleware, PgBouncer in Compose/CI; T-ISO-03/04, T-CTX.
 4. `security_events` + buffered post-transaction flush (needed by every later step's denials); T-SEV.
 5. Identity: `auth` schema, definer functions, auth connection, login/logout/me/picker, session/CSRF/cookies; T-LOGIN, T-AUTH, T-SESS, T-CSRF, T-COOKIE.
 6. Delivery worker + outbox minimal + invitation + password reset; T-INV, T-RST.

@@ -7,14 +7,17 @@ cd "$(dirname "$0")/.."
 umask 077
 added=""
 for key in EORA_DB_OWNER_PASSWORD EORA_DB_APP_PASSWORD EORA_DB_AUTH_WEB_PASSWORD EORA_DB_AUTH_DELIVERY_PASSWORD \
-           EORA_DB_PROVISIONER_PASSWORD EORA_DB_RELAY_PASSWORD; do
+           EORA_DB_PROVISIONER_PASSWORD EORA_DB_RELAY_PASSWORD EORA_CTX_KEY_KID1; do
+  # signed-context HMAC key: 32 bytes as 64 hex characters (D-055); role passwords: 24 random bytes as hex
+  bytes=24
+  [ "$key" = EORA_CTX_KEY_KID1 ] && bytes=32
   if ! grep -Eq "^${key}=.+" .env; then
     if grep -Eq "^${key}=$" .env; then
       # empty placeholder line: replace it in place (portable sed -i)
       tmp=$(mktemp)
-      sed "s/^${key}=\$/${key}=$(openssl rand -hex 24)/" .env > "$tmp" && cat "$tmp" > .env && rm -f "$tmp"
+      sed "s/^${key}=\$/${key}=$(openssl rand -hex $bytes)/" .env > "$tmp" && cat "$tmp" > .env && rm -f "$tmp"
     else
-      printf '%s=%s\n' "$key" "$(openssl rand -hex 24)" >> .env
+      printf '%s=%s\n' "$key" "$(openssl rand -hex $bytes)" >> .env
     fi
     added="$added $key"
   fi

@@ -79,6 +79,23 @@ the definer-owned schemas. It never drops anything. Docker Compose runs it befor
 The image links `pdo_pgsql` against libpq ≥ 17 from apt.postgresql.org (native prepares through PgBouncer, D-056 P-05).
 Tests refuse non-`*_test` databases and non-local hosts (`EORA_TEST_DB_HOST_ALLOW` overrides the host list).
 
+## Tenant context and isolation (M1 / B1 step 2, D-055, ADR-0001 Amendment 2)
+- Tenant tables (`tenants`, `companies`, `plants`) use **forced RLS** bound to the **signed tenant context**:
+  `tenant_id = (SELECT c.tenant FROM ctx_api.context() c)`. Composite tenant foreign keys; the runtime role has no DELETE.
+- `App\Platform\Tenancy\TenantTransaction::run(TenantContext, fn)` is the only way to do tenant work. It opens the
+  outermost transaction with `BEGIN` + the transaction binding (backend pid, transaction start) in one round trip
+  (`EoraPostgresConnection`), signs `v1.<kid>.<tenant|->.<actor>.<pid>.<xact_us>.<exp>.<hmac>` (`ContextSigner`) and sets
+  it as a bound, transaction-local `app.ctx` directly on PDO, so the token never reaches Laravel query events or logs.
+- The verifier `ctx_api.context()` (definer, `PARALLEL RESTRICTED`, owned by the NOLOGIN `eora_ctx_verifier`) checks
+  the HMAC with the key in `ctx.keys` (loaded by `db-bootstrap` from `EORA_CTX_KEYS`, then `ANALYZE`d) and the binding;
+  anything else returns NULL and the policies return no rows. A tenant-less token (`-`) serves the tenant picker.
+- Runtime traffic goes through **PgBouncer** (`infra/pgbouncer`, transaction pooling, `max_prepared_statements`);
+  owner and provisioner connect directly. `eora_test` uses a 2-connection pool so tests exercise connection reuse.
+- Keys: `EORA_CTX_KEY_KID1` in the root `.env` (`scripts/ensure-dev-secrets.sh` creates it); the API reads
+  `EORA_CTX_SIGNING_KID` / `EORA_CTX_SIGNING_KEY`.
+- Tests: `tests/Feature/Tenancy` — T-ISO-02/02b/03, the T-CTX suite ported from the D-B1-24 PoC, and the D-055
+  performance gate (≤ 15 µs per verifier evaluation, ≤ 0.3 ms p95 per transaction versus Option A).
+
 ## Endpoints (B0)
 | Method | Path | Purpose |
 |---|---|---|

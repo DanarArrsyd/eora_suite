@@ -11,8 +11,11 @@ x-api-env: &api-env
   LOG_CHANNEL: stack
   LOG_STACK: json
   DB_CONNECTION: pgsql
-  DB_HOST: postgres
-  DB_PORT: '5432'
+  # runtime traffic goes through PgBouncer (transaction pooling, doc 25 §7); owner/provisioner connect directly
+  DB_HOST: pgbouncer
+  DB_PORT: '6432'
+  DB_OWNER_HOST: postgres
+  DB_OWNER_PORT: '5432'
   DB_DATABASE: ${EORA_DB_DATABASE:-eora}
   # runtime role (doc 25 §5.1) — never the bootstrap superuser or the migrations owner
   DB_USERNAME: eora_app
@@ -23,6 +26,9 @@ x-api-env: &api-env
   CACHE_STORE: redis
   QUEUE_CONNECTION: redis
   SESSION_DRIVER: array
+  # signed tenant context (D-055): same key as loaded into ctx.keys by db-bootstrap
+  EORA_CTX_SIGNING_KID: kid1
+  EORA_CTX_SIGNING_KEY: ${EORA_CTX_KEY_KID1:?set EORA_CTX_KEY_KID1 in .env (scripts/ensure-dev-secrets.sh)}
 
 services:
   postgres:
@@ -76,6 +82,7 @@ services:
       EORA_DB_AUTH_DELIVERY_PASSWORD: ${EORA_DB_AUTH_DELIVERY_PASSWORD:?set EORA_DB_AUTH_DELIVERY_PASSWORD in .env}
       EORA_DB_PROVISIONER_PASSWORD: ${EORA_DB_PROVISIONER_PASSWORD:?set EORA_DB_PROVISIONER_PASSWORD in .env}
       EORA_DB_RELAY_PASSWORD: ${EORA_DB_RELAY_PASSWORD:?set EORA_DB_RELAY_PASSWORD in .env}
+      EORA_CTX_KEYS: kid1:${EORA_CTX_KEY_KID1:?set EORA_CTX_KEY_KID1 in .env}
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,11 +99,30 @@ services:
       <<: *api-env
       DB_OWNER_USERNAME: eora_owner
       DB_OWNER_PASSWORD: ${EORA_DB_OWNER_PASSWORD}
+      # test fixtures create tenants the way provisioning does (doc 25 §2.5)
+      DB_PROVISIONER_PASSWORD: ${EORA_DB_PROVISIONER_PASSWORD}
     depends_on:
       db-bootstrap:
         condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
       redis:
         condition: service_healthy
+
+  pgbouncer:
+    build:
+      context: ./infra/pgbouncer
+    image: eora-pgbouncer:dev
+    environment:
+      EORA_DB_APP_PASSWORD: ${EORA_DB_APP_PASSWORD}
+    healthcheck:
+      test: ['CMD-SHELL', 'nc -z 127.0.0.1 6432']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      db-bootstrap:
+        condition: service_completed_successfully
 
   api:
     build:

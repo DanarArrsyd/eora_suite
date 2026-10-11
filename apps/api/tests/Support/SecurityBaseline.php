@@ -21,12 +21,13 @@ final class SecurityBaseline
     /**
      * Exact allowlist of SECURITY DEFINER functions: full signature (regprocedure text) => owner and the complete,
      * sorted set of roles holding EXECUTE (the owner itself excluded; "PUBLIC" would be listed by name).
-     * Empty until the reviewed definer functions of later B1 steps are added (signed context, auth, provisioning, outbox).
-     * Example entry: 'ctx_api.context()' => ['owner' => 'eora_ctx_verifier', 'execute' => ['eora_app']].
      *
      * @var array<string, array{owner: string, execute: list<string>}>
      */
-    public const array DEFINER_FUNCTIONS = [];
+    public const array DEFINER_FUNCTIONS = [
+        // signed tenant context verifier — D-055, ADR-0001 Amendment 2, doc 25 §5.5 (reviewed in the D-B1-24 PoC)
+        'ctx_api.context()' => ['owner' => 'eora_ctx_verifier', 'execute' => ['eora_app']],
+    ];
 
     /** Every RLS expression on a tenant table must read the signed context (ADR-0001 Amendment 2). */
     public const string TENANT_CONTEXT_CALL = 'ctx_api.context()';

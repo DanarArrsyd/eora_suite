@@ -67,6 +67,12 @@ jobs:
       DB_PASSWORD: ci-only-throwaway-app-0000000000
       DB_OWNER_USERNAME: eora_owner
       DB_OWNER_PASSWORD: ci-only-throwaway-owner-00000000
+      DB_PROVISIONER_PASSWORD: ci-only-throwaway-prov-000000000
+      # throwaway signed-context key (D-055), CI only; the same value is loaded into ctx.keys by the bootstrap step
+      EORA_CTX_SIGNING_KID: kid1
+      # D-067: shared-runner regression ceiling for the verifier gate (reference hardware budget stays 15 us, D-055)
+      EORA_PERF_VERIFIER_BUDGET_US: '25'
+      EORA_CTX_SIGNING_KEY: c1000000c1000000c1000000c1000000c1000000c1000000c1000000c1000000
       REDIS_CLIENT: predis
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: '6379'
@@ -107,6 +113,7 @@ jobs:
           EORA_DB_AUTH_DELIVERY_PASSWORD: ci-only-throwaway-delivery-00000
           EORA_DB_PROVISIONER_PASSWORD: ci-only-throwaway-prov-000000000
           EORA_DB_RELAY_PASSWORD: ci-only-throwaway-relay-00000000
+          EORA_CTX_KEYS: kid1:c1000000c1000000c1000000c1000000c1000000c1000000c1000000c1000000
         run: |
           sh database/bootstrap/bootstrap.sh
           sh database/bootstrap/bootstrap.sh   # idempotency: a second run must succeed and change nothing harmful
@@ -155,6 +162,7 @@ jobs:
       EORA_DB_AUTH_DELIVERY_PASSWORD: ci-only-throwaway-delivery-00000
       EORA_DB_PROVISIONER_PASSWORD: ci-only-throwaway-prov-000000000
       EORA_DB_RELAY_PASSWORD: ci-only-throwaway-relay-00000000
+      EORA_CTX_KEY_KID1: c1000000c1000000c1000000c1000000c1000000c1000000c1000000c1000000
     steps:
       - uses: actions/checkout@v5
       - name: Validate compose file
@@ -186,7 +194,7 @@ jobs:
           q="select string_agg(c.relname || ':' || c.oid, ',' order by c.relname) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r'"
           before=$(docker compose exec -T postgres psql -U eora -d eora -Atc "$q")
           docker compose run --rm -T -e DB_DATABASE=eora_test db-migrate
-          docker compose run --rm -T --entrypoint vendor/bin/pest db-migrate
+          docker compose run --rm -T -e EORA_PERF_VERIFIER_BUDGET_US=25 --entrypoint vendor/bin/pest db-migrate
           after=$(docker compose exec -T postgres psql -U eora -d eora -Atc "$q")
           echo "eora tables before: $before"
           echo "eora tables after:  $after"
