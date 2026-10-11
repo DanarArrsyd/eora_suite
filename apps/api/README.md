@@ -122,6 +122,20 @@ Tests refuse non-`*_test` databases and non-local hosts (`EORA_TEST_DB_HOST_ALLO
   bounded retries with backoff; lockout after 10 failures in 15 min (lookup then returns no hash).
 - Connections: `pgsql_auth` (`eora_auth_web`), `pgsql_delivery` (`eora_auth_delivery`).
 
+## Authentication over HTTP (M1 / B1 step 4b, ADR-0006, doc 25 §4)
+- Sanctum stateful SPA: `GET /sanctum/csrf-cookie`, then every non-GET sends `X-XSRF-TOKEN` (419
+  `CSRF_TOKEN_MISMATCH` otherwise). Session in Redis, cookie `__Host-eora_session` (Secure, HttpOnly, SameSite=Lax),
+  idle 30 min, absolute 12 h (`AuthSession::requireUser`), regenerated on login and tenant/plant switch.
+- `POST /api/v1/auth/login` (argon2id verified in PHP, constant work, one uniform 401, 5/min per account + 20/min per IP),
+  `POST /auth/logout`, `GET /auth/me`, `POST /auth/tenant` (only tenants with an ACTIVE membership),
+  `POST /auth/plant`, `POST /auth/invitations/accept` (token + password ≥ 12 chars → membership ACTIVE).
+- Business routes use the `tenant` middleware: one `TenantTransaction` per request with the session's signed context,
+  credential version + ACTIVE membership re-checked under RLS (401 `SESSION_EXPIRED`), GET read-only, any 4xx/5xx
+  rolls back. 403/404 of signed-in users become `security_events` (flushed after the transaction).
+- Invitation emails: `php artisan eora:deliver-invitations` (Compose service `delivery-worker`, role
+  `eora_auth_delivery` only). Dev mail lands in Mailpit: http://127.0.0.1:8025. The link carries the secret in the URL
+  fragment (`/invitations/accept#token=…`).
+
 ## Endpoints (B0)
 | Method | Path | Purpose |
 |---|---|---|

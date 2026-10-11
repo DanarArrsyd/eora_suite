@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Platform\Exceptions;
 
+use App\Platform\Auth\SessionExpiredException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -37,7 +39,10 @@ final class ProblemDetails
                 'status' => 422, 'code' => 'VALIDATION_FAILED', 'title' => 'Validation failed',
                 'detail' => 'One or more fields are invalid.', 'errors' => $e->errors(),
             ],
+            $e instanceof SessionExpiredException => ['status' => 401, 'code' => 'SESSION_EXPIRED', 'title' => 'Session expired', 'detail' => null],
             $e instanceof AuthenticationException => ['status' => 401, 'code' => 'UNAUTHENTICATED', 'title' => 'Authentication required', 'detail' => null],
+            // ADR-0006 / D-B1-08: a stale or missing XSRF token on a stateful request
+            $e instanceof TokenMismatchException => ['status' => 419, 'code' => 'CSRF_TOKEN_MISMATCH', 'title' => 'Security token expired', 'detail' => null],
             // Laravel prepares AuthorizationException as AccessDeniedHttpException (or a plain HttpException for
             // denyWithStatus/denyAsNotFound) before this renderer runs; the status mapping below covers both.
             $e instanceof AuthorizationException, $e instanceof AccessDeniedHttpException => self::FORBIDDEN,
@@ -47,6 +52,7 @@ final class ProblemDetails
             $e instanceof HttpExceptionInterface && $e->getStatusCode() < 500 => match ($e->getStatusCode()) {
                 401 => ['status' => 401, 'code' => 'UNAUTHENTICATED', 'title' => 'Authentication required', 'detail' => null],
                 403 => self::FORBIDDEN,
+                419 => ['status' => 419, 'code' => 'CSRF_TOKEN_MISMATCH', 'title' => 'Security token expired', 'detail' => null],
                 404 => ['status' => 404, 'code' => 'NOT_FOUND', 'title' => 'Not found', 'detail' => null],
                 default => ['status' => $e->getStatusCode(), 'code' => 'MALFORMED_REQUEST', 'title' => 'Request rejected', 'detail' => null],
             },
