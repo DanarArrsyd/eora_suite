@@ -32,7 +32,7 @@ final class TenantFixtures
                 $db->insert('insert into plants (tenant_id, id, company_id, code, name) values (?, ?, ?, ?, ?)', [$tenant, $id, $company, "P{$i}", "Plant {$i}"]);
             }
 
-            $db->update("update tenants set status = 'ACTIVE', updated_at = now(), version = version + 1 where id = ?", [$tenant]);
+            $db->update("update tenants set status = 'ACTIVE' where id = ?", [$tenant]);
         }, 'pgsql_provisioner');
 
         return ['tenant' => $tenant, 'company' => $company, 'plants' => $plantIds, 'actor' => $actor];

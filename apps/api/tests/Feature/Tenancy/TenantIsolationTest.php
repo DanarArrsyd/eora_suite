@@ -93,8 +93,14 @@ it('lets the provisioner create a tenant only in PROVISIONING and change it only
     $db = DB::connection('pgsql_provisioner');
     $id = Str::uuid7()->toString();
 
+    // without a signed context the audit trigger refuses; with one, RLS refuses a non-PROVISIONING status
     expect(fn () => $db->insert("insert into tenants (id, code, name, status) values (?, ?, ?, 'ACTIVE')", [$id, 'x-'.substr($id, -8), 'x']))
-        ->toThrow(QueryException::class, 'row-level security');
+        ->toThrow(QueryException::class, 'SQLSTATE[42501]');
+    expect(fn () => app(TenantTransaction::class)->run(
+        TenantContext::forTenant($id, $this->a['actor']),
+        fn (EoraPostgresConnection $c) => $c->insert("insert into tenants (id, code, name, status) values (?, ?, ?, 'ACTIVE')", [$id, 'y-'.substr($id, -8), 'y']),
+        'pgsql_provisioner',
+    ))->toThrow(QueryException::class, 'row-level security');
 
     $changed = app(TenantTransaction::class)->run(
         TenantContext::forTenant($this->a['tenant'], $this->a['actor']),

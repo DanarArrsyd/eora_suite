@@ -67,7 +67,7 @@ it('PoC-CTX-01: a forged context cannot insert into another tenant', function ()
         $parts[2] = $this->b['tenant'];
         $db->installSignedContext(implode('.', $parts));
         $db->insert('insert into plants (tenant_id, company_id, code, name) values (?, ?, ?, ?)', [$this->b['tenant'], $this->b['company'], 'FRG', 'forged']);
-    }))->toThrow(QueryException::class, 'row-level security');
+    }))->toThrow(QueryException::class, 'SQLSTATE[42501]'); // forged context: audit trigger or RLS, both insufficient privilege
 })->group('integration', 'ctx');
 
 it('PoC-CTX-02: a token replayed in a later transaction sees nothing', function () {
@@ -163,4 +163,21 @@ it('PoC-CTX-03: the token never reaches Laravel query events or the query log', 
     DB::disableQueryLog();
 
     expect($all)->not->toContain('v1.kid1')->and($all)->toContain('select id from plants');
+})->group('integration', 'ctx');
+
+it('expires a token inside a long transaction (expiry is checked per statement, not per transaction)', function () {
+    $shortLived = new ContextSigner('kid1', (string) config('eora.context.key'), 1);
+    /** @var EoraPostgresConnection $db */
+    $db = DB::connection();
+
+    $counts = $db->transaction(function () use ($db, $shortLived): array {
+        $binding = $db->transactionBinding();
+        $db->installSignedContext($shortLived->sign(TenantContext::forTenant($this->a['tenant'], $this->a['actor']), $binding['pid'], $binding['xact_us']));
+        $before = count($db->select('select id from plants'));
+        $db->select('select pg_sleep(2.1)');
+
+        return ['before' => $before, 'after' => count($db->select('select id from plants'))];
+    });
+
+    expect($counts)->toBe(['before' => 2, 'after' => 0]);
 })->group('integration', 'ctx');

@@ -33,7 +33,7 @@ BEGIN
   END IF;
   payload := pg_catalog.substr(t, 1, n - 65);
   SELECT ck.key INTO k FROM ctx.keys ck
-   WHERE ck.kid = pg_catalog.split_part(payload, '.', 2) AND ck.not_after > pg_catalog.now();
+   WHERE ck.kid = pg_catalog.split_part(payload, '.', 2) AND ck.not_after > pg_catalog.statement_timestamp();
   IF k IS NULL
      OR pg_catalog.encode(ext.hmac(pg_catalog.convert_to(payload, 'UTF8'), k, 'sha256'), 'hex') <> pg_catalog.substr(t, n - 63) THEN
     RETURN;
@@ -43,7 +43,8 @@ BEGIN
   IF pg_catalog.cardinality(f) <> 7 OR f[1] <> 'v1'
      OR f[5]::integer <> pg_catalog.pg_backend_pid()
      OR f[6]::numeric <> EXTRACT(epoch FROM pg_catalog.transaction_timestamp()) * 1000000
-     OR f[7]::bigint <= EXTRACT(epoch FROM pg_catalog.now()) THEN
+     -- statement_timestamp() advances per statement: a token expires inside a long transaction too (now() would not)
+     OR f[7]::bigint <= EXTRACT(epoch FROM pg_catalog.statement_timestamp()) THEN
     RETURN;
   END IF;
   tenant := CASE WHEN f[3] = '-' THEN NULL ELSE f[3]::uuid END;
