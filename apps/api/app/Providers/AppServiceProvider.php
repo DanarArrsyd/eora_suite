@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Platform\Database\EoraPostgresConnection;
+use App\Platform\Security\SecurityEventRecorder;
+use App\Platform\Security\SecurityHasher;
 use App\Platform\Tenancy\ContextSigner;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +19,10 @@ class AppServiceProvider extends ServiceProvider
     {
         // Every pgsql connection merges BEGIN with the transaction binding read (signed context, D-055).
         Connection::resolverFor('pgsql', static fn ($pdo, string $database, string $prefix, array $config) => new EoraPostgresConnection($pdo, $database, $prefix, $config));
+
+        // request/job scoped: flushed after the outer transaction, reset between jobs and Octane requests
+        $this->app->scoped(SecurityEventRecorder::class);
+        $this->app->singleton(SecurityHasher::class, static fn ($app): SecurityHasher => new SecurityHasher((string) $app['config']->get('eora.pepper.key')));
 
         $this->app->singleton(ContextSigner::class, static fn ($app): ContextSigner => new ContextSigner(
             (string) $app['config']->get('eora.context.kid'),

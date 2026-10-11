@@ -96,6 +96,18 @@ Tests refuse non-`*_test` databases and non-local hosts (`EORA_TEST_DB_HOST_ALLO
 - Tests: `tests/Feature/Tenancy` — T-ISO-02/02b/03, the T-CTX suite ported from the D-B1-24 PoC, and the D-055
   performance gate (≤ 15 µs per verifier evaluation, ≤ 0.3 ms p95 per transaction versus Option A).
 
+## Business calendar and security events (M1 / B1 step 3)
+- `business_calendars` (tenant default `plant_id` NULL → plant override), `calendar_exceptions`, `shift_calendars`,
+  `shifts`: versioned by `effective_from`, immutable for the runtime role (a change is a new version), forced RLS.
+- `App\Platform\Calendar\BusinessCalendar::resolve($db, $plantId, $instant)` → calendar date, production date
+  (cut-off; a shift belongs wholly to the production date of its start), shift, ISO week (ADR-0012, doc 14 #62).
+  No configured calendar → exception; nothing is guessed.
+- `security_events` (doc 25 §8): append-only (no UPDATE/DELETE grants, trigger blocks TRUNCATE), the runtime role
+  inserts only `source = 'app'` rows for its own tenant and actor; `auth.*` actions are reserved for auth sources.
+  `SecurityEventRecorder` buffers events during the request/job and `flush()`es them after the outer transaction
+  (logged first; a failed write is queued as `RetrySecurityEventFlush`). Client IP / user agent are stored only as
+  keyed hashes (`SecurityHasher`, `EORA_PEPPER_KEY`, D-B1-22).
+
 ## Endpoints (B0)
 | Method | Path | Purpose |
 |---|---|---|

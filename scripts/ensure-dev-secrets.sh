@@ -7,10 +7,10 @@ cd "$(dirname "$0")/.."
 umask 077
 added=""
 for key in EORA_DB_OWNER_PASSWORD EORA_DB_APP_PASSWORD EORA_DB_AUTH_WEB_PASSWORD EORA_DB_AUTH_DELIVERY_PASSWORD \
-           EORA_DB_PROVISIONER_PASSWORD EORA_DB_RELAY_PASSWORD EORA_CTX_KEY_KID1; do
+           EORA_DB_PROVISIONER_PASSWORD EORA_DB_RELAY_PASSWORD EORA_CTX_KEY_KID1 EORA_PEPPER_KEY; do
   # signed-context HMAC key: 32 bytes as 64 hex characters (D-055); role passwords: 24 random bytes as hex
   bytes=24
-  [ "$key" = EORA_CTX_KEY_KID1 ] && bytes=32
+  case "$key" in EORA_CTX_KEY_KID1|EORA_PEPPER_KEY) bytes=32 ;; esac
   if ! grep -Eq "^${key}=.+" .env; then
     if grep -Eq "^${key}=$" .env; then
       # empty placeholder line: replace it in place (portable sed -i)

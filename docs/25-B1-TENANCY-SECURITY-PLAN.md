@@ -604,9 +604,9 @@ Grantor ⊇ grantee; SoD-06 self-elevation always blocked (no thresholds in earl
 ## 16. Recommended B1 implementation sequence (after approval; each step its own commit/PR section)
 0. ~~(Separate approval) Security PoC~~ → done 2026-10-10/11; D-B1-24 approved (D-055).
 1. ✅ *(M1 step 1, PR #5)* DB bootstrap script: roles (§5.1), schemas, grants; Compose/CI switch away from the superuser; group A harness + schema guard.
-2. ✅ *(M1 step 2: tenants, companies, plants; calendars follow with step 4)* Tenancy tables (`tenants`, `companies`, `plants`, calendars) with forced RLS; group C isolation tests T-ISO-02/02b.
+2. ✅ *(M1 step 2: tenants, companies, plants; M1 step 3: business calendars, calendar exceptions, shift calendars, shifts + `BusinessCalendar` resolver)* Tenancy tables (`tenants`, `companies`, `plants`, calendars) with forced RLS; group C isolation tests T-ISO-02/02b.
 3. ✅ partly *(M1 step 2: `TenantContext`, `TenantTransaction`, signed context, PgBouncer in Compose/CI, T-ISO-03, T-CTX, D-055 performance gate; HTTP and job middleware follow with authentication)* `TenantContext`, `TenantTransaction`, middleware priority, job middleware, PgBouncer in Compose/CI; T-ISO-03/04, T-CTX.
-4. `security_events` + buffered post-transaction flush (needed by every later step's denials); T-SEV.
+4. ✅ *(M1 step 3: append-only `security_events`, request-scoped `SecurityEventRecorder` flushed after the outer transaction, JSON log first, queued retry, keyed hashes; HTTP wiring follows with authentication in step 5)* `security_events` + buffered post-transaction flush (needed by every later step's denials); T-SEV.
 5. Identity: `auth` schema, definer functions, auth connection, login/logout/me/picker, session/CSRF/cookies; T-LOGIN, T-AUTH, T-SESS, T-CSRF, T-COOKIE.
 6. Delivery worker + outbox minimal + invitation + password reset; T-INV, T-RST.
 7. RBAC: roles, assignments, policies, escalation rules; T-RBAC, T-ESC.
