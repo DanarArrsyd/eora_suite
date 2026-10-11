@@ -6,8 +6,11 @@ use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Security\SecurityEventRecorder;
 use App\Platform\Security\SecurityHasher;
 use App\Platform\Tenancy\ContextSigner;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Connection;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -38,5 +41,20 @@ class AppServiceProvider extends ServiceProvider
     {
         // migrate:fresh, db:wipe and friends are refused in production (doc 25 §10).
         DB::prohibitDestructiveCommands($this->app->isProduction());
+
+        // D-B1-06: 5/min per account and 20/min per IP. Limiter keys hold only pepper-keyed HMACs (D-B1-22): the cache
+        // never stores an email address or a client IP, and a low-entropy email cannot be dictionary-tested from it.
+        RateLimiter::for('login', function (Request $request): array {
+            $hasher = app(SecurityHasher::class);
+            $email = mb_strtolower(trim((string) $request->input('email')));
+
+            return [
+                Limit::perMinute(5)->by('login:account:'.($hasher->hash($email) ?? 'none')),
+                Limit::perMinute(20)->by('login:ip:'.($hasher->hash((string) $request->ip()) ?? 'none')),
+            ];
+        });
+        RateLimiter::for('invitation-accept', fn (Request $request) => Limit::perMinute(10)->by(
+            'invite:ip:'.(app(SecurityHasher::class)->hash((string) $request->ip()) ?? 'none'),
+        ));
     }
 }

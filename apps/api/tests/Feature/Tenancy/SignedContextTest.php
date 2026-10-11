@@ -166,7 +166,8 @@ it('PoC-CTX-03: the token never reaches Laravel query events or the query log', 
 })->group('integration', 'ctx');
 
 it('expires a token inside a long transaction (expiry is checked per statement, not per transaction)', function () {
-    $shortLived = new ContextSigner('kid1', (string) config('eora.context.key'), 1);
+    // exp = whole seconds: a 2 s TTL is valid for at least 1 s, and 2.1 s later it has always passed
+    $shortLived = new ContextSigner('kid1', (string) config('eora.context.key'), 2);
     /** @var EoraPostgresConnection $db */
     $db = DB::connection();
 

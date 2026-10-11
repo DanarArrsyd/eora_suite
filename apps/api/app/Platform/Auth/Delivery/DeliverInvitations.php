@@ -1,0 +1,82 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Platform\Auth\Delivery;
+
+use Illuminate\Console\Command;
+use Illuminate\Database\Connection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Throwable;
+
+/**
+ * Secret-delivery worker (doc 25 §2.4, §2.9, D-B1-18). Runs as its own process with the eora_auth_delivery role only:
+ * converts pending invitation requests, claims one delivery at a time under a lease, issues the secret, sends the email
+ * outside any transaction, then acknowledges the result for the current claim. Secrets never reach logs.
+ */
+final class DeliverInvitations extends Command
+{
+    protected $signature = 'eora:deliver-invitations {--once : Process what is due, then exit} {--sleep=5 : Seconds between polls}';
+
+    protected $description = 'Deliver pending invitation emails (separate worker, eora_auth_delivery role)';
+
+    public function handle(): int
+    {
+        $mailer = (string) config('mail.default');
+        if (in_array($mailer, ['log', 'array'], true) && ! app()->environment('testing')) {
+            $this->error("Refusing to deliver secrets through the '{$mailer}' mailer (it would store them).");
+
+            return self::FAILURE;
+        }
+
+        $worker = substr(gethostname() ?: 'worker', 0, 40).':'.getmypid();
+        $db = DB::connection('pgsql_delivery');
+
+        do {
+            $db->select('select auth_api.claim_invitation_dispatch(?, ?)', [$worker, 50]);
+
+            while (($claim = $db->selectOne('select * from auth_api.claim_delivery(?)', [$worker])) !== null && $claim->delivery_id !== null) {
+                $this->deliver($db, $claim);
+            }
+
+            if (! $this->option('once')) {
+                sleep(max(1, (int) $this->option('sleep')));
+            }
+        } while (! $this->option('once'));
+
+        return self::SUCCESS;
+    }
+
+    private function deliver(Connection $db, \stdClass $claim): void
+    {
+        if ($claim->kind !== 'INVITATION') {
+            $db->select('select auth_api.mark_delivery_result(?, ?, false, ?)', [$claim->delivery_id, $claim->claim_token, 'UNSUPPORTED_KIND']);
+
+            return;
+        }
+
+        $secret = $db->selectOne('select auth_api.issue_invitation_secret(?, ?) as s', [$claim->delivery_id, $claim->claim_token])->s;
+        if ($secret === null) {
+            return; // target gone: the database cancelled the delivery
+        }
+
+        $link = rtrim((string) config('eora.frontend_url'), '/').'/invitations/accept#token='.$secret;
+
+        try {
+            Mail::to((string) $claim->recipient)->send(new InvitationMail($link));
+            $ok = true;
+        } catch (Throwable $e) {
+            Log::warning('invitation_delivery_failed', ['delivery_id' => $claim->delivery_id, 'error' => class_basename($e)]);
+            $ok = false;
+        }
+
+        try {
+            $db->select('select auth_api.mark_delivery_result(?, ?, ?, ?)', [$claim->delivery_id, $claim->claim_token, $ok, $ok ? null : 'SEND_FAILED']);
+        } catch (Throwable $e) {
+            // lease expired or a newer claim exists: the next claim re-issues a fresh secret (doc 25 §2.9)
+            Log::warning('invitation_ack_rejected', ['delivery_id' => $claim->delivery_id, 'error' => class_basename($e)]);
+        }
+    }
+}

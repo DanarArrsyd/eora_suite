@@ -15,6 +15,9 @@ return [
         'ttl' => (int) env('EORA_CTX_TTL', 300),
     ],
 
+    // Public URL of the web app; invitation links point here (the secret travels in the URL fragment).
+    'frontend_url' => env('EORA_FRONTEND_URL', env('APP_URL', 'http://localhost:3000')),
+
     // Server pepper for keyed hashes (ip_hash, user_agent_hash, email_hmac; D-B1-22): 64 hex chars from the secrets
     // manager; rotated yearly (old key kept for lookups when rotation is implemented).
     'pepper' => [
