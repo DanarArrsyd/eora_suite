@@ -68,6 +68,8 @@ jobs:
       DB_OWNER_USERNAME: eora_owner
       DB_OWNER_PASSWORD: ci-only-throwaway-owner-00000000
       DB_PROVISIONER_PASSWORD: ci-only-throwaway-prov-000000000
+      DB_AUTH_WEB_PASSWORD: ci-only-throwaway-authweb-000000
+      DB_AUTH_DELIVERY_PASSWORD: ci-only-throwaway-delivery-00000
       # throwaway signed-context key (D-055), CI only; the same value is loaded into ctx.keys by the bootstrap step
       EORA_CTX_SIGNING_KID: kid1
       # D-067: shared-runner regression ceiling for the verifier gate (reference hardware budget stays 15 us, D-055)

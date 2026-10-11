@@ -101,8 +101,11 @@ services:
       <<: *api-env
       DB_OWNER_USERNAME: eora_owner
       DB_OWNER_PASSWORD: ${EORA_DB_OWNER_PASSWORD}
-      # test fixtures create tenants the way provisioning does (doc 25 §2.5)
+      # test fixtures create tenants the way provisioning does (doc 25 §2.5); group C tests call the auth functions
+      # as their real roles (doc 25 §11)
       DB_PROVISIONER_PASSWORD: ${EORA_DB_PROVISIONER_PASSWORD}
+      DB_AUTH_WEB_PASSWORD: ${EORA_DB_AUTH_WEB_PASSWORD}
+      DB_AUTH_DELIVERY_PASSWORD: ${EORA_DB_AUTH_DELIVERY_PASSWORD}
     depends_on:
       db-bootstrap:
         condition: service_completed_successfully

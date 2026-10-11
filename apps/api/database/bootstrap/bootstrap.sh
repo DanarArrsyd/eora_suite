@@ -65,6 +65,7 @@ for db in $EORA_BOOTSTRAP_DATABASES; do
   fi
   psql_super -d "$db" -f "$dir/02_database.sql"
   psql_super -d "$db" -f "$dir/10_ctx.sql"
+  psql_super -d "$db" -f "$dir/20_auth.sql"
   printf '%s' "$key_sql" | psql_super -d "$db"
   echo "bootstrap: database $db ready"
 done
