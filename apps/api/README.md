@@ -108,6 +108,20 @@ Tests refuse non-`*_test` databases and non-local hosts (`EORA_TEST_DB_HOST_ALLO
   (logged first; a failed write is queued as `RetrySecurityEventFlush`). Client IP / user agent are stored only as
   keyed hashes (`SecurityHasher`, `EORA_PEPPER_KEY`, D-B1-22).
 
+## Identity and invitations — database layer (M1 / B1 step 4a, doc 25 §2)
+- `auth` schema (bootstrap `database/bootstrap/20_auth.sql`, owned by NOLOGIN `eora_auth_definer`): identities,
+  login failures, rate buckets, invitations, delivery queue. No login role can read it; the only surface is
+  `auth_api`, one grantee per function (schema guard allowlist):
+  `eora_auth_web` → `login_lookup`, `record_login_failure`, `invite_identity`, `record_security_event`,
+  `consume_invitation`; `eora_auth_delivery` → `claim_invitation_dispatch`, `claim_delivery`,
+  `issue_invitation_secret`, `mark_delivery_result`; `eora_provisioner` → `provision_identity`.
+- Public tables (migration): `users` (profile, no secrets; runtime may edit only its own name/locale),
+  `memberships` (tenant-scoped + tenant-less picker read), `invitation_dispatch_requests` (durable hand-off).
+- Rules: random UUIDv4 user ids; first password only via an accepted invitation; secrets 256-bit, stored as SHA-256,
+  usable only after the delivery is acknowledged (`SENT`), single use, rotated on every re-issue, 72 h TTL; lease +
+  bounded retries with backoff; lockout after 10 failures in 15 min (lookup then returns no hash).
+- Connections: `pgsql_auth` (`eora_auth_web`), `pgsql_delivery` (`eora_auth_delivery`).
+
 ## Endpoints (B0)
 | Method | Path | Purpose |
 |---|---|---|

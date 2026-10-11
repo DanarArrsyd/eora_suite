@@ -101,6 +101,40 @@ return [
             'connect_timeout' => env('DB_CONNECT_TIMEOUT', 3),
         ],
 
+        // Web authentication role (doc 25 §2.1): EXECUTE on the web auth_api functions only; used only by App\Platform\Auth.
+        'pgsql_auth' => [
+            'driver' => 'pgsql',
+            'url' => null,
+            'host' => env('DB_AUTH_WEB_HOST', env('DB_OWNER_HOST', env('DB_HOST', '127.0.0.1'))),
+            'port' => env('DB_AUTH_WEB_PORT', env('DB_OWNER_PORT', env('DB_PORT', '5432'))),
+            'database' => env('DB_DATABASE', 'laravel'),
+            'username' => env('DB_AUTH_WEB_USERNAME', 'eora_auth_web'),
+            'password' => env('DB_AUTH_WEB_PASSWORD', ''),
+            'charset' => env('DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => env('DB_SSLMODE', 'prefer'),
+            'connect_timeout' => env('DB_CONNECT_TIMEOUT', 3),
+        ],
+
+        // Secret delivery role (doc 25 §2.1): EXECUTE on the delivery auth_api functions only; separate worker process.
+        'pgsql_delivery' => [
+            'driver' => 'pgsql',
+            'url' => null,
+            'host' => env('DB_AUTH_DELIVERY_HOST', env('DB_OWNER_HOST', env('DB_HOST', '127.0.0.1'))),
+            'port' => env('DB_AUTH_DELIVERY_PORT', env('DB_OWNER_PORT', env('DB_PORT', '5432'))),
+            'database' => env('DB_DATABASE', 'laravel'),
+            'username' => env('DB_AUTH_DELIVERY_USERNAME', 'eora_auth_delivery'),
+            'password' => env('DB_AUTH_DELIVERY_PASSWORD', ''),
+            'charset' => env('DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => env('DB_SSLMODE', 'prefer'),
+            'connect_timeout' => env('DB_CONNECT_TIMEOUT', 3),
+        ],
+
         // Tenant provisioning role (doc 25 §2.5): member of eora_app plus tenant creation. Direct connection (provisioning
         // may bypass the pooler, doc 25 §7). Used by the provisioning command and by test fixtures.
         'pgsql_provisioner' => [
