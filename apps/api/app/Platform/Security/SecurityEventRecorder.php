@@ -59,7 +59,17 @@ final class SecurityEventRecorder
             self::write($this->transaction, $context, $events);
         } catch (Throwable $e) {
             Log::warning('security_event_flush_failed', ['error' => class_basename($e), 'count' => count($events)]);
-            RetrySecurityEventFlush::dispatch($context->tenantId, $context->actorId, array_map(static fn (SecurityEvent $e) => $e->toArray(), $events));
+
+            try {
+                RetrySecurityEventFlush::dispatch($context->tenantId, $context->actorId, array_map(static fn (SecurityEvent $e) => $e->toArray(), $events));
+            } catch (Throwable $queueError) {
+                // the queue is unavailable too: the events are already in the JSON log above; never fail the response
+                Log::error('security_event_retry_enqueue_failed', [
+                    'error' => class_basename($queueError),
+                    'tenant_id' => $context->tenantId,
+                    'events' => array_map(static fn (SecurityEvent $e) => $e->toLog(), $events),
+                ]);
+            }
         }
     }
 

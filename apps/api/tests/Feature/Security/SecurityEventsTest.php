@@ -10,6 +10,7 @@ use App\Platform\Security\SecurityHasher;
 use App\Platform\Tenancy\TenantContext;
 use App\Platform\Tenancy\TenantTransaction;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Tests\Support\TenantFixtures;
@@ -104,6 +105,16 @@ it('queues a retry instead of failing the response when the flush fails', functi
     $recorder->flush(TenantContext::forTenant('00000000-0000-7000-8000-000000000000', $this->a['actor']));
 
     Queue::assertPushed(RetrySecurityEventFlush::class, fn (RetrySecurityEventFlush $job) => $job->events[0]['action'] === 'access.forbidden');
+})->group('integration', 'security');
+
+it('never fails the caller when both the database write and the retry queue fail', function () {
+    Bus::shouldReceive('dispatch')->andThrow(new RuntimeException('redis down'));
+    $recorder = app(SecurityEventRecorder::class);
+    $recorder->record(new SecurityEvent('access.forbidden', httpStatus: 403));
+
+    $recorder->flush(TenantContext::forTenant('00000000-0000-7000-8000-000000000000', $this->a['actor']));
+
+    expect($recorder->pending())->toBe([]);
 })->group('integration', 'security');
 
 it('stores client identifiers only as keyed hashes', function () {

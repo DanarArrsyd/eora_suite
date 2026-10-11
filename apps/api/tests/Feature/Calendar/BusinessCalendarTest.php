@@ -85,21 +85,46 @@ it('lets a plant override the tenant default (other timezone, other cut-off)', f
 })->group('integration', 'calendar');
 
 it('applies a new calendar version only from its effective date; earlier dates never move', function () {
-    // new version from 1 Nov: cut-off 06:00 with shifts moved one hour earlier (S1 06–14, S2 14–22, S3 22–06)
-    inT($this->t, function (EoraPostgresConnection $db) {
-        $db->insert("insert into business_calendars (tenant_id, plant_id, timezone, production_day_starts_at, effective_from) values (?, null, 'Asia/Jakarta', '06:00', '2026-11-01')", [$this->t['tenant']]);
-        $sc = $db->selectOne("insert into shift_calendars (tenant_id, plant_id, code, name, effective_from) values (?, null, 'STD2', 'Standard from Nov', '2026-11-01') returning id", [$this->t['tenant']])->id;
-        foreach ([['S1', '06:00', '14:00'], ['S2', '14:00', '22:00'], ['S3', '22:00', '06:00']] as [$code, $from, $to]) {
-            $db->insert('insert into shifts (tenant_id, shift_calendar_id, code, name, starts_at, ends_at) values (?, ?, ?, ?, ?, ?)', [$this->t['tenant'], $sc, $code, "Shift {$code}", $from, $to]);
+    // new versions must start in the future (freeze boundary), so the dates are relative to today in Jakarta
+    $today = new DateTimeImmutable('today', new DateTimeZone('Asia/Jakarta'));
+    $from = $today->modify('+20 days')->format('Y-m-d');
+
+    // new version: cut-off 06:00 with shifts moved one hour earlier (S1 06–14, S2 14–22, S3 22–06)
+    inT($this->t, function (EoraPostgresConnection $db) use ($from) {
+        $db->insert("insert into business_calendars (tenant_id, plant_id, timezone, production_day_starts_at, effective_from) values (?, null, 'Asia/Jakarta', '06:00', ?)", [$this->t['tenant'], $from]);
+        $sc = $db->selectOne("insert into shift_calendars (tenant_id, plant_id, code, name, effective_from) values (?, null, 'STD2', 'Standard v2', ?) returning id", [$this->t['tenant'], $from])->id;
+        foreach ([['S1', '06:00', '14:00'], ['S2', '14:00', '22:00'], ['S3', '22:00', '06:00']] as [$code, $start, $end]) {
+            $db->insert('insert into shifts (tenant_id, shift_calendar_id, code, name, starts_at, ends_at) values (?, ?, ?, ?, ?, ?)', [$this->t['tenant'], $sc, $code, "Shift {$code}", $start, $end]);
         }
     });
 
-    // 06:30 Tue: still S3 of Monday under the old version; S1 of the same day under the new one
-    $old = resolveAt($this->t, $this->t['plants'][0], '2026-10-13T06:30:00+07:00');
-    $new = resolveAt($this->t, $this->t['plants'][0], '2026-11-03T06:30:00+07:00');
+    // 06:30: still S3 of the previous day under the old version; S1 of the same day under the new one
+    $before = $today->modify('+10 days');
+    $after = $today->modify('+22 days');
+    $old = resolveAt($this->t, $this->t['plants'][0], $before->format('Y-m-d').'T06:30:00+07:00');
+    $new = resolveAt($this->t, $this->t['plants'][0], $after->format('Y-m-d').'T06:30:00+07:00');
 
-    expect([$old->productionDate, $old->shiftCode])->toBe(['2026-10-12', 'S3'])
-        ->and([$new->productionDate, $new->shiftCode])->toBe(['2026-11-03', 'S1']);
+    expect([$old->productionDate, $old->shiftCode])->toBe([$before->modify('-1 day')->format('Y-m-d'), 'S3'])
+        ->and([$new->productionDate, $new->shiftCode])->toBe([$after->format('Y-m-d'), 'S1']);
+})->group('integration', 'calendar');
+
+it('freezes versions in effect: no backdated version, no shift added to a running shift calendar', function () {
+    $today = (new DateTimeImmutable('today', new DateTimeZone('Asia/Jakarta')))->format('Y-m-d');
+
+    expect(fn () => inT($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into business_calendars (tenant_id, plant_id, timezone, production_day_starts_at, effective_from) values (?, null, 'Asia/Jakarta', '05:00', ?)",
+        [$this->t['tenant'], $today],
+    )))->toThrow(QueryException::class, 'frozen');
+
+    expect(fn () => inT($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into shift_calendars (tenant_id, plant_id, code, name, effective_from) values (?, null, 'BACK', 'Backdated', '2026-02-01')",
+        [$this->t['tenant']],
+    )))->toThrow(QueryException::class, 'frozen');
+
+    expect(fn () => inT($this->t, function (EoraPostgresConnection $db) {
+        $sc = $db->selectOne("select id from shift_calendars where code = 'STD'")->id;
+        $db->insert("insert into shifts (tenant_id, shift_calendar_id, code, name, starts_at, ends_at) values (?, ?, 'S4', 'Late', '12:00', '13:00')", [$this->t['tenant'], $sc]);
+    }))->toThrow(QueryException::class, 'already in effect');
 })->group('integration', 'calendar');
 
 it('refuses to guess when no calendar is configured', function () {

@@ -95,6 +95,62 @@ return new class extends Migration
             CREATE INDEX calendar_exceptions_calendar_idx ON calendar_exceptions (tenant_id, calendar_id, exception_date);
             CREATE INDEX shifts_calendar_idx ON shifts (tenant_id, shift_calendar_id);
 
+            -- Freeze boundary (ADR-0012: historical buckets never move). The first version of a scope (tenant default or one
+            -- plant) may start in the past — that is the initial configuration; every later version must start after
+            -- today in the scope's local date. Invoker triggers: the runtime role's RLS view decides what "exists".
+            CREATE OR REPLACE FUNCTION eora_calendar_version_guard() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            DECLARE
+              zone text;
+              today date;
+              has_version boolean;
+            BEGIN
+              IF TG_TABLE_NAME = 'business_calendars' THEN
+                zone := NEW.timezone;
+                SELECT EXISTS (SELECT 1 FROM public.business_calendars c
+                                WHERE c.tenant_id = NEW.tenant_id AND c.plant_id IS NOT DISTINCT FROM NEW.plant_id) INTO has_version;
+              ELSE
+                SELECT coalesce((SELECT p.timezone FROM public.plants p WHERE p.tenant_id = NEW.tenant_id AND p.id = NEW.plant_id),
+                                (SELECT t.timezone FROM public.tenants t WHERE t.id = NEW.tenant_id)) INTO zone;
+                SELECT EXISTS (SELECT 1 FROM public.shift_calendars c
+                                WHERE c.tenant_id = NEW.tenant_id AND c.plant_id IS NOT DISTINCT FROM NEW.plant_id) INTO has_version;
+              END IF;
+              today := (pg_catalog.statement_timestamp() AT TIME ZONE coalesce(zone, 'UTC'))::date;
+              IF has_version AND NEW.effective_from <= today THEN
+                RAISE EXCEPTION 'a new % version must start after % (versions in effect are frozen)', TG_TABLE_NAME, today
+                  USING ERRCODE = 'check_violation';
+              END IF;
+              RETURN NEW;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_calendar_version_guard() FROM PUBLIC;
+
+            -- Shifts belong to their shift-calendar version: they may be added while that version has not started yet,
+            -- or in the same transaction that created it (initial configuration).
+            CREATE OR REPLACE FUNCTION eora_shift_guard() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            DECLARE
+              cal record;
+              zone text;
+            BEGIN
+              SELECT c.effective_from, c.plant_id, (c.xmin = pg_catalog.pg_current_xact_id()::xid) AS same_tx INTO cal
+                FROM public.shift_calendars c WHERE c.tenant_id = NEW.tenant_id AND c.id = NEW.shift_calendar_id;
+              IF cal IS NULL THEN
+                RETURN NEW; -- the composite foreign key reports the missing calendar
+              END IF;
+              SELECT coalesce((SELECT p.timezone FROM public.plants p WHERE p.tenant_id = NEW.tenant_id AND p.id = cal.plant_id),
+                              (SELECT t.timezone FROM public.tenants t WHERE t.id = NEW.tenant_id)) INTO zone;
+              IF NOT cal.same_tx AND cal.effective_from <= (pg_catalog.statement_timestamp() AT TIME ZONE coalesce(zone, 'UTC'))::date THEN
+                RAISE EXCEPTION 'shift calendar version is already in effect; create a new version instead'
+                  USING ERRCODE = 'check_violation';
+              END IF;
+              RETURN NEW;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_shift_guard() FROM PUBLIC;
+
+            CREATE TRIGGER version_guard BEFORE INSERT ON business_calendars FOR EACH ROW EXECUTE FUNCTION eora_calendar_version_guard();
+            CREATE TRIGGER version_guard BEFORE INSERT ON shift_calendars FOR EACH ROW EXECUTE FUNCTION eora_calendar_version_guard();
+            CREATE TRIGGER version_guard BEFORE INSERT ON shifts FOR EACH ROW EXECUTE FUNCTION eora_shift_guard();
+
             CREATE TRIGGER stamp_audit BEFORE INSERT OR UPDATE ON business_calendars FOR EACH ROW EXECUTE FUNCTION eora_stamp_audit();
             CREATE TRIGGER stamp_audit BEFORE INSERT OR UPDATE ON calendar_exceptions FOR EACH ROW EXECUTE FUNCTION eora_stamp_audit();
             CREATE TRIGGER stamp_audit BEFORE INSERT OR UPDATE ON shift_calendars FOR EACH ROW EXECUTE FUNCTION eora_stamp_audit();
@@ -123,6 +179,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::unprepared('DROP TABLE shifts; DROP TABLE shift_calendars; DROP TABLE calendar_exceptions; DROP TABLE business_calendars;');
+        DB::unprepared('DROP TABLE shifts; DROP TABLE shift_calendars; DROP TABLE calendar_exceptions; DROP TABLE business_calendars; DROP FUNCTION eora_calendar_version_guard(); DROP FUNCTION eora_shift_guard();');
     }
 };
