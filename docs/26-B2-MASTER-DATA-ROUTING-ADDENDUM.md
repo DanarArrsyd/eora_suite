@@ -81,7 +81,7 @@ Approving v(n+1) of a routing is one service command, executed in **one transact
   - `eora_lifecycle_definer` needs `USAGE` on schema `ctx_api` and `EXECUTE` on `ctx_api.context()` (granted with the D-B1-24 implementation, doc 25 §5.5).
   - The definer reads `memberships`, `role_assignments`, `role_permissions`, `plants` only through tenant policies equal to `eora_app`'s (`tenant_id = (SELECT c.tenant FROM ctx_api.context() c)`), with column grants limited to the columns these checks use; it never widens tenant scope.
 - **Approver identity:** only the trusted actor of step 1; the function never accepts an approver id parameter.
-- **Implementation gate (owner, 2026-10-09):** implementing `lifecycle_api.approve_routing_version` — or any elevated database approval function — is **BLOCKED** until D-B1-24 (signed tenant context) passes PoC-CTX-01..13 and is approved for implementation, or the owner approves an alternative actor context proven equally unforgeable. There is **no automatic fallback** to `app.user_id` or other forgeable settings; if neither is approved, routing approval cannot use the elevated path and B2 must stop at this point for an owner decision.
+- **Implementation gate (owner, 2026-10-09) — LIFTED 2026-10-11 (D-055 approved D-B1-24; D-B2-15 unblocked):** the elevated path uses `ctx_api.context()`. *(History:)* implementing `lifecycle_api.approve_routing_version` — or any elevated database approval function — was **BLOCKED** until D-B1-24 (signed tenant context) passes PoC-CTX-01..13 and is approved for implementation, or the owner approves an alternative actor context proven equally unforgeable. There is **no automatic fallback** to `app.user_id` or other forgeable settings; if neither is approved, routing approval cannot use the elevated path and B2 must stop at this point for an owner decision.
 - The role is added to the schema-guard allowlist of definer owners (doc 25 §5.4).
 **Traceability:** superseded versions remain readable; released WO snapshots (B5) keep their copied routing/standards and are unaffected; history of effective ranges stays non-overlapping.
 
@@ -120,7 +120,7 @@ Canonical rule ADR-0004: input material leaves stock **once**, in the consumptio
     - duplicate posting stays rejected by the idempotency key (BR-INV-06) and the posting source controls (point 5); allocations cannot be added to an already posted leg (corrections = reversal + repost).
     **Example (owner):** BOM line 10 nut M6 × 2 and BOM line 20 nut M6 × 2, both consumed at the same operation from `LOT-001`: one consume leg `−4 pcs` on `LOT-001`; allocations line 10 = `−2`, line 20 = `−2`; Σ = `−4` (equals the leg). Its reversal leg `+4 pcs` gets allocations line 10 = `+2`, line 20 = `+2`; Σ = `+4`. Net per line = 0; stock decreases once and is restored once. If line 20 belongs to a different operation, that operation's own posting has its own leg and allocation — valid, because it is a different physical event.
 4. **Idempotency (B3):** every posting command carries an idempotency key unique per tenant; replay returns the original document; same key + different payload → `409 IDEMPOTENCY_KEY_REUSED`.
-5. **Source controls (B6):** one consume leg per input lot per posting (doc 04 posting invariants, BR-OUT-01); every posting carries its source reference (run, operation, production date and shift — time model of BR-PER-04) and an idempotency key (BR-INV-06). Whether "at most one regular Production Posting per run per shift" (a note in doc 16 §3) becomes an enforced uniqueness invariant is a **separate owner decision (D-B2-12)** — no canonical rule is added here.
+5. **Source controls (B6):** one consume leg per input lot per posting (doc 04 posting invariants, BR-OUT-01); every posting carries its source reference (run, operation, production date and shift — time model of BR-PER-04) and an idempotency key (BR-INV-06). **At most one regular Production Posting per (run, production date, shift)** is an enforced invariant: unique key `(tenant_id, run_id, production_date, shift_id)` for regular postings; corrections and reversals are exempt and reference the original posting — **BR-OUT-08** (D-B2-12 approved, D-058, 2026-10-11).
 6. **Later operations** of the same part report their counts and outputs for that operation (Option S or M, §3A) but do not re-consume the material of earlier lines.
 7. **Planned ≠ actual:** consuming more or less than planned is a variance for reconciliation (doc 02, ADR-0005), not a validation error — physical measurement governs (ADR-0003).
 8. **Option M chains** (semi-finished stage items) must be acyclic: an item may not transitively consume itself (validated at BOM approval).
@@ -316,7 +316,7 @@ erDiagram
 | B2-AT-18 | Routing import fails because work center `WC-WELD-2` does not exist; the work center is created; the **same file** is uploaded again → new job linked by `retry_of_job_id`, revalidated against current data, commits; the failed job and its error file remain in history; a third upload returns the committed result (no duplicate versions). |
 | B2-AT-19 | (Hook for B8) Line-level reconciliation: planned qty per WO material line vs Σ allocations per line reported for information; doc 02 indicators and case logic per component/lot/scope unchanged. |
 
-## 11. Decision matrix (B2) — proposals, none final until approved
+## 11. Decision matrix (B2) — **all approved as recommended on 2026-10-11 (D-058)**; O-003 decided by D-059; the option columns are kept as history
 ### 11.1 Recommended for approval now
 | ID | Decision | Recommendation | Trade-off |
 |---|---|---|---|
@@ -325,7 +325,7 @@ erDiagram
 | D-B2-09 | Search | `pg_trgm` GIN on code/name/customer part number + B-tree prefix on code | index size / write cost |
 | D-B2-10 | Cycle-time basis | `cycle_basis` (`PER_PIECE`, `PER_STROKE`, `PER_BATCH`) + `parts_per_cycle` | one more field to import |
 
-### 11.2 Requires owner decision
+### 11.2 Required owner decision — decided 2026-10-11 (D-058, recommendations approved)
 | ID | Decision | Options | Recommendation (rationale) |
 |---|---|---|---|
 | D-B2-01 *(revised)* | Consumption point model | (a) approved BOM–routing map per version pair; (b) BOM line bound to one routing version's `op_seq`; (c) operation-level material lists in the routing | (a): supports alternate routings and renumbered operations, allows repeated components, keeps BOM and routing independently versioned; cost = one more approval artefact per pair |
@@ -345,6 +345,6 @@ erDiagram
 | ID | Item | Status |
 |---|---|---|
 | D-B2-13 | Consumption allocation model (`consumption_line_allocations`, §3 point 3a) — Option A, BR-OUT-01 unchanged | **owner-approved design direction (2026-10-09)**; logical design only; B6 implementation needs separate approval |
-| D-B2-14 | Retroactive routing effectivity (v(n+1) effective before its approval date) | **requires owner decision**; recommendation: not allowed in V1 (prevents silent change of standards for already-planned dates); corrections via a new version from today |
-| D-B2-12 | Posting source uniqueness: "at most one regular Production Posting per (run, shift)" as an enforced invariant (today a state-machine note in doc 16 §3) vs idempotency key + source reference only | **requires owner decision**; recommendation: unique key `(tenant_id, run_id, production_date, shift_id)` for regular postings, corrections/reversals exempt — a **new** canonical rule, therefore not added automatically |
+| D-B2-14 | Retroactive routing effectivity (v(n+1) effective before its approval date) | **APPROVED (D-058)** as recommended: not allowed in V1 (prevents silent change of standards for already-planned dates); corrections via a new version from today |
+| D-B2-12 | Posting source uniqueness | **APPROVED (D-058): BR-OUT-08** — unique key `(tenant_id, run_id, production_date, shift_id)` for regular postings, corrections/reversals exempt *(history: required owner decision between this invariant and idempotency key + source reference only)* |
 **2026-10-11:** all §11 decisions approved as recommended (D-058); O-003, O-007, O-012, O-013, O-015 decided (D-059..D-063); O-021 stays OPEN.

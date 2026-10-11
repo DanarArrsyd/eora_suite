@@ -33,7 +33,7 @@ apps/api (Laravel modular monolith, ADR-0007)
 ```
 Modules: Core, Demand, Planning, Materials, Production, Quality, **Inventory (only ledger writer)**, Warehouse, Delivery, Maintenance, Traceability (reconciliation), Analytics (read models). Cross-module calls only through `Contracts`; enforced by architecture tests in CI.
 
-**Command pipeline:** HTTP → auth (Sanctum session, CSRF) → rate limit → `TenantTransaction` (BEGIN; `set_config('app.tenant_id', …, true)`; `SET LOCAL statement_timeout/lock_timeout`) → FormRequest validation → policy (permission + scope + SoD) → idempotency check (`idempotency_records`) → command handler → domain rules → `InventoryPostingService` when stock moves (doc 04 §posting) → audit + outbox rows → COMMIT → response. External I/O (files, push, PDF) only in workers after commit.
+**Command pipeline:** HTTP → auth (Sanctum session, CSRF) → rate limit → `TenantTransaction` (BEGIN + binding read in one round trip; signed token via bound `set_config('app.ctx', $1, true)` — doc 25 §5.5/§6.2, ADR-0001 Amendment 2; `SET LOCAL statement_timeout/lock_timeout`) → FormRequest validation → policy (permission + scope + SoD) → idempotency check (`idempotency_records`) → command handler → domain rules → `InventoryPostingService` when stock moves (doc 04 §posting) → audit + outbox rows → COMMIT → response. External I/O (files, push, PDF) only in workers after commit.
 
 **Query pipeline:** HTTP → auth → `TenantTransaction` (read) → QueryDefinition (scope predicates, allowed filters/sorts, keyset/offset, column projection) → resource → `meta` (asOf, freshness, scopeHash).
 
