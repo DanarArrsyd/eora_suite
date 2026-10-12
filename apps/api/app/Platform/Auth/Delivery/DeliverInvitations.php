@@ -20,7 +20,9 @@ final class DeliverInvitations extends Command
 {
     protected $signature = 'eora:deliver-invitations {--once : Process what is due, then exit} {--sleep=5 : Seconds between polls}';
 
-    protected $description = 'Deliver pending invitation emails (separate worker, eora_auth_delivery role)';
+    protected $description = 'Deliver pending invitation and password-reset emails and remove orphan identities (separate worker, eora_auth_delivery role)';
+
+    private const int CLEANUP_EVERY_SECONDS = 600;
 
     public function handle(): int
     {
@@ -34,7 +36,14 @@ final class DeliverInvitations extends Command
         $worker = substr(gethostname() ?: 'worker', 0, 40).':'.getmypid();
         $db = DB::connection('pgsql_delivery');
 
+        $lastCleanup = 0;
+
         do {
+            if (time() - $lastCleanup >= self::CLEANUP_EVERY_SECONDS) {
+                // doc 25 §2.4 (R-25): password-less identities without membership older than 7 days
+                $db->select('select auth_api.cleanup_orphan_identities(?)', [200]);
+                $lastCleanup = time();
+            }
             $db->select('select auth_api.claim_invitation_dispatch(?, ?)', [$worker, 50]);
 
             while (($claim = $db->selectOne('select * from auth_api.claim_delivery(?)', [$worker])) !== null && $claim->delivery_id !== null) {
@@ -51,21 +60,20 @@ final class DeliverInvitations extends Command
 
     private function deliver(Connection $db, \stdClass $claim): void
     {
-        if ($claim->kind !== 'INVITATION') {
-            $db->select('select auth_api.mark_delivery_result(?, ?, false, ?)', [$claim->delivery_id, $claim->claim_token, 'UNSUPPORTED_KIND']);
-
-            return;
-        }
-
-        $secret = $db->selectOne('select auth_api.issue_invitation_secret(?, ?) as s', [$claim->delivery_id, $claim->claim_token])->s;
+        $reset = $claim->kind === 'RESET';
+        $function = $reset ? 'auth_api.issue_reset_secret' : 'auth_api.issue_invitation_secret';
+        $secret = $db->selectOne("select {$function}(?, ?) as s", [$claim->delivery_id, $claim->claim_token])->s;
         if ($secret === null) {
             return; // target gone: the database cancelled the delivery
         }
 
-        $link = rtrim((string) config('eora.frontend_url'), '/').'/invitations/accept#token='.$secret;
+        $base = rtrim((string) config('eora.frontend_url'), '/');
+        $mail = $reset
+            ? new PasswordResetMail($base.'/password/reset#token='.$secret)
+            : new InvitationMail($base.'/invitations/accept#token='.$secret);
 
         try {
-            Mail::to((string) $claim->recipient)->send(new InvitationMail($link));
+            Mail::to((string) $claim->recipient)->send($mail);
             $ok = true;
         } catch (Throwable $e) {
             Log::warning('invitation_delivery_failed', ['delivery_id' => $claim->delivery_id, 'error' => class_basename($e)]);

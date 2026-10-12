@@ -52,6 +52,22 @@ CREATE TABLE IF NOT EXISTS auth.invitations (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- one row per password-reset request; usable secret only in SENT (doc 25 §2.3, §2.10)
+CREATE TABLE IF NOT EXISTS auth.reset_requests (
+  id uuid PRIMARY KEY DEFAULT pg_catalog.gen_random_uuid(),
+  user_id uuid NOT NULL,
+  status text NOT NULL DEFAULT 'REQUESTED'
+    CHECK (status IN ('REQUESTED', 'ISSUED', 'SENT', 'CONSUMED', 'EXPIRED', 'CANCELLED', 'DELIVERY_FAILED')),
+  secret_hash bytea UNIQUE,
+  expires_at timestamptz,
+  secret_generation integer NOT NULL DEFAULT 0,
+  current_delivery_id uuid,
+  ip_hash text CHECK (ip_hash ~ '^[0-9a-f]{64}$'),
+  requested_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS reset_requests_user_idx ON auth.reset_requests (user_id, requested_at DESC);
+
 -- delivery queue with lease and bounded retries (doc 25 §2.9)
 CREATE TABLE IF NOT EXISTS auth.delivery_queue (
   id uuid PRIMARY KEY DEFAULT pg_catalog.gen_random_uuid(),
@@ -73,6 +89,14 @@ CREATE TABLE IF NOT EXISTS auth.delivery_queue (
   updated_at timestamptz NOT NULL DEFAULT now(),
   CHECK (kind <> 'INVITATION' OR membership_id IS NOT NULL)
 );
+ALTER TABLE auth.delivery_queue ADD COLUMN IF NOT EXISTS reset_request_id uuid;
+DO $do$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conname = 'delivery_reset_has_request') THEN
+    ALTER TABLE auth.delivery_queue ADD CONSTRAINT delivery_reset_has_request CHECK (kind <> 'RESET' OR reset_request_id IS NOT NULL);
+  END IF;
+END
+$do$;
 CREATE UNIQUE INDEX IF NOT EXISTS delivery_one_open_invitation ON auth.delivery_queue (membership_id)
   WHERE kind = 'INVITATION' AND status IN ('PENDING', 'CLAIMED');
 CREATE INDEX IF NOT EXISTS delivery_due_idx ON auth.delivery_queue (next_attempt_at, id) WHERE status IN ('PENDING', 'CLAIMED');
@@ -308,6 +332,8 @@ BEGIN
   LOOP
     UPDATE auth.invitations SET status = 'DELIVERY_FAILED', updated_at = pg_catalog.now()
      WHERE membership_id = d.membership_id AND current_delivery_id = d.id AND status IN ('PENDING', 'ISSUED');
+    UPDATE auth.reset_requests SET status = 'DELIVERY_FAILED', updated_at = pg_catalog.now()
+     WHERE current_delivery_id = d.id AND status IN ('REQUESTED', 'ISSUED');
     INSERT INTO public.security_events (id, occurred_at, tenant_id, source, action, detail_code)
     VALUES (pg_catalog.gen_random_uuid(), pg_catalog.now(), d.tenant_id, 'auth_delivery', 'delivery.dead', d.kind);
   END LOOP;
@@ -389,6 +415,13 @@ BEGIN
       IF NOT FOUND THEN
         RAISE EXCEPTION 'no secret issued under this claim' USING ERRCODE = '55000';
       END IF;
+    ELSE
+      UPDATE auth.reset_requests SET status = 'SENT', updated_at = pg_catalog.now()
+       WHERE id = q.reset_request_id AND current_delivery_id = q.id AND status = 'ISSUED'
+         AND q.secret_generation_issued IS NOT NULL AND secret_generation = q.secret_generation_issued;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'no secret issued under this claim' USING ERRCODE = '55000';
+      END IF;
     END IF;
     UPDATE auth.delivery_queue SET status = 'SENT', claim_token = NULL, updated_at = pg_catalog.now() WHERE id = q.id;
   ELSE
@@ -439,6 +472,159 @@ BEGIN
 END
 $fn$;
 
+-- Password reset request (eora_auth_web; doc 25 §2.3, R-46, R-48). Returns nothing in every case; the HTTP layer adds
+-- a uniform minimum response time. Unknown / DISABLED / passwordless identities produce no row of any kind.
+CREATE OR REPLACE FUNCTION auth_api.request_password_reset(email text, ip_hash text)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
+DECLARE
+  i auth.identities%ROWTYPE;
+  recent integer;
+  rid uuid;
+  did uuid;
+BEGIN
+  IF email IS NULL OR pg_catalog.length(email) > 254 OR (ip_hash IS NOT NULL AND ip_hash !~ '^[0-9a-f]{64}$') THEN
+    RETURN;
+  END IF;
+  SELECT * INTO i FROM auth.identities x WHERE x.email_normalized = pg_catalog.lower(pg_catalog.btrim(email));
+  IF NOT FOUND OR i.status <> 'ACTIVE' OR i.password_hash IS NULL THEN
+    RETURN;
+  END IF;
+  -- one transaction, serialized per identity (R-48)
+  PERFORM 1 FROM auth.identities x WHERE x.user_id = i.user_id FOR UPDATE;
+  SELECT pg_catalog.count(*) INTO recent FROM auth.reset_requests rr
+   WHERE rr.user_id = i.user_id AND rr.requested_at > pg_catalog.now() - interval '1 hour';
+  IF recent >= 3 OR NOT auth.take_token('reset_delivery', interval '1 minute', 60) THEN
+    INSERT INTO public.security_events (id, occurred_at, source, action, detail_code, ip_hash)
+    VALUES (pg_catalog.gen_random_uuid(), pg_catalog.now(), 'auth_web', 'auth.reset_throttled', CASE WHEN recent >= 3 THEN 'IDENTITY_CAP' ELSE 'GLOBAL_CAP' END, ip_hash);
+    RETURN;
+  END IF;
+  -- a new request supersedes older open ones (and their deliveries)
+  UPDATE auth.delivery_queue SET status = 'CANCELLED', claim_token = NULL, updated_at = pg_catalog.now()
+   WHERE kind = 'RESET' AND user_id = i.user_id AND status IN ('PENDING', 'CLAIMED');
+  UPDATE auth.reset_requests SET status = 'CANCELLED', updated_at = pg_catalog.now()
+   WHERE user_id = i.user_id AND status IN ('REQUESTED', 'ISSUED', 'SENT');
+  INSERT INTO auth.reset_requests (user_id, ip_hash) VALUES (i.user_id, ip_hash) RETURNING id INTO rid;
+  INSERT INTO auth.delivery_queue (kind, user_id, reset_request_id) VALUES ('RESET', i.user_id, rid) RETURNING id INTO did;
+  UPDATE auth.reset_requests SET current_delivery_id = did WHERE id = rid;
+  INSERT INTO public.security_events (id, occurred_at, user_id, source, action, ip_hash)
+  VALUES (pg_catalog.gen_random_uuid(), pg_catalog.now(), i.user_id, 'auth_web', 'auth.reset_requested', ip_hash);
+END
+$fn$;
+
+-- Issues (rotates) the reset secret for the current claim (eora_auth_delivery; doc 25 §2.8, §2.10). NULL = the
+-- request is no longer valid; the delivery and request are cancelled and there is nothing to send.
+CREATE OR REPLACE FUNCTION auth_api.issue_reset_secret(delivery_id uuid, claim_token uuid)
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
+DECLARE
+  q auth.delivery_queue%ROWTYPE;
+  rr auth.reset_requests%ROWTYPE;
+  secret bytea;
+BEGIN
+  SELECT * INTO q FROM auth.delivery_queue x WHERE x.id = issue_reset_secret.delivery_id FOR UPDATE;
+  IF NOT FOUND OR q.kind <> 'RESET' OR q.status <> 'CLAIMED' OR q.claim_token IS DISTINCT FROM issue_reset_secret.claim_token
+     OR q.claim_expires_at < pg_catalog.now() THEN
+    RAISE EXCEPTION 'stale or invalid claim' USING ERRCODE = '55000';
+  END IF;
+  SELECT * INTO rr FROM auth.reset_requests x WHERE x.id = q.reset_request_id FOR UPDATE;
+  IF rr.id IS NULL OR rr.current_delivery_id IS DISTINCT FROM q.id OR rr.status NOT IN ('REQUESTED', 'ISSUED')
+     OR rr.requested_at < pg_catalog.now() - interval '2 hours'
+     OR NOT EXISTS (SELECT 1 FROM auth.identities i WHERE i.user_id = rr.user_id AND i.status = 'ACTIVE' AND i.password_hash IS NOT NULL) THEN
+    UPDATE auth.delivery_queue SET status = 'CANCELLED', claim_token = NULL, updated_at = pg_catalog.now() WHERE id = q.id;
+    UPDATE auth.reset_requests SET status = 'CANCELLED', updated_at = pg_catalog.now()
+     WHERE id = q.reset_request_id AND status IN ('REQUESTED', 'ISSUED');
+    RETURN NULL;
+  END IF;
+  secret := ext.gen_random_bytes(32);
+  UPDATE auth.reset_requests
+     SET secret_hash = pg_catalog.sha256(secret), expires_at = pg_catalog.now() + interval '30 minutes',
+         secret_generation = rr.secret_generation + 1, status = 'ISSUED', updated_at = pg_catalog.now()
+   WHERE id = rr.id;
+  UPDATE auth.delivery_queue SET secret_generation_issued = rr.secret_generation + 1, updated_at = pg_catalog.now() WHERE id = q.id;
+  INSERT INTO public.security_events (id, occurred_at, user_id, source, action)
+  VALUES (pg_catalog.gen_random_uuid(), pg_catalog.now(), rr.user_id, 'auth_delivery', 'auth.reset_secret_issued');
+  RETURN pg_catalog.encode(secret, 'hex');
+END
+$fn$;
+
+-- Consumes a reset secret (eora_auth_web; doc 25 §2.3 step 3): single use, sets the new password, clears the lockout
+-- (email ownership proven), cancels every other open request, bumps credential_version (all sessions die, R-39) and
+-- writes one auth event per tenant where the user holds an ACTIVE membership.
+CREATE OR REPLACE FUNCTION auth_api.consume_password_reset(secret text, new_hash text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
+DECLARE
+  rr auth.reset_requests%ROWTYPE;
+BEGIN
+  IF secret IS NULL OR secret !~ '^[0-9a-f]{64}$' OR new_hash IS NULL OR new_hash NOT LIKE '$argon2id$%' OR pg_catalog.length(new_hash) > 256 THEN
+    RETURN false;
+  END IF;
+  SELECT * INTO rr FROM auth.reset_requests x
+   WHERE x.secret_hash = pg_catalog.sha256(pg_catalog.decode(secret, 'hex')) AND x.status = 'SENT' AND x.expires_at > pg_catalog.now()
+   FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN false; -- uniform failure: unknown, unsent, expired or replayed
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM auth.identities i WHERE i.user_id = rr.user_id AND i.status = 'ACTIVE' AND i.password_hash IS NOT NULL) THEN
+    UPDATE auth.reset_requests SET status = 'CANCELLED', updated_at = pg_catalog.now() WHERE id = rr.id;
+    RETURN false;
+  END IF;
+  UPDATE auth.reset_requests SET status = 'CONSUMED', updated_at = pg_catalog.now() WHERE id = rr.id;
+  UPDATE auth.reset_requests SET status = 'CANCELLED', updated_at = pg_catalog.now()
+   WHERE user_id = rr.user_id AND id <> rr.id AND status IN ('REQUESTED', 'ISSUED', 'SENT');
+  UPDATE auth.delivery_queue SET status = 'CANCELLED', claim_token = NULL, updated_at = pg_catalog.now()
+   WHERE kind = 'RESET' AND user_id = rr.user_id AND status IN ('PENDING', 'CLAIMED');
+  UPDATE auth.identities
+     SET password_hash = new_hash, password_changed_at = pg_catalog.now(), lockout_cleared_at = pg_catalog.now()
+   WHERE user_id = rr.user_id;
+  UPDATE public.users SET credential_version = credential_version + 1 WHERE id = rr.user_id;
+  INSERT INTO public.security_events (id, occurred_at, tenant_id, user_id, membership_id, source, action)
+  SELECT pg_catalog.gen_random_uuid(), pg_catalog.now(), m.tenant_id, rr.user_id, m.id, 'auth_web', 'auth.password_reset_consumed'
+    FROM public.memberships m WHERE m.user_id = rr.user_id AND m.status = 'ACTIVE';
+  RETURN true;
+END
+$fn$;
+
+-- Removes orphan identities (eora_auth_delivery scheduler; doc 25 §2.4, R-25): older than 7 days, never set a password,
+-- no membership, no open delivery, no unexpired sent invitation. Each candidate is re-checked under its row lock; the
+-- users DELETE policy re-checks "no membership" again and memberships.user_id is ON DELETE RESTRICT.
+CREATE OR REPLACE FUNCTION auth_api.cleanup_orphan_identities(batch_limit integer)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
+DECLARE
+  c record;
+  removed integer := 0;
+BEGIN
+  IF batch_limit NOT BETWEEN 1 AND 500 THEN
+    RAISE EXCEPTION 'invalid batch limit' USING ERRCODE = '22023';
+  END IF;
+  FOR c IN
+    SELECT i.user_id FROM auth.identities i
+     WHERE i.created_at < pg_catalog.now() - interval '7 days' AND i.last_invited_at < pg_catalog.now() - interval '7 days'
+       AND i.password_hash IS NULL
+     ORDER BY i.created_at LIMIT batch_limit FOR UPDATE SKIP LOCKED
+  LOOP
+    IF EXISTS (SELECT 1 FROM public.memberships m WHERE m.user_id = c.user_id)
+       OR EXISTS (SELECT 1 FROM auth.delivery_queue q WHERE q.user_id = c.user_id AND q.status IN ('PENDING', 'CLAIMED'))
+       OR EXISTS (SELECT 1 FROM auth.invitations v WHERE v.user_id = c.user_id AND v.status = 'SENT' AND v.expires_at > pg_catalog.now()) THEN
+      CONTINUE;
+    END IF;
+    BEGIN
+      DELETE FROM auth.invitations WHERE user_id = c.user_id;
+      DELETE FROM auth.reset_requests WHERE user_id = c.user_id;
+      DELETE FROM auth.delivery_queue WHERE user_id = c.user_id;
+      DELETE FROM auth.login_failures WHERE user_id = c.user_id;
+      DELETE FROM auth.identities WHERE user_id = c.user_id;
+      DELETE FROM public.users WHERE id = c.user_id;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'profile not removable' USING ERRCODE = '55000'; -- a membership appeared: undo this candidate
+      END IF;
+      removed := removed + 1;
+    EXCEPTION WHEN OTHERS THEN
+      CONTINUE; -- e.g. a membership committed first (ON DELETE RESTRICT): skip, the invite flow wins
+    END;
+  END LOOP;
+  RETURN removed;
+END
+$fn$;
+
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA auth_api FROM PUBLIC;
 
 RESET ROLE;
@@ -446,7 +632,9 @@ RESET ROLE;
 -- exactly one grantee per function (doc 25 §2.1, §2.8)
 GRANT USAGE ON SCHEMA auth_api TO eora_auth_web, eora_auth_delivery, eora_provisioner;
 GRANT EXECUTE ON FUNCTION auth_api.login_lookup(text), auth_api.record_login_failure(uuid, text), auth_api.invite_identity(text),
-  auth_api.record_security_event(text, text, text, text, text, text), auth_api.consume_invitation(text, text) TO eora_auth_web;
+  auth_api.record_security_event(text, text, text, text, text, text), auth_api.consume_invitation(text, text),
+  auth_api.request_password_reset(text, text), auth_api.consume_password_reset(text, text) TO eora_auth_web;
 GRANT EXECUTE ON FUNCTION auth_api.claim_invitation_dispatch(text, integer), auth_api.claim_delivery(text),
-  auth_api.issue_invitation_secret(uuid, uuid), auth_api.mark_delivery_result(uuid, uuid, boolean, text) TO eora_auth_delivery;
+  auth_api.issue_invitation_secret(uuid, uuid), auth_api.mark_delivery_result(uuid, uuid, boolean, text),
+  auth_api.issue_reset_secret(uuid, uuid), auth_api.cleanup_orphan_identities(integer) TO eora_auth_delivery;
 GRANT EXECUTE ON FUNCTION auth_api.provision_identity(text) TO eora_provisioner;
