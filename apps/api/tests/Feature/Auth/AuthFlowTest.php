@@ -274,10 +274,21 @@ it('D-B1-07: rejects short and breached passwords on reset and on invitation acc
     spa($this)->postJson('/api/v1/auth/password/reset', ['token' => $token, 'password' => $new, 'password_confirmation' => $new])->assertNoContent();
 })->group('integration', 'auth');
 
-it('limits forgot-password requests per email at HTTP (3 per minute)', function () {
-    $email = IdentityFixtures::email();
+it('T-RSTU-10: a forgot-password request throttled at HTTP gets the same delayed 202 and reaches nothing', function () {
+    $u = activeUser($this, $this->t);
     for ($i = 0; $i < 3; $i++) {
-        spa($this)->postJson('/api/v1/auth/password/forgot', ['email' => $email])->assertStatus(202);
+        spa($this)->postJson('/api/v1/auth/password/forgot', ['email' => $u['email']])->assertStatus(202)->assertHeaderMissing('X-RateLimit-Remaining');
     }
-    spa($this)->postJson('/api/v1/auth/password/forgot', ['email' => $email])->assertStatus(429)->assertJsonPath('code', 'RATE_LIMITED');
+    $this->artisan('eora:deliver-invitations', ['--once' => true])->assertSuccessful(); // drain the accepted ones
+
+    $started = hrtime(true);
+    $throttled = spa($this)->postJson('/api/v1/auth/password/forgot', ['email' => $u['email']]);
+    $throttled->assertStatus(202)->assertNoContent(202);
+    expect((hrtime(true) - $started) / 1e6)->toBeGreaterThanOrEqual(400.0)
+        ->and($throttled->headers->has('Retry-After'))->toBeFalse()
+        ->and($throttled->headers->has('X-RateLimit-Remaining'))->toBeFalse();
+
+    Mail::fake();
+    $this->artisan('eora:deliver-invitations', ['--once' => true])->assertSuccessful();
+    Mail::assertNotSent(PasswordResetMail::class);
 })->group('integration', 'auth');

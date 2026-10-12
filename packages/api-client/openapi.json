@@ -415,10 +415,12 @@
                                     },
                                     "password": {
                                         "type": "string",
+                                        "minLength": 12,
                                         "maxLength": 1024
                                     },
                                     "password_confirmation": {
                                         "type": "string",
+                                        "minLength": 12,
                                         "maxLength": 1024
                                     }
                                 },
@@ -444,7 +446,7 @@
         "/auth/password/forgot": {
             "post": {
                 "operationId": "v1.auth.password.forgot",
-                "summary": "Forgot password (doc 25 \u00a72.3): always 202 with the same body after a fixed minimum duration (D-B1-21: 400 ms), so\nwhether the email exists, is throttled or was queued is not observable",
+                "summary": "Forgot password (doc 25 \u00a72.3): always 202 with the same body and headers after a fixed minimum duration (D-B1-21:\n400 ms), so whether the email exists, is throttled or was queued is not observable (T-RST-07, T-RSTU-10). The HTTP\nlimits (3/min per email HMAC, 10/min per IP) run here rather than as throttle middleware, which would answer 429\nor add rate-limit headers",
                 "tags": [
                     "Auth"
                 ],
@@ -497,10 +499,12 @@
                                     },
                                     "password": {
                                         "type": "string",
+                                        "minLength": 12,
                                         "maxLength": 1024
                                     },
                                     "password_confirmation": {
                                         "type": "string",
+                                        "minLength": 12,
                                         "maxLength": 1024
                                     }
                                 },

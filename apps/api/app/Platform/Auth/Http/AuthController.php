@@ -22,6 +22,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 use stdClass;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -168,7 +169,7 @@ final class AuthController
     {
         $data = $request->validate([
             'token' => ['required', 'string', 'regex:/^[0-9a-f]{64}$/'],
-            'password' => ['required', 'string', 'max:1024', 'confirmed', new PasswordPolicy],
+            'password' => ['bail', 'required', 'string', 'min:12', 'max:1024', 'confirmed', new PasswordPolicy],
         ]);
         $accepted = DB::connection('pgsql_auth')->selectOne(
             'select user_id, tenant_id, membership_id from auth_api.consume_invitation(?, ?)',
@@ -209,18 +210,32 @@ final class AuthController
     }
 
     /**
-     * Forgot password (doc 25 §2.3): always 202 with the same body after a fixed minimum duration (D-B1-21: 400 ms), so
-     * whether the email exists, is throttled or was queued is not observable.
+     * Forgot password (doc 25 §2.3): always 202 with the same body and headers after a fixed minimum duration (D-B1-21:
+     * 400 ms), so whether the email exists, is throttled or was queued is not observable (T-RST-07, T-RSTU-10). The HTTP
+     * limits (3/min per email HMAC, 10/min per IP) run here rather than as throttle middleware, which would answer 429
+     * or add rate-limit headers.
      */
     public function forgotPassword(Request $request): Response
     {
         $started = hrtime(true);
         $email = $request->validate(['email' => ['required', 'string', 'max:254']])['email'];
 
-        try {
-            DB::connection('pgsql_auth')->select('select auth_api.request_password_reset(?, ?)', [$email, $this->hasher->hash($request->ip())]);
-        } catch (Throwable $e) {
-            Log::warning('password_reset_request_failed', ['error' => class_basename($e)]); // same answer either way
+        $ipHash = $this->hasher->hash($request->ip());
+        $keys = ['forgot:account:'.$this->hasher->hash(mb_strtolower(trim($email))) => 3, 'forgot:ip:'.$ipHash => 10];
+        $throttled = false;
+        foreach ($keys as $key => $max) {
+            $throttled = RateLimiter::tooManyAttempts($key, $max) || $throttled;
+        }
+
+        if (! $throttled) {
+            foreach (array_keys($keys) as $key) {
+                RateLimiter::hit($key, 60);
+            }
+            try {
+                DB::connection('pgsql_auth')->select('select auth_api.request_password_reset(?, ?)', [$email, $ipHash]);
+            } catch (Throwable $e) {
+                Log::warning('password_reset_request_failed', ['error' => class_basename($e)]); // same answer either way
+            }
         }
 
         $remaining = 400_000_000 - (hrtime(true) - $started);
@@ -239,7 +254,7 @@ final class AuthController
     {
         $data = $request->validate([
             'token' => ['required', 'string', 'regex:/^[0-9a-f]{64}$/'],
-            'password' => ['required', 'string', 'max:1024', 'confirmed', new PasswordPolicy],
+            'password' => ['bail', 'required', 'string', 'min:12', 'max:1024', 'confirmed', new PasswordPolicy],
         ]);
         $ok = (bool) DB::connection('pgsql_auth')->selectOne('select auth_api.consume_password_reset(?, ?) as ok', [$data['token'], $this->passwords->hash($data['password'])])->ok;
 

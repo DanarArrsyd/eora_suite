@@ -116,8 +116,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Forgot password (doc 25 §2.3): always 202 with the same body after a fixed minimum duration (D-B1-21: 400 ms), so
-         *     whether the email exists, is throttled or was queued is not observable
+         * Forgot password (doc 25 §2.3): always 202 with the same body and headers after a fixed minimum duration (D-B1-21:
+         *     400 ms), so whether the email exists, is throttled or was queued is not observable (T-RST-07, T-RSTU-10). The HTTP
+         *     limits (3/min per email HMAC, 10/min per IP) run here rather than as throttle middleware, which would answer 429
+         *     or add rate-limit headers
          */
         post: operations["v1.auth.password.forgot"];
         delete?: never;

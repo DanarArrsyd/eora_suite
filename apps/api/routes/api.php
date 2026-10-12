@@ -19,7 +19,7 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('tenant', [AuthController::class, 'selectTenant'])->name('tenant');
         Route::post('plant', [AuthController::class, 'selectPlant'])->name('plant');
         Route::post('invitations/accept', [AuthController::class, 'acceptInvitation'])->middleware('throttle:invitation-accept')->name('invitations.accept');
-        Route::post('password/forgot', [AuthController::class, 'forgotPassword'])->middleware('throttle:password-forgot')->name('password.forgot');
+        Route::post('password/forgot', [AuthController::class, 'forgotPassword'])->name('password.forgot');
         Route::post('password/reset', [AuthController::class, 'resetPassword'])->middleware('throttle:invitation-accept')->name('password.reset');
     });
 });
