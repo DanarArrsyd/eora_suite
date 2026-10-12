@@ -53,6 +53,15 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(20)->by('login:ip:'.($hasher->hash((string) $request->ip()) ?? 'none')),
             ];
         });
+        // forgot-password flooding stops at HTTP before the database (doc 25 §2.3): per IP and per email HMAC
+        RateLimiter::for('password-forgot', function (Request $request): array {
+            $hasher = app(SecurityHasher::class);
+
+            return [
+                Limit::perMinute(3)->by('forgot:account:'.($hasher->hash(mb_strtolower(trim((string) $request->input('email')))) ?? 'none')),
+                Limit::perMinute(10)->by('forgot:ip:'.($hasher->hash((string) $request->ip()) ?? 'none')),
+            ];
+        });
         RateLimiter::for('invitation-accept', fn (Request $request) => Limit::perMinute(10)->by(
             'invite:ip:'.(app(SecurityHasher::class)->hash((string) $request->ip()) ?? 'none'),
         ));

@@ -6,6 +6,7 @@ namespace App\Platform\Auth\Http;
 
 use App\Platform\Auth\AuthSession;
 use App\Platform\Auth\PasswordHasher;
+use App\Platform\Auth\PasswordPolicy;
 use App\Platform\Auth\SessionExpiredException;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
@@ -167,7 +168,7 @@ final class AuthController
     {
         $data = $request->validate([
             'token' => ['required', 'string', 'regex:/^[0-9a-f]{64}$/'],
-            'password' => ['required', 'string', 'min:12', 'max:1024', 'confirmed'],
+            'password' => ['required', 'string', 'max:1024', 'confirmed', new PasswordPolicy],
         ]);
         $accepted = DB::connection('pgsql_auth')->selectOne(
             'select user_id, tenant_id, membership_id from auth_api.consume_invitation(?, ?)',
@@ -205,6 +206,51 @@ final class AuthController
         }
 
         throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Membership not activated', 'Your invitation was accepted but the membership could not be activated. Please contact your administrator.');
+    }
+
+    /**
+     * Forgot password (doc 25 §2.3): always 202 with the same body after a fixed minimum duration (D-B1-21: 400 ms), so
+     * whether the email exists, is throttled or was queued is not observable.
+     */
+    public function forgotPassword(Request $request): Response
+    {
+        $started = hrtime(true);
+        $email = $request->validate(['email' => ['required', 'string', 'max:254']])['email'];
+
+        try {
+            DB::connection('pgsql_auth')->select('select auth_api.request_password_reset(?, ?)', [$email, $this->hasher->hash($request->ip())]);
+        } catch (Throwable $e) {
+            Log::warning('password_reset_request_failed', ['error' => class_basename($e)]); // same answer either way
+        }
+
+        $remaining = 400_000_000 - (hrtime(true) - $started);
+        if ($remaining > 0) {
+            usleep(intdiv($remaining, 1000));
+        }
+
+        return response()->noContent(202);
+    }
+
+    /**
+     * Reset with the delivered secret (doc 25 §2.3 step 3). Success bumps credential_version, so every existing session
+     * of the user — including this one if signed in — ends on its next request.
+     */
+    public function resetPassword(Request $request): Response
+    {
+        $data = $request->validate([
+            'token' => ['required', 'string', 'regex:/^[0-9a-f]{64}$/'],
+            'password' => ['required', 'string', 'max:1024', 'confirmed', new PasswordPolicy],
+        ]);
+        $ok = (bool) DB::connection('pgsql_auth')->selectOne('select auth_api.consume_password_reset(?, ?) as ok', [$data['token'], $this->passwords->hash($data['password'])])->ok;
+
+        if (! $ok) {
+            throw ValidationException::withMessages(['token' => 'This reset link is invalid or has expired.']);
+        }
+        if ($this->auth->userId() !== null) {
+            $this->auth->end();
+        }
+
+        return response()->noContent();
     }
 
     private function requireSession(): string

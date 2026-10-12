@@ -415,12 +415,92 @@
                                     },
                                     "password": {
                                         "type": "string",
-                                        "minLength": 12,
                                         "maxLength": 1024
                                     },
                                     "password_confirmation": {
                                         "type": "string",
-                                        "minLength": 12,
+                                        "maxLength": 1024
+                                    }
+                                },
+                                "required": [
+                                    "token",
+                                    "password",
+                                    "password_confirmation"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "No content"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/auth/password/forgot": {
+            "post": {
+                "operationId": "v1.auth.password.forgot",
+                "summary": "Forgot password (doc 25 \u00a72.3): always 202 with the same body after a fixed minimum duration (D-B1-21: 400 ms), so\nwhether the email exists, is throttled or was queued is not observable",
+                "tags": [
+                    "Auth"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "maxLength": 254
+                                    }
+                                },
+                                "required": [
+                                    "email"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "202": {
+                        "description": ""
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/auth/password/reset": {
+            "post": {
+                "operationId": "v1.auth.password.reset",
+                "summary": "Reset with the delivered secret (doc 25 \u00a72.3 step 3). Success bumps credential_version, so every existing session\nof the user \u2014 including this one if signed in \u2014 ends on its next request",
+                "tags": [
+                    "Auth"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "token": {
+                                        "type": "string",
+                                        "pattern": "^[0-9a-f]{64}$"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "maxLength": 1024
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string",
                                         "maxLength": 1024
                                     }
                                 },

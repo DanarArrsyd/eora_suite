@@ -28,6 +28,10 @@ final class SecurityBaseline
         // signed tenant context verifier — D-055, ADR-0001 Amendment 2, doc 25 §5.5 (reviewed in the D-B1-24 PoC)
         'ctx_api.context()' => ['owner' => 'eora_ctx_verifier', 'execute' => ['eora_app']],
         // identity and credential surface — doc 25 §2.8 (one grantee each)
+        'auth_api.cleanup_orphan_identities(integer)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_delivery']],
+        'auth_api.consume_password_reset(text,text)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_web']],
+        'auth_api.issue_reset_secret(uuid,uuid)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_delivery']],
+        'auth_api.request_password_reset(text,text)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_web']],
         'auth_api.claim_delivery(text)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_delivery']],
         'auth_api.claim_invitation_dispatch(text,integer)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_delivery']],
         'auth_api.consume_invitation(text,text)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_web']],

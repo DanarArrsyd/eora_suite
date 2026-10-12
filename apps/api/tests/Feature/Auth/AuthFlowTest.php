@@ -3,9 +3,11 @@
 declare(strict_types=1);
 
 use App\Platform\Auth\Delivery\InvitationMail;
+use App\Platform\Auth\Delivery\PasswordResetMail;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Tenancy\TenantContext;
 use App\Platform\Tenancy\TenantTransaction;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 use Tests\Support\IdentityFixtures;
@@ -45,6 +47,20 @@ function invitationToken(TestCase $test, array $tenant, string $email): string
     });
 
     return (string) $token;
+}
+
+/** Requests a reset for $email over HTTP and returns the secret from the email the worker sent ('' when none was sent). */
+function resetToken(TestCase $test, string $email): string
+{
+    Mail::fake();
+    spa($test)->postJson('/api/v1/auth/password/forgot', ['email' => $email])->assertStatus(202);
+    $test->artisan('eora:deliver-invitations', ['--once' => true])->assertSuccessful();
+    $token = '';
+    foreach (Mail::sent(PasswordResetMail::class, fn (PasswordResetMail $mail) => $mail->hasTo($email)) as $mail) {
+        preg_match('/\/password\/reset#token=([0-9a-f]{64})$/', $mail->link, $m) === 1 && $token = $m[1];
+    }
+
+    return $token;
 }
 
 /** @return array{email: string, password: string} */
@@ -187,4 +203,81 @@ it('expires business-route sessions after the absolute lifetime too', function (
 
     $this->travel(13)->hours();
     spa($this)->getJson('/api/v1/_test/ping')->assertUnauthorized()->assertJsonPath('code', 'SESSION_EXPIRED');
+})->group('integration', 'auth');
+
+it('T-RST: forgot → reset email → new password; old password and old sessions stop working', function () {
+    $u = activeUser($this, $this->t);
+    $token = resetToken($this, $u['email']);
+    expect($token)->toMatch('/^[0-9a-f]{64}$/');
+
+    $new = 'a brand new passphrase 2026';
+    spa($this)->postJson('/api/v1/auth/password/reset', ['token' => $token, 'password' => $new, 'password_confirmation' => $new])->assertNoContent();
+    spa($this)->postJson('/api/v1/auth/password/reset', ['token' => $token, 'password' => $new, 'password_confirmation' => $new])
+        ->assertStatus(422)->assertJsonPath('errors.token.0', 'This reset link is invalid or has expired.'); // single use
+
+    spa($this)->postJson('/api/v1/auth/login', $u)->assertUnauthorized();
+    spa($this)->postJson('/api/v1/auth/login', ['email' => $u['email'], 'password' => $new])->assertOk();
+})->group('integration', 'auth');
+
+it('T-RST: a completed reset ends every existing session of the user (credential version)', function () {
+    $u = activeUser($this, $this->t);
+    spa($this)->postJson('/api/v1/auth/login', $u)->assertOk();
+    $token = resetToken($this, $u['email']);
+
+    // consumed from "another browser": this session's credential version is now stale
+    expect(DB::connection('pgsql_auth')->selectOne('select auth_api.consume_password_reset(?, ?) as ok', [$token, '$argon2id$v=19$m=65536,t=3,p=1$c2FsdHNhbHQ$aGFzaGhhc2g'])->ok)->toBeTrue();
+    spa($this)->getJson('/api/v1/auth/me')->assertUnauthorized()->assertJsonPath('code', 'SESSION_EXPIRED');
+})->group('integration', 'auth');
+
+it('T-RST: forgot answers 202 after the same minimum time and sends nothing for unknown or password-less emails', function () {
+    $invited = IdentityFixtures::email();
+    IdentityFixtures::invite($this->t, $invited); // identity exists but never set a password
+
+    foreach (['nobody-'.bin2hex(random_bytes(4)).'@example.test', $invited] as $email) {
+        expect(resetToken($this, $email))->toBe('');
+        Mail::assertNotSent(PasswordResetMail::class);
+    }
+    $started = hrtime(true);
+    spa($this)->postJson('/api/v1/auth/password/forgot', ['email' => 'nobody@example.test'])->assertStatus(202);
+    expect((hrtime(true) - $started) / 1e6)->toBeGreaterThanOrEqual(400.0);
+})->group('integration', 'auth');
+
+it('T-RST: a reset clears an account lockout', function () {
+    $u = activeUser($this, $this->t);
+    $auth = DB::connection('pgsql_auth');
+    $user = $auth->selectOne('select user_id from auth_api.login_lookup(?)', [$u['email']])->user_id;
+    for ($i = 0; $i < 10; $i++) {
+        $auth->select('select auth_api.record_login_failure(?, ?)', [$user, hash('sha256', "ip-{$i}")]);
+    }
+    expect($auth->selectOne('select status from auth_api.login_lookup(?)', [$u['email']])->status)->toBe('LOCKED');
+
+    $new = 'a brand new passphrase 2026';
+    spa($this)->postJson('/api/v1/auth/password/reset', ['token' => resetToken($this, $u['email']), 'password' => $new, 'password_confirmation' => $new])->assertNoContent();
+    spa($this)->postJson('/api/v1/auth/login', ['email' => $u['email'], 'password' => $new])->assertOk();
+})->group('integration', 'auth');
+
+it('D-B1-07: rejects short and breached passwords on reset and on invitation acceptance', function () {
+    $u = activeUser($this, $this->t);
+    $token = resetToken($this, $u['email']);
+
+    spa($this)->postJson('/api/v1/auth/password/reset', ['token' => $token, 'password' => 'Password1234', 'password_confirmation' => 'Password1234'])
+        ->assertStatus(422)->assertJsonValidationErrors(['password']);
+    spa($this)->postJson('/api/v1/auth/password/reset', ['token' => $token, 'password' => 'short', 'password_confirmation' => 'short'])
+        ->assertStatus(422)->assertJsonValidationErrors(['password']);
+
+    $invite = invitationToken($this, $this->t, IdentityFixtures::email());
+    spa($this)->postJson('/api/v1/auth/invitations/accept', ['token' => $invite, 'password' => 'passwordpassword', 'password_confirmation' => 'passwordpassword'])
+        ->assertStatus(422)->assertJsonValidationErrors(['password']);
+
+    // the rejected attempts did not burn the reset link
+    $new = 'a brand new passphrase 2026';
+    spa($this)->postJson('/api/v1/auth/password/reset', ['token' => $token, 'password' => $new, 'password_confirmation' => $new])->assertNoContent();
+})->group('integration', 'auth');
+
+it('limits forgot-password requests per email at HTTP (3 per minute)', function () {
+    $email = IdentityFixtures::email();
+    for ($i = 0; $i < 3; $i++) {
+        spa($this)->postJson('/api/v1/auth/password/forgot', ['email' => $email])->assertStatus(202);
+    }
+    spa($this)->postJson('/api/v1/auth/password/forgot', ['email' => $email])->assertStatus(429)->assertJsonPath('code', 'RATE_LIMITED');
 })->group('integration', 'auth');

@@ -128,13 +128,28 @@ Tests refuse non-`*_test` databases and non-local hosts (`EORA_TEST_DB_HOST_ALLO
   idle 30 min, absolute 12 h (`AuthSession::requireUser`), regenerated on login and tenant/plant switch.
 - `POST /api/v1/auth/login` (argon2id verified in PHP, constant work, one uniform 401, 5/min per account + 20/min per IP),
   `POST /auth/logout`, `GET /auth/me`, `POST /auth/tenant` (only tenants with an ACTIVE membership),
-  `POST /auth/plant`, `POST /auth/invitations/accept` (token + password ≥ 12 chars → membership ACTIVE).
+  `POST /auth/plant`, `POST /auth/invitations/accept` (token + password → membership ACTIVE).
 - Business routes use the `tenant` middleware: one `TenantTransaction` per request with the session's signed context,
   credential version + ACTIVE membership re-checked under RLS (401 `SESSION_EXPIRED`), GET read-only, any 4xx/5xx
   rolls back. 403/404 of signed-in users become `security_events` (flushed after the transaction).
 - Invitation emails: `php artisan eora:deliver-invitations` (Compose service `delivery-worker`, role
   `eora_auth_delivery` only). Dev mail lands in Mailpit: http://127.0.0.1:8025. The link carries the secret in the URL
   fragment (`/invitations/accept#token=…`).
+
+## Password reset, password policy, orphan cleanup (M1 / B1 step 4c, doc 25 §2.3–§2.4)
+- `POST /api/v1/auth/password/forgot` always answers 202 after ≥ 400 ms, whether the email exists or not (3/min per
+  email, 10/min per IP at HTTP; in the database 3 requests per identity per hour and 60 reset deliveries per minute
+  overall). Unknown, disabled and password-less identities get nothing. A new request supersedes the previous link.
+- The delivery worker issues the reset secret (256-bit, SHA-256 stored, usable only after the send is acknowledged,
+  30 min TTL, single use) and mails `/password/reset#token=…`.
+- `POST /api/v1/auth/password/reset` (token + password + confirmation): 204 or one uniform 422. Success sets the
+  password, clears a lockout, bumps `credential_version` (every session of the user ends) and writes
+  `auth.password_reset_consumed` per ACTIVE membership.
+- Password rule (`PasswordPolicy`, invitation acceptance and reset): ≥ 12 characters and not on the offline list
+  `resources/security/breached-passwords.txt` (case-insensitive; the rule fails closed if the list is missing). The
+  shipped list is a small seed: replace it with a vetted breached-password corpus before pilot.
+- The worker removes orphan identities every 10 minutes (`auth_api.cleanup_orphan_identities`): no password, no
+  membership, no open delivery, no unexpired invitation, older than 7 days.
 
 ## Endpoints (B0)
 | Method | Path | Purpose |

@@ -29,6 +29,36 @@ function deliverFor(string $email): array
     throw new RuntimeException("no delivery for {$email}");
 }
 
+/** Claims deliveries until the RESET one for $email; returns its acknowledged secret, or null when none is pending. */
+function deliverResetFor(string $email): ?string
+{
+    $delivery = DB::connection('pgsql_delivery');
+    for ($i = 0; $i < 50; $i++) {
+        $claim = $delivery->selectOne('select * from auth_api.claim_delivery(?)', ['test-worker']);
+        if ($claim === null || $claim->delivery_id === null) {
+            return null;
+        }
+        if ($claim->kind !== 'RESET' || $claim->recipient !== $email) {
+            $delivery->select('select auth_api.mark_delivery_result(?, ?, false, ?)', [$claim->delivery_id, $claim->claim_token, 'SKIPPED']);
+
+            continue;
+        }
+        $secret = $delivery->selectOne('select auth_api.issue_reset_secret(?, ?) as s', [$claim->delivery_id, $claim->claim_token])->s;
+        if ($secret !== null) {
+            $delivery->select('select auth_api.mark_delivery_result(?, ?, true, null)', [$claim->delivery_id, $claim->claim_token]);
+
+            return (string) $secret;
+        }
+    }
+
+    return null;
+}
+
+function requestReset(string $email): void
+{
+    DB::connection('pgsql_auth')->select('select auth_api.request_password_reset(?, ?)', [$email, hash('sha256', 'ip')]);
+}
+
 beforeEach(function () {
     $this->t = TenantFixtures::provision(1);
 });
@@ -136,6 +166,12 @@ it('T-ABUSE: each role reaches only its own functions and no auth table', functi
     'delivery → consume' => ['pgsql_delivery', "select * from auth_api.consume_invitation(repeat('0', 64), '\$argon2id\$x')"],
     'delivery → auth table' => ['pgsql_delivery', 'select count(*) from auth.delivery_queue'],
     'provisioner → login_lookup' => ['pgsql_provisioner', "select * from auth_api.login_lookup('a@b.cd')"],
+    'app → request_password_reset' => ['pgsql', "select auth_api.request_password_reset('a@b.cd', null)"],
+    'web → issue_reset_secret' => ['pgsql_auth', 'select auth_api.issue_reset_secret(gen_random_uuid(), gen_random_uuid())'],
+    'web → cleanup_orphan_identities' => ['pgsql_auth', 'select auth_api.cleanup_orphan_identities(1)'],
+    'delivery → consume_password_reset' => ['pgsql_delivery', "select auth_api.consume_password_reset(repeat('0', 64), '\$argon2id\$x')"],
+    'delivery → request_password_reset' => ['pgsql_delivery', "select auth_api.request_password_reset('a@b.cd', null)"],
+    'delivery → reset table' => ['pgsql_delivery', 'select count(*) from auth.reset_requests'],
 ])->throws(QueryException::class, 'permission denied')->group('integration', 'identity');
 
 it('T-ABUSE: record_security_event accepts only allowlisted actions and never a tenant', function () {
@@ -219,4 +255,50 @@ it('T-INV: a success acknowledgement before any secret was issued is rejected an
     $secret = $delivery->selectOne('select auth_api.issue_invitation_secret(?, ?) as s', [$claim->delivery_id, $claim->claim_token])->s;
     $delivery->select('select auth_api.mark_delivery_result(?, ?, true, null)', [$claim->delivery_id, $claim->claim_token]);
     expect(IdentityFixtures::accept($secret))->not->toBeNull();
+})->group('integration', 'identity');
+
+it('T-RST: each new request supersedes the previous link; the fourth within an hour is throttled and keeps the third', function () {
+    $email = IdentityFixtures::email();
+    IdentityFixtures::invite($this->t, $email);
+    IdentityFixtures::accept(deliverFor($email)['secret']);
+    $hash = '$argon2id$v=19$m=65536,t=3,p=1$c2FsdHNhbHQ$aGFzaGhhc2g';
+    $consume = fn (string $secret): bool => (bool) DB::connection('pgsql_auth')->selectOne('select auth_api.consume_password_reset(?, ?) as ok', [$secret, $hash])->ok;
+
+    $secrets = [];
+    for ($i = 0; $i < 3; $i++) {
+        requestReset($email);
+        $secrets[] = deliverResetFor($email);
+    }
+    requestReset($email); // identity cap: 3 per hour
+    expect($secrets)->each->toMatch('/^[0-9a-f]{64}$/')
+        ->and(deliverResetFor($email))->toBeNull()
+        ->and($consume($secrets[0]))->toBeFalse() // superseded
+        ->and($consume($secrets[2]))->toBeTrue()
+        ->and($consume($secrets[2]))->toBeFalse(); // single use
+})->group('integration', 'identity');
+
+it('T-RST: unknown and password-less identities get no reset delivery; a reset never activates an invitation', function () {
+    $invited = IdentityFixtures::email();
+    IdentityFixtures::invite($this->t, $invited);
+    deliverFor($invited); // the invitation goes out; no password yet
+
+    requestReset($invited);
+    requestReset('nobody-'.bin2hex(random_bytes(4)).'@example.test');
+    expect(deliverResetFor($invited))->toBeNull();
+})->group('integration', 'identity');
+
+it('T-IDN: orphan cleanup validates its batch and never removes recent orphans or identities with a membership', function () {
+    $orphan = IdentityFixtures::email();
+    $orphanId = DB::connection('pgsql_provisioner')->selectOne('select auth_api.provision_identity(?) as id', [$orphan])->id;
+    $member = IdentityFixtures::email();
+    IdentityFixtures::invite($this->t, $member);
+    $cleanup = DB::connection('pgsql_delivery');
+
+    expect(fn () => $cleanup->select('select auth_api.cleanup_orphan_identities(0)'))->toThrow(QueryException::class, 'invalid batch limit')
+        ->and(fn () => $cleanup->select('select auth_api.cleanup_orphan_identities(501)'))->toThrow(QueryException::class, 'invalid batch limit');
+    $cleanup->select('select auth_api.cleanup_orphan_identities(500)');
+
+    $auth = DB::connection('pgsql_auth');
+    expect($auth->selectOne('select user_id from auth_api.login_lookup(?)', [$orphan])->user_id)->toBe($orphanId)
+        ->and($auth->select('select user_id from auth_api.login_lookup(?)', [$member]))->toHaveCount(1);
 })->group('integration', 'identity');
