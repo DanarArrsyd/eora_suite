@@ -343,3 +343,27 @@ it('authorizes a permission against a plant target (entry point for module polic
         ->and($authorize('planning.wo.post', $p2))->toBe('SCOPE_FORBIDDEN')
         ->and($authorize('inventory.period_close.post', $p1))->toBe('FORBIDDEN');
 })->group('integration', 'rbac');
+
+it('T-RBAC-02: a scoped administrator lists only assignments inside its scope (query predicate)', function () {
+    [$p1, $p2] = $this->t['plants'];
+    $m = member($this, $this->t);
+    AccessFixtures::grant($this->t, $m['id'], 'PPC', ['PLANT', $p1]);
+    AccessFixtures::grant($this->t, $m['id'], 'QCI', ['PLANT', $p2]);
+    AccessFixtures::grant($this->t, $m['id'], 'AUD', ['COMPANY', $this->t['company']]);
+    $plantAdmin = member($this, $this->t);
+    AccessFixtures::grant($this->t, $plantAdmin['id'], 'TENANT_ADMIN', ['PLANT', $p1]);
+    $companyAdmin = member($this, $this->t);
+    AccessFixtures::grant($this->t, $companyAdmin['id'], 'TENANT_ADMIN', ['COMPANY', $this->t['company']]);
+    $visible = function (array $admin) use ($m) {
+        signIn($this, $admin, $this->t);
+        $members = collect(spa($this)->getJson('/api/v1/core/members')->assertOk()->json('data'))->keyBy('membershipId');
+
+        return [count($members), collect($members[$m['membership']]['assignments'])->pluck('roleCode')->sort()->values()->all(),
+            collect($members[$this->admin['membership']]['assignments'])->pluck('roleCode')->all()];
+    };
+
+    // every member is listed; assignments only where the caller's scope covers them
+    expect($visible($plantAdmin))->toBe([4, ['PPC'], []])
+        ->and($visible($companyAdmin))->toBe([4, ['AUD', 'PPC', 'QCI'], []])
+        ->and($visible($this->admin))->toBe([4, ['AUD', 'PPC', 'QCI'], ['TENANT_ADMIN']]);
+})->group('integration', 'rbac');

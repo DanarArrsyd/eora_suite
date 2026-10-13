@@ -54,19 +54,26 @@ final class AccessController
         return RoleResource::collection($roles)->response();
     }
 
-    /** Members of the active tenant with their unrevoked assignments (`effective` = inside the validity window now). */
+    /**
+     * Members of the active tenant with their unrevoked assignments (`effective` = inside the validity window now).
+     * Assignments are limited to the caller's view scopes as query predicates (doc 18 §5): a company- or plant-scoped
+     * administrator sees only assignments inside its company/plant. Member identities are tenant-wide by design (the
+     * `users` policy already shows every member of the active tenant, doc 25 §2.2) so a scoped administrator can
+     * still pick whom to grant.
+     */
     public function members(): JsonResponse
     {
         $db = $this->db();
-        $this->authorizer->requireAnywhere($db, self::VIEW);
+        $scopes = $this->authorizer->requireAnywhere($db, self::VIEW);
 
         $members = $db->select(
             'select m.id, m.user_id, m.status, u.display_name, u.email_display
                from memberships m join users u on u.id = m.user_id
               order by u.display_name, m.id',
         );
+        [$predicate, $bindings] = $this->scopePredicate($scopes);
         $assignments = [];
-        foreach ($db->select(self::ASSIGNMENT_SQL.' where ra.revoked_at is null order by r.code, ra.id') as $a) {
+        foreach ($db->select(self::ASSIGNMENT_SQL.' left join plants sp on sp.id = ra.plant_id where ra.revoked_at is null and '.$predicate.' order by r.code, ra.id', $bindings) as $a) {
             $assignments[(string) $a->membership_id][] = $a;
         }
         foreach ($members as $m) {
@@ -141,9 +148,16 @@ final class AccessController
         }
 
         try {
-            $db->update('update role_assignments set revoked_at = now(), revoked_by = (select c.actor from ctx_api.context() c), revoke_reason = ? where id = ?', [$data['reason'], $row->id]);
+            // conditional: a concurrent revocation that committed first leaves 0 rows here (re-checked after the row lock)
+            $updated = $db->update(
+                'update role_assignments set revoked_at = now(), revoked_by = (select c.actor from ctx_api.context() c), revoke_reason = ? where id = ? and revoked_at is null',
+                [$data['reason'], $row->id],
+            );
         } catch (QueryException $e) {
             $this->rethrow($e, []);
+        }
+        if ($updated === 0) {
+            throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Already revoked', 'This assignment was already revoked.');
         }
 
         return $this->load($db, (string) $row->id)->response();
@@ -154,6 +168,35 @@ final class AccessController
         $db = DB::connection();
 
         return $db instanceof EoraPostgresConnection ? $db : throw new LogicException('Access administration requires the EORA PostgreSQL connection.');
+    }
+
+    /**
+     * SQL predicate over `ra` (assignment) and `sp` (its plant) matching assignments covered by one of $scopes:
+     * tenant covers all, company covers its company and that company's plants, plant covers itself.
+     *
+     * @param  list<Scope>  $scopes
+     * @return array{0: string, 1: list<string>}
+     */
+    private function scopePredicate(array $scopes): array
+    {
+        $companies = $plants = [];
+        foreach ($scopes as $scope) {
+            if ($scope->type === Scope::TENANT) {
+                return ['true', []];
+            }
+            if ($scope->type === Scope::COMPANY) {
+                $companies[] = (string) $scope->companyId;
+            } else {
+                $plants[] = (string) $scope->plantId;
+            }
+        }
+        $array = static fn (array $ids): string => '{'.implode(',', array_unique($ids)).'}';
+
+        return [
+            "((ra.scope_type = 'COMPANY' and ra.company_id = any(?::uuid[]))
+              or (ra.scope_type = 'PLANT' and (sp.company_id = any(?::uuid[]) or ra.plant_id = any(?::uuid[]))))",
+            [$array($companies), $array($companies), $array($plants)],
+        ];
     }
 
     /** SoD-06 (D-060): self-elevation and self-revocation are always blocked in early V1. */
