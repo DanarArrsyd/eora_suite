@@ -97,7 +97,7 @@ final class AuthController
 
         $profile = $this->transaction->run(TenantContext::tenantless($user), fn (EoraPostgresConnection $db) => [
             'user' => $db->selectOne('select id, display_name, email_display, locale, credential_version from users where id = ?', [$user]),
-            'tenants' => $db->select('select t.id, t.code, t.name from tenants t order by t.name'),
+            'tenants' => $db->select('select t.id, t.code, t.name, t.timezone from tenants t order by t.name'),
         ]);
         $this->assertCredentialVersion($profile['user']->credential_version ?? null);
 
@@ -132,11 +132,12 @@ final class AuthController
                 'locale' => $profile['user']->locale,
             ],
             /**
-             * Tenants where the user holds an ACTIVE membership (tenant picker).
+             * Tenants where the user holds an ACTIVE membership (tenant picker). `timezone` is the tenant's IANA zone
+             * (D-044), used to read calendar dates such as a role's end date.
              *
-             * @var list<array{id: string, code: string, name: string}>
+             * @var list<array{id: string, code: string, name: string, timezone: string}>
              */
-            'tenants' => array_map(static fn (stdClass $t) => ['id' => (string) $t->id, 'code' => (string) $t->code, 'name' => (string) $t->name], $profile['tenants']),
+            'tenants' => array_map(static fn (stdClass $t) => ['id' => (string) $t->id, 'code' => (string) $t->code, 'name' => (string) $t->name, 'timezone' => (string) $t->timezone], $profile['tenants']),
             'activeTenantId' => $this->auth->tenantId(),
             /**
              * Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected).

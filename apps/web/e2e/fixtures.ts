@@ -7,7 +7,7 @@ import { test as base, expect, type Page, type Route } from '@playwright/test';
  */
 export const SESSION = {
   user: { id: '00000000-0000-4000-8000-000000000001', displayName: 'Review User', email: 'review.user@example.test', locale: 'en' },
-  tenants: [{ id: '00000000-0000-7000-8000-0000000000a1', code: 'demo-stamping', name: 'Demo Stamping' }],
+  tenants: [{ id: '00000000-0000-7000-8000-0000000000a1', code: 'demo-stamping', name: 'Demo Stamping', timezone: 'Asia/Jakarta' }],
   activeTenantId: '00000000-0000-7000-8000-0000000000a1',
   plants: [
     { id: '00000000-0000-7000-8000-0000000000b1', code: 'P1', name: 'Plant 1' },

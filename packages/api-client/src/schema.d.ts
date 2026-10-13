@@ -962,11 +962,15 @@ export interface operations {
                             email: string;
                             locale: string;
                         };
-                        /** @description Tenants where the user holds an ACTIVE membership (tenant picker). */
+                        /**
+                         * @description Tenants where the user holds an ACTIVE membership (tenant picker). `timezone` is the tenant's IANA zone
+                         *     (D-044), used to read calendar dates such as a role's end date.
+                         */
                         tenants: {
                             id: string;
                             code: string;
                             name: string;
+                            timezone: string;
                         }[];
                         activeTenantId: string | null;
                         /** @description Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected). */
@@ -1137,11 +1141,15 @@ export interface operations {
                             email: string;
                             locale: string;
                         };
-                        /** @description Tenants where the user holds an ACTIVE membership (tenant picker). */
+                        /**
+                         * @description Tenants where the user holds an ACTIVE membership (tenant picker). `timezone` is the tenant's IANA zone
+                         *     (D-044), used to read calendar dates such as a role's end date.
+                         */
                         tenants: {
                             id: string;
                             code: string;
                             name: string;
+                            timezone: string;
                         }[];
                         activeTenantId: string | null;
                         /** @description Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected). */
@@ -1208,11 +1216,15 @@ export interface operations {
                             email: string;
                             locale: string;
                         };
-                        /** @description Tenants where the user holds an ACTIVE membership (tenant picker). */
+                        /**
+                         * @description Tenants where the user holds an ACTIVE membership (tenant picker). `timezone` is the tenant's IANA zone
+                         *     (D-044), used to read calendar dates such as a role's end date.
+                         */
                         tenants: {
                             id: string;
                             code: string;
                             name: string;
+                            timezone: string;
                         }[];
                         activeTenantId: string | null;
                         /** @description Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected). */
@@ -1348,11 +1360,15 @@ export interface operations {
                             email: string;
                             locale: string;
                         };
-                        /** @description Tenants where the user holds an ACTIVE membership (tenant picker). */
+                        /**
+                         * @description Tenants where the user holds an ACTIVE membership (tenant picker). `timezone` is the tenant's IANA zone
+                         *     (D-044), used to read calendar dates such as a role's end date.
+                         */
                         tenants: {
                             id: string;
                             code: string;
                             name: string;
+                            timezone: string;
                         }[];
                         activeTenantId: string | null;
                         /** @description Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected). */

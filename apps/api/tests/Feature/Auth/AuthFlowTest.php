@@ -33,6 +33,7 @@ it('runs the whole flow: invitation email → accept → login → tenant → pl
     spa($this)->postJson('/api/v1/auth/login', $u)->assertOk()
         ->assertJsonPath('user.email', $u['email'])
         ->assertJsonPath('tenants.0.id', $this->t['tenant'])
+        ->assertJsonPath('tenants.0.timezone', 'Asia/Jakarta')
         ->assertJsonPath('activeTenantId', null);
 
     spa($this)->postJson('/api/v1/auth/tenant', ['tenantId' => $this->t['tenant']])->assertOk()

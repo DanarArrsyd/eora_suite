@@ -1144,7 +1144,7 @@
                                         },
                                         "tenants": {
                                             "type": "array",
-                                            "description": "Tenants where the user holds an ACTIVE membership (tenant picker).",
+                                            "description": "Tenants where the user holds an ACTIVE membership (tenant picker). `timezone` is the tenant's IANA zone\n(D-044), used to read calendar dates such as a role's end date.",
                                             "items": {
                                                 "type": "object",
                                                 "properties": {
@@ -1156,12 +1156,16 @@
                                                     },
                                                     "name": {
                                                         "type": "string"
+                                                    },
+                                                    "timezone": {
+                                                        "type": "string"
                                                     }
                                                 },
                                                 "required": [
                                                     "id",
                                                     "code",
-                                                    "name"
+                                                    "name",
+                                                    "timezone"
                                                 ]
                                             }
                                         },
@@ -1532,7 +1536,7 @@
                                         },
                                         "tenants": {
                                             "type": "array",
-                                            "description": "Tenants where the user holds an ACTIVE membership (tenant picker).",
+                                            "description": "Tenants where the user holds an ACTIVE membership (tenant picker). `timezone` is the tenant's IANA zone\n(D-044), used to read calendar dates such as a role's end date.",
                                             "items": {
                                                 "type": "object",
                                                 "properties": {
@@ -1544,12 +1548,16 @@
                                                     },
                                                     "name": {
                                                         "type": "string"
+                                                    },
+                                                    "timezone": {
+                                                        "type": "string"
                                                     }
                                                 },
                                                 "required": [
                                                     "id",
                                                     "code",
-                                                    "name"
+                                                    "name",
+                                                    "timezone"
                                                 ]
                                             }
                                         },
@@ -1720,7 +1728,7 @@
                                         },
                                         "tenants": {
                                             "type": "array",
-                                            "description": "Tenants where the user holds an ACTIVE membership (tenant picker).",
+                                            "description": "Tenants where the user holds an ACTIVE membership (tenant picker). `timezone` is the tenant's IANA zone\n(D-044), used to read calendar dates such as a role's end date.",
                                             "items": {
                                                 "type": "object",
                                                 "properties": {
@@ -1732,12 +1740,16 @@
                                                     },
                                                     "name": {
                                                         "type": "string"
+                                                    },
+                                                    "timezone": {
+                                                        "type": "string"
                                                     }
                                                 },
                                                 "required": [
                                                     "id",
                                                     "code",
-                                                    "name"
+                                                    "name",
+                                                    "timezone"
                                                 ]
                                             }
                                         },
@@ -2061,7 +2073,7 @@
                                         },
                                         "tenants": {
                                             "type": "array",
-                                            "description": "Tenants where the user holds an ACTIVE membership (tenant picker).",
+                                            "description": "Tenants where the user holds an ACTIVE membership (tenant picker). `timezone` is the tenant's IANA zone\n(D-044), used to read calendar dates such as a role's end date.",
                                             "items": {
                                                 "type": "object",
                                                 "properties": {
@@ -2073,12 +2085,16 @@
                                                     },
                                                     "name": {
                                                         "type": "string"
+                                                    },
+                                                    "timezone": {
+                                                        "type": "string"
                                                     }
                                                 },
                                                 "required": [
                                                     "id",
                                                     "code",
-                                                    "name"
+                                                    "name",
+                                                    "timezone"
                                                 ]
                                             }
                                         },
