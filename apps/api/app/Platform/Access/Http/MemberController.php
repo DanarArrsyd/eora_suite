@@ -10,6 +10,7 @@ use App\Platform\Access\Scope;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
+use App\Platform\Outbox\OutboxPublisher;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,7 +33,7 @@ final class MemberController
 
     private const string MANAGE = 'core.users_roles.post';
 
-    public function __construct(private readonly Authorizer $authorizer, private readonly AuditRecorder $audit) {}
+    public function __construct(private readonly Authorizer $authorizer, private readonly AuditRecorder $audit, private readonly OutboxPublisher $outbox) {}
 
     /**
      * Invite by e-mail. The identity is resolved first on the auth connection (`auth_api.invite_identity`: existing
@@ -73,6 +74,8 @@ final class MemberController
         }
         $this->dispatch($db, $membership, 'INITIAL');
         $this->audit->record($db, 'membership.invited', 'membership', $membership, null, ['status' => 'INVITED', 'userId' => (string) $userId], ['userId' => (string) $userId]);
+        // business event only (doc 25 §6.4): delivery uses the dispatch request above, not this event (R-43)
+        $this->outbox->publish($db, 'membership.invited', 'membership', $membership, ['membership_id' => $membership, 'user_id' => (string) $userId]);
 
         return $this->member($db, $membership)->response()->setStatusCode(201);
     }

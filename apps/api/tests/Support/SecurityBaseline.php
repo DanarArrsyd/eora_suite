@@ -49,6 +49,10 @@ final class SecurityBaseline
         'prov_api.lock_request(text)' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
         'prov_api.mark_tenant_created(text,uuid,uuid)' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
         'prov_api.provision_lookup(text,text)' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
+        // outbox relay surface — doc 25 §6.4 (M1 step 7b), R-30/R-33
+        'outbox_api.claim_events(text,integer)' => ['owner' => 'eora_outbox_definer', 'execute' => ['eora_relay']],
+        'outbox_api.complete_event(uuid,uuid)' => ['owner' => 'eora_outbox_definer', 'execute' => ['eora_relay']],
+        'outbox_api.fail_event(uuid,uuid,text)' => ['owner' => 'eora_outbox_definer', 'execute' => ['eora_relay']],
     ];
 
     /** Every RLS expression on a tenant table must read the signed context (ADR-0001 Amendment 2). */
@@ -65,6 +69,9 @@ final class SecurityBaseline
         'memberships.definer_read' => 'doc 25 §2.1: eora_auth_definer reads membership status to validate invitations (NOLOGIN, reviewed functions only)',
         'invitation_dispatch_requests.definer_dispatch' => 'doc 25 §2.4 R-40: delivery definer converts pending dispatch requests',
         'invitation_dispatch_requests.definer_dispatch_update' => 'doc 25 §2.4 R-40: delivery definer sets the request outcome',
+        'outbox_events.definer_insert' => 'doc 25 §2.3 R-26: consume_password_reset inserts auth.password_reset_consumed from auth_web only',
+        'outbox_events.relay_claim_read' => 'doc 25 §6.4 R-30/R-33: outbox definer reads ids, tenant ids and claim columns only (column grants)',
+        'outbox_events.relay_claim_update' => 'doc 25 §6.4 R-33: outbox definer writes claim columns only (column grants)',
         'security_events.definer_insert' => 'doc 25 §8 R-19: auth definer functions insert auth-source events from stored rows',
     ];
 

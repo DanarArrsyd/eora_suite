@@ -7,6 +7,7 @@ namespace App\Platform\Provisioning;
 use App\Platform\Access\RoleTemplates;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Database\EoraPostgresConnection;
+use App\Platform\Outbox\OutboxPublisher;
 use App\Platform\Security\SecurityHasher;
 use App\Platform\Tenancy\TenantContext;
 use App\Platform\Tenancy\TenantTransaction;
@@ -32,13 +33,14 @@ use RuntimeException;
 final class TenantProvisioner
 {
     /** Actor stamped on everything provisioning writes (created_by, granted_by): never a user id. */
-    public const string SYSTEM_ACTOR = '00000000-0000-0000-0000-000000000000';
+    public const string SYSTEM_ACTOR = TenantContext::SYSTEM_ACTOR;
 
     public function __construct(
         private readonly TenantTransaction $transaction,
         private readonly SecurityHasher $hasher,
         private readonly RoleTemplates $roles,
         private readonly AuditRecorder $audit,
+        private readonly OutboxPublisher $outbox,
     ) {}
 
     /**
@@ -109,6 +111,7 @@ final class TenantProvisioner
 
             $membership = (string) $db->selectOne("insert into memberships (tenant_id, user_id, status) values (?, ?, 'INVITED') returning id", [$tenantId, $user])->id;
             $this->dispatch($db, $tenantId, $membership, $console ? 'CONSOLE' : 'INITIAL');
+            $this->outbox->publish($db, 'membership.invited', 'membership', $membership, ['membership_id' => $membership, 'user_id' => $user]);
             $db->insert(
                 "insert into role_assignments (tenant_id, membership_id, role_id, scope_type, granted_by, grant_reason)
                  select ?, ?, r.id, 'TENANT', ?, 'Tenant provisioning: first administrator' from roles r where r.code = 'TENANT_ADMIN'",

@@ -20,7 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
         apiPrefix: 'api',
     )
-    ->withCommands([__DIR__.'/../app/Platform/Auth/Delivery', __DIR__.'/../app/Platform/Provisioning'])
+    ->withCommands([__DIR__.'/../app/Platform/Auth/Delivery', __DIR__.'/../app/Platform/Provisioning', __DIR__.'/../app/Platform/Outbox'])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(AssignCorrelationId::class);
         // Sanctum stateful SPA (ADR-0006): session cookie + XSRF for requests from the app's own origin
