@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { z } from 'zod';
-import { EoraForm, FormSelectField, FormTextareaField, FormTextField, useFormContext, useWatch } from '@eora/features/patterns';
-import { Button } from '@eora/ui';
+import { EoraForm, FormDateField, FormSelectField, FormTextareaField, useFormContext, useWatch } from '@eora/features/patterns';
+import { Button, todayIn } from '@eora/ui';
 import { useAccessActions, type Member, type Role } from './api';
 import { formFailure } from './errors';
 import { defaultScope, endOfDayIn, scopeChoices, type PlantRef } from './model';
@@ -136,7 +136,14 @@ export function AssignRoleForm({ members, roles, plants, timeZone, memberId, rol
         />
       )}
       <ScopeFields roles={roles} plants={plants} />
-      <FormTextField name="validUntil" label="Access ends" type="date" hint={`Optional. The role stops at the end of this day (${timeZone}).`} />
+      <FormDateField
+        name="validUntil"
+        label="Access ends"
+        min={todayIn(timeZone)}
+        today={todayIn(timeZone)}
+        placeholder="No end date"
+        hint={`Optional. The role stops at the end of this day (${timeZone}).`}
+      />
       <FormTextareaField name="reason" label="Reason" required rows={3} hint="Kept with the assignment for audit, e.g. the request or ticket." />
     </EoraForm>
   );

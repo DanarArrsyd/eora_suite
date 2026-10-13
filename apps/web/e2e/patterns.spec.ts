@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from './fixtures';
+import { expect, test, type Page, choose } from './fixtures';
 
 /** Phase 2 shared patterns: enterprise list (URL state, filters, table, pagination), dialogs, forms, import/export, notifications. */
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
@@ -24,7 +24,7 @@ test.describe('enterprise list example (desktop)', () => {
     await page.goto(LIST);
     await expect(table(page).getByRole('row')).toHaveCount(22); // 2 header rows + 20
     const form = page.getByRole('form', { name: 'Filters' });
-    await form.getByRole('combobox', { name: 'Warehouse' }).selectOption('RM-WH2');
+    await choose(page, form.getByRole('combobox', { name: 'Warehouse' }), 'RM-WH2');
     await form.getByRole('button', { name: 'Apply' }).click();
     await expect(page).toHaveURL(/f\.warehouse=RM-WH2/);
     await expect(total(page)).not.toHaveText('214 lots');
@@ -192,7 +192,7 @@ test.describe('pattern showcase and notifications', () => {
     const form = page.getByRole('form', { name: 'Request material issue (sample)' });
     await form.getByRole('button', { name: 'Submit request' }).click();
     await expect(form.getByRole('alert')).toContainText('Fix 3 fields before submitting');
-    await expect(form.locator('[tabindex="-1"]')).toBeFocused();
+    await expect(form.locator('div[tabindex="-1"]')).toBeFocused();
     await page.getByRole('button', { name: 'Request reversal…' }).click();
     const dlg = page.getByRole('alertdialog', { name: /Request reversal/ });
     await expect(dlg.getByRole('button', { name: 'Cancel' })).toBeFocused();

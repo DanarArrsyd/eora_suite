@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from './fixtures';
+import { expect, test, type Page, choose } from './fixtures';
 
 /** Phase 3 PPIC Control Tower: data concepts per docs 02/14/15/19 rendered from typed mock contracts. */
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
@@ -35,7 +35,7 @@ test('CT-0: four decision KPIs with definition, basis and drill link; UOM bands 
 test('CT-0: filters scope the overview via the URL and exceptions drill to the source list', async ({ page }) => {
   await page.goto('/ppic/control-tower');
   const form = page.getByRole('form', { name: 'Filters' });
-  await form.getByRole('combobox', { name: 'Part' }).selectOption('PART-C');
+  await choose(page, form.getByRole('combobox', { name: 'Part' }), /PART-C/);
   await form.getByRole('button', { name: 'Apply' }).click();
   await expect(page).toHaveURL(/f\.part=PART-C/);
   const queue = page.getByRole('table', { name: 'Exception queue' });

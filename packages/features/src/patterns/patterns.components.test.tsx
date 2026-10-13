@@ -176,8 +176,10 @@ describe('FilterBar', () => {
       </Providers>,
     );
     const form = screen.getByRole('form', { name: 'Filters' });
-    await userEvent.selectOptions(within(form).getByRole('combobox', { name: 'Plant' }), 'PB');
-    expect(within(form).getByRole('combobox', { name: 'Warehouse' })).toHaveValue('');
+    await userEvent.click(within(form).getByRole('combobox', { name: 'Plant' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Plant B' }));
+    expect(within(form).getByRole('combobox', { name: 'Plant' })).toHaveTextContent('Plant B');
+    expect(within(form).getByRole('combobox', { name: 'Warehouse' })).toHaveTextContent('Warehouse');
     await userEvent.click(within(form).getByRole('button', { name: 'Apply' }));
     expect(onApply).toHaveBeenLastCalledWith({ plant: 'PB', warehouse: undefined });
     await userEvent.click(within(form).getByRole('button', { name: 'Reset' }));

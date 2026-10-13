@@ -3,6 +3,7 @@
 import * as React from 'react';
 import {
   FormProvider,
+  useController,
   useForm,
   useFormContext,
   type DefaultValues,
@@ -13,7 +14,7 @@ import {
 } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
-import { Button, Field, InlineAlert, Input, Select, Textarea, cn } from '@eora/ui';
+import { Button, DatePicker, Field, InlineAlert, Input, Select, Textarea, cn, type IsoDate } from '@eora/ui';
 
 export type SubmitContext = {
   /** Stable for this form instance until a submission succeeds — the server deduplicates retries (CLAUDE.md: idempotent writes). */
@@ -188,20 +189,58 @@ export function FormSelectField({
   className,
   options,
   placeholder,
-}: BaseFieldProps & { options: { value: string; label: string }[]; placeholder?: string }) {
-  const { register } = useFormContext();
+}: BaseFieldProps & { options: { value: string; label: string; description?: string }[]; placeholder?: string }) {
+  const { field } = useController({ name });
   const error = useFieldError(name);
   return (
     <Field label={label} hint={hint} error={error} required={required} className={className}>
       {(c) => (
-        <Select {...c} {...register(name)}>
-          <option value="">{placeholder ?? 'Select…'}</option>
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </Select>
+        <Select
+          {...c}
+          ref={field.ref}
+          name={field.name}
+          value={(field.value as string | undefined) ?? ''}
+          onValueChange={field.onChange}
+          onBlur={field.onBlur}
+          options={options}
+          placeholder={placeholder ?? 'Select…'}
+          emptyLabel={required ? undefined : (placeholder ?? 'None')}
+        />
+      )}
+    </Field>
+  );
+}
+
+/** Calendar date (`YYYY-MM-DD` or empty) chosen in the EORA calendar popover — never the browser's native date input. */
+export function FormDateField({
+  name,
+  label,
+  hint,
+  required,
+  className,
+  min,
+  max,
+  today,
+  placeholder,
+}: BaseFieldProps & { min?: IsoDate; max?: IsoDate; today?: IsoDate; placeholder?: string }) {
+  const { field } = useController({ name });
+  const error = useFieldError(name);
+  return (
+    <Field label={label} hint={hint} error={error} required={required} className={className}>
+      {(c) => (
+        <DatePicker
+          {...c}
+          ref={field.ref}
+          label={label}
+          value={(field.value as string | undefined) ?? ''}
+          onChange={field.onChange}
+          onBlur={field.onBlur}
+          min={min}
+          max={max}
+          today={today}
+          placeholder={placeholder}
+          clearable={!required}
+        />
       )}
     </Field>
   );

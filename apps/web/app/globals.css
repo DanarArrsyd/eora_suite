@@ -61,22 +61,26 @@
   --breakpoint-4xl: 105rem; /* 1680px */
 }
 
-html,
-body {
-  height: 100%;
+/* Base styles sit in the base layer so component utilities (e.g. a borderless search input) can override them. */
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    background: var(--color-bg-workspace);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
 }
-body {
-  background: var(--color-bg-workspace);
-  color: var(--color-text-primary);
-  font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 20px;
-  -webkit-font-smoothing: antialiased;
-}
-:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }

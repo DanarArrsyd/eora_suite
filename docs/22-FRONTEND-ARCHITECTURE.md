@@ -170,3 +170,15 @@ Scope: `/admin/users` and `/admin/roles` on the live API (`apps/web/modules/admi
 | Real stack smoke | provision `--deliver=console` → accept → sign in → `/admin/users`: invite, assign QCI at plant P1 with reason, revoke with reason; `/admin/roles` list — against Laravel through the Next.js proxy |
 | Production build | succeeds |
 
+### M1 UI refinement — pickers and search (2026-10-14, owner feedback on PR #18 review)
+Owner: date filters must be a real calendar, no plain browser controls in any filter, search was imprecise.
+- `packages/ui`: `Select` (Radix listbox, variants field / segment / compact, optional clear item, lock for workspace scope), `Calendar` (ISO weeks with week numbers, WAI-ARIA grid keyboard, min/max, today marker, range preview), `DatePicker`, `DateRangePicker`, calendar-date helpers (`lib/dates.ts`, UTC-safe, fixed month abbreviations). The native `Select` is removed.
+- Applied everywhere: FilterBar (segment + phone sheet, select and date range), topbar production date + shift and warehouse, workspace switcher, pagination page size, `FormSelectField`, new `FormDateField` (Assign role end date, pattern showcase), Due vs supply part picker, UI kit.
+- Global search (Ctrl/⌘ K): searches the pages the user can open — ranked on page name, word starts and initials (MPS, WO), group names only for whole words; matched text highlighted; combobox + listbox keyboard (↑ ↓ Enter Esc); honest note that record search arrives with module APIs. The stray focus box came from an unlayered global `:focus-visible` rule overriding component utilities: base styles now live in `@layer base`; new controls use `outline-hidden` so their focus ring renders.
+| Gate | Result |
+|---|---|
+| Format · typecheck · lint | clean |
+| Unit + component | 107/107 (new: calendar dates incl. ISO weeks across years, page search ranking/noise) |
+| E2E (mocked API) | 122/122 (specs moved from `selectOption` to the `choose()` helper; new: search by initials + Enter, keyboard date choice with future dates disabled) |
+| Visual check | Chrome pane at 1440: topbar calendar, filter select, date range with keyboard preview, search results |
+

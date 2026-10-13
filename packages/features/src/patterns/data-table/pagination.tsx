@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CornerDownLeft } from 'lucide-react';
-import { IconButton, cn } from '@eora/ui';
+import { IconButton, Select, cn } from '@eora/ui';
 import { PAGE_SIZES } from '../../data';
 
 type Props = {
@@ -58,18 +58,14 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
         </p>
         <div className="flex items-center gap-2 max-md:hidden">
           <label htmlFor={sizeId}>Items per page</label>
-          <select
+          <Select
             id={sizeId}
-            value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="h-8 w-[76px] rounded-md border border-line-control bg-surface px-2 text-[13px] text-ink focus:outline-2 focus:outline-ring"
-          >
-            {PAGE_SIZES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+            variant="compact"
+            className="w-[76px]"
+            value={String(pageSize)}
+            onValueChange={(v) => onPageSizeChange(Number(v))}
+            options={PAGE_SIZES.map((s) => ({ value: String(s), label: String(s) }))}
+          />
         </div>
         <form
           className="flex items-center gap-2 max-md:hidden"

@@ -1,4 +1,4 @@
-import { test as base, expect, type Page, type Route } from '@playwright/test';
+import { test as base, expect, type Locator, type Page, type Route } from '@playwright/test';
 
 /**
  * Frontend E2E runs without the API (doc 22 §4): the workspace needs a session, so `/api/v1/auth/me` is answered with a
@@ -29,6 +29,13 @@ export async function mockApi(page: Page, path: string, response: MockResponse |
       body: r.json === undefined ? '' : JSON.stringify(r.json),
     });
   });
+}
+
+/** Picks `option` in an EORA select (Radix listbox, not a native <select>): open the combobox, click the option. */
+export async function choose(page: Page, combobox: Locator, option: string | RegExp) {
+  await combobox.click();
+  await page.getByRole('option', { name: option, exact: typeof option === 'string' }).click();
+  await expect(page.getByRole('listbox')).toBeHidden();
 }
 
 export function problem(status: number, code: string, title: string, extra: Record<string, unknown> = {}) {

@@ -12,7 +12,7 @@ import {
   FormQuantityField,
   FormSelectField,
   FormTextareaField,
-  FormTextField,
+  FormDateField,
   ImportWizard,
   NotificationCenter,
   Pagination,
@@ -163,7 +163,7 @@ export function PatternShowcase() {
             />
             <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
               <FormQuantityField name="quantity" label="Quantity" required uom="kg" decimals={3} />
-              <FormTextField name="neededBy" label="Needed by" type="date" required />
+              <FormDateField name="neededBy" label="Needed by" required />
             </div>
             <FormTextareaField name="note" label="Note for the warehouse" hint="Optional, up to 200 characters" rows={3} />
           </EoraForm>

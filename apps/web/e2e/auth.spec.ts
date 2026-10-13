@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, mockApi, problem, SESSION, test, type Page } from './fixtures';
+import { expect, mockApi, problem, SESSION, test, type Page, choose } from './fixtures';
 
 /* M1 sign-in surfaces (doc 28 §1, doc 25 §4, ADR-0006) against a mocked API; the real flow runs in the stack E2E. */
 
@@ -158,7 +158,7 @@ test('topbar: plant switch and sign-out talk to the API', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/ppic');
   await page.getByRole('button', { name: /^Workspace: Demo Stamping, P1 · Plant 1/ }).click();
-  await page.getByRole('dialog', { name: 'Workspace' }).getByLabel('Plant').selectOption({ label: 'P2 · Plant 2' });
+  await choose(page, page.getByRole('dialog', { name: 'Workspace' }).getByRole('combobox', { name: 'Plant' }), 'P2 · Plant 2');
   await expect(page.getByRole('button', { name: /^Workspace: Demo Stamping, P2 · Plant 2/ })).toBeVisible();
 
   await page.keyboard.press('Escape');

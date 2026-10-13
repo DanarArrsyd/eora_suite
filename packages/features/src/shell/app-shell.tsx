@@ -107,7 +107,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         pathname={nav.pathname}
         returnFocusTo={returnFocus}
       />
-      <GlobalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} returnFocusTo={returnFocus} />
+      <GlobalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} modules={nav.modules} returnFocusTo={returnFocus} />
     </>
   );
 }

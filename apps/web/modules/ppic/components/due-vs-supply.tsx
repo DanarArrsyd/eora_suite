@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { TriangleAlert } from 'lucide-react';
+import { Select } from '@eora/ui';
 import type { DueVsSupplyPoint } from '../contracts';
 import { fmtDay, fmtQty } from './format';
 
@@ -35,18 +36,14 @@ export function DueVsSupplyChart({ series }: { series: { part: string; points: D
           <label htmlFor={selectId} className="text-ink-2">
             Part
           </label>
-          <select
+          <Select
             id={selectId}
+            variant="compact"
+            className="min-w-28"
             value={current.part}
-            onChange={(e) => setPart(e.target.value)}
-            className="h-8 rounded-md border border-line-control bg-surface px-2 text-[13px] focus:outline-2 focus:outline-ring max-md:h-11 max-md:text-base"
-          >
-            {series.map((s) => (
-              <option key={s.part} value={s.part}>
-                {s.part}
-              </option>
-            ))}
-          </select>
+            onValueChange={setPart}
+            options={series.map((s) => ({ value: s.part, label: s.part }))}
+          />
         </div>
         <ul aria-label="Legend" className="m-0 flex list-none gap-4 p-0 text-xs text-ink-2">
           <li className="flex items-center gap-1.5">
