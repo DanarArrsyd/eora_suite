@@ -79,6 +79,17 @@ final class Authorizer
     }
 
     /**
+     * SoD-06 (D-060): an administrator never changes its own access — grants, revocations, suspension, reactivation.
+     * 403 SOD_VIOLATION when $userId is the signed actor.
+     */
+    public function refuseSelf(EoraPostgresConnection $db, string $userId): void
+    {
+        if ($db->selectOne('select 1 as self from ctx_api.context() c where c.actor = ?', [$userId]) !== null) {
+            throw new DomainProblem(403, 'SOD_VIOLATION', 'Not allowed on your own access', 'Your own access can be changed only by another administrator.');
+        }
+    }
+
+    /**
      * Every permission the actor holds anywhere in the active tenant — a UX hint for navigation only; each endpoint
      * still authorizes its own scope.
      *

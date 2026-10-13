@@ -23,4 +23,9 @@ return [
     'pepper' => [
         'key' => env('EORA_PEPPER_KEY'),
     ],
+
+    // Optional per-administrator cap on member invitations + resends per hour (doc 25 §2.4: per-inviter limits live at
+    // the HTTP layer). No value is approved yet, so it is off unless set; the database still caps identity creation
+    // platform-wide and resends at 5 per membership per 24 h.
+    'member_invite_per_hour' => env('EORA_MEMBER_INVITE_PER_HOUR') === null ? null : (int) env('EORA_MEMBER_INVITE_PER_HOUR'),
 ];

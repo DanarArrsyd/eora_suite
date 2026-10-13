@@ -7,66 +7,14 @@ use App\Platform\Access\RoleTemplates;
 use App\Platform\Access\Scope;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
-use App\Platform\Tenancy\TenantContext;
-use App\Platform\Tenancy\TenantTransaction;
 use Illuminate\Database\QueryException;
 use Tests\Support\AccessFixtures;
 use Tests\Support\TenantFixtures;
-use Tests\TestCase;
 
 /*
  * M1 step 5 — RBAC (doc 25 §3, §12 T-RBAC/T-ESC, §13; doc 18; D-060, D-B1-16). Group B through HTTP with the real
  * session, group C directly as eora_app with a signed context. Fixtures run as eora_provisioner, never as owner.
  */
-
-/** Signs $u in and selects $tenant. */
-function signIn(TestCase $test, array $u, array $tenant): void
-{
-    spa($test)->postJson('/api/v1/auth/login', $u)->assertOk();
-    spa($test)->postJson('/api/v1/auth/tenant', ['tenantId' => $tenant['tenant']])->assertOk();
-}
-
-/** An accepted member of $tenant with its ids. */
-function member(TestCase $test, array $tenant): array
-{
-    $u = activeUser($test, $tenant);
-    $u['id'] = AccessFixtures::userId($tenant, $u['email']);
-    $u['membership'] = AccessFixtures::membershipId($tenant, $u['id']);
-
-    return $u;
-}
-
-/** Runs $work as eora_app inside $tenant with $actor as the signed actor. */
-function asApp(array $tenant, string $actor, Closure $work): mixed
-{
-    return app(TenantTransaction::class)->run(TenantContext::forTenant($tenant['tenant'], $actor), $work);
-}
-
-function roleId(array $tenant, string $code): string
-{
-    return (string) AccessFixtures::run($tenant, fn (EoraPostgresConnection $db) => $db->selectOne('select id from roles where code = ?', [$code])->id);
-}
-
-/** @return list<string> */
-function eventActions(array $tenant): array
-{
-    return array_column(AccessFixtures::run($tenant, fn (EoraPostgresConnection $db) => $db->select(
-        "select action from security_events where source = 'app' and action like 'access.%' order by occurred_at",
-    )), 'action');
-}
-
-/** Body for POST /core/role-assignments. */
-function grantBody(array $tenant, string $membership, string $role, array $scope = ['TENANT']): array
-{
-    return array_filter([
-        'membershipId' => $membership,
-        'roleId' => roleId($tenant, $role),
-        'scopeType' => $scope[0],
-        'companyId' => $scope[0] === 'COMPANY' ? $scope[1] : null,
-        'plantId' => $scope[0] === 'PLANT' ? $scope[1] : null,
-        'reason' => 'onboarding',
-    ]);
-}
 
 beforeEach(function () {
     $this->t = TenantFixtures::provision(2);

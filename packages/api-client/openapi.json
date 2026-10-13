@@ -994,6 +994,161 @@
                     }
                 }
             }
+        },
+        "/core/members/invitations": {
+            "post": {
+                "operationId": "v1.core.members.invite",
+                "summary": "Invite by e-mail. The identity is resolved first on the auth connection (`auth_api.invite_identity`: existing\ne-mail \u2192 existing user, otherwise a password-less identity); then the INVITED membership and an INITIAL dispatch\nrequest are written in this tenant transaction. Inviting grants no access; roles are assigned separately",
+                "tags": [
+                    "Member"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "pattern": "^\\s*[^@\\s]{1,64}@[^@\\s]{1,253}\\.[^@\\s]{2,63}\\s*$",
+                                        "maxLength": 254
+                                    }
+                                },
+                                "required": [
+                                    "email"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "`MemberResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/MemberResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/core/members/{membership}/actions/resend-invitation": {
+            "post": {
+                "operationId": "v1.core.members.resend-invitation",
+                "summary": "Resend an open invitation (new secret; the previous link stops working). Capped at 5 per 24 h in the database",
+                "tags": [
+                    "Member"
+                ],
+                "parameters": [
+                    {
+                        "name": "membership",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/core/members/{membership}/actions/suspend": {
+            "post": {
+                "operationId": "v1.core.members.suspend",
+                "summary": "Suspend an invited or active member: no access in this tenant until reactivated; assignments are kept",
+                "tags": [
+                    "Member"
+                ],
+                "parameters": [
+                    {
+                        "name": "membership",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "`MemberResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/MemberResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/core/members/{membership}/actions/reactivate": {
+            "post": {
+                "operationId": "v1.core.members.reactivate",
+                "summary": "Reactivate a suspended member: back to ACTIVE when it had been activated, otherwise back to INVITED",
+                "tags": [
+                    "Member"
+                ],
+                "parameters": [
+                    {
+                        "name": "membership",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "`MemberResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/MemberResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     "components": {

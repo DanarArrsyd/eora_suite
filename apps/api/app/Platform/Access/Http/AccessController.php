@@ -18,7 +18,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use LogicException;
-use stdClass;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -33,7 +32,8 @@ final class AccessController
 
     private const string GRANT = 'core.users_roles.post';
 
-    private const string ASSIGNMENT_SQL = 'select ra.*, r.code as role_code,
+    /** Assignment row + role code + `effective`; shared with MemberController. */
+    public const string ASSIGNMENT_SQL = 'select ra.*, r.code as role_code,
             (ra.revoked_at is null and ra.valid_from <= now() and (ra.valid_until is null or ra.valid_until > now())) as effective
           from role_assignments ra join roles r on r.id = ra.role_id';
 
@@ -103,7 +103,7 @@ final class AccessController
         if ($membership === null) {
             throw ValidationException::withMessages(['membershipId' => 'Unknown member.']);
         }
-        $this->refuseSelf($db, $membership);
+        $this->authorizer->refuseSelf($db, (string) $membership->user_id);
         if (! in_array($membership->status, ['INVITED', 'ACTIVE'], true)) {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Member not assignable', 'Roles can be assigned only to invited or active members.');
         }
@@ -141,7 +141,7 @@ final class AccessController
         if ($row === null) {
             throw new NotFoundHttpException;
         }
-        $this->refuseSelf($db, $db->selectOne('select id, user_id, status from memberships where id = ?', [$row->membership_id]));
+        $this->authorizer->refuseSelf($db, (string) $db->selectOne('select user_id from memberships where id = ?', [$row->membership_id])->user_id);
         $this->authorizer->requireCovered($grantorScopes, Scope::of((string) $row->scope_type, $row->company_id, $row->plant_id, $row->plant_company_id));
         if ($row->revoked_at !== null) {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Already revoked', 'This assignment was already revoked.');
@@ -199,16 +199,6 @@ final class AccessController
         ];
     }
 
-    /** SoD-06 (D-060): self-elevation and self-revocation are always blocked in early V1. */
-    private function refuseSelf(EoraPostgresConnection $db, ?stdClass $membership): void
-    {
-        $actor = $db->selectOne('select c.actor from ctx_api.context() c')->actor ?? null;
-
-        if ($membership !== null && $actor !== null && (string) $membership->user_id === (string) $actor) {
-            throw new DomainProblem(403, 'SOD_VIOLATION', 'Not allowed on your own access', 'Your own role assignments can be changed only by another administrator.');
-        }
-    }
-
     private function targetScope(EoraPostgresConnection $db, string $type, ?string $companyId, ?string $plantId): Scope
     {
         if ($type === Scope::COMPANY) {
@@ -235,7 +225,7 @@ final class AccessController
         $state = (string) $e->getCode();
 
         if ($state === 'EO006') {
-            throw new DomainProblem(403, 'SOD_VIOLATION', 'Not allowed on your own access', 'Your own role assignments can be changed only by another administrator.');
+            throw new DomainProblem(403, 'SOD_VIOLATION', 'Not allowed on your own access', 'Your own access can be changed only by another administrator.');
         }
         if (isset($validation[$state])) {
             throw ValidationException::withMessages($validation[$state]);
