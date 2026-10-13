@@ -259,6 +259,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/core/members/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invite by e-mail. The identity is resolved first on the auth connection (`auth_api.invite_identity`: existing
+         *     e-mail → existing user, otherwise a password-less identity); then the INVITED membership and an INITIAL dispatch
+         *     request are written in this tenant transaction. Inviting grants no access; roles are assigned separately
+         */
+        post: operations["v1.core.members.invite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/core/members/{membership}/actions/resend-invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resend an open invitation (new secret; the previous link stops working). Capped at 5 per 24 h in the database */
+        post: operations["v1.core.members.resend-invitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/core/members/{membership}/actions/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suspend an invited or active member: no access in this tenant until reactivated; assignments are kept */
+        post: operations["v1.core.members.suspend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/core/members/{membership}/actions/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivate a suspended member: back to ACTIVE when it had been activated, otherwise back to INVITED */
+        post: operations["v1.core.members.reactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -807,6 +879,103 @@ export interface operations {
                             };
                         };
                         time: string;
+                    };
+                };
+            };
+        };
+    };
+    "v1.core.members.invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                };
+            };
+        };
+        responses: {
+            /** @description `MemberResource` */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MemberResource"];
+                    };
+                };
+            };
+            422: components["responses"]["ValidationException"];
+        };
+    };
+    "v1.core.members.resend-invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "v1.core.members.suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `MemberResource` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MemberResource"];
+                    };
+                };
+            };
+        };
+    };
+    "v1.core.members.reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `MemberResource` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MemberResource"];
                     };
                 };
             };

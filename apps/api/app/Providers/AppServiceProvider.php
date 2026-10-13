@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Platform\Auth\AuthSession;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Security\SecurityEventRecorder;
 use App\Platform\Security\SecurityHasher;
@@ -53,6 +54,11 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(20)->by('login:ip:'.($hasher->hash((string) $request->ip()) ?? 'none')),
             ];
         });
+        // Per-administrator cap on member invitations and resends (doc 25 §2.4: per-inviter limits live at the HTTP layer;
+        // the database caps identity creation platform-wide and resends at 5 per membership per 24 h). Proposed value.
+        RateLimiter::for('member-invite', fn (Request $request) => Limit::perHour(30)->by(
+            'member-invite:'.(app(AuthSession::class)->userId() ?? 'none'),
+        ));
         RateLimiter::for('invitation-accept', fn (Request $request) => Limit::perMinute(10)->by(
             'invite:ip:'.(app(SecurityHasher::class)->hash((string) $request->ip()) ?? 'none'),
         ));
