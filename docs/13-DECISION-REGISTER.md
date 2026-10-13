@@ -171,6 +171,7 @@ These were proposed in the audit and are required to make D-009..D-019 implement
 ## Change log
 | Date | Change | Owner | Affected |
 |---|---|---|---|
+| 2026-10-14 | M1 frontend F2 implemented (no new decision): Administration → Users and Roles & Permissions on the live API; `membership` status-badge domain added for tenant membership statuses (doc 25 §2.6) | Claude Code (record) | doc 22, `apps/web`, `packages/features` |
 | 2026-10-13 | D-070 recorded and implemented in PR #17 (M1 frontend F1 review): plant list/switch limited to assignment scopes; tenant/plant switches recorded as security events; Compose `EORA_FRONTEND_URL` points at the web app on port 3100 | Product owner (decision), Claude Code (record) | docs 13, 25, `apps/api`, `compose.yaml` |
 | 2026-10-13 | M1 step 7c implemented (no new decision): problem+json error responses per endpoint in OpenAPI; D-B1-06 factory-NAT login allowlist; rate-limit review recorded in doc 25 §16 — the doc 05 *proposed* API-wide/posting/export limits stay unenforced pending owner approval | Claude Code (record) | docs 13, 24, 25, `apps/api/README.md` |
 | 2026-10-13 | M1 step 7b implemented (no new decision): transactional outbox, relay through `outbox_api` (allowlisted definers), privileged-reset notification per D-B1-25 / R-26 / R-38 / R-44, `membership.invited` business event; Compose service `outbox-relay` | Claude Code (record) | docs 13, 17, 25, `apps/api/README.md`, compose |

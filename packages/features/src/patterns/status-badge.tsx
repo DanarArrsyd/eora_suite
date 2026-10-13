@@ -38,6 +38,13 @@ export const STATUS_CATALOGUE = {
     SUPERSEDED: { label: 'Superseded', tone: 'neutral' },
     CANCELLED: { label: 'Cancelled', tone: 'neutral' },
   },
+  /** Tenant membership (doc 25 §2.6, doc 17): access to the workspace, independent of role assignments. */
+  membership: {
+    INVITED: { label: 'Invited', tone: 'info' },
+    ACTIVE: { label: 'Active', tone: 'success' },
+    SUSPENDED: { label: 'Suspended', tone: 'warning' },
+    REVOKED: { label: 'Revoked', tone: 'neutral' },
+  },
   /** Variance indicator finality (ADR-0005). Never labelled as loss. */
   indicator: {
     NOT_CALCULABLE: { label: 'Not calculable', tone: 'neutral' },

@@ -4,6 +4,8 @@ import { allRouteParams, matchRoute, NAV_MODULES } from '@eora/features/navigati
 import { Suspense } from 'react';
 import { LoadingState } from '@eora/ui';
 import { PlannedPage } from '@/components/planned-page';
+import { ADMIN_IMPLEMENTED } from '@/modules/admin/implemented';
+import { AdminScreen } from '@/modules/admin/registry';
 import { PPIC_IMPLEMENTED } from '@/modules/ppic/implemented';
 import { PpicScreen } from '@/modules/ppic/registry';
 
@@ -29,6 +31,14 @@ export default async function ItemPage({ params }: { params: Promise<Params> }) 
     return (
       <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
         <PpicScreen item={item} />
+      </Suspense>
+    );
+  }
+  if (module === 'admin' && (ADMIN_IMPLEMENTED as readonly string[]).includes(item)) {
+    // M1 Administration on the live API (URL-synced search/view needs a Suspense boundary).
+    return (
+      <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
+        <AdminScreen item={item} />
       </Suspense>
     );
   }

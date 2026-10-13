@@ -58,6 +58,7 @@ const DOMAIN_LABEL: Record<StatusDomain, string> = {
   stock: 'Stock status (DD-01)',
   document: 'Document state (doc 16)',
   schedule: 'Delivery schedule line (D-034)',
+  membership: 'Tenant membership (doc 25 §2.6)',
   indicator: 'Variance indicator (ADR-0005)',
 };
 

@@ -156,3 +156,17 @@ Scope: `/login`, `/select-tenant`, `/invitations/accept`, `/password/forgot`, `/
 | Production build | succeeds |
 Not done: Administration screens and live inbox (F2); stack Playwright in CI, demo seeder, UAT script (F3); screen-reader and real-device checks (O-021).
 
+### M1 F2 — Administration: Users, Roles & Permissions (2026-10-14, milestone M1 / D-066; owner reviews at the M1 demo)
+Scope: `/admin/users` and `/admin/roles` on the live API (`apps/web/modules/admin`); every other Administration item stays a planned page.
+- **Users** (EoraEnterprisePage list): status tabs All / Active / Invited / Suspended (membership statuses only, new `membership` badge domain), search on name, e-mail and role code (URL-synced), roles shown inside the viewer's scope. Primary action **Invite user** (modal; inviting grants no access). Row menu and member drawer: Resend invitation, Suspend and Reactivate (confirmation), Assign role (role → suggested template scope → plant → optional end date → mandatory reason), Revoke (confirmation with mandatory reason).
+- **Roles & Permissions**: the 14 tenant roles from the templates, suggested scope, permission count (templates without permissions say *None yet*), members holding the role in the viewer's scope; role drawer with permissions grouped by module, holders, and Assign to member.
+- Guidance only, the server decides: actions unavailable for the viewer stay visible and disabled with the reason (missing permission, own access — SoD-06, member status); refusals map to plain messages (`SCOPE_FORBIDDEN`, `FORBIDDEN`, `RATE_LIMITED`, `RETRYABLE_CONFLICT`) and say nothing was saved.
+- Known limits: `GET /core/members` and `GET /core/roles` return the whole list, so search and tabs run in the browser (acceptable for M1 tenant sizes; server paging/filters when the list endpoints get QueryDefinition support). Company scope is not offered (no company list until M2); company-scoped assignments display as *Company*. Inbox bell still on mock data (F3).
+| Gate | Result |
+|---|---|
+| Format · typecheck · lint | clean |
+| Unit + component | 95/95 (new `modules/admin/model.test.ts`: scope and validity text, status views and counts, action blocks incl. SoD-06, suggested scope, holders, permission groups) |
+| E2E (mocked API) | 118/118; new `admin.spec.ts` (12): list + tabs + URL, own-access block, invite with CSRF header + validation, plant-scoped assign body, scope refusal message, revoke reason required, suspend confirmation, no-permission state, roles drawer, axe, no overflow at 1440/768/375 |
+| Real stack smoke | provision `--deliver=console` → accept → sign in → `/admin/users`: invite, assign QCI at plant P1 with reason, revoke with reason; `/admin/roles` list — against Laravel through the Next.js proxy |
+| Production build | succeeds |
+
