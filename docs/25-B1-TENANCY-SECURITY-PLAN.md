@@ -565,10 +565,23 @@ Bootstrap of B and C: for every connection, `rolsuper = false AND rolbypassrls =
 | T-SEV-03 | B | DB flush forced to fail | response unchanged; JSON log line present; retry job queued; metric incremented |
 | T-SEV-04 | C | `eora_app` with A context inserts security event for tenant B; updates/deletes any event | WITH CHECK violation / permission denied |
 | T-SEV-05 | B | auth failure for unknown email | event with `email_hmac`, no email, no password |
+| **RBAC and escalation (M1 step 5; definitions written 2026-10-13 — v3 listed only the IDs)** | | | |
+| T-RBAC-01 | B | member without any grant calls the role/member/assignment endpoints | 403 `FORBIDDEN`, no permission or scope named; `access.forbidden` event per request |
+| T-RBAC-02 | B | plant-scoped administrator grants or revokes at another plant, the company or the tenant | 403 `SCOPE_FORBIDDEN` + `access.scope_forbidden`; inside its plant 201 |
+| T-RBAC-03 | B | revoked, expired and not-yet-valid assignments | grant nothing (`/auth/me` permissions empty, endpoints 403); revocation effective on the next request |
+| T-RBAC-04 | B | membership, role or plant ids of another tenant in a grant; revoke of another tenant's assignment | 422 unknown field / 404; nothing disclosed |
+| T-RBAC-05 | C | catalogue and template instantiation | doc 18 §1 templates, `TENANT_ADMIN` exactly D-B1-16, idempotent copy, copy only inside the tenant's own context |
+| T-ESC-01 | B/C | administrator grants itself a role (HTTP and direct SQL as `eora_app`) | 403 `SOD_VIOLATION` + `access.sod_violation`; trigger raises `EO006` |
+| T-ESC-02 | B/C | administrator revokes its own assignment | as T-ESC-01 |
+| T-ESC-03 | B | company-scoped administrator grants at tenant scope | 403 `SCOPE_FORBIDDEN`; company and its plants allowed |
+| T-ESC-04 | C | `eora_app` updates role/scope/grantor/validity of an assignment, deletes it, un-revokes it, edits roles, role permissions or the catalogue; forges `granted_by` / `revoked_by` | permission denied / CHECK; grantor and revoker stamped from the signed actor |
+| T-ESC-05 | B | the grantor's own assignment is being revoked by a concurrent, uncommitted transaction while it grants | write waits on the `FOR SHARE` lock → `lock_timeout` → 503 `RETRYABLE_CONFLICT`, nothing written; retry succeeds after the other transaction ends |
 | **Isolation, context, session (unchanged from v3)** | | | |
 | T-ISO-01..05, 02b; T-MEM-01; T-TEN-01; T-USR-02; T-CTX-01..05; T-PROV-01..07; T-AUTH/SESS/CSRF/COOKIE/CORS/RBAC/ESC/CONC/RATE/AUD/PRIV | B/C | as v3 (T-ISO-01 now asserts the `security_events` row of §8) | as v3 |
 
 ## 13. Privilege-escalation prevention
+**Implementation reading (M1 step 5, 2026-10-13 — owner confirmation requested in the PR):** "grantor ⊇ grantee" is enforced on **scope** (the grantor's `core.users_roles.post` scope must contain the target scope). It is not applied to the role's permission set: D-B1-16 gives `TENANT_ADMIN` only `core.users_roles` + `core.audit`, and doc 18's SoD design gives no role every permission, so a permission-superset rule would leave no one able to assign operational roles. Approvals are not weakened: D-060 requires an independent second approver for every sensitive action, and self-grants are always blocked. No permission cache exists (evaluation per request), so `roles_version` and session regeneration on privilege change are not needed yet.
+
 Grantor ⊇ grantee; SoD-06 self-elevation always blocked (no thresholds in early V1, D-060); protected columns never mass-assignable; tenant/plant only from session; regeneration on privilege change; `roles_version` cache keys; break-glass time-boxed; no platform → tenant path; runtime roles cannot `SET ROLE`; credential issuance and consumption held by different roles; definer functions with `search_path=''` and one grantee each.
 
 ## 14. Risk register
@@ -609,7 +622,7 @@ Grantor ⊇ grantee; SoD-06 self-elevation always blocked (no thresholds in earl
 4. ✅ *(M1 step 3: append-only `security_events`, request-scoped `SecurityEventRecorder` flushed after the outer transaction, JSON log first, queued retry, keyed hashes; HTTP wiring follows with authentication in step 5)* `security_events` + buffered post-transaction flush (needed by every later step's denials); T-SEV.
 5. ✅ *(M1 step 4a: `auth` schema + identity/invitation/delivery definer functions, users/memberships/dispatch requests, auth connections, group C T-IDN/T-INV/T-LOGIN/T-ABUSE; M1 step 4b: Sanctum stateful session + CSRF, login/logout/me/tenant/plant, invitation acceptance, delivery worker with mail, `tenant` request middleware + security events; M1 step 4c: password forgot/reset, offline breached-password rule, orphan identity cleanup)* Identity: `auth` schema, definer functions, auth connection, login/logout/me/picker, session/CSRF/cookies; T-LOGIN, T-AUTH, T-SESS, T-CSRF, T-COOKIE.
 6. ✅ partly *(M1 steps 4b/4c: delivery worker, invitation and password-reset emails, T-INV, T-RST; outbox minimal follows with audit in step 9)* Delivery worker + outbox minimal + invitation + password reset; T-INV, T-RST.
-7. RBAC: roles, assignments, policies, escalation rules; T-RBAC, T-ESC.
+7. ✅ *(M1 step 5: catalogue + templates (doc 18 §1/§2/§5, D-B1-16), tenant roles, scoped `role_assignments`, `Authorizer`, SoD-06 trigger, admin endpoints `core/roles`, `core/members`, `core/role-assignments` (+ revoke), `/auth/me` permissions; T-RBAC-01..05, T-ESC-01..05)* RBAC: roles, assignments, policies, escalation rules; T-RBAC, T-ESC.
 8. Provisioning command (bootstrap admin role D-B1-16); T-PROV, Playwright end-to-end.
 9. Business audit (`audit_events`), rate limits, OpenAPI, docs.
 

@@ -38,7 +38,12 @@ return Application::configure(basePath: dirname(__DIR__))
                 if (in_array($response->getStatusCode(), [403, 404], true) && $request->hasSession() && app(AuthSession::class)->userId() !== null) {
                     $correlation = (string) (Context::get('correlation_id') ?? '');
                     app(SecurityEventRecorder::class)->record(new SecurityEvent(
-                        action: $response->getStatusCode() === 403 ? 'access.forbidden' : 'access.not_found',
+                        action: match ($response->getStatusCode() === 403 ? ($response->getData(true)['code'] ?? null) : 'NOT_FOUND') {
+                            'NOT_FOUND' => 'access.not_found',
+                            'SCOPE_FORBIDDEN' => 'access.scope_forbidden',
+                            'SOD_VIOLATION' => 'access.sod_violation',
+                            default => 'access.forbidden',
+                        },
                         route: substr((string) ($request->route()?->getName() ?? $request->path()), 0, 200),
                         httpStatus: $response->getStatusCode(),
                         correlationId: preg_match('/^[A-Za-z0-9_-]{8,64}$/', $correlation) === 1 ? $correlation : null,

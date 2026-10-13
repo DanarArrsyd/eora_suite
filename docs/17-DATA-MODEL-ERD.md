@@ -61,8 +61,8 @@ erDiagram
 | `work_centers`, `machines`, `dies` | tenant_id, id, plant_id, die stroke counters | |
 | `users` | id, display_name, locale, email_display | global profile only; login identity (normalized email, account status) and credentials live in `auth.identities`, reachable only through reviewed definer functions — never by the business runtime role (doc 25 §2.1–§2.2, proposed) |
 | `memberships` | tenant_id, id, user_id, status | user ↔ tenant |
-| `roles`, `permissions`, `role_permissions` | tenant_id (roles), permission key | permission catalogue global |
-| `role_assignments` | tenant_id, membership_id, role_id, scope_type (`company/plant/warehouse/work_center`), scope_id | data scope (doc 18) |
+| `roles`, `permissions`, `role_permissions` | tenant_id (roles), permission key | permission catalogue global; + `role_templates`, `role_template_permissions` (global, read-only) — M1 step 5 |
+| `role_assignments` | tenant_id, membership_id, role_id, scope_type (`TENANT/COMPANY/PLANT` in B1; `warehouse/work_center` with B2), typed scope columns `company_id`, `plant_id` (D-B1-02, composite FKs), valid_from, valid_until, granted_by, grant_reason, revoked_at, revoked_by, revoke_reason | data scope (doc 18); revocation keeps the row |
 | `approval_policies`, `approval_requests`, `approval_steps` | tenant_id, entity_type, action, threshold, approver_role, sod_rule | |
 | `audit_events` | tenant_id, id, occurred_at, actor, action, entity, before/after hash, correlation_id | append-only |
 | `inventory_periods` | tenant_id, plant_id, period, status | |

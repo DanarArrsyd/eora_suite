@@ -9,7 +9,7 @@
 4. `docs/03-MODULE-SPECIFICATIONS.md` through `docs/12-SAAS-OPERATIONS.md`.
 5. `docs/13-DECISION-REGISTER.md` and `docs/14-ACCEPTANCE-SCENARIOS.md`.
 6. `docs/adr/` (ADR-0001..0016), `docs/15-BUSINESS-RULE-CATALOG.md`, `docs/16-STATE-MACHINES.md`, `docs/17-DATA-MODEL-ERD.md`, `docs/18-RBAC-OWNERSHIP-MATRIX.md`, `docs/19-PPIC-CONTROL-TOWER-SPEC.md`, `docs/20-PERFORMANCE-WORKLOAD-MODEL.md`, `docs/21-PRODUCT-BACKLOG.md`, `docs/23-MPS-PLANNING-SPEC.md`, `docs/24-API-CONTRACT-SPEC.md`.
-7. `docs/uiux/` — approved design system (canonical UI/UX source, D-021) and `design/mockups/` — Modern Corporate Blue prototypes (static, sample data) pending final approval. Superseded v1 prototypes in `design/mockups/_superseded-v1-ledger-ink/`.
+7. `docs/uiux/` — approved design system (canonical UI/UX source, D-021) and `design/mockups/` — Modern Corporate Blue prototypes (static, sample data); prototype v2.1 is the official design baseline (D-027). Superseded v1 prototypes in `design/mockups/_superseded-v1-ledger-ink/`.
 8. `docs/22-FRONTEND-ARCHITECTURE.md` + ADR-0011 — frontend structure, phase plan, quality gates; code in `apps/web` and `packages/*`.
 9. `apps/api/README.md` — Laravel API (B0 foundation): versions, Docker Compose, quality commands, OpenAPI → `packages/api-client`.
 10. `docs/25-B1-TENANCY-SECURITY-PLAN.md` (B1, decisions approved D-055/D-057) and `docs/26-B2-MASTER-DATA-ROUTING-ADDENDUM.md` (B2, decisions approved D-058) — implementation per milestone approval (D-054).

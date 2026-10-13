@@ -12,6 +12,226 @@
         }
     ],
     "paths": {
+        "/core/roles": {
+            "get": {
+                "operationId": "v1.core.roles.index",
+                "tags": [
+                    "Access"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Array of `RoleResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/RoleResource"
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/core/members": {
+            "get": {
+                "operationId": "v1.core.members.index",
+                "summary": "Members of the active tenant with their unrevoked assignments (`effective` = inside the validity window now)",
+                "tags": [
+                    "Access"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Array of `MemberResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/MemberResource"
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/core/role-assignments": {
+            "post": {
+                "operationId": "v1.core.role-assignments.store",
+                "summary": "Grant a role in a scope to a member (INVITED or ACTIVE)",
+                "tags": [
+                    "Access"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "membershipId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "roleId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "scopeType": {
+                                        "type": "string",
+                                        "enum": [
+                                            "TENANT",
+                                            "COMPANY",
+                                            "PLANT"
+                                        ]
+                                    },
+                                    "companyId": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "uuid"
+                                    },
+                                    "plantId": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "uuid"
+                                    },
+                                    "validUntil": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "date-time"
+                                    },
+                                    "reason": {
+                                        "type": "string",
+                                        "minLength": 3,
+                                        "maxLength": 500
+                                    }
+                                },
+                                "required": [
+                                    "membershipId",
+                                    "roleId",
+                                    "scopeType",
+                                    "reason"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "`RoleAssignmentResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/RoleAssignmentResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/core/role-assignments/{assignment}/actions/revoke": {
+            "post": {
+                "operationId": "v1.core.role-assignments.revoke",
+                "summary": "Revoke an assignment: kept as history with revoker, time and reason",
+                "tags": [
+                    "Access"
+                ],
+                "parameters": [
+                    {
+                        "name": "assignment",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "reason": {
+                                        "type": "string",
+                                        "minLength": 3,
+                                        "maxLength": 500
+                                    }
+                                },
+                                "required": [
+                                    "reason"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "`RoleAssignmentResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/RoleAssignmentResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFoundHttpException"
+                    }
+                }
+            }
+        },
         "/auth/login": {
             "post": {
                 "operationId": "v1.auth.login",
@@ -92,6 +312,13 @@
                                                 "string",
                                                 "null"
                                             ]
+                                        },
+                                        "permissions": {
+                                            "type": "array",
+                                            "description": "Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself.",
+                                            "items": {
+                                                "type": "string"
+                                            }
                                         }
                                     },
                                     "required": [
@@ -99,7 +326,8 @@
                                         "tenants",
                                         "activeTenantId",
                                         "plants",
-                                        "activePlantId"
+                                        "activePlantId",
+                                        "permissions"
                                     ]
                                 }
                             }
@@ -183,6 +411,13 @@
                                                 "string",
                                                 "null"
                                             ]
+                                        },
+                                        "permissions": {
+                                            "type": "array",
+                                            "description": "Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself.",
+                                            "items": {
+                                                "type": "string"
+                                            }
                                         }
                                     },
                                     "required": [
@@ -190,7 +425,8 @@
                                         "tenants",
                                         "activeTenantId",
                                         "plants",
-                                        "activePlantId"
+                                        "activePlantId",
+                                        "permissions"
                                     ]
                                 }
                             }
@@ -275,6 +511,13 @@
                                                 "string",
                                                 "null"
                                             ]
+                                        },
+                                        "permissions": {
+                                            "type": "array",
+                                            "description": "Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself.",
+                                            "items": {
+                                                "type": "string"
+                                            }
                                         }
                                     },
                                     "required": [
@@ -282,7 +525,8 @@
                                         "tenants",
                                         "activeTenantId",
                                         "plants",
-                                        "activePlantId"
+                                        "activePlantId",
+                                        "permissions"
                                     ]
                                 }
                             }
@@ -373,6 +617,13 @@
                                                 "string",
                                                 "null"
                                             ]
+                                        },
+                                        "permissions": {
+                                            "type": "array",
+                                            "description": "Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself.",
+                                            "items": {
+                                                "type": "string"
+                                            }
                                         }
                                     },
                                     "required": [
@@ -380,7 +631,8 @@
                                         "tenants",
                                         "activeTenantId",
                                         "plants",
-                                        "activePlantId"
+                                        "activePlantId",
+                                        "permissions"
                                     ]
                                 }
                             }
@@ -745,6 +997,175 @@
         }
     },
     "components": {
+        "schemas": {
+            "MemberResource": {
+                "type": "object",
+                "properties": {
+                    "membershipId": {
+                        "type": "string"
+                    },
+                    "userId": {
+                        "type": "string"
+                    },
+                    "displayName": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "INVITED",
+                            "ACTIVE",
+                            "SUSPENDED",
+                            "REVOKED"
+                        ]
+                    },
+                    "assignments": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RoleAssignmentResource"
+                        }
+                    }
+                },
+                "required": [
+                    "membershipId",
+                    "userId",
+                    "displayName",
+                    "email",
+                    "status",
+                    "assignments"
+                ],
+                "title": "MemberResource"
+            },
+            "RoleAssignmentResource": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "membershipId": {
+                        "type": "string"
+                    },
+                    "roleId": {
+                        "type": "string"
+                    },
+                    "roleCode": {
+                        "type": "string"
+                    },
+                    "scopeType": {
+                        "type": "string",
+                        "enum": [
+                            "TENANT",
+                            "COMPANY",
+                            "PLANT"
+                        ]
+                    },
+                    "companyId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "plantId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "validFrom": {
+                        "type": "string"
+                    },
+                    "validUntil": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "grantedBy": {
+                        "type": "string"
+                    },
+                    "grantReason": {
+                        "type": "string"
+                    },
+                    "revokedAt": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "revokeReason": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "effective": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "id",
+                    "membershipId",
+                    "roleId",
+                    "roleCode",
+                    "scopeType",
+                    "companyId",
+                    "plantId",
+                    "validFrom",
+                    "validUntil",
+                    "grantedBy",
+                    "grantReason",
+                    "revokedAt",
+                    "revokeReason",
+                    "effective"
+                ],
+                "title": "RoleAssignmentResource"
+            },
+            "RoleResource": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "code": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "templateCode": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "defaultScopeType": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Suggested scope when assigning; null = as assigned (APR)."
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "id",
+                    "code",
+                    "name",
+                    "templateCode",
+                    "defaultScopeType",
+                    "permissions"
+                ],
+                "title": "RoleResource"
+            }
+        },
         "responses": {
             "ValidationException": {
                 "description": "Validation error",

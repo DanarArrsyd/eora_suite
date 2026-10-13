@@ -62,6 +62,12 @@ APR role adds `A` on configured entities; it never adds `P` on the same document
 | SoD-06 | Role administrator granting self elevated rights | blocked; second CSA approval |
 Break-glass: time-boxed grant, reason, approver, auto-expiry, full audit (doc 05).
 
+### Implementation (M1 step 5, 2026-10-13; no rule change)
+- Catalogue code = `<resource>.<action>` with letters V `view`, C `create`, S `submit`, P `post`, A `approve`, R `request_correction`, X `export`; compound resources written with `_` (`quality.disposition_release`, `delivery.shipment`, `inventory.period_close`, `inventory.period_reopen`, `planning.planned_order_release`); §2 and §5 rows seeded.
+- Qualifiers in parentheses ("own WC", "≤ threshold", "pick", "count", "accept", "evidence", "revise", "after confirmation", "QC") grant the letter only; the condition is enforced by that resource's policy in its slice. "V (accept)" on `production.lot_split` for MAT grants V only.
+- Templates: §1 codes plus `TENANT_ADMIN` (D-B1-16: `core.users_roles` VCP, `core.audit` V). PSA has no tenant template (platform only). MAD and APR have no matrix column, so they start empty; their content is tenant configuration (D-060). Warehouse and work-center scopes (MAT, PRL, OPR, FGW) arrive with B2; in B1 an assignment scope is TENANT, COMPANY or PLANT.
+- `sensitive` permissions (D-B1-25 proposed set): `core.users_roles.*`, every `*.approve`, `inventory.adjustment.*`, `inventory.reversal.*`.
+
 ## 4. Data ownership matrix (who writes, who reads)
 | Entity | Owning module (sole writer) | Writes via | Readers | Cross-module change path |
 |---|---|---|---|---|

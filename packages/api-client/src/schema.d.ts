@@ -4,6 +4,73 @@
  */
 
 export interface paths {
+    "/core/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1.core.roles.index"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/core/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Members of the active tenant with their unrevoked assignments (`effective` = inside the validity window now) */
+        get: operations["v1.core.members.index"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/core/role-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Grant a role in a scope to a member (INVITED or ACTIVE) */
+        post: operations["v1.core.role-assignments.store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/core/role-assignments/{assignment}/actions/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke an assignment: kept as history with revoker, time and reason */
+        post: operations["v1.core.role-assignments.revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/login": {
         parameters: {
             query?: never;
@@ -189,7 +256,46 @@ export interface paths {
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: never;
+    schemas: {
+        /** MemberResource */
+        MemberResource: {
+            membershipId: string;
+            userId: string;
+            displayName: string;
+            email: string;
+            /** @enum {string} */
+            status: "INVITED" | "ACTIVE" | "SUSPENDED" | "REVOKED";
+            assignments: components["schemas"]["RoleAssignmentResource"][];
+        };
+        /** RoleAssignmentResource */
+        RoleAssignmentResource: {
+            id: string;
+            membershipId: string;
+            roleId: string;
+            roleCode: string;
+            /** @enum {string} */
+            scopeType: "TENANT" | "COMPANY" | "PLANT";
+            companyId: string | null;
+            plantId: string | null;
+            validFrom: string;
+            validUntil: string | null;
+            grantedBy: string;
+            grantReason: string;
+            revokedAt: string | null;
+            revokeReason: string | null;
+            effective: boolean;
+        };
+        /** RoleResource */
+        RoleResource: {
+            id: string;
+            code: string;
+            name: string;
+            templateCode: string | null;
+            /** @description Suggested scope when assigning; null = as assigned (APR). */
+            defaultScopeType: string | null;
+            permissions: string[];
+        };
+    };
     responses: {
         /** @description Validation error */
         ValidationException: {
@@ -239,6 +345,123 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "v1.core.roles.index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Array of `RoleResource` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RoleResource"][];
+                    };
+                };
+            };
+        };
+    };
+    "v1.core.members.index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Array of `MemberResource` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MemberResource"][];
+                    };
+                };
+            };
+        };
+    };
+    "v1.core.role-assignments.store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    membershipId: string;
+                    /** Format: uuid */
+                    roleId: string;
+                    /** @enum {string} */
+                    scopeType: "TENANT" | "COMPANY" | "PLANT";
+                    /** Format: uuid */
+                    companyId?: string | null;
+                    /** Format: uuid */
+                    plantId?: string | null;
+                    /** Format: date-time */
+                    validUntil?: string | null;
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description `RoleAssignmentResource` */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RoleAssignmentResource"];
+                    };
+                };
+            };
+            422: components["responses"]["ValidationException"];
+        };
+    };
+    "v1.core.role-assignments.revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description `RoleAssignmentResource` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RoleAssignmentResource"];
+                    };
+                };
+            };
+            404: components["responses"]["NotFoundHttpException"];
+            422: components["responses"]["ValidationException"];
+        };
+    };
     "v1.auth.login": {
         parameters: {
             query?: never;
@@ -271,6 +494,8 @@ export interface operations {
                         activeTenantId: string | null;
                         plants: unknown[];
                         activePlantId: string | null;
+                        /** @description Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself. */
+                        permissions: string[];
                     };
                 };
             };
@@ -321,6 +546,8 @@ export interface operations {
                         activeTenantId: string | null;
                         plants: unknown[];
                         activePlantId: string | null;
+                        /** @description Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself. */
+                        permissions: string[];
                     };
                 };
             };
@@ -358,6 +585,8 @@ export interface operations {
                         activeTenantId: string | null;
                         plants: unknown[];
                         activePlantId: string | null;
+                        /** @description Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself. */
+                        permissions: string[];
                     };
                 };
             };
@@ -397,6 +626,8 @@ export interface operations {
                         activeTenantId: string | null;
                         plants: unknown[];
                         activePlantId: string | null;
+                        /** @description Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself. */
+                        permissions: string[];
                     };
                 };
             };

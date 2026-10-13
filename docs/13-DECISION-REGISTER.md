@@ -168,6 +168,7 @@ These were proposed in the audit and are required to make D-009..D-019 implement
 ## Change log
 | Date | Change | Owner | Affected |
 |---|---|---|---|
+| 2026-10-13 | M1 step 5 RBAC implemented (no new decision): catalogue + templates from doc 18 §1/§2/§5 and D-B1-16, scoped assignments, SoD-06 enforced in API and database; T-RBAC-01..05 and T-ESC-01..05 defined in doc 25 §12. **Implementation reading awaiting owner confirmation:** "grantor ⊇ grantee" (doc 25 §13) enforced on scope, not on the role's permission set (a permission-superset rule would contradict D-B1-16); MAD and APR templates start empty | Claude Code (record) | docs 11, 13, 17, 18, 24, 25, README |
 | 2026-10-11 | D-067: verifier performance budget 15 µs on reference hardware, 25 µs regression ceiling on CI runners | Product owner (decision), Claude Code (record) | docs 13, 25, ADR-0001, CI |
 | 2026-10-11 | PR #3 review follow-up (no new decision): TenantTransaction, provisioning and job context use the signed-context sequence (doc 25 §6.2/§6.3, doc 09); BR-OUT-08 made normative in doc 26 §3 and §11; D-061 vs ADR-0005 measurement floor recorded as OPEN O-033 (no interpretation adopted) | Claude Code (record) | docs 09, 13, 15, 25, 26, ADR-0005 |
 | 2026-10-11 | D-066: M1 Access scope approved (doc 28) | Product owner (decision), Claude Code (record) | docs 13, 28, CLAUDE.md |
