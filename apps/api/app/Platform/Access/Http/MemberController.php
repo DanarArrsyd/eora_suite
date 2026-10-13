@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use LogicException;
 use stdClass;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -39,11 +40,16 @@ final class MemberController
      */
     public function invite(Request $request): JsonResponse
     {
-        $email = (string) $request->validate(['email' => ['required', 'string', 'email:rfc', 'max:254']])['email'];
+        // same grammar as auth.normalize_email, so the database never rejects what validation accepted
+        $email = (string) $request->validate(['email' => ['required', 'string', 'max:254', 'email:rfc', 'regex:/^\s*[^@\s]{1,64}@[^@\s]{1,253}\.[^@\s]{2,63}\s*$/']])['email'];
         $db = $this->db();
         $this->authorizer->requireAnywhere($db, self::INVITE);
 
-        $userId = DB::connection('pgsql_auth')->selectOne('select auth_api.invite_identity(?) as id', [$email])->id ?? null;
+        try {
+            $userId = DB::connection('pgsql_auth')->selectOne('select auth_api.invite_identity(?) as id', [$email])->id ?? null;
+        } catch (QueryException $e) {
+            throw (string) $e->getCode() === '22023' ? ValidationException::withMessages(['email' => 'This e-mail address is not valid.']) : $e;
+        }
         if ($userId === null) {
             // platform-wide identity creation cap reached (recorded by the auth function)
             throw new DomainProblem(429, 'RATE_LIMITED', 'Too many requests', 'Invitations are temporarily limited. Please try again later.');

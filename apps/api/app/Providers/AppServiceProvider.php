@@ -54,11 +54,15 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(20)->by('login:ip:'.($hasher->hash((string) $request->ip()) ?? 'none')),
             ];
         });
-        // Per-administrator cap on member invitations and resends (doc 25 §2.4: per-inviter limits live at the HTTP layer;
-        // the database caps identity creation platform-wide and resends at 5 per membership per 24 h). Proposed value.
-        RateLimiter::for('member-invite', fn (Request $request) => Limit::perHour(30)->by(
-            'member-invite:'.(app(AuthSession::class)->userId() ?? 'none'),
-        ));
+        // Per-administrator cap on member invitations and resends: configurable, off unless EORA_MEMBER_INVITE_PER_HOUR is
+        // set (no approved value yet; doc 25 §2.4 places per-inviter limits at the HTTP layer).
+        RateLimiter::for('member-invite', function () {
+            $perHour = config('eora.member_invite_per_hour');
+
+            return is_int($perHour) && $perHour > 0
+                ? Limit::perHour($perHour)->by('member-invite:'.(app(AuthSession::class)->userId() ?? 'none'))
+                : Limit::none();
+        });
         RateLimiter::for('invitation-accept', fn (Request $request) => Limit::perMinute(10)->by(
             'invite:ip:'.(app(SecurityHasher::class)->hash((string) $request->ip()) ?? 'none'),
         ));

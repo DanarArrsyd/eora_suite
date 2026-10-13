@@ -1012,6 +1012,7 @@
                                     "email": {
                                         "type": "string",
                                         "format": "email",
+                                        "pattern": "^\\s*[^@\\s]{1,64}@[^@\\s]{1,253}\\.[^@\\s]{2,63}\\s*$",
                                         "maxLength": 254
                                     }
                                 },

@@ -174,7 +174,8 @@ Tests refuse non-`*_test` databases and non-local hosts (`EORA_TEST_DB_HOST_ALLO
   connection (`auth_api.invite_identity`), writes the INVITED membership and an INITIAL dispatch request in the tenant
   transaction → 201 member; the delivery worker sends the mail. Existing member → 409. Inviting grants no role.
 - `POST /core/members/{id}/actions/resend-invitation` (`create`): INVITED only → 202; new secret, old link invalid;
-  database cap 5 per membership per 24 h. Invitations and resends: 30 per hour per administrator (`member-invite`).
+  database cap 5 per membership per 24 h. Optional per-administrator cap on invitations + resends per hour:
+  `EORA_MEMBER_INVITE_PER_HOUR` (off unless set; no approved value yet).
 - `POST /core/members/{id}/actions/suspend` (INVITED/ACTIVE → SUSPENDED) and `/reactivate` (→ ACTIVE if it had been
   activated, else INVITED), permission `core.users_roles.post`: never one's own membership (403 `SOD_VIOLATION`), and
   the administrator's scope must cover every unrevoked assignment of the member (403 `SCOPE_FORBIDDEN`, D-068).

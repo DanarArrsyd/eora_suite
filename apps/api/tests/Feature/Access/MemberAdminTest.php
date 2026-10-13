@@ -59,7 +59,9 @@ it('refuses to invite an existing member and rejects malformed e-mails', functio
 
     spa($this)->postJson('/api/v1/core/members/invitations', ['email' => strtoupper($m['email'])])->assertStatus(409)
         ->assertJsonPath('code', 'INVALID_STATE_TRANSITION');
-    spa($this)->postJson('/api/v1/core/members/invitations', ['email' => 'not-an-email'])->assertStatus(422)->assertJsonValidationErrors(['email']);
+    foreach (['not-an-email', 'a@b.c', 'x@localhost'] as $bad) {
+        spa($this)->postJson('/api/v1/core/members/invitations', ['email' => $bad])->assertStatus(422)->assertJsonValidationErrors(['email']);
+    }
 })->group('integration', 'rbac');
 
 it('invites an identity that already belongs to another tenant without touching its password', function () {
@@ -149,11 +151,15 @@ it('requires core.users_roles permissions; foreign or malformed member ids are 4
     spa($this)->postJson('/api/v1/core/members/not-a-uuid/actions/reactivate')->assertNotFound();
 })->group('integration', 'rbac');
 
-it('limits invitations per administrator (30 per hour)', function () {
+it('limits invitations per administrator only when a cap is configured', function () {
+    config(['eora.member_invite_per_hour' => 30]);
     signIn($this, $this->admin, $this->t);
     for ($i = 0; $i < 30; $i++) {
         RateLimiter::hit(md5('member-invite'.'member-invite:'.$this->admin['id']), 3600); // ThrottleRequests key for a named limiter
     }
 
     spa($this)->postJson('/api/v1/core/members/invitations', ['email' => IdentityFixtures::email()])->assertStatus(429)->assertJsonPath('code', 'RATE_LIMITED');
+
+    config(['eora.member_invite_per_hour' => null]);
+    spa($this)->postJson('/api/v1/core/members/invitations', ['email' => IdentityFixtures::email()])->assertCreated();
 })->group('integration', 'rbac');
