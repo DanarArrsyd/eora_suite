@@ -46,7 +46,7 @@
         "/core/members": {
             "get": {
                 "operationId": "v1.core.members.index",
-                "summary": "Members of the active tenant with their unrevoked assignments (`effective` = inside the validity window now)",
+                "summary": "Members of the active tenant with their unrevoked assignments (`effective` = inside the validity window now).\nAssignments are limited to the caller's view scopes as query predicates (doc 18 \u00a75): a company- or plant-scoped\nadministrator sees only assignments inside its company/plant. Member identities are tenant-wide by design (the\n`users` policy already shows every member of the active tenant, doc 25 \u00a72.2) so a scoped administrator can\nstill pick whom to grant",
                 "tags": [
                     "Access"
                 ],

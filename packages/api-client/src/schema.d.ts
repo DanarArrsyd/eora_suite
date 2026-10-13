@@ -27,7 +27,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Members of the active tenant with their unrevoked assignments (`effective` = inside the validity window now) */
+        /**
+         * Members of the active tenant with their unrevoked assignments (`effective` = inside the validity window now).
+         *     Assignments are limited to the caller's view scopes as query predicates (doc 18 §5): a company- or plant-scoped
+         *     administrator sees only assignments inside its company/plant. Member identities are tenant-wide by design (the
+         *     `users` policy already shows every member of the active tenant, doc 25 §2.2) so a scoped administrator can
+         *     still pick whom to grant
+         */
         get: operations["v1.core.members.index"];
         put?: never;
         post?: never;
