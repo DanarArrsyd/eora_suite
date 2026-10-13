@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 use App\Platform\Auth\Delivery\PasswordResetMail;
 use App\Platform\Database\EoraPostgresConnection;
+use App\Platform\Security\SecurityHasher;
 use App\Platform\Tenancy\TenantContext;
 use App\Platform\Tenancy\TenantTransaction;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Tests\Support\IdentityFixtures;
 use Tests\Support\TenantFixtures;
@@ -234,4 +236,19 @@ it('T-RSTU-10: a forgot-password request throttled at HTTP gets the same delayed
     Mail::fake();
     $this->artisan('eora:deliver-invitations', ['--once' => true])->assertSuccessful();
     Mail::assertNotSent(PasswordResetMail::class);
+})->group('integration', 'auth');
+
+it('D-B1-06: limits logins per IP to 20/min, 60/min for an allow-listed factory NAT', function () {
+    $key = md5('login'.'login:ip:'.app(SecurityHasher::class)->hash('127.0.0.1'));
+    $attempt = fn () => spa($this)->postJson('/api/v1/auth/login', ['email' => IdentityFixtures::email(), 'password' => 'whatever12345']);
+
+    RateLimiter::clear($key);
+    for ($i = 0; $i < 20; $i++) {
+        $attempt()->assertUnauthorized();
+    }
+    $attempt()->assertStatus(429)->assertJsonPath('code', 'RATE_LIMITED');
+
+    config(['eora.login_nat_allowlist' => ['127.0.0.0/8']]);
+    $attempt()->assertUnauthorized(); // the same 20 hits are under the NAT limit of 60
+    RateLimiter::clear($key);
 })->group('integration', 'auth');
