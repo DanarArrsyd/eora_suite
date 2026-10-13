@@ -72,6 +72,7 @@ final class SecurityBaseline
         'outbox_events.definer_insert' => 'doc 25 §2.3 R-26: consume_password_reset inserts auth.password_reset_consumed from auth_web only',
         'outbox_events.relay_claim_read' => 'doc 25 §6.4 R-30/R-33: outbox definer reads ids, tenant ids and claim columns only (column grants)',
         'outbox_events.relay_claim_update' => 'doc 25 §6.4 R-33: outbox definer writes claim columns only (column grants)',
+        'security_events.outbox_definer_insert' => 'doc 25 §6.4: claim_events records outbox.dead for exhausted events (fixed action/resource, INSERT only)',
         'security_events.definer_insert' => 'doc 25 §8 R-19: auth definer functions insert auth-source events from stored rows',
     ];
 

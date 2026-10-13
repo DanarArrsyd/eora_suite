@@ -47,7 +47,7 @@ return new class extends Migration
               WITH CHECK (source = 'app' AND tenant_id = (SELECT c.tenant FROM ctx_api.context() c));
             CREATE POLICY tenant_read ON outbox_events FOR SELECT TO eora_app
               USING (tenant_id = (SELECT c.tenant FROM ctx_api.context() c));
-            GRANT SELECT, INSERT (tenant_id, id, source, event_type, aggregate_type, aggregate_id, payload) ON outbox_events TO eora_app;
+            GRANT SELECT, INSERT (tenant_id, id, source, event_type, aggregate_type, aggregate_id, payload, max_attempts) ON outbox_events TO eora_app;
 
             -- auth definer (consume_password_reset): one fixed type from one fixed source, INSERT only (doc 25 §2.3, R-26)
             CREATE POLICY definer_insert ON outbox_events FOR INSERT TO eora_auth_definer
@@ -61,6 +61,11 @@ return new class extends Migration
               ON outbox_events TO eora_outbox_definer;
             GRANT UPDATE (status, claim_token, claimed_until, attempts, next_attempt_at, last_error_code, dispatched_at, dead_at)
               ON outbox_events TO eora_outbox_definer;
+
+            -- DEAD transitions leave a durable alert: the outbox definer may insert exactly that security event (doc 25 §6.4)
+            CREATE POLICY outbox_definer_insert ON security_events FOR INSERT TO eora_outbox_definer
+              WITH CHECK (source = 'app' AND action = 'outbox.dead' AND resource = 'outbox_events');
+            GRANT INSERT (id, occurred_at, tenant_id, source, action, resource, requested_id, detail_code) ON security_events TO eora_outbox_definer;
 
             CREATE TABLE processed_events (
               tenant_id uuid NOT NULL,
@@ -80,6 +85,8 @@ return new class extends Migration
     public function down(): void
     {
         DB::unprepared(<<<'SQL'
+            REVOKE ALL ON security_events FROM eora_outbox_definer;
+            DROP POLICY IF EXISTS outbox_definer_insert ON security_events;
             DROP TABLE processed_events;
             DROP TABLE outbox_events;
             SQL);

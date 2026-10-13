@@ -81,6 +81,29 @@ it('T-OUT-02: a failed claim backs off; exhausted events become DEAD', function 
     expect(fn () => $relay->select('select outbox_api.fail_event(?, ?, ?)', [$event, $claim->claim_token, 'bad code']))->toThrow(QueryException::class);
 })->group('integration', 'outbox');
 
+it('T-OUT-03: an exhausted event becomes DEAD with a durable outbox.dead security event', function () {
+    $event = asApp($this->t, $this->admin['id'], fn (EoraPostgresConnection $db) => (string) $db->selectOne(
+        "insert into outbox_events (tenant_id, source, event_type, max_attempts) values (?, 'app', 'probe.exhausted', 1) returning id", [$this->t['tenant']],
+    )->id);
+    $relay = DB::connection('pgsql_relay');
+    $claims = collect($relay->select('select * from outbox_api.claim_events(?, ?)', ['test', 500]));
+    $mine = $claims->firstWhere('event_id', $event);
+    $relay->select('select outbox_api.fail_event(?, ?, ?)', [$event, $mine->claim_token, 'HANDLER_FAILED']);
+    foreach ($claims as $c) {
+        if ($c->event_id !== $event) {
+            $relay->select('select outbox_api.fail_event(?, ?, ?)', [$c->event_id, $c->claim_token, 'TEST_RELEASE']);
+        }
+    }
+
+    $relay->select('select * from outbox_api.claim_events(?, ?)', ['test', 1]); // the next claim round retires it
+
+    $state = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => [
+        'status' => $db->selectOne('select status from outbox_events where id = ?', [$event])->status,
+        'alerts' => $db->select("select detail_code from security_events where action = 'outbox.dead' and requested_id = ?", [str_replace('-', '', $event)]),
+    ]);
+    expect($state['status'])->toBe('DEAD')->and($state['alerts'])->toHaveCount(1)->and($state['alerts'][0]->detail_code)->toBe('MAX_ATTEMPTS');
+})->group('integration', 'outbox');
+
 it('T-SRC-01 / T-SRC-05: the runtime role writes only app-sourced, non-auth events of its own tenant', function (string $source, string $type, string $message) {
     expect(fn () => asApp($this->t, $this->admin['id'], fn (EoraPostgresConnection $db) => $db->insert(
         'insert into outbox_events (tenant_id, source, event_type) values (?, ?, ?)', [$this->t['tenant'], $source, $type],

@@ -8,7 +8,7 @@ SET log_statement = 'none';
 
 SET ROLE eora_outbox_definer;
 
--- Claims due events with a 2-minute lease; exhausted rows become DEAD first. Returns event id, tenant id, claim token.
+-- Claims due events with a 2-minute lease; exhausted rows become DEAD first (with an `outbox.dead` security event). Returns event id, tenant id, claim token.
 CREATE OR REPLACE FUNCTION outbox_api.claim_events(worker_id text, batch_limit integer)
 RETURNS TABLE (event_id uuid, tenant_id uuid, claim_token uuid)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
@@ -16,11 +16,19 @@ BEGIN
   IF worker_id IS NULL OR pg_catalog.length(worker_id) > 64 OR batch_limit NOT BETWEEN 1 AND 500 THEN
     RAISE EXCEPTION 'invalid arguments' USING ERRCODE = '22023';
   END IF;
-  UPDATE public.outbox_events e SET status = 'DEAD', claim_token = NULL, dead_at = pg_catalog.now()
-   WHERE e.id IN (SELECT x.id FROM public.outbox_events x
-                   WHERE x.attempts >= x.max_attempts
-                     AND (x.status = 'PENDING' OR (x.status = 'CLAIMED' AND x.claimed_until < pg_catalog.now()))
-                   FOR UPDATE SKIP LOCKED);
+  -- exhausted events become DEAD and leave a durable alert per event in the tenant's security events (doc 25 §6.4)
+  WITH dead AS (
+    UPDATE public.outbox_events e SET status = 'DEAD', claim_token = NULL, dead_at = pg_catalog.now()
+     WHERE e.id IN (SELECT x.id FROM public.outbox_events x
+                     WHERE x.attempts >= x.max_attempts
+                       AND (x.status = 'PENDING' OR (x.status = 'CLAIMED' AND x.claimed_until < pg_catalog.now()))
+                     FOR UPDATE SKIP LOCKED)
+    RETURNING e.id, e.tenant_id
+  )
+  INSERT INTO public.security_events (id, occurred_at, tenant_id, source, action, resource, requested_id, detail_code)
+  SELECT pg_catalog.gen_random_uuid(), pg_catalog.now(), d.tenant_id, 'app', 'outbox.dead', 'outbox_events',
+         pg_catalog.replace(d.id::text, '-', ''), 'MAX_ATTEMPTS'
+    FROM dead d;
   RETURN QUERY
   UPDATE public.outbox_events e
      SET status = 'CLAIMED', claim_token = pg_catalog.gen_random_uuid(),
