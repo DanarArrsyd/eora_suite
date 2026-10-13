@@ -641,7 +641,7 @@ Grantor ⊇ grantee; SoD-06 self-elevation always blocked (no thresholds in earl
 **Rate-limit review (M1 step 7c, 2026-10-13)**
 | Limit | Source | Status |
 |---|---|---|
-| Login 5/min per account, 20/min per IP, 60/min per IP for allow-listed factory NAT (`EORA_LOGIN_NAT_ALLOWLIST`) | D-B1-06 (approved, D-057) | enforced (HTTP, keyed by HMAC) |
+| Login 5/min per account, 20/min per IP, 60/min per IP for allow-listed factory NAT (`EORA_LOGIN_NAT_ALLOWLIST`) | D-B1-06 (approved, D-057) | enforced (HTTP, keyed by HMAC); the client IP is resolved only through proxies listed in `EORA_TRUSTED_PROXIES` (ADR-0006 topology, set at M6 with the hosting decision O-008) |
 | DB lockout after 10 failures in 15 min | D-B1-06 | enforced (`auth.login_failures`) |
 | Forgot password 3/min per e-mail HMAC + 10/min per IP (uniform 202); 3 requests per identity per hour and 60 reset deliveries/min in the DB | D-B1-21 | enforced |
 | Invitation acceptance / reset 10/min per IP | D-B1-06 family | enforced |

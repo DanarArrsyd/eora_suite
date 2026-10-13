@@ -11,6 +11,7 @@ use App\Platform\Tenancy\ContextSigner;
 use Dedoc\Scramble\Scramble;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Connection;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
@@ -43,6 +44,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // ADR-0006 topology: resolve the client IP only through explicitly trusted proxy hops (login limits, D-B1-06 NAT
+        // allowlist, security-event IP hashes); nothing is trusted unless configured.
+        $proxies = (array) config('eora.trusted_proxies');
+        if ($proxies !== []) {
+            TrustProxies::at($proxies);
+        }
+
         // OpenAPI error contract: problem+json responses with the catalogued codes per endpoint (doc 24 §5)
         Scramble::configure()
             ->withOperationTransformers(ProblemResponses::class)

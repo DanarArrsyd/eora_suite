@@ -222,7 +222,8 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   as `application/problem+json` with the endpoint's codes from doc 24 §5; `ProblemResponses::ERRORS` must list every
   `v1.*` route (contract test).
 - Login: 5/min per account, 20/min per IP; 60/min per IP for factory NAT addresses in `EORA_LOGIN_NAT_ALLOWLIST`
-  (comma-separated IPs/CIDRs, D-B1-06). Review of all limits: doc 25 §16.
+  (comma-separated IPs/CIDRs, D-B1-06). The client IP is taken from `X-Forwarded-For` only through the hops listed in
+  `EORA_TRUSTED_PROXIES` (exact IPs/CIDRs; empty = trust none, never `*`). Review of all limits: doc 25 §16.
 
 ## Endpoints (B0)
 | Method | Path | Purpose |

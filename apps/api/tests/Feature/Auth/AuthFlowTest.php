@@ -7,6 +7,7 @@ use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Security\SecurityHasher;
 use App\Platform\Tenancy\TenantContext;
 use App\Platform\Tenancy\TenantTransaction;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
@@ -251,4 +252,33 @@ it('D-B1-06: limits logins per IP to 20/min, 60/min for an allow-listed factory 
     config(['eora.login_nat_allowlist' => ['127.0.0.0/8']]);
     $attempt()->assertUnauthorized(); // the same 20 hits are under the NAT limit of 60
     RateLimiter::clear($key);
+})->group('integration', 'auth');
+
+it('ADR-0006: the NAT allowance follows the client IP resolved through trusted proxies only', function () {
+    $nat = '203.0.113.7';
+    $natKey = md5('login'.'login:ip:'.app(SecurityHasher::class)->hash($nat));
+    $localKey = md5('login'.'login:ip:'.app(SecurityHasher::class)->hash('127.0.0.1'));
+    config(['eora.login_nat_allowlist' => [$nat]]);
+    $attempt = fn () => spa($this)->withHeaders(['X-Forwarded-For' => $nat])
+        ->postJson('/api/v1/auth/login', ['email' => IdentityFixtures::email(), 'password' => 'whatever12345']);
+
+    // untrusted peer: X-Forwarded-For is ignored, the peer address keeps the 20/min limit
+    RateLimiter::clear($localKey);
+    for ($i = 0; $i < 20; $i++) {
+        $attempt()->assertUnauthorized();
+    }
+    $attempt()->assertStatus(429);
+
+    // trusted proxy hop: the forwarded factory address is the client and gets the NAT allowance
+    TrustProxies::at(['127.0.0.1']);
+    try {
+        RateLimiter::clear($natKey);
+        for ($i = 0; $i < 21; $i++) {
+            $attempt()->assertUnauthorized();
+        }
+    } finally {
+        TrustProxies::flushState();
+        RateLimiter::clear($natKey);
+        RateLimiter::clear($localKey);
+    }
 })->group('integration', 'auth');
