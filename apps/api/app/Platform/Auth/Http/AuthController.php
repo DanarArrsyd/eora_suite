@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Platform\Auth\Http;
 
+use App\Platform\Access\Authorizer;
 use App\Platform\Auth\AuthSession;
 use App\Platform\Auth\PasswordHasher;
 use App\Platform\Auth\PasswordPolicy;
@@ -40,6 +41,7 @@ final class AuthController
         private readonly PasswordHasher $passwords,
         private readonly TenantTransaction $transaction,
         private readonly SecurityHasher $hasher,
+        private readonly Authorizer $authorizer,
     ) {}
 
     public function login(Request $request): JsonResponse
@@ -98,20 +100,22 @@ final class AuthController
         $this->assertCredentialVersion($profile['user']->credential_version ?? null);
 
         $plants = [];
+        $permissions = [];
         if ($this->auth->tenantId() !== null) {
-            $plants = $this->transaction->run(new TenantContext($this->auth->tenantId(), $user), function (EoraPostgresConnection $db) use ($user) {
+            $tenant = $this->transaction->run(new TenantContext($this->auth->tenantId(), $user), function (EoraPostgresConnection $db) use ($user) {
                 // the active tenant stays valid only while the membership is ACTIVE
                 if ($db->selectOne("select 1 as ok from memberships where user_id = ? and status = 'ACTIVE'", [$user]) === null) {
                     return null;
                 }
 
-                return $db->select('select id, code, name from plants order by code');
+                return ['plants' => $db->select('select id, code, name from plants order by code'), 'permissions' => $this->authorizer->permissions($db)];
             });
-            if ($plants === null) {
+            if ($tenant === null) {
                 $this->auth->end();
 
                 throw new SessionExpiredException('Membership no longer active.');
             }
+            ['plants' => $plants, 'permissions' => $permissions] = $tenant;
         }
 
         return response()->json([
@@ -125,6 +129,12 @@ final class AuthController
             'activeTenantId' => $this->auth->tenantId(),
             'plants' => array_map(static fn (stdClass $p) => ['id' => $p->id, 'code' => $p->code, 'name' => $p->name], $plants),
             'activePlantId' => $this->auth->plantId(),
+            /**
+             * Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself.
+             *
+             * @var list<string>
+             */
+            'permissions' => $permissions,
         ]);
     }
 

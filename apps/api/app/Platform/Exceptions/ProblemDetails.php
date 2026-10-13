@@ -7,6 +7,7 @@ namespace App\Platform\Exceptions;
 use App\Platform\Auth\SessionExpiredException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Session\TokenMismatchException;
@@ -29,6 +30,9 @@ final class ProblemDetails
     /** Policy reasons are never echoed: they can reveal permission names, scopes or other tenants' records. */
     private const array FORBIDDEN = ['status' => 403, 'code' => 'FORBIDDEN', 'title' => 'Forbidden', 'detail' => null];
 
+    /** Serialization failure, deadlock, lock timeout (doc 24 §4): nothing was committed and a retry may succeed. */
+    private const array RETRYABLE_SQLSTATES = ['40001', '40P01', '55P03'];
+
     /**
      * @return array{status: int, code: string, title: string, detail: string|null, errors?: array<string, array<int, string>>}
      */
@@ -49,6 +53,10 @@ final class ProblemDetails
             $e instanceof AuthorizationException, $e instanceof AccessDeniedHttpException => self::FORBIDDEN,
             $e instanceof ThrottleRequestsException => ['status' => 429, 'code' => 'RATE_LIMITED', 'title' => 'Too many requests', 'detail' => null],
             $e instanceof NotFoundHttpException => ['status' => 404, 'code' => 'NOT_FOUND', 'title' => 'Not found', 'detail' => null],
+            self::retryable($e) => [
+                'status' => 503, 'code' => 'RETRYABLE_CONFLICT', 'title' => 'Conflicting change in progress',
+                'detail' => 'Another change to the same records was in progress. Nothing was changed; please retry.',
+            ],
             $e instanceof MethodNotAllowedHttpException => ['status' => 405, 'code' => 'METHOD_NOT_ALLOWED', 'title' => 'Method not allowed', 'detail' => null],
             $e instanceof HttpExceptionInterface && $e->getStatusCode() < 500 => match ($e->getStatusCode()) {
                 401 => ['status' => 401, 'code' => 'UNAUTHENTICATED', 'title' => 'Authentication required', 'detail' => null],
@@ -82,9 +90,14 @@ final class ProblemDetails
             'errors' => $p['errors'] ?? null,
         ], static fn ($v) => $v !== null);
 
-        $headers = $e instanceof HttpExceptionInterface ? $e->getHeaders() : [];
+        $headers = $e instanceof HttpExceptionInterface ? $e->getHeaders() : (self::retryable($e) ? ['Retry-After' => '1'] : []);
 
         return new JsonResponse($body, $p['status'], [...$headers, 'Content-Type' => 'application/problem+json'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    private static function retryable(Throwable $e): bool
+    {
+        return $e instanceof QueryException && in_array((string) $e->getCode(), self::RETRYABLE_SQLSTATES, true);
     }
 
     /** Short, user-quotable reference derived from the correlation id (e.g. "q4zt-8m2k"). */

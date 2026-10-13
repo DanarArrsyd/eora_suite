@@ -151,6 +151,24 @@ Tests refuse non-`*_test` databases and non-local hosts (`EORA_TEST_DB_HOST_ALLO
 - The worker removes orphan identities every 10 minutes (`auth_api.cleanup_orphan_identities`): no password, no
   membership, no open delivery, no unexpired invitation, older than 7 days.
 
+## Roles, permissions and scoped assignments (M1 / B1 step 5, doc 25 §3, §13; doc 18)
+- Global, read-only catalogue (migration `000500`): `permissions` (code `<module>.<resource>.<action>`, actions view,
+  create, submit, post, approve, request_correction, export; `sensitive` = D-B1-25 set), `role_templates` (doc 18 §1 +
+  `TENANT_ADMIN` of D-B1-16; no platform template), `role_template_permissions` (doc 18 §2 + §5 letters).
+- Tenant tables (forced RLS): `roles` + `role_permissions` (template copies, `RoleTemplates::instantiate`, idempotent;
+  not editable in M1), `role_assignments` (scope `TENANT` / `COMPANY` / `PLANT`, validity window, grant/revoke reason,
+  revocation keeps the row; no DELETE).
+- `Authorizer` evaluates the signed actor's unrevoked, currently valid assignments held through an ACTIVE membership:
+  `requireAnywhere` → 403 `FORBIDDEN`, `requireCovered` → 403 `SCOPE_FORBIDDEN`, `authorize(perm, Scope)` = both.
+  No cache: a change applies to the next request.
+- Escalation rules: grantor scope ⊇ target scope; nobody grants or revokes their own assignments (403
+  `SOD_VIOLATION`, also enforced by the `eora_guard_role_assignment` trigger); grantor/revoker stamped from the signed
+  actor; only revocation columns are updatable; a write locks the grantor's assignments `FOR SHARE`, so a concurrent
+  revocation of them answers 503 `RETRYABLE_CONFLICT` (`Retry-After: 1`).
+- Endpoints (`tenant` middleware): `GET /api/v1/core/roles`, `GET /api/v1/core/members` (`core.users_roles.view`),
+  `POST /api/v1/core/role-assignments`, `POST /api/v1/core/role-assignments/{id}/actions/revoke`
+  (`core.users_roles.post`). `GET /auth/me` adds `permissions` (navigation hint only).
+
 ## Endpoints (B0)
 | Method | Path | Purpose |
 |---|---|---|

@@ -87,6 +87,11 @@ Offset (`total`) for master data and small lists; **cursor/keyset** for ledgers,
 | 503 | `RETRYABLE_CONFLICT`, `READ_MODEL_UNAVAILABLE` |
 The frontend maps `403 FORBIDDEN/SCOPE_FORBIDDEN` → `SourceError('forbidden')` (PermissionDeniedState), 5xx → `SourceError('server')` with `reference`; `422 errors` → form field errors (EoraForm already maps them).
 
+### 5.1 Implemented in M1 (B1)
+- `503 RETRYABLE_CONFLICT` with `Retry-After` is returned for serialization failure, deadlock and lock timeout (SQLSTATE 40001, 40P01, 55P03); nothing was committed.
+- `403 SCOPE_FORBIDDEN` / `SOD_VIOLATION` are recorded as `access.scope_forbidden` / `access.sod_violation` security events (doc 25 §8).
+- Administration (M1 step 5): `GET /api/v1/core/roles`, `GET /api/v1/core/members`, `POST /api/v1/core/role-assignments` (`{membershipId, roleId, scopeType, companyId?, plantId?, validUntil?, reason}` → 201), `POST /api/v1/core/role-assignments/{id}/actions/revoke` (`{reason}` → 200). Problem responses are not yet emitted into the OpenAPI document (step 9).
+
 ## 6. Security on every endpoint
 Session + CSRF (non-GET), tenant from session, permission + scope policy, rate limits (doc 05), audit for commands and sensitive reads, response never contains other-tenant ids; export files tenant-prefixed and served through short-lived signed URLs.
 
