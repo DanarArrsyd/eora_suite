@@ -33,6 +33,8 @@ export function useAccessContext(): { ctx: AccessContext | null; canView: boolea
         canInvite: permissions.includes(PERMISSION.invite),
         canManage: permissions.includes(PERMISSION.manage),
         plants: me.data.plants,
+        // D-044: the tenant zone reads calendar dates; Asia/Jakarta is the recorded default
+        timeZone: me.data.tenants.find((t) => t.id === me.data?.activeTenantId)?.timezone ?? 'Asia/Jakarta',
       }
     : null;
   return { ctx, canView: permissions.includes(PERMISSION.view), pending: me.isPending };
@@ -213,6 +215,7 @@ export function UsersScreen() {
         member={open}
         members={all}
         roles={roles.data ?? []}
+        rolesState={{ status: roles.isError ? 'error' : roles.isPending ? 'loading' : 'ready', retry: () => void roles.refetch() }}
         ctx={ctx}
         onClose={() => setOpenId(null)}
         onNotice={setNotice}

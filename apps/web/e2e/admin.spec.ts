@@ -155,6 +155,16 @@ test('users: assign a plant-scoped role with a reason; the template scope is sug
   });
 });
 
+test('users: when roles fail to load, assigning waits and offers a retry', async ({ page }) => {
+  await asAdmin(page);
+  await mockApi(page, '/core/roles', problem(503, 'RETRYABLE_CONFLICT', 'Retry'));
+  await page.goto('/admin/users');
+  await page.getByRole('button', { name: 'Manage Budi Santoso' }).click();
+  const drawer = page.getByRole('dialog', { name: 'Budi Santoso' });
+  await expect(drawer.getByRole('alert')).toContainText('Roles could not be loaded');
+  await expect(drawer.getByRole('button', { name: /Assign role\. Roles/ })).toHaveAttribute('aria-disabled', 'true');
+});
+
 test('users: a scope refusal is explained and nothing is claimed as saved', async ({ page }) => {
   await asAdmin(page);
   await mockApi(page, '/core/role-assignments', problem(403, 'SCOPE_FORBIDDEN', 'Forbidden'));
@@ -224,6 +234,16 @@ test('roles: permissions and holders in scope; an empty template is explained', 
   await expect(drawer.getByText('quality.inspection.view')).toBeVisible();
   await expect(drawer.getByRole('list', { name: 'Members with QCI' })).toContainText('Rina Wulandari');
   await axe(page);
+});
+
+test('roles: when members fail to load, the drawer says so instead of claiming nobody holds the role', async ({ page }) => {
+  await asAdmin(page);
+  await mockApi(page, '/core/members', problem(503, 'RETRYABLE_CONFLICT', 'Retry'));
+  await page.goto('/admin/roles');
+  await page.getByRole('button', { name: 'View Quality Inspector (QCI)' }).click();
+  const drawer = page.getByRole('dialog', { name: 'Quality Inspector (QCI)' });
+  await expect(drawer.getByRole('alert')).toContainText('Members could not be loaded');
+  await expect(drawer.getByText('Nobody holds this role')).toHaveCount(0);
 });
 
 for (const width of [1440, 768, 375]) {

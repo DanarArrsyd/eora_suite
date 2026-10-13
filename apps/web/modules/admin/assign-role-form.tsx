@@ -4,7 +4,7 @@ import { EoraForm, FormSelectField, FormTextareaField, FormTextField, useFormCon
 import { Button } from '@eora/ui';
 import { useAccessActions, type Member, type Role } from './api';
 import { formFailure } from './errors';
-import { defaultScope, scopeChoices, type PlantRef } from './model';
+import { defaultScope, endOfDayIn, scopeChoices, type PlantRef } from './model';
 
 const schema = z
   .object({
@@ -23,17 +23,14 @@ type Props = {
   members: readonly Member[];
   roles: readonly Role[];
   plants: readonly PlantRef[];
+  /** Tenant IANA zone (D-044): the end date is the end of that day there. */
+  timeZone: string;
   /** Fixed member (from the member drawer) or fixed role (from the role drawer). */
   memberId?: string;
   roleId?: string;
   onDone: (message: string) => void;
   onCancel: () => void;
 };
-
-/** End of the chosen day in the tenant time zone (D-044: Asia/Jakarta default), sent as an ISO instant. */
-function endOfDay(date: string): string | null {
-  return date ? `${date}T23:59:59+07:00` : null;
-}
 
 function ScopeFields({ roles, plants }: { roles: readonly Role[]; plants: readonly PlantRef[] }) {
   const { setValue } = useFormContext();
@@ -78,7 +75,7 @@ function ScopeFields({ roles, plants }: { roles: readonly Role[]; plants: readon
  * Grant a role in a scope (doc 25 §13, D-068). The reason is stored with the assignment; the server checks that the
  * administrator's own scope covers the target scope (SCOPE_FORBIDDEN otherwise) and refuses changes to one's own access.
  */
-export function AssignRoleForm({ members, roles, plants, memberId, roleId, onDone, onCancel }: Props) {
+export function AssignRoleForm({ members, roles, plants, timeZone, memberId, roleId, onDone, onCancel }: Props) {
   const { assign } = useAccessActions();
   const assignable = members.filter((m) => m.status === 'INVITED' || m.status === 'ACTIVE');
   const initialRole = roles.find((r) => r.id === roleId);
@@ -108,7 +105,7 @@ export function AssignRoleForm({ members, roles, plants, memberId, roleId, onDon
             roleId: v.roleId,
             scopeType: v.scopeType,
             plantId: v.scopeType === 'PLANT' ? v.plantId : null,
-            validUntil: endOfDay(v.validUntil),
+            validUntil: v.validUntil ? endOfDayIn(v.validUntil, timeZone) : null,
             reason: v.reason,
           });
           const role = roles.find((r) => r.id === v.roleId);
@@ -139,7 +136,7 @@ export function AssignRoleForm({ members, roles, plants, memberId, roleId, onDon
         />
       )}
       <ScopeFields roles={roles} plants={plants} />
-      <FormTextField name="validUntil" label="Access ends" type="date" hint="Optional. The role stops at the end of this day (Asia/Jakarta)." />
+      <FormTextField name="validUntil" label="Access ends" type="date" hint={`Optional. The role stops at the end of this day (${timeZone}).`} />
       <FormTextareaField name="reason" label="Reason" required rows={3} hint="Kept with the assignment for audit, e.g. the request or ticket." />
     </EoraForm>
   );

@@ -165,8 +165,8 @@ Scope: `/admin/users` and `/admin/roles` on the live API (`apps/web/modules/admi
 | Gate | Result |
 |---|---|
 | Format · typecheck · lint | clean |
-| Unit + component | 95/95 (new `modules/admin/model.test.ts`: scope and validity text, status views and counts, action blocks incl. SoD-06, suggested scope, holders, permission groups) |
-| E2E (mocked API) | 118/118; new `admin.spec.ts` (12): list + tabs + URL, own-access block, invite with CSRF header + validation, plant-scoped assign body, scope refusal message, revoke reason required, suspend confirmation, no-permission state, roles drawer, axe, no overflow at 1440/768/375 |
+| Unit + component | 96/96 (new `modules/admin/model.test.ts`: scope and validity text, end of day in the tenant zone incl. DST, status views and counts, action blocks incl. SoD-06, suggested scope, holders, permission groups) |
+| E2E (mocked API) | 120/120; new `admin.spec.ts` (14): list + tabs + URL, own-access block, invite with CSRF header + validation, plant-scoped assign body, roles/members load failure keeps role-dependent controls waiting with retry, scope refusal message, revoke reason required, suspend confirmation, no-permission state, roles drawer, axe, no overflow at 1440/768/375 |
 | Real stack smoke | provision `--deliver=console` → accept → sign in → `/admin/users`: invite, assign QCI at plant P1 with reason, revoke with reason; `/admin/roles` list — against Laravel through the Next.js proxy |
 | Production build | succeeds |
 

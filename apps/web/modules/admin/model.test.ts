@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Assignment, Member } from './api';
 import {
   defaultScope,
+  endOfDayIn,
   filterMembers,
   groupPermissions,
   holdersOf,
@@ -48,10 +49,17 @@ describe('admin presentation rules', () => {
 
   it('describes validity: open-ended, ending, ended, not yet started', () => {
     const now = new Date('2026-10-14T00:00:00Z');
-    expect(validityText(assignment(), now)).toBe('No end date');
-    expect(validityText(assignment({ validUntil: '2026-12-31T23:59:59+07:00' }), now)).toBe('Until 31 Dec 2026');
-    expect(validityText(assignment({ effective: false, validUntil: '2026-10-01T23:59:59+07:00' }), now)).toBe('Ended 01 Oct 2026');
-    expect(validityText(assignment({ effective: false, validFrom: '2026-11-01T00:00:00+07:00' }), now)).toBe('Starts 01 Nov 2026');
+    expect(validityText(assignment(), 'Asia/Jakarta', now)).toBe('No end date');
+    expect(validityText(assignment({ validUntil: '2026-12-31T23:59:59+07:00' }), 'Asia/Jakarta', now)).toBe('Until 31 Dec 2026');
+    expect(validityText(assignment({ effective: false, validUntil: '2026-10-01T23:59:59+07:00' }), 'Asia/Jakarta', now)).toBe('Ended 01 Oct 2026');
+    expect(validityText(assignment({ effective: false, validFrom: '2026-11-01T00:00:00+07:00' }), 'Asia/Jakarta', now)).toBe('Starts 01 Nov 2026');
+  });
+
+  it('ends a role at the last second of the chosen day in the tenant zone, DST included', () => {
+    expect(endOfDayIn('2026-12-31', 'Asia/Jakarta')).toBe('2026-12-31T16:59:59.000Z');
+    expect(endOfDayIn('2026-12-31', 'Europe/Berlin')).toBe('2026-12-31T22:59:59.000Z');
+    expect(endOfDayIn('2026-03-08', 'America/New_York')).toBe('2026-03-09T03:59:59.000Z'); // EDT starts that day
+    expect(validityText(assignment({ validUntil: '2026-12-31T22:59:59.000Z' }), 'Europe/Berlin', new Date('2026-10-14T00:00:00Z'))).toBe('Until 31 Dec 2026');
   });
 
   it('filters by membership status and searches name, e-mail and role code; counts follow the search', () => {

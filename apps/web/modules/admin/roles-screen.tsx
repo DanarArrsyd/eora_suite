@@ -14,10 +14,10 @@ import {
   type EoraColumn,
   type ListUrlConfig,
 } from '@eora/features/patterns';
-import { Button, Drawer, DrawerContent, EmptyState, InlineAlert, LoadingState, PermissionDeniedState, Tooltip } from '@eora/ui';
+import { Button, Drawer, DrawerContent, EmptyState, ErrorState, InlineAlert, LoadingState, PermissionDeniedState, Tooltip } from '@eora/ui';
 import { useMembers, useRoles, type Member, type Role } from './api';
 import { AssignRoleForm } from './assign-role-form';
-import type { AccessContext } from './member-drawer';
+import { loadBlock, type AccessContext, type Loadable } from './member-drawer';
 import { groupPermissions, holdersOf, MANAGE_REASON, SCOPE_LABEL, scopeText, validityText } from './model';
 import { useAccessContext } from './users-screen';
 
@@ -26,12 +26,14 @@ const URL_CONFIG: ListUrlConfig = { filterKeys: [], defaultSort: [], defaultPage
 function RoleDrawer({
   role,
   members,
+  membersState,
   roles,
   ctx,
   onClose,
 }: {
   role: Role | null;
   members: readonly Member[];
+  membersState: Loadable;
   roles: readonly Role[];
   ctx: AccessContext;
   onClose: () => void;
@@ -79,16 +81,21 @@ function RoleDrawer({
           <section aria-labelledby="role-holders" className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-3">
               <h3 id="role-holders" className="m-0 text-sm font-semibold">
-                Members with this role ({holders.length})
+                Members with this role{membersState.status === 'ready' ? ` (${holders.length})` : ''}
               </h3>
-              {assigning ? null : ctx.canManage ? (
+              {assigning ? null : ctx.canManage && !loadBlock(membersState, 'Members') ? (
                 <Button size="sm" onClick={() => setAssigning(true)}>
                   <Plus aria-hidden="true" className="size-4" />
                   Assign to member
                 </Button>
               ) : (
-                <Tooltip content={MANAGE_REASON}>
-                  <Button size="sm" aria-disabled="true" aria-label={`Assign to member. ${MANAGE_REASON}`} onClick={(e) => e.preventDefault()}>
+                <Tooltip content={ctx.canManage ? (loadBlock(membersState, 'Members') ?? '') : MANAGE_REASON}>
+                  <Button
+                    size="sm"
+                    aria-disabled="true"
+                    aria-label={`Assign to member. ${ctx.canManage ? loadBlock(membersState, 'Members') : MANAGE_REASON}`}
+                    onClick={(e) => e.preventDefault()}
+                  >
                     <Plus aria-hidden="true" className="size-4" />
                     Assign to member
                   </Button>
@@ -102,6 +109,7 @@ function RoleDrawer({
                   members={members.filter((m) => m.userId !== ctx.selfId)}
                   roles={roles}
                   plants={ctx.plants}
+                  timeZone={ctx.timeZone}
                   roleId={role.id}
                   onCancel={() => setAssigning(false)}
                   onDone={(title) => {
@@ -111,7 +119,20 @@ function RoleDrawer({
                 />
               </div>
             ) : null}
-            {holders.length === 0 ? (
+            {membersState.status === 'loading' ? (
+              <LoadingState title="Loading members" className="py-4" />
+            ) : membersState.status === 'error' ? (
+              <ErrorState
+                className="py-4"
+                title="Members could not be loaded"
+                description="Who holds this role is unknown until the list loads."
+                action={
+                  <Button size="sm" onClick={membersState.retry}>
+                    Retry
+                  </Button>
+                }
+              />
+            ) : holders.length === 0 ? (
               <EmptyState className="py-4" title="Nobody holds this role in your scope" description="Assign it to a member to give them its permissions." />
             ) : (
               <ul className="m-0 list-none p-0" aria-label={`Members with ${role.code}`}>
@@ -121,7 +142,7 @@ function RoleDrawer({
                       <p className="m-0 truncate text-sm font-medium text-ink">{member.displayName}</p>
                       {assignments.map((a) => (
                         <p key={a.id} className="m-0 text-xs text-ink-2">
-                          {scopeText(a, ctx.plants)} · {validityText(a)}
+                          {scopeText(a, ctx.plants)} · {validityText(a, ctx.timeZone)}
                         </p>
                       ))}
                     </div>
@@ -177,7 +198,12 @@ export function RolesScreen() {
       cell: (r) => (r.defaultScopeType ? SCOPE_LABEL[r.defaultScopeType as keyof typeof SCOPE_LABEL] : 'Per assignment'),
     },
     { id: 'permissions', header: 'Permissions', numeric: true, critical: true, cell: (r) => (r.permissions.length ? r.permissions.length : 'None yet') },
-    { id: 'holders', header: 'Members in your scope', numeric: true, cell: (r) => (members.data ? holdersOf(r.id, memberList).length : '…') },
+    {
+      id: 'holders',
+      header: 'Members in your scope',
+      numeric: true,
+      cell: (r) => (members.data ? holdersOf(r.id, memberList).length : members.isError ? 'Unavailable' : '…'),
+    },
   ];
 
   return (
@@ -235,6 +261,7 @@ export function RolesScreen() {
         key={openId ?? 'none'}
         role={all.find((r) => r.id === openId) ?? null}
         members={memberList}
+        membersState={{ status: members.isError ? 'error' : members.isPending ? 'loading' : 'ready', retry: () => void members.refetch() }}
         roles={all}
         ctx={ctx}
         onClose={() => setOpenId(null)}

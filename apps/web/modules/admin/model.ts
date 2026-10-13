@@ -13,16 +13,48 @@ export function scopeText(a: Pick<Assignment, 'scopeType' | 'plantId'>, plants: 
   return p ? `Plant ${p.code} · ${p.name}` : 'Plant outside your workspace';
 }
 
-/** Validity of an unrevoked assignment: effective now, not yet started or ended (`validUntil` passed). */
-export function validityText(a: Pick<Assignment, 'effective' | 'validFrom' | 'validUntil'>, now = new Date()): string {
+/** Validity of an unrevoked assignment: effective now, not yet started or ended (`validUntil` passed), in the tenant zone. */
+export function validityText(a: Pick<Assignment, 'effective' | 'validFrom' | 'validUntil'>, timeZone: string, now = new Date()): string {
   const until = a.validUntil ? new Date(a.validUntil) : null;
-  if (a.effective) return until ? `Until ${fmtDate(until)}` : 'No end date';
-  if (until && until <= now) return `Ended ${fmtDate(until)}`;
-  return `Starts ${fmtDate(new Date(a.validFrom))}`;
+  if (a.effective) return until ? `Until ${fmtDate(until, timeZone)}` : 'No end date';
+  if (until && until <= now) return `Ended ${fmtDate(until, timeZone)}`;
+  return `Starts ${fmtDate(new Date(a.validFrom), timeZone)}`;
 }
 
-export function fmtDate(d: Date): string {
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' });
+export function fmtDate(d: Date, timeZone: string): string {
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone });
+}
+
+/** Offset of `timeZone` from UTC at instant `ms`, in milliseconds (local = UTC + offset). */
+function zoneOffset(ms: number, timeZone: string): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })
+      .formatToParts(new Date(ms))
+      .map((p) => [p.type, p.value]),
+  );
+  const local = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute), Number(parts.second));
+  return local - Math.floor(ms / 1000) * 1000;
+}
+
+/**
+ * The last second of calendar day `date` (YYYY-MM-DD) in the tenant's IANA zone (D-044), as an ISO instant. The API
+ * compares `validUntil` as an instant, so the day boundary must be the tenant's, never the browser's or a fixed offset.
+ */
+export function endOfDayIn(date: string, timeZone: string): string {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const wall = Date.UTC(y, m - 1, d, 23, 59, 59);
+  let instant = wall - zoneOffset(wall, timeZone);
+  instant = wall - zoneOffset(instant, timeZone); // second pass: offset at the result (DST change on that day)
+  return new Date(instant).toISOString();
 }
 
 export type MemberView = 'all' | Exclude<MemberStatus, 'REVOKED'>;

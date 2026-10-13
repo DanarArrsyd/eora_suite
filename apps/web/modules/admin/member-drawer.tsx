@@ -7,7 +7,15 @@ import { AssignRoleForm } from './assign-role-form';
 import { actionMessage } from './errors';
 import { memberActionBlock, scopeText, validityText, type PlantRef } from './model';
 
-export type AccessContext = { selfId: string; canInvite: boolean; canManage: boolean; plants: readonly PlantRef[] };
+export type AccessContext = { selfId: string; canInvite: boolean; canManage: boolean; plants: readonly PlantRef[]; timeZone: string };
+
+/** State of a list another view depends on: role-dependent controls wait for it and offer a retry when it failed. */
+export type Loadable = { status: 'loading' | 'error' | 'ready'; retry: () => void };
+
+export function loadBlock(state: Loadable, what: string): string | undefined {
+  if (state.status === 'loading') return `${what} are still loading.`;
+  return state.status === 'error' ? `${what} could not be loaded.` : undefined;
+}
 
 type MemberAction = 'resend' | 'suspend' | 'reactivate';
 
@@ -109,7 +117,7 @@ function AssignmentItem({
         </p>
         <p className="m-0 text-[13px] text-ink">{scopeText(a, ctx.plants)}</p>
         <p className="m-0 text-xs text-ink-2">
-          {validityText(a)}
+          {validityText(a, ctx.timeZone)}
           {a.effective ? '' : ' · not in effect now'}
         </p>
         <p className="m-0 mt-1 truncate text-xs text-ink-2" title={a.grantReason}>
@@ -139,6 +147,7 @@ export function MemberDrawer({
   member,
   members,
   roles,
+  rolesState,
   ctx,
   onClose,
   onNotice,
@@ -146,6 +155,7 @@ export function MemberDrawer({
   member: Member | null;
   members: readonly Member[];
   roles: readonly Role[];
+  rolesState: Loadable;
   ctx: AccessContext;
   onClose: () => void;
   onNotice: (n: { tone: 'success' | 'danger'; title: string }) => void;
@@ -159,7 +169,7 @@ export function MemberDrawer({
     onNotice(n);
   });
 
-  const assignBlock = member ? memberActionBlock('assign', member, ctx) : undefined;
+  const assignBlock = member ? (memberActionBlock('assign', member, ctx) ?? loadBlock(rolesState, 'Roles')) : undefined;
   const roleById = new Map(roles.map((r) => [r.id, r]));
 
   return (
@@ -234,12 +244,24 @@ export function MemberDrawer({
                   </Button>
                 )}
               </div>
-              {assigning ? (
+              {rolesState.status === 'error' ? (
+                <InlineAlert
+                  tone="danger"
+                  title="Roles could not be loaded, so no role can be assigned right now."
+                  action={
+                    <Button size="sm" onClick={rolesState.retry}>
+                      Retry
+                    </Button>
+                  }
+                />
+              ) : null}
+              {assigning && rolesState.status === 'ready' ? (
                 <div className="rounded-md border border-line p-4">
                   <AssignRoleForm
                     members={members}
                     roles={roles}
                     plants={ctx.plants}
+                    timeZone={ctx.timeZone}
                     memberId={member.membershipId}
                     onCancel={() => setAssigning(false)}
                     onDone={(title) => {
