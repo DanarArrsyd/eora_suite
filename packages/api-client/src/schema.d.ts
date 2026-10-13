@@ -954,9 +954,19 @@ export interface operations {
                             email: string;
                             locale: string;
                         };
-                        tenants: unknown[];
+                        /** @description Tenants where the user holds an ACTIVE membership (tenant picker). */
+                        tenants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activeTenantId: string | null;
-                        plants: unknown[];
+                        /** @description Plants of the active tenant (empty while no tenant is selected). */
+                        plants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activePlantId: string | null;
                         /** @description Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself. */
                         permissions: string[];
@@ -1119,9 +1129,19 @@ export interface operations {
                             email: string;
                             locale: string;
                         };
-                        tenants: unknown[];
+                        /** @description Tenants where the user holds an ACTIVE membership (tenant picker). */
+                        tenants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activeTenantId: string | null;
-                        plants: unknown[];
+                        /** @description Plants of the active tenant (empty while no tenant is selected). */
+                        plants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activePlantId: string | null;
                         /** @description Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself. */
                         permissions: string[];
@@ -1180,9 +1200,19 @@ export interface operations {
                             email: string;
                             locale: string;
                         };
-                        tenants: unknown[];
+                        /** @description Tenants where the user holds an ACTIVE membership (tenant picker). */
+                        tenants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activeTenantId: string | null;
-                        plants: unknown[];
+                        /** @description Plants of the active tenant (empty while no tenant is selected). */
+                        plants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activePlantId: string | null;
                         /** @description Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself. */
                         permissions: string[];
@@ -1310,9 +1340,19 @@ export interface operations {
                             email: string;
                             locale: string;
                         };
-                        tenants: unknown[];
+                        /** @description Tenants where the user holds an ACTIVE membership (tenant picker). */
+                        tenants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activeTenantId: string | null;
-                        plants: unknown[];
+                        /** @description Plants of the active tenant (empty while no tenant is selected). */
+                        plants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activePlantId: string | null;
                         /** @description Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself. */
                         permissions: string[];

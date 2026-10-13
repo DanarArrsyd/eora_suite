@@ -145,3 +145,14 @@ Scope per D-037. Screens (navigation `ppic/*`, rendered through `modules/ppic/re
 Defects found and fixed: chart SVG exposed as `img` with focusable children (axe nested-interactive) → `group`; KPI "Definition & basis" target < 24 px; exception titles repeated raw ISO dates; topbar mock period out of sync with the sample business date; CT-9 axe flake (scan during refetch dimming) → scans wait for `aria-busy` to clear; **shared-pattern race** in `useListUrlState` (rapid tab/sort clicks lost under load because a second `router.replace` was de-duplicated against a pending navigation) → native `history.replaceState` per Next 16 docs, computed from the current URL; regression E2E added.
 Not done / tracked: production-vs-calendar date toggle (mock does not model shifts crossing midnight); expected-acceptance projection of Pending QC (needs policy); BOM-quantity-based conversion method (not in approved formulas — only layout/pitch methods with BOM-sourced cavity/parts per blank are shown); server read models, cursor pagination, counts parameter (doc 19 §10 recommendations); O-021 and CI on GitHub.
 
+### M1 F1 — Sign-in and live workspace (2026-10-13, milestone M1 / D-066; owner reviews at the M1 demo)
+Scope: `/login`, `/select-tenant`, `/invitations/accept`, `/password/forgot`, `/password/reset` (route group `(auth)`, navy brand panel ≥ 1024 px, navy header on phones); `@eora/features/auth` (same-origin client with Sanctum CSRF, `ApiError` from problem+json, `useMe`, `useSessionActions`, `AuthGate`); workspace guarded by `AuthGate` (no session → `/login?next=…`, no tenant → `/select-tenant`, any API 401 signs the shell out); topbar workspace switcher with live tenant/plant and Sign out; Administration module shown from the `core.users_roles.view` hint. Other modules keep mock data and the prototype role switch.
+| Gate | Result |
+|---|---|
+| Format · typecheck · lint | clean (`pnpm check`) |
+| Unit + component | 89/89 (new: `safeNext`, `call`/`ApiError`) |
+| E2E (mocked API) | 106/106 twice; existing specs run with a synthetic session fixture (`e2e/fixtures.ts`); new `auth.spec.ts`: redirect with destination, uniform login failure, single-workspace sign-in with CSRF header, no open redirect, workspace picker, uniform forgot answer, invitation token missing/valid, reset breached/expired, plant switch + sign-out, axe + no overflow at 1440/375 |
+| Real stack smoke | provision `--deliver=console` → accept invitation → sign in → workspace → plant switch → sign out, against Laravel through the Next.js same-origin proxy |
+| Production build | succeeds |
+Not done: Administration screens and live inbox (F2); stack Playwright in CI, demo seeder, UAT script (F3); screen-reader and real-device checks (O-021).
+

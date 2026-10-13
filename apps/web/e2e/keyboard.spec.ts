@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('skip link is the first tab stop and moves focus to main', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });

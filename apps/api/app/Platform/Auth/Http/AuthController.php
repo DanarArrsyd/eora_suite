@@ -127,9 +127,19 @@ final class AuthController
                 'email' => $profile['user']->email_display,
                 'locale' => $profile['user']->locale,
             ],
-            'tenants' => array_map(static fn (stdClass $t) => ['id' => $t->id, 'code' => $t->code, 'name' => $t->name], $profile['tenants']),
+            /**
+             * Tenants where the user holds an ACTIVE membership (tenant picker).
+             *
+             * @var list<array{id: string, code: string, name: string}>
+             */
+            'tenants' => array_map(static fn (stdClass $t) => ['id' => (string) $t->id, 'code' => (string) $t->code, 'name' => (string) $t->name], $profile['tenants']),
             'activeTenantId' => $this->auth->tenantId(),
-            'plants' => array_map(static fn (stdClass $p) => ['id' => $p->id, 'code' => $p->code, 'name' => $p->name], $plants),
+            /**
+             * Plants of the active tenant (empty while no tenant is selected).
+             *
+             * @var list<array{id: string, code: string, name: string}>
+             */
+            'plants' => array_map(static fn (stdClass $p) => ['id' => (string) $p->id, 'code' => (string) $p->code, 'name' => (string) $p->name], $plants),
             'activePlantId' => $this->auth->plantId(),
             /**
              * Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself.

@@ -11,6 +11,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@eora/api-client": "workspace:*",
     "@eora/design-tokens": "workspace:*",
     "@eora/features": "workspace:*",
     "@eora/ui": "workspace:*",

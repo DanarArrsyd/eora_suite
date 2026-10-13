@@ -71,8 +71,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div role="note" className="col-span-full flex items-center gap-2 border-b border-line bg-stat-warn-bg px-4 py-1.5 text-xs text-stat-warn-fg">
           <FlaskConical aria-hidden="true" className="size-4 shrink-0" />
           <span>
-            <b className="font-semibold">EORA Suite · Frontend prototype build.</b> Navigation badges and workspace values come from mock adapters; no
-            operational data is shown.
+            <b className="font-semibold">EORA Suite · Pre-release build.</b> Sign-in and the company/plant workspace are live; modules marked Mock data and
+            navigation badges still come from mock adapters.
           </span>
         </div>
         <div className="hidden md:block">

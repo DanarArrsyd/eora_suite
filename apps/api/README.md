@@ -197,6 +197,9 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
 - `--deliver=email` (default): the delivery worker mails the invitation. `--deliver=console`: the link is printed in
   the operator's terminal (CONSOLE channel, never mailed, never logged; `invitation.delivered_console` event).
 - The production-day start has no default (tenant input, ADR-0012); the time zone defaults to Asia/Jakarta (D-044).
+- The long-running `api` container has no provisioner or delivery credentials (least privilege). Locally, run the command
+  in the one-shot runner that has them, e.g.
+  `docker compose run --rm --entrypoint php -e EORA_FRONTEND_URL=http://localhost:3100 db-migrate artisan eora:tenant:provision …`
 
 ## Business audit and inbox (M1 / B1 step 7a, doc 25 §8, D-069)
 - `AuditRecorder::record($db, action, entityType, entityId, before, after, detail)` inside the command transaction →
