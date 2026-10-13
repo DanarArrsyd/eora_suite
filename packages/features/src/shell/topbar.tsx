@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
   Field,
   IconButton,
+  InlineAlert,
   Kbd,
   NumericBadge,
   Popover,
@@ -24,7 +25,7 @@ import {
 } from '@eora/ui';
 import { ROLE_LABELS, type RoleKey, type TopbarContext } from '../navigation';
 import { NotificationCenter } from '../patterns/notifications';
-import { useShellSession } from './session';
+import { useShellSession, type ShellIdentity } from './session';
 
 /* ===================== Breadcrumb ===================== */
 export type Crumb = { label: string; href?: string };
@@ -177,8 +178,60 @@ export function PageContextControl({ kind }: { kind: TopbarContext }) {
   );
 }
 
-/* ===================== Workspace switcher (company + plant) ===================== */
+/* ===================== Workspace switcher (tenant + plant) ===================== */
+function LiveWorkspaceFields({ identity }: { identity: ShellIdentity }) {
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const run = (action: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    action()
+      .catch(() => setError('The workspace could not be changed. Nothing was switched; try again.'))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="flex flex-col gap-3 p-3" aria-busy={busy || undefined}>
+      <Field label="Company workspace" hint={identity.tenants.length > 1 ? 'Switching reloads every view in the new workspace.' : undefined}>
+        {(p) => (
+          <Select
+            {...p}
+            value={identity.tenant.id}
+            disabled={busy || identity.tenants.length < 2}
+            onChange={(e) => run(() => identity.selectTenant(e.target.value))}
+          >
+            {identity.tenants.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+      <Field label="Plant" hint="Data in plant-scoped views follows the selected plant.">
+        {(p) => (
+          <Select
+            {...p}
+            value={identity.activePlantId ?? ''}
+            disabled={busy || identity.plants.length === 0}
+            onChange={(e) => run(() => identity.selectPlant(e.target.value))}
+          >
+            {identity.activePlantId ? null : <option value="">Select a plant</option>}
+            {identity.plants.map((pl) => (
+              <option key={pl.id} value={pl.id}>
+                {pl.code} · {pl.name}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+      {error ? <InlineAlert tone="danger" title={error} /> : null}
+    </div>
+  );
+}
+
 function WorkspaceFields() {
+  const { identity } = useShellSession();
+  if (identity) return <LiveWorkspaceFields identity={identity} />;
   return (
     <div className="flex flex-col gap-3 p-3">
       <Field label="Company">
@@ -267,29 +320,32 @@ export function NotificationBell({ actionCount }: { actionCount: number }) {
 
 /* ===================== User menu (profile; prototype role switch) ===================== */
 export function UserMenu() {
-  const { user, role, setRole } = useShellSession();
+  const { user, role, setRole, identity } = useShellSession();
+  const [signingOut, setSigningOut] = React.useState(false);
+  const subtitle = identity ? identity.tenant.name : ROLE_LABELS[role];
   return (
     // Non-modal: a modal menu aria-hides focusable page content (axe aria-hidden-focus); Esc / outside click still close it.
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger
         className="flex min-h-11 items-center gap-2 rounded-md px-1 hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring"
-        aria-label={`Account menu, ${user.name}, ${ROLE_LABELS[role]}`}
+        aria-label={`Account menu, ${user.name}, ${subtitle}`}
       >
         <span aria-hidden="true" className="grid size-8 place-items-center rounded-full bg-accent-subtle text-xs font-semibold text-accent">
           {user.initials}
         </span>
         <span className="hidden text-left leading-tight 4xl:block">
           <span className="block text-[13px] font-semibold">{user.name}</span>
-          <span className="block text-[11.5px] text-ink-2s">{ROLE_LABELS[role]}</span>
+          <span className="block text-[11.5px] text-ink-2s">{subtitle}</span>
         </span>
         <ChevronDown aria-hidden="true" className="size-4 text-ink-2 max-lg:hidden" />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-64">
         <DropdownMenuLabel>
-          {user.name} · {ROLE_LABELS[role]}
+          <span className="block">{user.name}</span>
+          {user.email ? <span className="block text-xs font-normal text-ink-2">{user.email}</span> : null}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Prototype: view navigation as role</DropdownMenuLabel>
+        <DropdownMenuLabel>Prototype: mock modules shown as role</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={role} onValueChange={(v) => setRole(v as RoleKey)}>
           {(Object.keys(ROLE_LABELS) as RoleKey[]).map((r) => (
             <DropdownMenuRadioItem key={r} value={r}>
@@ -300,12 +356,25 @@ export function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled>
           <User aria-hidden="true" />
-          Profile & devices (Phase 2)
+          Profile & devices (later)
         </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <LogOut aria-hidden="true" />
-          Sign out (auth not connected)
-        </DropdownMenuItem>
+        {identity ? (
+          <DropdownMenuItem
+            disabled={signingOut}
+            onSelect={() => {
+              setSigningOut(true);
+              void identity.signOut().finally(() => setSigningOut(false));
+            }}
+          >
+            <LogOut aria-hidden="true" />
+            {signingOut ? 'Signing out…' : 'Sign out'}
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem disabled>
+            <LogOut aria-hidden="true" />
+            Sign out (no session)
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

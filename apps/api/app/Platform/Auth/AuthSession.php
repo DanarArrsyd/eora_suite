@@ -72,6 +72,12 @@ final class AuthSession
         $this->session->put(self::KEY, ['plant_id' => $plantId] + $this->state());
     }
 
+    /** The active plant left the user's scope (assignment revoked or expired): the workspace falls back to no plant. */
+    public function clearPlant(): void
+    {
+        $this->session->put(self::KEY, ['plant_id' => null] + $this->state());
+    }
+
     public function context(): ?TenantContext
     {
         $user = $this->userId();

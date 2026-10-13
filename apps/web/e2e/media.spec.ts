@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 /** Automated proxies for user preferences (doc 22 §6). They do not replace manual high-contrast / OS-level validation. */
 

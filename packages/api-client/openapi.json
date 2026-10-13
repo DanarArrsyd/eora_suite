@@ -1144,7 +1144,26 @@
                                         },
                                         "tenants": {
                                             "type": "array",
-                                            "items": {}
+                                            "description": "Tenants where the user holds an ACTIVE membership (tenant picker).",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "code": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "code",
+                                                    "name"
+                                                ]
+                                            }
                                         },
                                         "activeTenantId": {
                                             "type": [
@@ -1154,7 +1173,26 @@
                                         },
                                         "plants": {
                                             "type": "array",
-                                            "items": {}
+                                            "description": "Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected).",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "code": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "code",
+                                                    "name"
+                                                ]
+                                            }
                                         },
                                         "activePlantId": {
                                             "type": [
@@ -1494,7 +1532,26 @@
                                         },
                                         "tenants": {
                                             "type": "array",
-                                            "items": {}
+                                            "description": "Tenants where the user holds an ACTIVE membership (tenant picker).",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "code": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "code",
+                                                    "name"
+                                                ]
+                                            }
                                         },
                                         "activeTenantId": {
                                             "type": [
@@ -1504,7 +1561,26 @@
                                         },
                                         "plants": {
                                             "type": "array",
-                                            "items": {}
+                                            "description": "Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected).",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "code": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "code",
+                                                    "name"
+                                                ]
+                                            }
                                         },
                                         "activePlantId": {
                                             "type": [
@@ -1587,6 +1663,7 @@
         "/auth/tenant": {
             "post": {
                 "operationId": "v1.auth.tenant",
+                "description": "The switch is recorded as security event `workspace.tenant_selected` of the chosen tenant before the session\nchanges: no record, no switch.",
                 "summary": "Tenant picker (DD-07): only a tenant where the user holds an ACTIVE membership; session regenerated",
                 "tags": [
                     "Auth"
@@ -1643,7 +1720,26 @@
                                         },
                                         "tenants": {
                                             "type": "array",
-                                            "items": {}
+                                            "description": "Tenants where the user holds an ACTIVE membership (tenant picker).",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "code": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "code",
+                                                    "name"
+                                                ]
+                                            }
                                         },
                                         "activeTenantId": {
                                             "type": [
@@ -1653,7 +1749,26 @@
                                         },
                                         "plants": {
                                             "type": "array",
-                                            "items": {}
+                                            "description": "Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected).",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "code": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "code",
+                                                    "name"
+                                                ]
+                                            }
                                         },
                                         "activePlantId": {
                                             "type": [
@@ -1889,7 +2004,8 @@
         "/auth/plant": {
             "post": {
                 "operationId": "v1.auth.plant",
-                "summary": "Plant switch inside the active tenant; RLS decides what exists",
+                "description": "Any other plant answers 404 like a missing one. Success (`workspace.plant_selected`) and refusal\n(`workspace.plant_denied`) are recorded as security events in the same transaction as the check.",
+                "summary": "Plant switch inside the active tenant, limited to plants covered by the user's current assignments",
                 "tags": [
                     "Auth"
                 ],
@@ -1945,7 +2061,26 @@
                                         },
                                         "tenants": {
                                             "type": "array",
-                                            "items": {}
+                                            "description": "Tenants where the user holds an ACTIVE membership (tenant picker).",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "code": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "code",
+                                                    "name"
+                                                ]
+                                            }
                                         },
                                         "activeTenantId": {
                                             "type": [
@@ -1955,7 +2090,26 @@
                                         },
                                         "plants": {
                                             "type": "array",
-                                            "items": {}
+                                            "description": "Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected).",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "code": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "code",
+                                                    "name"
+                                                ]
+                                            }
                                         },
                                         "activePlantId": {
                                             "type": [

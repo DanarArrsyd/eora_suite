@@ -35,6 +35,8 @@ type EoraFormProps<S extends z.ZodType<FieldValues, FieldValues>> = {
   className?: string;
   /** Render actions in a sticky footer (drawers / long forms). */
   stickyActions?: boolean;
+  /** `stack`: full-width primary action (single-column task forms such as sign-in). Default `end`. */
+  actionsLayout?: 'end' | 'stack';
 };
 
 function newKey(): string {
@@ -56,6 +58,7 @@ export function EoraForm<S extends z.ZodType<FieldValues, FieldValues>>({
   secondary,
   className,
   stickyActions,
+  actionsLayout = 'end',
 }: EoraFormProps<S>) {
   const form = useForm<z.input<S>, unknown, z.output<S>>({
     resolver: zodResolver(schema as never) as unknown as Resolver<z.input<S>, unknown, z.output<S>>,
@@ -121,9 +124,21 @@ export function EoraForm<S extends z.ZodType<FieldValues, FieldValues>>({
         ) : null}
         {result?.ok ? <InlineAlert tone="success" title={result.message ?? 'Saved'} /> : null}
         {children}
-        <div className={cn('flex flex-wrap justify-end gap-2 pt-2', stickyActions && 'sticky bottom-0 -mx-5 border-t border-line bg-surface px-5 py-3')}>
+        <div
+          className={cn(
+            'flex gap-2 pt-2',
+            actionsLayout === 'stack' ? 'flex-col-reverse' : 'flex-wrap justify-end',
+            stickyActions && 'sticky bottom-0 -mx-5 border-t border-line bg-surface px-5 py-3',
+          )}
+        >
           {secondary}
-          <Button type="submit" variant="primary" disabled={form.formState.isSubmitting} aria-disabled={form.formState.isSubmitting || undefined}>
+          <Button
+            type="submit"
+            variant="primary"
+            className={actionsLayout === 'stack' ? 'w-full' : undefined}
+            disabled={form.formState.isSubmitting}
+            aria-disabled={form.formState.isSubmitting || undefined}
+          >
             {form.formState.isSubmitting ? 'Submitting…' : submitLabel}
           </Button>
         </div>

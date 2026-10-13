@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 const WIDTHS = [1920, 1600, 1440, 1280, 1200, 1024, 768, 640, 390, 375];
 const ROUTES = [

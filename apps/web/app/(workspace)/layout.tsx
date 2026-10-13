@@ -1,15 +1,16 @@
+import { AuthGate } from '@eora/features/auth';
 import { EoraQueryProvider } from '@eora/features/data';
 import { FeedbackProvider } from '@eora/features/patterns';
-import { AppShell, ShellSessionProvider } from '@eora/features/shell';
+import { AppShell } from '@eora/features/shell';
 
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   return (
     <EoraQueryProvider>
-      <ShellSessionProvider>
+      <AuthGate>
         <FeedbackProvider>
           <AppShell>{children}</AppShell>
         </FeedbackProvider>
-      </ShellSessionProvider>
+      </AuthGate>
     </EoraQueryProvider>
   );
 }

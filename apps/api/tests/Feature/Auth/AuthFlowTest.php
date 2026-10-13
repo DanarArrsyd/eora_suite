@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
+use Tests\Support\AccessFixtures;
 use Tests\Support\IdentityFixtures;
 use Tests\Support\TenantFixtures;
 
@@ -25,7 +26,9 @@ beforeEach(function () {
 });
 
 it('runs the whole flow: invitation email → accept → login → tenant → plant → logout', function () {
-    $u = activeUser($this, $this->t);
+    AccessFixtures::roles($this->t);
+    $u = member($this, $this->t);
+    AccessFixtures::grant($this->t, $u['id'], 'AUD');
 
     spa($this)->postJson('/api/v1/auth/login', $u)->assertOk()
         ->assertJsonPath('user.email', $u['email'])
@@ -41,6 +44,56 @@ it('runs the whole flow: invitation email → accept → login → tenant → pl
 
     spa($this)->postJson('/api/v1/auth/logout')->assertNoContent();
     spa($this)->getJson('/api/v1/auth/me')->assertUnauthorized()->assertJsonPath('code', 'UNAUTHENTICATED');
+})->group('integration', 'auth');
+
+/** @return list<array{action: string, requested_id: string, http_status: int}> */
+function workspaceEvents(array $tenant, string $userId): array
+{
+    return array_map(static fn ($e) => (array) $e, AccessFixtures::run($tenant, fn (EoraPostgresConnection $db) => $db->select(
+        "select action, requested_id, http_status from security_events where source = 'app' and action like 'workspace.%' and user_id = ? order by occurred_at, id",
+        [$userId],
+    )));
+}
+
+it('lists and switches only plants inside the assignment scopes; out-of-scope plants answer 404', function () {
+    $t = TenantFixtures::provision(3);
+    AccessFixtures::roles($t);
+    $u = member($this, $t);
+    $plant = AccessFixtures::grant($t, $u['id'], 'QCI', ['PLANT', $t['plants'][1]]);
+
+    signIn($this, $u, $t);
+    spa($this)->getJson('/api/v1/auth/me')->assertOk()
+        ->assertJsonCount(1, 'plants')->assertJsonPath('plants.0.id', $t['plants'][1]);
+    spa($this)->postJson('/api/v1/auth/plant', ['plantId' => $t['plants'][0]])->assertNotFound()->assertJsonPath('code', 'NOT_FOUND');
+    spa($this)->postJson('/api/v1/auth/plant', ['plantId' => $t['plants'][1]])->assertOk()->assertJsonPath('activePlantId', $t['plants'][1]);
+
+    // a tenant- or company-wide assignment covers every plant of the tenant / company
+    AccessFixtures::grant($t, $u['id'], 'AUD', ['COMPANY', $t['company']]);
+    spa($this)->getJson('/api/v1/auth/me')->assertOk()->assertJsonCount(3, 'plants');
+
+    // the active plant leaves the workspace once no assignment covers it any more
+    AccessFixtures::revoke($t, $plant);
+    $company = AccessFixtures::run($t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
+        "select ra.id from role_assignments ra join memberships m on m.id = ra.membership_id where m.user_id = ? and ra.scope_type = 'COMPANY'", [$u['id']],
+    )->id);
+    AccessFixtures::revoke($t, $company);
+    spa($this)->getJson('/api/v1/auth/me')->assertOk()->assertJsonCount(0, 'plants')->assertJsonPath('activePlantId', null);
+})->group('integration', 'auth');
+
+it('records every tenant and plant switch, and a refused plant, as security events of the tenant', function () {
+    AccessFixtures::roles($this->t);
+    $u = member($this, $this->t);
+    AccessFixtures::grant($this->t, $u['id'], 'QCI', ['PLANT', $this->t['plants'][0]]);
+
+    signIn($this, $u, $this->t);
+    spa($this)->postJson('/api/v1/auth/plant', ['plantId' => $this->t['plants'][0]])->assertOk();
+    spa($this)->postJson('/api/v1/auth/plant', ['plantId' => $this->t['plants'][1]])->assertNotFound();
+
+    expect(workspaceEvents($this->t, $u['id']))->toBe([
+        ['action' => 'workspace.tenant_selected', 'requested_id' => str_replace('-', '', $this->t['tenant']), 'http_status' => 200],
+        ['action' => 'workspace.plant_selected', 'requested_id' => str_replace('-', '', $this->t['plants'][0]), 'http_status' => 200],
+        ['action' => 'workspace.plant_denied', 'requested_id' => str_replace('-', '', $this->t['plants'][1]), 'http_status' => 404],
+    ]);
 })->group('integration', 'auth');
 
 it('answers every failed login with the same 401 body', function () {

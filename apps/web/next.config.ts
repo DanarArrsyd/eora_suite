@@ -2,8 +2,10 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@eora/ui', '@eora/features', '@eora/design-tokens'],
+  transpilePackages: ['@eora/ui', '@eora/features', '@eora/design-tokens', '@eora/api-client'],
   poweredByHeader: false,
+  // `next dev` would otherwise write apps/web/AGENTS.md (repository agent rules live in the root files).
+  agentRules: false,
   // ADR-0006: the browser must see ONE origin (session cookie + CSRF, no CORS). In local development Next.js proxies
   // the API paths to Laravel; in deployed environments the reverse proxy does the same path routing.
   async rewrites() {

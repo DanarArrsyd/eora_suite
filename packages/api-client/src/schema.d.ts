@@ -134,7 +134,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Tenant picker (DD-07): only a tenant where the user holds an ACTIVE membership; session regenerated */
+        /**
+         * Tenant picker (DD-07): only a tenant where the user holds an ACTIVE membership; session regenerated
+         * @description The switch is recorded as security event `workspace.tenant_selected` of the chosen tenant before the session
+         *     changes: no record, no switch.
+         */
         post: operations["v1.auth.tenant"];
         delete?: never;
         options?: never;
@@ -151,7 +155,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Plant switch inside the active tenant; RLS decides what exists */
+        /**
+         * Plant switch inside the active tenant, limited to plants covered by the user's current assignments
+         * @description Any other plant answers 404 like a missing one. Success (`workspace.plant_selected`) and refusal
+         *     (`workspace.plant_denied`) are recorded as security events in the same transaction as the check.
+         */
         post: operations["v1.auth.plant"];
         delete?: never;
         options?: never;
@@ -954,9 +962,19 @@ export interface operations {
                             email: string;
                             locale: string;
                         };
-                        tenants: unknown[];
+                        /** @description Tenants where the user holds an ACTIVE membership (tenant picker). */
+                        tenants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activeTenantId: string | null;
-                        plants: unknown[];
+                        /** @description Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected). */
+                        plants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activePlantId: string | null;
                         /** @description Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself. */
                         permissions: string[];
@@ -1119,9 +1137,19 @@ export interface operations {
                             email: string;
                             locale: string;
                         };
-                        tenants: unknown[];
+                        /** @description Tenants where the user holds an ACTIVE membership (tenant picker). */
+                        tenants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activeTenantId: string | null;
-                        plants: unknown[];
+                        /** @description Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected). */
+                        plants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activePlantId: string | null;
                         /** @description Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself. */
                         permissions: string[];
@@ -1180,9 +1208,19 @@ export interface operations {
                             email: string;
                             locale: string;
                         };
-                        tenants: unknown[];
+                        /** @description Tenants where the user holds an ACTIVE membership (tenant picker). */
+                        tenants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activeTenantId: string | null;
-                        plants: unknown[];
+                        /** @description Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected). */
+                        plants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activePlantId: string | null;
                         /** @description Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself. */
                         permissions: string[];
@@ -1310,9 +1348,19 @@ export interface operations {
                             email: string;
                             locale: string;
                         };
-                        tenants: unknown[];
+                        /** @description Tenants where the user holds an ACTIVE membership (tenant picker). */
+                        tenants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activeTenantId: string | null;
-                        plants: unknown[];
+                        /** @description Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected). */
+                        plants: {
+                            id: string;
+                            code: string;
+                            name: string;
+                        }[];
                         activePlantId: string | null;
                         /** @description Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself. */
                         permissions: string[];

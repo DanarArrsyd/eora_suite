@@ -110,7 +110,7 @@ final class AuthController
                     return null;
                 }
 
-                return ['plants' => $db->select('select id, code, name from plants order by code'), 'permissions' => $this->authorizer->permissions($db)];
+                return ['plants' => $this->authorizer->plants($db), 'permissions' => $this->authorizer->permissions($db)];
             });
             if ($tenant === null) {
                 $this->auth->end();
@@ -118,6 +118,10 @@ final class AuthController
                 throw new SessionExpiredException('Membership no longer active.');
             }
             ['plants' => $plants, 'permissions' => $permissions] = $tenant;
+            $active = $this->auth->plantId();
+            if ($active !== null && ! in_array($active, array_map(static fn (stdClass $p) => (string) $p->id, $plants), true)) {
+                $this->auth->clearPlant();
+            }
         }
 
         return response()->json([
@@ -127,9 +131,19 @@ final class AuthController
                 'email' => $profile['user']->email_display,
                 'locale' => $profile['user']->locale,
             ],
-            'tenants' => array_map(static fn (stdClass $t) => ['id' => $t->id, 'code' => $t->code, 'name' => $t->name], $profile['tenants']),
+            /**
+             * Tenants where the user holds an ACTIVE membership (tenant picker).
+             *
+             * @var list<array{id: string, code: string, name: string}>
+             */
+            'tenants' => array_map(static fn (stdClass $t) => ['id' => (string) $t->id, 'code' => (string) $t->code, 'name' => (string) $t->name], $profile['tenants']),
             'activeTenantId' => $this->auth->tenantId(),
-            'plants' => array_map(static fn (stdClass $p) => ['id' => $p->id, 'code' => $p->code, 'name' => $p->name], $plants),
+            /**
+             * Plants of the active tenant inside the user's assignment scopes (empty while no tenant is selected).
+             *
+             * @var list<array{id: string, code: string, name: string}>
+             */
+            'plants' => array_map(static fn (stdClass $p) => ['id' => (string) $p->id, 'code' => (string) $p->code, 'name' => (string) $p->name], $plants),
             'activePlantId' => $this->auth->plantId(),
             /**
              * Permission codes held anywhere in the active tenant: a navigation hint only, every endpoint authorizes itself.
@@ -140,32 +154,52 @@ final class AuthController
         ]);
     }
 
-    /** Tenant picker (DD-07): only a tenant where the user holds an ACTIVE membership; session regenerated. */
+    /**
+     * Tenant picker (DD-07): only a tenant where the user holds an ACTIVE membership; session regenerated.
+     *
+     * The switch is recorded as security event `workspace.tenant_selected` of the chosen tenant before the session
+     * changes: no record, no switch.
+     */
     public function selectTenant(Request $request): JsonResponse
     {
         $user = $this->requireSession();
-        $tenant = (string) $request->validate(['tenantId' => ['required', 'uuid']])['tenantId'];
+        $tenant = strtolower((string) $request->validate(['tenantId' => ['required', 'uuid']])['tenantId']);
 
         $allowed = $this->transaction->run(TenantContext::tenantless($user), fn (EoraPostgresConnection $db) => $db->selectOne(
-            'select 1 as ok from tenants where id = ?', [strtolower($tenant)],
+            'select 1 as ok from tenants where id = ?', [$tenant],
         ));
         if ($allowed === null) {
             throw new NotFoundHttpException; // not a member: indistinguishable from a missing tenant
         }
-        $this->auth->switchTenant(strtolower($tenant));
+        $context = new TenantContext($tenant, $user);
+        SecurityEventRecorder::write($this->transaction, $context, [$this->workspaceEvent('workspace.tenant_selected', 'tenants', $tenant, 200, $request)]);
+        $this->auth->switchTenant($tenant);
 
         return $this->me();
     }
 
-    /** Plant switch inside the active tenant; RLS decides what exists. */
+    /**
+     * Plant switch inside the active tenant, limited to plants covered by the user's current assignments.
+     *
+     * Any other plant answers 404 like a missing one. Success (`workspace.plant_selected`) and refusal
+     * (`workspace.plant_denied`) are recorded as security events in the same transaction as the check.
+     */
     public function selectPlant(Request $request): JsonResponse
     {
         $user = $this->requireSession();
         $plant = strtolower((string) $request->validate(['plantId' => ['required', 'uuid']])['plantId']);
         $tenant = $this->auth->tenantId() ?? throw ValidationException::withMessages(['plantId' => 'Select a tenant first.']);
 
-        $exists = $this->transaction->run(new TenantContext($tenant, $user), fn (EoraPostgresConnection $db) => $db->selectOne('select 1 as ok from plants where id = ?', [$plant]));
-        if ($exists === null) {
+        $context = new TenantContext($tenant, $user);
+        $allowed = $this->transaction->run($context, function (EoraPostgresConnection $db) use ($context, $plant, $request): bool {
+            $allowed = $this->authorizer->plants($db, $plant) !== [];
+            SecurityEventRecorder::insert($db, $context, [$allowed
+                ? $this->workspaceEvent('workspace.plant_selected', 'plants', $plant, 200, $request)
+                : $this->workspaceEvent('workspace.plant_denied', 'plants', $plant, 404, $request)]);
+
+            return $allowed;
+        });
+        if (! $allowed) {
             throw new NotFoundHttpException;
         }
         $this->auth->switchPlant($plant);
@@ -302,6 +336,22 @@ final class AuthController
         return (int) $this->transaction->run(TenantContext::tenantless($user), fn (EoraPostgresConnection $db) => $db->selectOne(
             'select credential_version from users where id = ?', [$user],
         )->credential_version);
+    }
+
+    private function workspaceEvent(string $action, string $resource, string $id, int $status, Request $request): SecurityEvent
+    {
+        $correlation = (string) (Context::get('correlation_id') ?? '');
+
+        return new SecurityEvent(
+            $action,
+            resource: $resource,
+            requestedId: str_replace('-', '', $id),
+            route: $request->route()?->getName(),
+            httpStatus: $status,
+            correlationId: $correlation !== '' ? $correlation : null,
+            ipHash: $this->hasher->hash($request->ip()),
+            userAgentHash: $this->hasher->hash((string) $request->userAgent()),
+        );
     }
 
     private function authEvent(string $action, ?string $emailHmac, ?string $ipHash, Request $request): void

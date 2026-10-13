@@ -226,6 +226,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@eora/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       '@eora/design-tokens':
         specifier: workspace:*
         version: link:../../packages/design-tokens
@@ -293,6 +296,9 @@ importers:
 
   packages/features:
     dependencies:
+      '@eora/api-client':
+        specifier: workspace:*
+        version: link:../api-client
       '@eora/ui':
         specifier: workspace:*
         version: link:../ui

@@ -21,11 +21,17 @@ export type ShellNavigation = {
 /** Navigation state derived from the single config + session role + current route. */
 export function useShellNavigation(): ShellNavigation {
   const pathname = usePathname() ?? '/';
-  const { role, source } = useShellSession();
-  const modules = React.useMemo(
-    () => visibleModules(NAV_MODULES, { allowedModules: source.allowedModules(role), showPendingDecisions: false }),
-    [role, source],
-  );
+  const { role, source, identity } = useShellSession();
+  const permissions = identity?.permissions;
+  const modules = React.useMemo(() => {
+    let allowed = source.allowedModules(role);
+    // Administration runs on the live API: shown from the user's permission hint, not from the prototype role.
+    if (permissions) {
+      const others = allowed === '*' ? NAV_MODULES.map((m) => m.id) : [...allowed];
+      allowed = [...others.filter((id) => id !== 'admin'), ...(permissions.includes('core.users_roles.view') ? ['admin'] : [])];
+    }
+    return visibleModules(NAV_MODULES, { allowedModules: allowed, showPendingDecisions: false });
+  }, [role, source, permissions]);
   const counts = React.useMemo(() => source.badgeCounts(role), [role, source]);
   const match = React.useMemo(() => matchRoute(modules, pathname), [modules, pathname]);
   // A module previewed from the primary sidebar applies only to the route it was chosen on.
