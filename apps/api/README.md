@@ -198,6 +198,14 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   the operator's terminal (CONSOLE channel, never mailed, never logged; `invitation.delivered_console` event).
 - The production-day start has no default (tenant input, ADR-0012); the time zone defaults to Asia/Jakarta (D-044).
 
+## Business audit and inbox (M1 / B1 step 7a, doc 25 §8, D-069)
+- `AuditRecorder::record($db, action, entityType, entityId, before, after, detail)` inside the command transaction →
+  `audit_events` (append-only; actor and time stamped by the database; before/after as SHA-256 of canonical JSON;
+  detail = ids and codes, never e-mails or secrets). Recorded: `role_assignment.granted|revoked`,
+  `membership.invited|invitation_resent|activated|suspended|reactivated`, `tenant.provisioned`.
+- `inbox_notifications`: a user sees and marks only its own rows. Granting a role with sensitive permissions notifies
+  every other ACTIVE administrator (`access.sensitive_role_granted`, D-069). `GET /api/v1/inbox`, `POST /inbox/read`.
+
 ## Endpoints (B0)
 | Method | Path | Purpose |
 |---|---|---|

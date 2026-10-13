@@ -7,6 +7,7 @@ namespace App\Platform\Access\Http;
 use App\Platform\Access\Authorizer;
 use App\Platform\Access\Http\Resources\MemberResource;
 use App\Platform\Access\Scope;
+use App\Platform\Audit\AuditRecorder;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
 use Illuminate\Database\QueryException;
@@ -31,7 +32,7 @@ final class MemberController
 
     private const string MANAGE = 'core.users_roles.post';
 
-    public function __construct(private readonly Authorizer $authorizer) {}
+    public function __construct(private readonly Authorizer $authorizer, private readonly AuditRecorder $audit) {}
 
     /**
      * Invite by e-mail. The identity is resolved first on the auth connection (`auth_api.invite_identity`: existing
@@ -71,6 +72,7 @@ final class MemberController
                 : $e;
         }
         $this->dispatch($db, $membership, 'INITIAL');
+        $this->audit->record($db, 'membership.invited', 'membership', $membership, null, ['status' => 'INVITED', 'userId' => (string) $userId], ['userId' => (string) $userId]);
 
         return $this->member($db, $membership)->response()->setStatusCode(201);
     }
@@ -86,6 +88,7 @@ final class MemberController
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Not invited', 'Only a pending invitation can be resent.');
         }
         $this->dispatch($db, (string) $row->id, 'RESEND');
+        $this->audit->record($db, 'membership.invitation_resent', 'membership', (string) $row->id);
 
         return response()->noContent(202);
     }
@@ -93,13 +96,13 @@ final class MemberController
     /** Suspend an invited or active member: no access in this tenant until reactivated; assignments are kept. */
     public function suspend(string $membership): JsonResponse
     {
-        return $this->transition($membership, ['INVITED', 'ACTIVE'], "'SUSPENDED'");
+        return $this->transition($membership, ['INVITED', 'ACTIVE'], "'SUSPENDED'", 'membership.suspended');
     }
 
     /** Reactivate a suspended member: back to ACTIVE when it had been activated, otherwise back to INVITED. */
     public function reactivate(string $membership): JsonResponse
     {
-        return $this->transition($membership, ['SUSPENDED'], "case when activated_at is null then 'INVITED' else 'ACTIVE' end");
+        return $this->transition($membership, ['SUSPENDED'], "case when activated_at is null then 'INVITED' else 'ACTIVE' end", 'membership.reactivated');
     }
 
     /**
@@ -109,7 +112,7 @@ final class MemberController
      *
      * @param  list<string>  $from
      */
-    private function transition(string $membership, array $from, string $to): JsonResponse
+    private function transition(string $membership, array $from, string $to, string $action): JsonResponse
     {
         $db = $this->db();
         $scopes = $this->authorizer->requireAnywhere($db, self::MANAGE, lock: true);
@@ -128,7 +131,8 @@ final class MemberController
         if (! in_array($row->status, $from, true)) {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Not allowed in this status', "This action is not possible for a member with status {$row->status}.");
         }
-        $db->update("update memberships set status = {$to} where id = ?", [$row->id]);
+        $status = (string) $db->selectOne("update memberships set status = {$to} where id = ? returning status", [$row->id])->status;
+        $this->audit->record($db, $action, 'membership', (string) $row->id, ['status' => $row->status], ['status' => $status], ['from' => $row->status, 'to' => $status]);
 
         return $this->member($db, (string) $row->id)->response();
     }

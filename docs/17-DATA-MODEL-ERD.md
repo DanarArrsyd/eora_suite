@@ -64,7 +64,7 @@ erDiagram
 | `roles`, `permissions`, `role_permissions` | tenant_id (roles), permission key | permission catalogue global; + `role_templates`, `role_template_permissions` (global, read-only) — M1 step 5 |
 | `role_assignments` | tenant_id, membership_id, role_id, scope_type (`TENANT/COMPANY/PLANT` in B1; `warehouse/work_center` with B2), typed scope columns `company_id`, `plant_id` (D-B1-02, composite FKs), valid_from, valid_until, granted_by, grant_reason, revoked_at, revoked_by, revoke_reason | data scope (doc 18); revocation keeps the row |
 | `approval_policies`, `approval_requests`, `approval_steps` | tenant_id, entity_type, action, threshold, approver_role, sod_rule | |
-| `audit_events` | tenant_id, id, occurred_at, actor, action, entity, before/after hash, correlation_id | append-only |
+| `audit_events` | tenant_id, id, occurred_at, actor, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail (jsonb, ids/codes only, ≤ 4 KB), correlation_id, ip_hash, user_agent_hash | append-only; actor/time stamped by the database from the signed context (M1 step 7a) |
 | `inventory_periods` | tenant_id, plant_id, period, status | |
 | `shift_calendars`, `shifts` | tenant_id, start/end local time, crosses_midnight | `production_date` rule |
 
