@@ -203,3 +203,17 @@ it('T-PROV-04: provisions an administrator who already has an account elsewhere 
     spa($this)->postJson('/api/v1/auth/login', ['email' => $existing['email'], 'password' => $existing['password']])->assertOk();
     expect(tenantState($result->tenantId)['memberships'][0]->status)->toBe('INVITED');
 })->group('integration', 'provisioning');
+
+it('T-PROV-02: the console link is issued even behind a backlog of more than 100 pending dispatch requests', function () {
+    $other = TenantFixtures::provision(1);
+    $invited = IdentityFixtures::invite($other, IdentityFixtures::email());
+    AccessFixtures::run($other, function (EoraPostgresConnection $db) use ($other, $invited) {
+        for ($i = 0; $i < 150; $i++) {
+            $db->insert("insert into invitation_dispatch_requests (tenant_id, membership_id, reason) values (?, ?, 'INITIAL')", [$other['tenant'], $invited['membership']]);
+        }
+    });
+
+    $result = app(TenantProvisioner::class)->provision(spec(tenantCode(), IdentityFixtures::email()), console: true);
+
+    expect(app(ConsoleInvitation::class)->deliver($result->adminMembershipId))->toMatch('/#token=[0-9a-f]{64}$/');
+})->group('integration', 'provisioning');

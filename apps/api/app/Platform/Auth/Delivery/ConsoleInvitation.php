@@ -14,13 +14,20 @@ use Illuminate\Support\Facades\DB;
  */
 final class ConsoleInvitation
 {
+    private const int MAX_ROUNDS = 50;
+
     public function deliver(string $membershipId): ?string
     {
         $db = DB::connection('pgsql_delivery');
         $worker = 'console:'.substr(gethostname() ?: 'host', 0, 40).':'.getmypid();
 
-        $db->select('select auth_api.claim_invitation_dispatch(?, ?)', [$worker, 100]);
-        $claim = $db->selectOne('select * from auth_api.claim_console_delivery(?, ?)', [$worker, $membershipId]);
+        // pending requests are converted oldest first across all tenants: keep converting until this membership's console
+        // delivery exists (bounded; each round converts up to 100 requests)
+        $claim = null;
+        for ($round = 0; $round < self::MAX_ROUNDS && ($claim->delivery_id ?? null) === null; $round++) {
+            $db->select('select auth_api.claim_invitation_dispatch(?, ?)', [$worker, 100]);
+            $claim = $db->selectOne('select * from auth_api.claim_console_delivery(?, ?)', [$worker, $membershipId]);
+        }
         if ($claim === null || $claim->delivery_id === null) {
             return null;
         }

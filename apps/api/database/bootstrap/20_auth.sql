@@ -231,10 +231,17 @@ BEGIN
 END
 $fn$;
 
+-- Provisioning refuses an identity that cannot activate (DISABLED): otherwise the tenant would be bound to an
+-- administrator whose invitation the delivery conversion rejects (IDENTITY_NOT_ACTIVE, SQLSTATE EA001).
 CREATE OR REPLACE FUNCTION auth_api.provision_identity(email text)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
+DECLARE
+  uid uuid := auth.ensure_identity(email, 'auth_web');
 BEGIN
-  RETURN auth.ensure_identity(email, 'auth_web');
+  IF uid IS NOT NULL AND EXISTS (SELECT 1 FROM auth.identities i WHERE i.user_id = uid AND i.status <> 'ACTIVE') THEN
+    RAISE EXCEPTION 'IDENTITY_NOT_ACTIVE' USING ERRCODE = 'EA001';
+  END IF;
+  RETURN uid;
 END
 $fn$;
 
@@ -358,7 +365,8 @@ $fn$;
 
 -- Claims the open CONSOLE invitation delivery of one membership for the provisioning command running in the operator's
 -- terminal (eora_auth_delivery; doc 25 §2.4, D-B1-18). Same lease, attempts and secret path as the e-mail worker; the
--- recipient is never returned (the operator types the address). Recorded as `invitation.delivered_console`.
+-- recipient is never returned (the operator types the address). `invitation.delivered_console` is recorded by
+-- mark_delivery_result on the successful acknowledgement only.
 CREATE OR REPLACE FUNCTION auth_api.claim_console_delivery(worker_id text, membership_id uuid)
 RETURNS TABLE (delivery_id uuid, claim_token uuid)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
@@ -380,8 +388,6 @@ BEGIN
   IF q.id IS NULL THEN
     RETURN;
   END IF;
-  INSERT INTO public.security_events (id, occurred_at, tenant_id, user_id, membership_id, source, action, detail_code)
-  VALUES (pg_catalog.gen_random_uuid(), pg_catalog.now(), q.tenant_id, q.user_id, q.membership_id, 'auth_delivery', 'invitation.delivered_console', 'CONSOLE');
   RETURN QUERY SELECT q.id, q.claim_token;
 END
 $fn$;
@@ -458,6 +464,10 @@ BEGIN
       END IF;
     END IF;
     UPDATE auth.delivery_queue SET status = 'SENT', claim_token = NULL, updated_at = pg_catalog.now() WHERE id = q.id;
+    IF q.channel = 'CONSOLE' THEN
+      INSERT INTO public.security_events (id, occurred_at, tenant_id, user_id, membership_id, source, action, detail_code)
+      VALUES (pg_catalog.gen_random_uuid(), pg_catalog.now(), q.tenant_id, q.user_id, q.membership_id, 'auth_delivery', 'invitation.delivered_console', 'CONSOLE');
+    END IF;
   ELSE
     -- backoff 1 / 5 / 15 / 60 minutes (D-B1-21); the secret stays ISSUED (unusable) and is rotated on the next claim
     UPDATE auth.delivery_queue

@@ -17,11 +17,12 @@ use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
- * Tenant provisioning without bypassing RLS (doc 25 §2.5, D-B1-13, D-B1-16): three idempotent steps, no external I/O
+ * Tenant provisioning without bypassing RLS (doc 25 §2.5, D-B1-13, D-B1-16): idempotent steps, no external I/O
  * inside a transaction.
- *  0. registry: prov_api.begin_provisioning(request_key, code, admin e-mail HMAC) — same inputs → same tenant id;
- *  1. identity: auth_api.provision_identity(email) (new or existing user);
- *  2. tenant transaction as eora_provisioner in the new tenant's signed context: lock_request → tenant, company, plant,
+ *  1. identity: auth_api.provision_identity(email) (new or existing user; a DISABLED identity is refused here, before
+ *     anything binds the tenant code to it);
+ *  2. registry: prov_api.begin_provisioning(request_key, code, admin e-mail HMAC) — same inputs → same tenant id;
+ *  3. tenant transaction as eora_provisioner in the new tenant's signed context: lock_request → tenant, company, plant,
  *     tenant-default business calendar, roles from templates, INVITED membership, dispatch request, TENANT_ADMIN at
  *     tenant scope, tenant ACTIVE → mark_tenant_created; all or nothing.
  * A re-run after success touches no tenant rows and only queues a resend for the stored first administrator.
@@ -48,6 +49,15 @@ final class TenantProvisioner
         $db = $this->db();
 
         try {
+            $user = $db->selectOne('select auth_api.provision_identity(?) as id', [$email])->id ?? null;
+        } catch (QueryException $e) {
+            throw (string) $e->getCode() === 'EA001' ? new ProvisioningException('IDENTITY_NOT_ACTIVE', 'This e-mail belongs to a disabled account; choose another administrator.') : $e;
+        }
+        if ($user === null) {
+            throw new ProvisioningException('IDENTITY_CAPPED', 'Identity creation is temporarily capped; retry later with the same inputs.');
+        }
+
+        try {
             $registry = $db->selectOne('select * from prov_api.begin_provisioning(?, ?, ?)', [$key, $spec->tenantCode, $this->hasher->hash($email)]);
         } catch (QueryException $e) {
             throw (string) $e->getCode() === 'EP001' ? new ProvisioningException('TENANT_CODE_TAKEN', 'The tenant code is already used by another provisioning request.') : $e;
@@ -55,11 +65,6 @@ final class TenantProvisioner
         $tenantId = (string) $registry->tenant_id;
 
         if ($registry->status === 'STARTED') {
-            $user = $db->selectOne('select auth_api.provision_identity(?) as id', [$email])->id ?? null;
-            if ($user === null) {
-                throw new ProvisioningException('IDENTITY_CAPPED', 'Identity creation is temporarily capped; retry later with the same inputs.');
-            }
-
             try {
                 $membership = $this->createTenant($spec, $key, $tenantId, (string) $user, $console, $beforeCommit);
 
