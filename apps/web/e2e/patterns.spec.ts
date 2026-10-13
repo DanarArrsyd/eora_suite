@@ -237,3 +237,17 @@ test('rapid list interactions are never lost (tab → tab → sort without waiti
   await expect(page).not.toHaveURL(/view=/);
   await expect(page.getByRole('tab', { name: /^All, 214/ })).toHaveAttribute('aria-selected', 'true');
 });
+
+test('date range filter: an end date only ("until") can be chosen, and a malformed URL date does not break the picker', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/system/examples/raw-material-lots?f.received=abc..def');
+  await page.getByRole('button', { name: /^Receipt date: not set/ }).click();
+  const panel = page.getByRole('dialog', { name: 'Receipt date' });
+  await panel.getByRole('button', { name: /^Until/ }).click();
+  await panel
+    .getByRole('grid', { name: /until/ })
+    .getByRole('button', { name: /^Friday, 9 October 2026/ })
+    .click();
+  await panel.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('button', { name: /^Receipt date: until 09 Oct 2026/ })).toBeVisible();
+});

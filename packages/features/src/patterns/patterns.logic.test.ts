@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readListQuery, writeListQuery, type ListUrlConfig } from './list-state';
-import { setDraftValue } from './filter-bar/filter-bar';
+import { setDraftValue, toRange } from './filter-bar/filter-bar';
 import type { FilterField } from './filter-bar/types';
 import { pageWindow } from './data-table/pagination';
 import { precheckFile } from './import-export/import-wizard';
@@ -84,5 +84,14 @@ describe('status catalogue', () => {
     expect(statusEntry('schedule', 'PARTIALLY_FULFILLED').label).toBe('Partially fulfilled');
     expect(statusEntry('indicator', 'PROVISIONAL').tone).toBe('warning');
     expect(JSON.stringify(STATUS_CATALOGUE)).not.toMatch(/WIP|Work in progress/i);
+  });
+});
+
+describe('date range from the URL', () => {
+  it('keeps valid ends, including an end date only, and drops malformed or impossible dates', () => {
+    expect(toRange('2026-10-01..2026-10-09')).toEqual({ from: '2026-10-01', to: '2026-10-09' });
+    expect(toRange('..2026-10-09')).toEqual({ from: '', to: '2026-10-09' });
+    expect(toRange('abc..def')).toEqual({ from: '', to: '' });
+    expect(toRange('2026-02-30..2026-13-01')).toEqual({ from: '', to: '' });
   });
 });

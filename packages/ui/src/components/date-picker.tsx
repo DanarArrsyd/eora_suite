@@ -145,7 +145,8 @@ export function DatePicker({
 
 /**
  * EoraDateRangePicker — from/to calendar dates in one popover calendar: the first click starts the range, the second ends
- * it (earlier second click swaps) and closes the popover. Either end may stay open (`from` only = from that date on).
+ * it (earlier second click swaps) and closes the popover. Either end may stay open: "From" / "Until" switch the calendar
+ * to that one endpoint, so `from`-only ("from that date on") and `to`-only ("until that date") ranges are both possible.
  */
 export function DateRangePicker({
   value,
@@ -164,8 +165,12 @@ export function DateRangePicker({
 }: Base & { value: DateRange; onChange: (value: DateRange) => void }) {
   const [open, setOpen] = React.useState(false);
   const [draft, setDraft] = React.useState<DateRange>(value);
+  const [edge, setEdge] = React.useState<'range' | 'from' | 'to'>('range');
   const change = (o: boolean) => {
-    if (o) setDraft(value);
+    if (o) {
+      setDraft(value);
+      setEdge('range');
+    }
     setOpen(o);
     if (!o) onBlur?.();
   };
@@ -176,7 +181,30 @@ export function DateRangePicker({
       setOpen(false);
     }
   };
-  const hint = !draft.from ? 'Choose the first day.' : !draft.to ? 'Choose the last day, or keep only the start.' : formatDateRange(draft.from, draft.to);
+  const hint =
+    edge === 'from'
+      ? 'Choose the first day; the end stays as it is.'
+      : edge === 'to'
+        ? 'Choose the last day; the start stays as it is.'
+        : !draft.from
+          ? 'Choose the first day, or use Until for an end date only.'
+          : !draft.to
+            ? 'Choose the last day, or press Done to keep only the start.'
+            : formatDateRange(draft.from, draft.to);
+  const edgeBtn = (which: 'from' | 'to') => (
+    <button
+      type="button"
+      aria-pressed={edge === which}
+      onClick={() => setEdge(edge === which ? 'range' : which)}
+      className={cn(
+        'flex min-w-0 flex-1 flex-col rounded-md border px-2.5 py-1 text-left max-md:py-2',
+        edge === which ? 'border-ring bg-accent-subtle' : 'border-line hover:bg-hover',
+      )}
+    >
+      <span className="text-[11px] text-ink-2">{which === 'from' ? 'From' : 'Until'}</span>
+      <span className="truncate text-[13px] font-medium text-ink tabular-nums">{draft[which] ? formatDate(draft[which]) : 'Any'}</span>
+    </button>
+  );
   return (
     <P.Root open={open} onOpenChange={change}>
       <Trigger
@@ -190,7 +218,28 @@ export function DateRangePicker({
         {...aria}
       />
       <Panel label={label}>
-        <Calendar mode="range" label={label} value={draft} onChange={pick} min={min} max={max} today={today} autoFocus />
+        <div className="mb-2 flex gap-2">
+          {edgeBtn('from')}
+          {edgeBtn('to')}
+        </div>
+        {edge === 'range' ? (
+          <Calendar mode="range" label={label} value={draft} onChange={pick} min={min} max={max} today={today} autoFocus />
+        ) : (
+          <Calendar
+            key={edge}
+            mode="single"
+            label={`${label}, ${edge === 'from' ? 'from' : 'until'}`}
+            value={draft[edge]}
+            onChange={(d) => {
+              setDraft({ ...draft, [edge]: d });
+              setEdge('range');
+            }}
+            min={edge === 'to' ? draft.from || min : min}
+            max={edge === 'from' ? draft.to || max : max}
+            today={today}
+            autoFocus
+          />
+        )}
         <p className="m-0 mt-2 text-xs text-ink-2" aria-live="polite">
           {hint}
         </p>
@@ -209,7 +258,7 @@ export function DateRangePicker({
           <button
             type="button"
             className={cn(footerBtn, 'bg-accent text-on-accent hover:bg-accent-hover disabled:bg-hover disabled:text-ink-2')}
-            disabled={!draft.from}
+            disabled={!draft.from && !draft.to}
             onClick={() => {
               onChange(draft);
               setOpen(false);

@@ -16,6 +16,7 @@ import {
   PopoverTrigger,
   Select,
   cn,
+  isIsoDate,
   type DateRange,
 } from '@eora/ui';
 import { activeFilterCount, useMediaQuery, type FilterValue, type FilterValues } from '../../data';
@@ -228,9 +229,10 @@ function CheckboxList({
   );
 }
 
-function toRange(str: string): DateRange {
+/** URL values are untrusted: a malformed or stale date (`?f.date=abc..`) is dropped instead of reaching the calendar. */
+export function toRange(str: string): DateRange {
   const r = parseRange(str);
-  return { from: r.from, to: r.to };
+  return { from: isIsoDate(r.from) ? r.from : '', to: isIsoDate(r.to) ? r.to : '' };
 }
 
 function fromRange(r: DateRange): string | undefined {
