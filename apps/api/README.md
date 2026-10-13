@@ -181,6 +181,23 @@ Tests refuse non-`*_test` databases and non-local hosts (`EORA_TEST_DB_HOST_ALLO
   the administrator's scope must cover every unrevoked assignment of the member (403 `SCOPE_FORBIDDEN`, D-068).
   Suspension ends access on the member's next request; assignments are kept.
 
+## Tenant provisioning (M1 / B1 step 6, doc 25 §2.5, D-B1-13, D-B1-16)
+```bash
+php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.test \
+  --company-code=DS --company-name="PT Demo Stamping" --plant-code=P1 --plant-name="Plant 1" \
+  --day-starts=07:00 [--timezone=Asia/Jakarta] [--deliver=email|console]
+```
+- Runs as `eora_provisioner` only: registry `prov.provisioning_requests` through `prov_api` (bootstrap `30_prov.sql`,
+  owner NOLOGIN `eora_prov_definer`), identity via `auth_api.provision_identity`, then one tenant transaction in the
+  new tenant's signed context (system actor `00000000-0000-0000-0000-000000000000`): tenant, company, plant,
+  tenant-default business calendar, roles from templates, INVITED membership + dispatch request, `TENANT_ADMIN` at
+  tenant scope, tenant ACTIVE, registry `TENANT_CREATED`. All or nothing.
+- Idempotent: the same code + admin e-mail resumes; after success it only queues a resend for the first
+  administrator. Same code with another e-mail → `TENANT_CODE_TAKEN`.
+- `--deliver=email` (default): the delivery worker mails the invitation. `--deliver=console`: the link is printed in
+  the operator's terminal (CONSOLE channel, never mailed, never logged; `invitation.delivered_console` event).
+- The production-day start has no default (tenant input, ADR-0012); the time zone defaults to Asia/Jakarta (D-044).
+
 ## Endpoints (B0)
 | Method | Path | Purpose |
 |---|---|---|

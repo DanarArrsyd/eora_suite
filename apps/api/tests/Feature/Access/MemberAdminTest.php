@@ -2,30 +2,16 @@
 
 declare(strict_types=1);
 
-use App\Platform\Auth\Delivery\InvitationMail;
 use App\Platform\Database\EoraPostgresConnection;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Tests\Support\AccessFixtures;
 use Tests\Support\IdentityFixtures;
 use Tests\Support\TenantFixtures;
-use Tests\TestCase;
 
 /*
  * M1 — Administration → Users (doc 28 §1, doc 25 §2.4, §13; D-068). Invitation through the real delivery worker,
  * resend, suspend and reactivate with SoD-06 and scope coverage.
  */
-
-/** Runs the delivery worker once and returns the invitation tokens mailed to $email, oldest first. */
-function mailedTokens(TestCase $test, string $email): array
-{
-    Mail::fake();
-    $test->artisan('eora:deliver-invitations', ['--once' => true])->assertSuccessful();
-
-    return Mail::sent(InvitationMail::class, fn (InvitationMail $m) => $m->hasTo($email))
-        ->map(fn (InvitationMail $m) => preg_match('/#token=([0-9a-f]{64})$/', $m->link, $x) === 1 ? $x[1] : null)
-        ->filter()->values()->all();
-}
 
 beforeEach(function () {
     $this->t = TenantFixtures::provision(2);

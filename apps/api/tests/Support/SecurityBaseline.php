@@ -33,6 +33,8 @@ final class SecurityBaseline
         'auth_api.issue_reset_secret(uuid,uuid)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_delivery']],
         'auth_api.request_password_reset(text,text)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_web']],
         'auth_api.claim_delivery(text)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_delivery']],
+        // M1 step 6: first-administrator link to the operator's terminal (doc 25 §2.4, D-B1-18)
+        'auth_api.claim_console_delivery(text,uuid)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_delivery']],
         'auth_api.claim_invitation_dispatch(text,integer)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_delivery']],
         'auth_api.consume_invitation(text,text)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_web']],
         'auth_api.invite_identity(text)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_web']],
@@ -42,6 +44,11 @@ final class SecurityBaseline
         'auth_api.provision_identity(text)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_provisioner']],
         'auth_api.record_login_failure(uuid,text)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_web']],
         'auth_api.record_security_event(text,text,text,text,text,text)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_web']],
+        // provisioning registry — doc 25 §2.5 (M1 step 6), one grantee
+        'prov_api.begin_provisioning(text,text,text)' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
+        'prov_api.lock_request(text)' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
+        'prov_api.mark_tenant_created(text,uuid,uuid)' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
+        'prov_api.provision_lookup(text,text)' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
     ];
 
     /** Every RLS expression on a tenant table must read the signed context (ADR-0001 Amendment 2). */
