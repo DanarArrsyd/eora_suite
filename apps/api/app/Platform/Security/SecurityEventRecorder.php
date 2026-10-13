@@ -78,15 +78,24 @@ final class SecurityEventRecorder
      */
     public static function write(TenantTransaction $transaction, TenantContext $context, array $events): void
     {
-        $transaction->run($context, function (EoraPostgresConnection $db) use ($context, $events): void {
-            foreach ($events as $event) {
-                $db->insert(
-                    'insert into security_events (tenant_id, user_id, source, action, resource, requested_id, route, http_status, correlation_id, ip_hash, user_agent_hash, detail_code)
-                     values (?, ?, \'app\', ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    [$context->tenantId, $context->actorId, $event->action, $event->resource, $event->requestedId, $event->route,
-                        $event->httpStatus, $event->correlationId, $event->ipHash, $event->userAgentHash, $event->detailCode],
-                );
-            }
-        });
+        $transaction->run($context, fn (EoraPostgresConnection $db) => self::insert($db, $context, $events));
+    }
+
+    /**
+     * Inserts $events inside the caller's open tenant transaction, so the event commits or rolls back with the work it
+     * records (e.g. a workspace switch).
+     *
+     * @param  list<SecurityEvent>  $events
+     */
+    public static function insert(EoraPostgresConnection $db, TenantContext $context, array $events): void
+    {
+        foreach ($events as $event) {
+            $db->insert(
+                'insert into security_events (tenant_id, user_id, source, action, resource, requested_id, route, http_status, correlation_id, ip_hash, user_agent_hash, detail_code)
+                 values (?, ?, \'app\', ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [$context->tenantId, $context->actorId, $event->action, $event->resource, $event->requestedId, $event->route,
+                    $event->httpStatus, $event->correlationId, $event->ipHash, $event->userAgentHash, $event->detailCode],
+            );
+        }
     }
 }

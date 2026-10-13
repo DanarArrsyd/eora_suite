@@ -199,7 +199,8 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
 - The production-day start has no default (tenant input, ADR-0012); the time zone defaults to Asia/Jakarta (D-044).
 - The long-running `api` container has no provisioner or delivery credentials (least privilege). Locally, run the command
   in the one-shot runner that has them, e.g.
-  `docker compose run --rm --entrypoint php -e EORA_FRONTEND_URL=http://localhost:3100 db-migrate artisan eora:tenant:provision …`
+  `docker compose run --rm --entrypoint php db-migrate artisan eora:tenant:provision …` (links in the mails and the
+  console point at `EORA_FRONTEND_URL`, the web app on port 3100)
 
 ## Business audit and inbox (M1 / B1 step 7a, doc 25 §8, D-069)
 - `AuditRecorder::record($db, action, entityType, entityId, before, after, detail)` inside the command transaction →

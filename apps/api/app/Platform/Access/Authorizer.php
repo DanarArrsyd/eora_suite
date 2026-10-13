@@ -90,6 +90,33 @@ final class Authorizer
     }
 
     /**
+     * Plants of the active tenant covered by at least one of the actor's current assignments (tenant ⊇ company ⊇ its
+     * plants ⊇ plant): the workspace a user may see and switch to. A member without an assignment sees no plant.
+     *
+     * @return list<stdClass> rows with id, code, name
+     */
+    public function plants(EoraPostgresConnection $db, ?string $plantId = null): array
+    {
+        return array_values($db->select(
+            "select p.id, p.code, p.name
+               from plants p
+              where (?::uuid is null or p.id = ?::uuid)
+                and exists (
+                    select 1
+                      from role_assignments ra
+                      join memberships m on m.tenant_id = ra.tenant_id and m.id = ra.membership_id and m.status = 'ACTIVE'
+                                        and m.user_id = (select c.actor from ctx_api.context() c)
+                     where ra.tenant_id = p.tenant_id
+                       and ra.revoked_at is null and ra.valid_from <= now() and (ra.valid_until is null or ra.valid_until > now())
+                       and (ra.scope_type = 'TENANT'
+                            or (ra.scope_type = 'COMPANY' and ra.company_id = p.company_id)
+                            or (ra.scope_type = 'PLANT' and ra.plant_id = p.id)))
+              order by p.code",
+            [$plantId, $plantId],
+        ));
+    }
+
+    /**
      * Every permission the actor holds anywhere in the active tenant — a UX hint for navigation only; each endpoint
      * still authorizes its own scope.
      *
