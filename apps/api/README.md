@@ -217,6 +217,14 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
 - Consumer `PrivilegedResetNotifier` (D-B1-25): a reset by a user holding sensitive permissions notifies the tenant
   administrators and the user (ACTIVE only) in the inbox; untrusted events → `outbox.untrusted_event`.
 
+## Error contract in OpenAPI and rate limits (M1 / B1 step 7c)
+- `App\Platform\Http\OpenApi\ProblemResponses` (Scramble operation + document transformer) documents every v1 error
+  as `application/problem+json` with the endpoint's codes from doc 24 §5; `ProblemResponses::ERRORS` must list every
+  `v1.*` route (contract test).
+- Login: 5/min per account, 20/min per IP; 60/min per IP for factory NAT addresses in `EORA_LOGIN_NAT_ALLOWLIST`
+  (comma-separated IPs/CIDRs, D-B1-06). The client IP is taken from `X-Forwarded-For` only through the hops listed in
+  `EORA_TRUSTED_PROXIES` (exact IPs/CIDRs; empty = trust none, never `*`). Review of all limits: doc 25 §16.
+
 ## Endpoints (B0)
 | Method | Path | Purpose |
 |---|---|---|

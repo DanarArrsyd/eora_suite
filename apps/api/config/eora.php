@@ -27,5 +27,14 @@ return [
     // Optional per-administrator cap on member invitations + resends per hour (doc 25 §2.4: per-inviter limits live at
     // the HTTP layer). No value is approved yet, so it is off unless set; the database still caps identity creation
     // platform-wide and resends at 5 per membership per 24 h.
+    // Reverse proxies / load balancers in front of the API (ADR-0006), exact IPs or CIDRs, comma-separated. Only these hops
+    // may set X-Forwarded-*; the client IP used for rate limits and security events is resolved through them. Empty =
+    // trust none (the direct peer is the client). Never "*" in production.
+    'trusted_proxies' => array_values(array_filter(array_map('trim', explode(',', (string) env('EORA_TRUSTED_PROXIES', ''))))),
+
+    // D-B1-06: factory NAT addresses/CIDRs that get the higher per-IP login limit (60/min instead of 20/min), e.g.
+    // "203.0.113.10,198.51.100.0/24". Empty by default.
+    'login_nat_allowlist' => array_values(array_filter(array_map('trim', explode(',', (string) env('EORA_LOGIN_NAT_ALLOWLIST', ''))))),
+
     'member_invite_per_hour' => env('EORA_MEMBER_INVITE_PER_HOUR') === null ? null : (int) env('EORA_MEMBER_INVITE_PER_HOUR'),
 ];
