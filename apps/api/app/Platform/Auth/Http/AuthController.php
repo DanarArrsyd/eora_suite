@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Platform\Auth\Http;
 
 use App\Platform\Access\Authorizer;
+use App\Platform\Audit\AuditRecorder;
 use App\Platform\Auth\AuthSession;
 use App\Platform\Auth\PasswordHasher;
 use App\Platform\Auth\PasswordPolicy;
@@ -42,6 +43,7 @@ final class AuthController
         private readonly TenantTransaction $transaction,
         private readonly SecurityHasher $hasher,
         private readonly Authorizer $authorizer,
+        private readonly AuditRecorder $audit,
     ) {}
 
     public function login(Request $request): JsonResponse
@@ -196,7 +198,9 @@ final class AuthController
         for ($attempt = 1; $attempt <= 2; $attempt++) {
             try {
                 $status = $this->transaction->run($context, function (EoraPostgresConnection $db) use ($accepted): ?string {
-                    $db->update("update memberships set status = 'ACTIVE', activated_at = now() where id = ? and status = 'INVITED'", [$accepted->membership_id]);
+                    if ($db->update("update memberships set status = 'ACTIVE', activated_at = now() where id = ? and status = 'INVITED'", [$accepted->membership_id]) === 1) {
+                        $this->audit->record($db, 'membership.activated', 'membership', (string) $accepted->membership_id, ['status' => 'INVITED'], ['status' => 'ACTIVE']);
+                    }
 
                     return $db->selectOne('select status from memberships where id = ?', [$accepted->membership_id])->status ?? null;
                 });

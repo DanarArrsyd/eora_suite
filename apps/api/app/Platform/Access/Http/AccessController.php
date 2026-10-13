@@ -9,8 +9,10 @@ use App\Platform\Access\Http\Resources\MemberResource;
 use App\Platform\Access\Http\Resources\RoleAssignmentResource;
 use App\Platform\Access\Http\Resources\RoleResource;
 use App\Platform\Access\Scope;
+use App\Platform\Audit\AuditRecorder;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
+use App\Platform\Inbox\Notifier;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use LogicException;
+use stdClass;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -37,7 +40,11 @@ final class AccessController
             (ra.revoked_at is null and ra.valid_from <= now() and (ra.valid_until is null or ra.valid_until > now())) as effective
           from role_assignments ra join roles r on r.id = ra.role_id';
 
-    public function __construct(private readonly Authorizer $authorizer) {}
+    public function __construct(
+        private readonly Authorizer $authorizer,
+        private readonly AuditRecorder $audit,
+        private readonly Notifier $notifier,
+    ) {}
 
     public function roles(): JsonResponse
     {
@@ -125,7 +132,14 @@ final class AccessController
             $this->rethrow($e, ['23505' => ['roleId' => 'This role is already assigned to the member in this scope.']]);
         }
 
-        return $this->load($db, (string) $row->id)->response()->setStatusCode(201);
+        $assignment = $db->selectOne(self::ASSIGNMENT_SQL.' where ra.id = ?', [$row->id]);
+        $event = $this->audit->record($db, 'role_assignment.granted', 'role_assignment', (string) $row->id, null, (array) $assignment, [
+            'membershipId' => (string) $assignment->membership_id, 'roleCode' => (string) $assignment->role_code, 'scopeType' => $target->type,
+            'companyId' => $assignment->company_id, 'plantId' => $assignment->plant_id, 'validUntil' => $assignment->valid_until, 'reason' => $data['reason'],
+        ], $target->plantId);
+        $this->notifySensitive($db, $event, $assignment);
+
+        return (new RoleAssignmentResource($assignment))->response()->setStatusCode(201);
     }
 
     /** Revoke an assignment: kept as history with revoker, time and reason. */
@@ -159,8 +173,12 @@ final class AccessController
         if ($updated === 0) {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Already revoked', 'This assignment was already revoked.');
         }
+        $after = $db->selectOne(self::ASSIGNMENT_SQL.' where ra.id = ?', [$row->id]);
+        $this->audit->record($db, 'role_assignment.revoked', 'role_assignment', (string) $row->id, (array) $row, (array) $after, [
+            'membershipId' => (string) $after->membership_id, 'roleCode' => (string) $after->role_code, 'reason' => $data['reason'],
+        ], $after->plant_id);
 
-        return $this->load($db, (string) $row->id)->response();
+        return (new RoleAssignmentResource($after))->response();
     }
 
     private function db(): EoraPostgresConnection
@@ -234,8 +252,19 @@ final class AccessController
         throw $e;
     }
 
-    private function load(EoraPostgresConnection $db, string $id): RoleAssignmentResource
+    /** D-069: tenant administrators are told when a role carrying sensitive permissions is granted. */
+    private function notifySensitive(EoraPostgresConnection $db, string $event, stdClass $assignment): void
     {
-        return new RoleAssignmentResource($db->selectOne(self::ASSIGNMENT_SQL.' where ra.id = ?', [$id]));
+        $role = $db->selectOne(
+            'select r.code, r.name, exists (select 1 from role_permissions rp join permissions p on p.code = rp.permission_code
+                                             where rp.role_id = r.id and p.sensitive) as sensitive
+               from roles r where r.id = ?',
+            [$assignment->role_id],
+        );
+        if ($role === null || ! $role->sensitive) {
+            return;
+        }
+        $grantee = $db->selectOne('select u.display_name from memberships m join users u on u.id = m.user_id where m.id = ?', [$assignment->membership_id]);
+        $this->notifier->sensitiveRoleGranted($db, $event, (string) $role->code, (string) $role->name, (string) ($grantee->display_name ?? 'a member'), (string) $assignment->scope_type);
     }
 }

@@ -4,6 +4,7 @@ use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
 use App\Platform\Auth\Http\AuthController;
 use App\Platform\Http\Controllers\HealthController;
+use App\Platform\Inbox\Http\InboxController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -23,6 +24,12 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('invitations/accept', [AuthController::class, 'acceptInvitation'])->middleware('throttle:invitation-accept')->name('invitations.accept');
         Route::post('password/forgot', [AuthController::class, 'forgotPassword'])->name('password.forgot');
         Route::post('password/reset', [AuthController::class, 'resetPassword'])->middleware('throttle:invitation-accept')->name('password.reset');
+    });
+
+    // Inbox of the signed-in user in the active tenant (doc 07, doc 24 §7).
+    Route::middleware('tenant')->group(function (): void {
+        Route::get('inbox', [InboxController::class, 'index'])->name('inbox.index');
+        Route::post('inbox/read', [InboxController::class, 'markRead'])->name('inbox.read');
     });
 
     // Administration → Users, Roles & Permissions (doc 25 §2.4, §3, §13; doc 18). One TenantTransaction per request.

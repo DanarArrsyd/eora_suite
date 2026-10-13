@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Platform\Provisioning;
 
 use App\Platform\Access\RoleTemplates;
+use App\Platform\Audit\AuditRecorder;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Security\SecurityHasher;
 use App\Platform\Tenancy\TenantContext;
@@ -37,6 +38,7 @@ final class TenantProvisioner
         private readonly TenantTransaction $transaction,
         private readonly SecurityHasher $hasher,
         private readonly RoleTemplates $roles,
+        private readonly AuditRecorder $audit,
     ) {}
 
     /**
@@ -82,7 +84,10 @@ final class TenantProvisioner
             throw new RuntimeException('Provisioning registry is not in a resumable state ('.$registry->status.').');
         }
         $membership = (string) $registry->admin_membership_id;
-        $this->inTenant($tenantId, fn (EoraPostgresConnection $db) => $this->dispatch($db, $tenantId, $membership, $console ? 'CONSOLE' : 'RESEND'));
+        $this->inTenant($tenantId, function (EoraPostgresConnection $db) use ($tenantId, $membership, $console): void {
+            $this->dispatch($db, $tenantId, $membership, $console ? 'CONSOLE' : 'RESEND');
+            $this->audit->record($db, 'membership.invitation_resent', 'membership', $membership, detail: ['via' => 'provisioning', 'delivery' => $console ? 'CONSOLE' : 'EMAIL']);
+        });
 
         return new ProvisioningResult($tenantId, $membership, created: false);
     }
@@ -110,6 +115,10 @@ final class TenantProvisioner
                 [$tenantId, $membership, self::SYSTEM_ACTOR],
             );
             $db->update("update tenants set status = 'ACTIVE' where id = ?", [$tenantId]);
+            $this->audit->record($db, 'tenant.provisioned', 'tenant', $tenantId, null, ['code' => $spec->tenantCode, 'status' => 'ACTIVE'], [
+                'tenantCode' => $spec->tenantCode, 'companyCode' => $spec->companyCode, 'plantCode' => $spec->plantCode,
+                'adminMembershipId' => $membership, 'delivery' => $console ? 'CONSOLE' : 'EMAIL',
+            ]);
             $db->select('select prov_api.mark_tenant_created(?, ?, ?)', [$key, $user, $membership]);
 
             if ($beforeCommit !== null) {

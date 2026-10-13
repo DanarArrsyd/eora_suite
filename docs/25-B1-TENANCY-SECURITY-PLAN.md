@@ -580,6 +580,12 @@ Bootstrap of B and C: for every connection, `rolsuper = false AND rolbypassrls =
 | T-ESC-03 | B | company-scoped administrator grants at tenant scope | 403 `SCOPE_FORBIDDEN`; company and its plants allowed |
 | T-ESC-04 | C | `eora_app` updates role/scope/grantor/validity of an assignment, deletes it, un-revokes it, edits roles, role permissions or the catalogue; forges `granted_by` / `revoked_by` | permission denied / CHECK; grantor and revoker stamped from the signed actor |
 | T-ESC-05 | B | the grantor's own assignment is being revoked by a concurrent, uncommitted transaction while it grants | write waits on the `FOR SHARE` lock → `lock_timeout` → 503 `RETRYABLE_CONFLICT`, nothing written; retry succeeds after the other transaction ends |
+| **Business audit and inbox (M1 step 7a; definitions written 2026-10-13)** | | | |
+| T-AUD-01 | B | role grant/revoke, member invite/resend/suspend/reactivate, invitation activation, tenant provisioning | one `audit_events` row each, in the command transaction; actor stamped from the signed context (system actor for provisioning, invitee for activation); before/after SHA-256; detail without e-mail or secrets; correlation id |
+| T-AUD-02 | B | command writes audit, then fails (4xx) | audit row rolled back with the command |
+| T-AUD-03 | C | `eora_app` forges actor/time, updates/deletes/truncates audit, inserts into another tenant | actor and time re-stamped; append-only error; RLS violation; other tenant invisible |
+| T-AUD-04 | B | sensitive role granted (D-069 mitigation 2) | one inbox notification per other ACTIVE administrator (`core.users_roles.post`); none for the grantor or non-administrators; non-sensitive roles notify nobody |
+| T-AUD-05 | B/C | another user reads or marks a notification; notification addressed to a user who is not that membership's user | 0 rows / recipient check rejects |
 | **Isolation, context, session (unchanged from v3)** | | | |
 | T-ISO-01..05, 02b; T-MEM-01; T-TEN-01; T-USR-02; T-CTX-01..05; T-PROV-01..07; T-AUTH/SESS/CSRF/COOKIE/CORS/RBAC/ESC/CONC/RATE/AUD/PRIV | B/C | as v3 (T-ISO-01 now asserts the `security_events` row of §8) | as v3 |
 
@@ -628,7 +634,7 @@ Grantor ⊇ grantee; SoD-06 self-elevation always blocked (no thresholds in earl
 6. ✅ partly *(M1 steps 4b/4c: delivery worker, invitation and password-reset emails, T-INV, T-RST; outbox minimal follows with audit in step 9)* Delivery worker + outbox minimal + invitation + password reset; T-INV, T-RST.
 7. ✅ *(M1 step 5: catalogue + templates (doc 18 §1/§2/§5, D-B1-16), tenant roles, scoped `role_assignments`, `Authorizer`, SoD-06 trigger, admin endpoints `core/roles`, `core/members`, `core/role-assignments` (+ revoke), `/auth/me` permissions; T-RBAC-01..05, T-ESC-01..05; step 5b: member invitation, resend, suspend, reactivate — suspension/reactivation require scope coverage of all the member's assignments (D-068) and never one's own membership)* RBAC: roles, assignments, policies, escalation rules; T-RBAC, T-ESC.
 8. ✅ partly *(M1 step 6: `prov` registry + `prov_api` definers (`30_prov.sql`), `TenantProvisioner` + `eora:tenant:provision` (company, first plant, tenant-default calendar with operator-given production-day start, role templates, `TENANT_ADMIN`), `--deliver=console` via the CONSOLE delivery channel and `auth_api.claim_console_delivery`; T-PROV-01..04, 08, 10–13, 15, 16; T-PROV-09/14 covered sequentially (registry row lock / resend path), not with parallel processes; Playwright end-to-end follows with the frontend)* Provisioning command (bootstrap admin role D-B1-16); T-PROV, Playwright end-to-end.
-9. Business audit (`audit_events`), rate limits, OpenAPI, docs.
+9. ✅ partly *(M1 step 7a: `audit_events` (append-only, actor/time stamped by the database, written in the command transaction) for role assignments, member administration, invitation activation and provisioning; `inbox_notifications` (owner-only read/mark) + `GET /inbox`, `POST /inbox/read`; D-069 mitigations 1–2; T-AUD-01..05. Step 7b: outbox relay, problem schemas in OpenAPI, rate-limit review)* Business audit (`audit_events`), rate limits, OpenAPI, docs.
 
 ## 17. Final decision proposal
 ### 17.0 Summary (no OPEN item is treated as approved)

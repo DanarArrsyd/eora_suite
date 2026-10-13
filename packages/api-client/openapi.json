@@ -995,6 +995,106 @@
                 }
             }
         },
+        "/inbox": {
+            "get": {
+                "operationId": "v1.inbox.index",
+                "tags": [
+                    "Inbox"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {}
+                                        },
+                                        "meta": {
+                                            "type": "object",
+                                            "properties": {
+                                                "unread": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "required": [
+                                                "unread"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inbox/read": {
+            "post": {
+                "operationId": "v1.inbox.read",
+                "summary": "Marks the given notifications (or all, when `ids` is absent) as read; unknown ids are ignored",
+                "tags": [
+                    "Inbox"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "ids": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "format": "uuid"
+                                        },
+                                        "maxItems": 200
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "meta": {
+                                            "type": "object",
+                                            "properties": {
+                                                "updated": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "required": [
+                                                "updated"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "meta"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
         "/core/members/invitations": {
             "post": {
                 "operationId": "v1.core.members.invite",
