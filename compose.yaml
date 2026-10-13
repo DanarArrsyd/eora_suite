@@ -119,6 +119,9 @@ services:
       DB_PROVISIONER_PASSWORD: ${EORA_DB_PROVISIONER_PASSWORD}
       DB_AUTH_WEB_PASSWORD: ${EORA_DB_AUTH_WEB_PASSWORD}
       DB_AUTH_DELIVERY_PASSWORD: ${EORA_DB_AUTH_DELIVERY_PASSWORD}
+      DB_RELAY_PASSWORD: ${EORA_DB_RELAY_PASSWORD}
+      DB_RELAY_HOST: postgres
+      DB_RELAY_PORT: '5432'
     depends_on:
       db-bootstrap:
         condition: service_completed_successfully
@@ -172,6 +175,27 @@ services:
         condition: service_completed_successfully
       mailpit:
         condition: service_started
+
+  # Outbox relay (doc 25 §6.4): claims as eora_relay (ids only), handles each event as eora_app in the event's tenant.
+  outbox-relay:
+    image: eora-api:dev
+    entrypoint: ['php', 'artisan', 'eora:outbox:relay']
+    restart: unless-stopped
+    pull_policy: never # image built by the api service
+    healthcheck:
+      test: ['CMD-SHELL', 'kill -0 1']
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    environment:
+      <<: *api-env
+      DB_RELAY_PASSWORD: ${EORA_DB_RELAY_PASSWORD}
+      # the relay role connects directly (doc 25 §7: workers may bypass the pooler); handlers use eora_app via the pooler
+      DB_RELAY_HOST: postgres
+      DB_RELAY_PORT: '5432'
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
 
   api:
     build:

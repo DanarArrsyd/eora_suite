@@ -16,8 +16,8 @@ abstract class TestCase extends BaseTestCase
 
         $config = $app->make('config');
         $allowedHosts = getenv('EORA_TEST_DB_HOST_ALLOW') ?: null;
-        // Every connection the suite uses (runtime, owner, provisioner, auth web, delivery) must point at a local *_test database.
-        foreach ([(string) $config->get('database.default'), 'pgsql_owner', 'pgsql_provisioner', 'pgsql_auth', 'pgsql_delivery'] as $name) {
+        // Every connection the suite uses (runtime, owner, provisioner, auth web, delivery, relay) must point at a local *_test database.
+        foreach ([(string) $config->get('database.default'), 'pgsql_owner', 'pgsql_provisioner', 'pgsql_auth', 'pgsql_delivery', 'pgsql_relay'] as $name) {
             TestDatabaseGuard::assertSafe(
                 $app->environment(),
                 (array) $config->get('database.connections.'.$name),

@@ -103,7 +103,7 @@ erDiagram
 | `recon_case_evidence` | case_id, file_id, measurement refs | |
 
 ### Eventing / exchange
-`outbox_events (tenant_id, id, aggregate_type, aggregate_id, event_type, payload, occurred_at, dispatched_at, attempts)`, `processed_events (consumer, event_id)`, `inbox_notifications (tenant_id, user_id, event_id, severity, action_required, deep_link, read_at, UNIQUE(user_id,event_id))`, `push_subscriptions`, `import_jobs/import_rows`, `export_jobs`, `documents/files (storage_key tenant-prefixed, sha256)`.
+`outbox_events (tenant_id, id, source, event_type, aggregate_type, aggregate_id, payload, occurred_at, status PENDING|CLAIMED|DONE|DEAD, claim_token, claimed_until, attempts, max_attempts, next_attempt_at, last_error_code, dispatched_at, dead_at)` (M1 step 7b), `processed_events (consumer, event_id)`, `inbox_notifications (tenant_id, user_id, event_id, severity, action_required, deep_link, read_at, UNIQUE(user_id,event_id))`, `push_subscriptions`, `import_jobs/import_rows`, `export_jobs`, `documents/files (storage_key tenant-prefixed, sha256)`.
 
 ### Read models (rebuildable, Analytics-owned)
 `rm_conversion_view (per lot: on-hand, CP status, est pcs range)`, `pending_qc_aging`, `daily_fg_receipt (production_date, shift)`, `daily_delivery_outstanding`, `material_variance_summary`, `flow_strip_snapshot (scope, stage, qty, uom, as_of)`. Each row carries `as_of` and source high-water mark (last ledger movement id).

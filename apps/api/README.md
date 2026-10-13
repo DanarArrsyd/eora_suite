@@ -206,6 +206,17 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
 - `inbox_notifications`: a user sees and marks only its own rows. Granting a role with sensitive permissions notifies
   every other ACTIVE administrator (`access.sensitive_role_granted`, D-069). `GET /api/v1/inbox`, `POST /inbox/read`.
 
+## Transactional outbox and relay (M1 / B1 step 7b, doc 25 §6.4)
+- `OutboxPublisher::publish($db, type, aggregateType, aggregateId, payload)` inside the command transaction →
+  `outbox_events` (`source = 'app'`; `auth.*` types reserved for auth sources). `membership.invited` is published on
+  invitations and provisioning (business event only; delivery uses dispatch requests).
+- `consume_password_reset` writes `auth.password_reset_consumed` (source `auth_web`) per ACTIVE tenant.
+- Relay: `php artisan eora:outbox:relay` (Compose `outbox-relay`). Claims through `outbox_api.claim_events` as
+  `eora_relay` (ids, tenant ids, claim tokens only; 2-minute lease; 10 attempts then DEAD; backoff 1/5/15/60 min),
+  then handles each event as `eora_app` in the event's tenant; `processed_events` = at most once per consumer.
+- Consumer `PrivilegedResetNotifier` (D-B1-25): a reset by a user holding sensitive permissions notifies the tenant
+  administrators and the user (ACTIVE only) in the inbox; untrusted events → `outbox.untrusted_event`.
+
 ## Endpoints (B0)
 | Method | Path | Purpose |
 |---|---|---|

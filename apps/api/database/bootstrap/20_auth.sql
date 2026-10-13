@@ -623,6 +623,13 @@ BEGIN
   INSERT INTO public.security_events (id, occurred_at, tenant_id, user_id, membership_id, source, action)
   SELECT pg_catalog.gen_random_uuid(), pg_catalog.now(), m.tenant_id, rr.user_id, m.id, 'auth_web', 'auth.password_reset_consumed'
     FROM public.memberships m WHERE m.user_id = rr.user_id AND m.status = 'ACTIVE';
+  -- delivery mechanism for the privileged-reset notification (doc 25 §2.3): one outbox event per ACTIVE tenant, with a
+  -- deterministic id per (reset request, tenant): a second insert for the same reset fails on the primary key (T-PRN-05;
+  -- no ON CONFLICT, which would need SELECT on outbox_events under RLS)
+  INSERT INTO public.outbox_events (tenant_id, id, source, event_type, aggregate_type, aggregate_id, payload)
+  SELECT m.tenant_id, pg_catalog.md5(rr.id::text || ':' || m.tenant_id::text)::uuid, 'auth_web', 'auth.password_reset_consumed',
+         'user', rr.user_id, pg_catalog.jsonb_build_object('user_id', rr.user_id)
+    FROM public.memberships m WHERE m.user_id = rr.user_id AND m.status = 'ACTIVE';
   RETURN true;
 END
 $fn$;

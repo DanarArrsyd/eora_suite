@@ -12,6 +12,9 @@ use InvalidArgumentException;
  */
 final readonly class TenantContext
 {
+    /** Actor of system work (provisioning, outbox handlers): never a user id; stamped as created_by / actor. */
+    public const string SYSTEM_ACTOR = '00000000-0000-0000-0000-000000000000';
+
     private const string UUID = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/';
 
     public function __construct(public ?string $tenantId, public string $actorId)
@@ -28,6 +31,11 @@ final readonly class TenantContext
     public static function forTenant(string $tenantId, string $actorId): self
     {
         return new self($tenantId, $actorId);
+    }
+
+    public static function system(string $tenantId): self
+    {
+        return new self($tenantId, self::SYSTEM_ACTOR);
     }
 
     public static function tenantless(string $actorId): self

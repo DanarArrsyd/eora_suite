@@ -135,6 +135,24 @@ return [
             'connect_timeout' => env('DB_CONNECT_TIMEOUT', 3),
         ],
 
+        // Outbox relay role (doc 25 §6.4): EXECUTE on outbox_api.claim_events / complete_event / fail_event only — no
+        // table privilege, never payloads. Handlers run as eora_app (default connection) in the claimed tenant.
+        'pgsql_relay' => [
+            'driver' => 'pgsql',
+            'url' => null,
+            'host' => env('DB_RELAY_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('DB_RELAY_PORT', env('DB_PORT', '5432')),
+            'database' => env('DB_DATABASE', 'laravel'),
+            'username' => env('DB_RELAY_USERNAME', 'eora_relay'),
+            'password' => env('DB_RELAY_PASSWORD', ''),
+            'charset' => env('DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => env('DB_SSLMODE', 'prefer'),
+            'connect_timeout' => env('DB_CONNECT_TIMEOUT', 3),
+        ],
+
         // Tenant provisioning role (doc 25 §2.5): member of eora_app plus tenant creation. Direct connection (provisioning
         // may bypass the pooler, doc 25 §7). Used by the provisioning command and by test fixtures.
         'pgsql_provisioner' => [
