@@ -27,4 +27,19 @@ abstract class TestCase extends BaseTestCase
 
         return $app;
     }
+
+    /**
+     * Closes every database connection the test opened (runtime, owner, provisioner, auth, delivery). Without this the
+     * PDO handles live until garbage collection and a direct PostgreSQL (CI, no pooler) runs out of connection slots.
+     */
+    protected function tearDown(): void
+    {
+        if (isset($this->app)) {
+            foreach (array_keys($this->app['db']->getConnections()) as $name) {
+                $this->app['db']->disconnect($name);
+            }
+        }
+
+        parent::tearDown();
+    }
 }

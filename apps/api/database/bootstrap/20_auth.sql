@@ -90,6 +90,9 @@ CREATE TABLE IF NOT EXISTS auth.delivery_queue (
   CHECK (kind <> 'INVITATION' OR membership_id IS NOT NULL)
 );
 ALTER TABLE auth.delivery_queue ADD COLUMN IF NOT EXISTS reset_request_id uuid;
+-- CONSOLE: first-administrator link printed in the operator's terminal by the provisioning command (doc 25 §2.4,
+-- D-B1-18); the e-mail worker never claims it.
+ALTER TABLE auth.delivery_queue ADD COLUMN IF NOT EXISTS channel text NOT NULL DEFAULT 'EMAIL' CHECK (channel IN ('EMAIL', 'CONSOLE'));
 DO $do$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conname = 'delivery_reset_has_request') THEN
@@ -228,10 +231,17 @@ BEGIN
 END
 $fn$;
 
+-- Provisioning refuses an identity that cannot activate (DISABLED): otherwise the tenant would be bound to an
+-- administrator whose invitation the delivery conversion rejects (IDENTITY_NOT_ACTIVE, SQLSTATE EA001).
 CREATE OR REPLACE FUNCTION auth_api.provision_identity(email text)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
+DECLARE
+  uid uuid := auth.ensure_identity(email, 'auth_web');
 BEGIN
-  RETURN auth.ensure_identity(email, 'auth_web');
+  IF uid IS NOT NULL AND EXISTS (SELECT 1 FROM auth.identities i WHERE i.user_id = uid AND i.status <> 'ACTIVE') THEN
+    RAISE EXCEPTION 'IDENTITY_NOT_ACTIVE' USING ERRCODE = 'EA001';
+  END IF;
+  RETURN uid;
 END
 $fn$;
 
@@ -302,7 +312,8 @@ BEGIN
     -- at most one open delivery per membership: the replacement supersedes it in the same transaction
     UPDATE auth.delivery_queue SET status = 'CANCELLED', claim_token = NULL, updated_at = pg_catalog.now()
      WHERE membership_id = m.id AND kind = 'INVITATION' AND status IN ('PENDING', 'CLAIMED');
-    INSERT INTO auth.delivery_queue (kind, tenant_id, user_id, membership_id) VALUES ('INVITATION', m.tenant_id, m.user_id, m.id)
+    INSERT INTO auth.delivery_queue (kind, tenant_id, user_id, membership_id, channel)
+    VALUES ('INVITATION', m.tenant_id, m.user_id, m.id, CASE WHEN r.reason = 'CONSOLE' THEN 'CONSOLE' ELSE 'EMAIL' END)
     RETURNING id INTO delivery;
     UPDATE auth.invitations SET current_delivery_id = delivery, updated_at = pg_catalog.now() WHERE membership_id = m.id;
     UPDATE public.invitation_dispatch_requests SET status = 'CONVERTED', converted_delivery_id = delivery WHERE id = r.id;
@@ -343,12 +354,41 @@ BEGIN
      SET status = 'CLAIMED', claim_token = pg_catalog.gen_random_uuid(), claimed_by = worker_id,
          claim_expires_at = pg_catalog.now() + interval '2 minutes', attempts = q.attempts + 1, updated_at = pg_catalog.now()
    WHERE q.id = (SELECT x.id FROM auth.delivery_queue x
-                  WHERE x.attempts < x.max_attempts
+                  WHERE x.attempts < x.max_attempts AND x.channel = 'EMAIL'
                     AND ((x.status = 'PENDING' AND x.next_attempt_at <= pg_catalog.now())
                       OR (x.status = 'CLAIMED' AND x.claim_expires_at < pg_catalog.now()))
                   ORDER BY x.next_attempt_at, x.id
                   FOR UPDATE SKIP LOCKED LIMIT 1)
   RETURNING q.id, q.claim_token, q.kind, (SELECT i.email_normalized FROM auth.identities i WHERE i.user_id = q.user_id);
+END
+$fn$;
+
+-- Claims the open CONSOLE invitation delivery of one membership for the provisioning command running in the operator's
+-- terminal (eora_auth_delivery; doc 25 §2.4, D-B1-18). Same lease, attempts and secret path as the e-mail worker; the
+-- recipient is never returned (the operator types the address). `invitation.delivered_console` is recorded by
+-- mark_delivery_result on the successful acknowledgement only.
+CREATE OR REPLACE FUNCTION auth_api.claim_console_delivery(worker_id text, membership_id uuid)
+RETURNS TABLE (delivery_id uuid, claim_token uuid)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
+DECLARE
+  q record;
+BEGIN
+  IF worker_id IS NULL OR pg_catalog.length(worker_id) > 64 OR membership_id IS NULL THEN
+    RAISE EXCEPTION 'invalid arguments' USING ERRCODE = '22023';
+  END IF;
+  UPDATE auth.delivery_queue d
+     SET status = 'CLAIMED', claim_token = pg_catalog.gen_random_uuid(), claimed_by = worker_id,
+         claim_expires_at = pg_catalog.now() + interval '2 minutes', attempts = d.attempts + 1, updated_at = pg_catalog.now()
+   WHERE d.id = (SELECT x.id FROM auth.delivery_queue x
+                  WHERE x.kind = 'INVITATION' AND x.channel = 'CONSOLE' AND x.membership_id = claim_console_delivery.membership_id
+                    AND x.attempts < x.max_attempts
+                    AND (x.status = 'PENDING' OR (x.status = 'CLAIMED' AND x.claim_expires_at < pg_catalog.now()))
+                  FOR UPDATE SKIP LOCKED LIMIT 1)
+  RETURNING d.id, d.claim_token, d.tenant_id, d.user_id, d.membership_id INTO q;
+  IF q.id IS NULL THEN
+    RETURN;
+  END IF;
+  RETURN QUERY SELECT q.id, q.claim_token;
 END
 $fn$;
 
@@ -424,6 +464,10 @@ BEGIN
       END IF;
     END IF;
     UPDATE auth.delivery_queue SET status = 'SENT', claim_token = NULL, updated_at = pg_catalog.now() WHERE id = q.id;
+    IF q.channel = 'CONSOLE' THEN
+      INSERT INTO public.security_events (id, occurred_at, tenant_id, user_id, membership_id, source, action, detail_code)
+      VALUES (pg_catalog.gen_random_uuid(), pg_catalog.now(), q.tenant_id, q.user_id, q.membership_id, 'auth_delivery', 'invitation.delivered_console', 'CONSOLE');
+    END IF;
   ELSE
     -- backoff 1 / 5 / 15 / 60 minutes (D-B1-21); the secret stays ISSUED (unusable) and is rotated on the next claim
     UPDATE auth.delivery_queue
@@ -636,5 +680,6 @@ GRANT EXECUTE ON FUNCTION auth_api.login_lookup(text), auth_api.record_login_fai
   auth_api.request_password_reset(text, text), auth_api.consume_password_reset(text, text) TO eora_auth_web;
 GRANT EXECUTE ON FUNCTION auth_api.claim_invitation_dispatch(text, integer), auth_api.claim_delivery(text),
   auth_api.issue_invitation_secret(uuid, uuid), auth_api.mark_delivery_result(uuid, uuid, boolean, text),
-  auth_api.issue_reset_secret(uuid, uuid), auth_api.cleanup_orphan_identities(integer) TO eora_auth_delivery;
+  auth_api.issue_reset_secret(uuid, uuid), auth_api.cleanup_orphan_identities(integer),
+  auth_api.claim_console_delivery(text, uuid) TO eora_auth_delivery;
 GRANT EXECUTE ON FUNCTION auth_api.provision_identity(text) TO eora_provisioner;

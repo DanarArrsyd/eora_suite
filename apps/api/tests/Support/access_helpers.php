@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Platform\Auth\Delivery\InvitationMail;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Tenancy\TenantContext;
 use App\Platform\Tenancy\TenantTransaction;
+use Illuminate\Support\Facades\Mail;
 use Tests\Support\AccessFixtures;
 use Tests\TestCase;
 
@@ -59,4 +61,15 @@ function grantBody(array $tenant, string $membership, string $role, array $scope
         'plantId' => $scope[0] === 'PLANT' ? $scope[1] : null,
         'reason' => 'onboarding',
     ]);
+}
+
+/** Runs the delivery worker once and returns the invitation tokens mailed to $email, oldest first. */
+function mailedTokens(TestCase $test, string $email): array
+{
+    Mail::fake();
+    $test->artisan('eora:deliver-invitations', ['--once' => true])->assertSuccessful();
+
+    return Mail::sent(InvitationMail::class, fn (InvitationMail $m) => $m->hasTo($email))
+        ->map(fn (InvitationMail $m) => preg_match('/#token=([0-9a-f]{64})$/', $m->link, $x) === 1 ? $x[1] : null)
+        ->filter()->values()->all();
 }
