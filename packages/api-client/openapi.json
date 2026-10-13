@@ -1003,7 +1003,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "",
+                        "description": "Array of `NotificationResource`",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1011,7 +1011,9 @@
                                     "properties": {
                                         "data": {
                                             "type": "array",
-                                            "items": {}
+                                            "items": {
+                                                "$ref": "#/components/schemas/NotificationResource"
+                                            }
                                         },
                                         "meta": {
                                             "type": "object",
@@ -1293,6 +1295,64 @@
                     "assignments"
                 ],
                 "title": "MemberResource"
+            },
+            "NotificationResource": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "kind": {
+                        "type": "string"
+                    },
+                    "severity": {
+                        "type": "string",
+                        "enum": [
+                            "INFO",
+                            "WARNING",
+                            "CRITICAL"
+                        ]
+                    },
+                    "actionRequired": {
+                        "type": "boolean"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "body": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "deepLink": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "createdAt": {
+                        "type": "string"
+                    },
+                    "readAt": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                },
+                "required": [
+                    "id",
+                    "kind",
+                    "severity",
+                    "actionRequired",
+                    "title",
+                    "body",
+                    "deepLink",
+                    "createdAt",
+                    "readAt"
+                ],
+                "title": "NotificationResource"
             },
             "RoleAssignmentResource": {
                 "type": "object",

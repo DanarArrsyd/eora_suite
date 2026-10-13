@@ -9,7 +9,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use LogicException;
-use stdClass;
 
 /**
  * The signed-in user's inbox in the active tenant (doc 07; doc 24 §7 `GET /api/v1/inbox`, `POST /inbox/read`).
@@ -23,21 +22,7 @@ final class InboxController
         $rows = $db->select('select id, kind, severity, action_required, title, body, deep_link, created_at, read_at from inbox_notifications order by created_at desc, id desc limit 50');
         $unread = (int) $db->selectOne('select count(*) as n from inbox_notifications where read_at is null')->n;
 
-        return response()->json([
-            'data' => array_map(static fn (stdClass $n) => [
-                'id' => (string) $n->id,
-                'kind' => (string) $n->kind,
-                /** @var 'INFO'|'WARNING'|'CRITICAL' */
-                'severity' => (string) $n->severity,
-                'actionRequired' => (bool) $n->action_required,
-                'title' => (string) $n->title,
-                'body' => $n->body === null ? null : (string) $n->body,
-                'deepLink' => $n->deep_link === null ? null : (string) $n->deep_link,
-                'createdAt' => (string) $n->created_at,
-                'readAt' => $n->read_at === null ? null : (string) $n->read_at,
-            ], $rows),
-            'meta' => ['unread' => $unread],
-        ]);
+        return NotificationResource::collection($rows)->additional(['meta' => ['unread' => $unread]])->response();
     }
 
     /** Marks the given notifications (or all, when `ids` is absent) as read; unknown ids are ignored. */

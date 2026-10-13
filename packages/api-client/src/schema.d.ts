@@ -378,6 +378,19 @@ export interface components {
             status: "INVITED" | "ACTIVE" | "SUSPENDED" | "REVOKED";
             assignments: components["schemas"]["RoleAssignmentResource"][];
         };
+        /** NotificationResource */
+        NotificationResource: {
+            id: string;
+            kind: string;
+            /** @enum {string} */
+            severity: "INFO" | "WARNING" | "CRITICAL";
+            actionRequired: boolean;
+            title: string;
+            body: string | null;
+            deepLink: string | null;
+            createdAt: string;
+            readAt: string | null;
+        };
         /** RoleAssignmentResource */
         RoleAssignmentResource: {
             id: string;
@@ -926,13 +939,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Array of `NotificationResource` */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        data: unknown[];
+                        data: components["schemas"]["NotificationResource"][];
                         meta: {
                             unread: number;
                         };

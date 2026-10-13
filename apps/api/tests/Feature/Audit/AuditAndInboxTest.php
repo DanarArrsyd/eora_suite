@@ -47,7 +47,8 @@ it('T-AUD-01: grants and revocations are audited in the same transaction, stampe
         ->and($rows[1]->before_hash)->toMatch('/^[0-9a-f]{64}$/')->and($rows[1]->after_hash)->not->toBe($rows[1]->before_hash)
         ->and($rows[0]->correlation_id)->not->toBeNull();
     $detail = json_decode($rows[0]->detail, true);
-    expect($detail['roleCode'])->toBe('QCI')->and($detail['scopeType'])->toBe('PLANT')->and($detail['reason'])->toBe('onboarding');
+    expect($detail['roleCode'])->toBe('QCI')->and($detail['scopeType'])->toBe('PLANT')->and($detail)->not->toHaveKey('reason')
+        ->and($rows[1]->before_hash)->toBe($rows[0]->after_hash); // same projection: the granted state is the state before revocation
 })->group('integration', 'audit');
 
 it('T-AUD-01: member administration and invitation acceptance are audited', function () {

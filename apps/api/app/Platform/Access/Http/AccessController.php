@@ -133,9 +133,10 @@ final class AccessController
         }
 
         $assignment = $db->selectOne(self::ASSIGNMENT_SQL.' where ra.id = ?', [$row->id]);
-        $event = $this->audit->record($db, 'role_assignment.granted', 'role_assignment', (string) $row->id, null, (array) $assignment, [
+        // the free-form reason stays on the assignment row only (it may contain anything the administrator typed)
+        $event = $this->audit->record($db, 'role_assignment.granted', 'role_assignment', (string) $row->id, null, $this->state($db, (string) $row->id), [
             'membershipId' => (string) $assignment->membership_id, 'roleCode' => (string) $assignment->role_code, 'scopeType' => $target->type,
-            'companyId' => $assignment->company_id, 'plantId' => $assignment->plant_id, 'validUntil' => $assignment->valid_until, 'reason' => $data['reason'],
+            'companyId' => $assignment->company_id, 'plantId' => $assignment->plant_id, 'validUntil' => $assignment->valid_until,
         ], $target->plantId);
         $this->notifySensitive($db, $event, $assignment);
 
@@ -161,6 +162,7 @@ final class AccessController
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Already revoked', 'This assignment was already revoked.');
         }
 
+        $before = $this->state($db, (string) $row->id);
         try {
             // conditional: a concurrent revocation that committed first leaves 0 rows here (re-checked after the row lock)
             $updated = $db->update(
@@ -174,8 +176,8 @@ final class AccessController
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Already revoked', 'This assignment was already revoked.');
         }
         $after = $db->selectOne(self::ASSIGNMENT_SQL.' where ra.id = ?', [$row->id]);
-        $this->audit->record($db, 'role_assignment.revoked', 'role_assignment', (string) $row->id, (array) $row, (array) $after, [
-            'membershipId' => (string) $after->membership_id, 'roleCode' => (string) $after->role_code, 'reason' => $data['reason'],
+        $this->audit->record($db, 'role_assignment.revoked', 'role_assignment', (string) $row->id, $before, $this->state($db, (string) $row->id), [
+            'membershipId' => (string) $after->membership_id, 'roleCode' => (string) $after->role_code,
         ], $after->plant_id);
 
         return (new RoleAssignmentResource($after))->response();
@@ -250,6 +252,16 @@ final class AccessController
         }
 
         throw $e;
+    }
+
+    /**
+     * The audited entity state: the stored row only, the same projection before and after a change.
+     *
+     * @return array<string, mixed>
+     */
+    private function state(EoraPostgresConnection $db, string $id): array
+    {
+        return (array) $db->selectOne('select * from role_assignments where id = ?', [$id]);
     }
 
     /** D-069: tenant administrators are told when a role carrying sensitive permissions is granted. */
