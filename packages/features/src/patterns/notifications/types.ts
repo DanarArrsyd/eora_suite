@@ -19,8 +19,13 @@ export type InboxNotification = {
   module?: string;
 };
 
+/** One inbox read: the latest items plus totals over the whole inbox (the list may be truncated, the totals never are). */
+export type InboxPage = { items: InboxNotification[]; unread: number; actionRequired: number };
+
 export interface NotificationSource {
   readonly isMock: boolean;
-  list(role: RoleKey, signal?: AbortSignal): Promise<InboxNotification[]>;
+  list(role: RoleKey, signal?: AbortSignal): Promise<InboxPage>;
   markRead(role: RoleKey, ids: string[]): Promise<void>;
+  /** Every unread notification of the inbox, not only the loaded ones. */
+  markAllRead(role: RoleKey): Promise<void>;
 }

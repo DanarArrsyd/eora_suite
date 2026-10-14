@@ -16,7 +16,7 @@ test('notifications page shows the server inbox without a mock label, with sever
   expect(r.violations.map((v) => v.id)).toEqual([]);
 });
 
-test('mark as read sends the id; mark all sends every unread id', async ({ page }) => {
+test('mark as read sends the id; mark all asks the server for the whole inbox (no ids)', async ({ page }) => {
   const sent: unknown[] = [];
   await mockApi(page, '/inbox/read', (route) => {
     sent.push(route.request().postDataJSON());
@@ -30,14 +30,25 @@ test('mark as read sends the id; mark all sends every unread id', async ({ page 
   expect(sent[0]).toEqual({ ids: [INBOX[2]!.id] });
   await inbox.getByRole('button', { name: 'Mark all as read' }).click();
   await expect.poll(() => sent.length).toBe(2);
-  expect(sent[1]).toEqual({ ids: [INBOX[0]!.id, INBOX[2]!.id] });
+  expect(sent[1]).toEqual({});
 });
 
 test('the bell counts only items needing action; with none, unread shows as a dot, not a number', async ({ page }) => {
-  await mockApi(page, '/inbox', { status: 200, json: { data: INBOX.slice(2), meta: { unread: 1 } } });
+  await mockApi(page, '/inbox', { status: 200, json: { data: INBOX.slice(2), meta: { unread: 1, actionRequired: 0 } } });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/ppic');
   const bell = page.getByRole('button', { name: 'Notifications: 1 unread' });
   await expect(bell).toBeVisible();
   await expect(bell).not.toContainText('1');
+});
+
+test('bell totals come from the whole inbox, not only the loaded page', async ({ page }) => {
+  // 50 newest items are all read and informational; older ones still need action / are unread
+  await mockApi(page, '/inbox', { status: 200, json: { data: [INBOX[3]], meta: { unread: 7, actionRequired: 3 } } });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ppic');
+  await page.getByRole('button', { name: 'Notifications: 3 need action, 7 unread' }).click();
+  const panel = page.getByRole('dialog', { name: 'Notifications' });
+  await expect(panel.getByRole('button', { name: /Needs action/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.getByRole('button', { name: /Needs action/ })).toContainText('3');
 });

@@ -109,7 +109,10 @@ export const test = base.extend<{ session: void; page: Page }>({
     async ({ page }, provide) => {
       await page.route('**/sanctum/csrf-cookie', (route) => route.fulfill({ status: 204, headers: { 'set-cookie': 'XSRF-TOKEN=e2e-token; Path=/' } }));
       await mockApi(page, '/auth/me', { status: 200, json: SESSION });
-      await mockApi(page, '/inbox', { status: 200, json: { data: INBOX, meta: { unread: INBOX.filter((n) => !n.readAt).length } } });
+      await mockApi(page, '/inbox', {
+        status: 200,
+        json: { data: INBOX, meta: { unread: INBOX.filter((n) => !n.readAt).length, actionRequired: INBOX.filter((n) => n.actionRequired).length } },
+      });
       await mockApi(page, '/inbox/read', { status: 200, json: { meta: { updated: 1 } } });
       await provide();
     },

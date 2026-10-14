@@ -3180,7 +3180,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Array of `NotificationResource`",
+                        "description": "",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -3188,6 +3188,7 @@
                                     "properties": {
                                         "data": {
                                             "type": "array",
+                                            "description": "The latest 50 notifications, newest first.",
                                             "items": {
                                                 "$ref": "#/components/schemas/NotificationResource"
                                             }
@@ -3196,11 +3197,17 @@
                                             "type": "object",
                                             "properties": {
                                                 "unread": {
-                                                    "type": "integer"
+                                                    "type": "integer",
+                                                    "description": "Unread notifications in the whole inbox."
+                                                },
+                                                "actionRequired": {
+                                                    "type": "integer",
+                                                    "description": "Notifications that need the user's action in the whole inbox; reading does not clear them (D-025)."
                                                 }
                                             },
                                             "required": [
-                                                "unread"
+                                                "unread",
+                                                "actionRequired"
                                             ]
                                         }
                                     },

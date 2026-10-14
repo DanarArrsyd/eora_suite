@@ -334,9 +334,9 @@ export function TopbarOverflow({ context }: { context: TopbarContext | undefined
 export function NotificationBell({ actionCount: mockCount }: { actionCount: number }) {
   const [open, setOpen] = React.useState(false);
   const { q, source } = useInbox();
-  const items = q.data ?? [];
-  const actionCount = source.isMock ? mockCount : items.filter((n) => n.actionable).length;
-  const unread = source.isMock ? 0 : items.filter((n) => !n.read).length;
+  // totals of the whole inbox, never derived from the loaded page (older items keep their badge)
+  const actionCount = source.isMock ? mockCount : (q.data?.actionRequired ?? 0);
+  const unread = source.isMock ? 0 : (q.data?.unread ?? 0);
   const label = [actionCount ? `${actionCount} need action` : '', unread ? `${unread} unread` : ''].filter(Boolean).join(', ');
   return (
     <Popover open={open} onOpenChange={setOpen}>

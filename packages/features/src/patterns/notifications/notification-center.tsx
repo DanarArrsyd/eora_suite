@@ -30,7 +30,7 @@ export function useInbox(override?: NotificationSource) {
     refetchInterval: source.isMock ? false : 60_000,
   });
   const mark = useMutation({
-    mutationFn: (ids: string[]) => source.markRead(role, ids),
+    mutationFn: (ids: string[] | 'all') => (ids === 'all' ? source.markAllRead(role) : source.markRead(role, ids)),
     onSuccess: () => qc.invalidateQueries({ queryKey }),
   });
   return { q, mark, source };
@@ -51,15 +51,16 @@ export function NotificationCenter({
 }) {
   const { role, source: nav } = useShellSession();
   const { q, mark, source } = useInbox(override);
-  const [filter, setFilter] = React.useState<Filter>(variant === 'panel' ? (source.isMock ? 'action' : 'unread') : 'all');
+  const [filter, setFilter] = React.useState<Filter>(variant === 'panel' ? 'action' : 'all');
   const allowed = nav.allowedModules(role);
   // live links: the server re-checks access when the page opens; mock links follow the prototype role
   const canOpen = (n: InboxNotification) => !!n.href && (!source.isMock || allowed === '*' || (!!n.module && allowed.includes(n.module)));
 
-  const items = q.data ?? [];
-  const counts = { all: items.length, action: items.filter((n) => n.actionable).length, unread: items.filter((n) => !n.read).length };
+  const items = q.data?.items ?? [];
+  // Needs action / Unread are totals of the whole inbox; the list shows the latest notifications
+  const counts = { all: items.length, action: q.data?.actionRequired ?? 0, unread: q.data?.unread ?? 0 };
   const shown = items.filter((n) => (filter === 'action' ? n.actionable : filter === 'unread' ? !n.read : true)).slice(0, variant === 'panel' ? 5 : undefined);
-  const unreadIds = items.filter((n) => !n.read).map((n) => n.id);
+
   const labels: Record<Filter, string> = { all: 'All', action: 'Needs action', unread: 'Unread' };
 
   return (
@@ -87,7 +88,7 @@ export function NotificationCenter({
         <div className="flex items-center gap-2">
           {source.isMock ? <MockDataLabel /> : null}
           {q.isSuccess ? (
-            <Button size="sm" variant="ghost" className="text-link" disabled={!unreadIds.length || mark.isPending} onClick={() => mark.mutate(unreadIds)}>
+            <Button size="sm" variant="ghost" className="text-link" disabled={!counts.unread || mark.isPending} onClick={() => mark.mutate('all')}>
               Mark all as read
             </Button>
           ) : null}

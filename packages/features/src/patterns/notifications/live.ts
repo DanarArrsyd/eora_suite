@@ -1,6 +1,6 @@
 import type { paths } from '@eora/api-client';
 import { api, call } from '../../auth/api';
-import type { InboxNotification, NotificationCategory, NotificationSource } from './types';
+import type { InboxNotification, InboxPage, NotificationCategory, NotificationSource } from './types';
 
 type ApiNotification = paths['/inbox']['get']['responses'][200]['content']['application/json']['data'][number];
 
@@ -37,11 +37,15 @@ export function fromApi(n: ApiNotification): InboxNotification {
  */
 export const liveNotificationSource: NotificationSource = {
   isMock: false,
-  async list(_role, signal) {
+  async list(_role, signal): Promise<InboxPage> {
     const res = await call(() => api.GET('/inbox', { signal }));
-    return res.data.map(fromApi);
+    return { items: res.data.map(fromApi), unread: res.meta.unread, actionRequired: res.meta.actionRequired };
   },
   async markRead(_role, ids) {
     await call(() => api.POST('/inbox/read', { body: { ids } }));
+  },
+  async markAllRead() {
+    // no `ids`: the server marks every unread row of the inbox, beyond the loaded page
+    await call(() => api.POST('/inbox/read', { body: {} }));
   },
 };

@@ -122,7 +122,7 @@ it('D-069: granting a sensitive role notifies the other administrators, not the 
     // OPR carries no sensitive permission (QCI does: inventory.reversal.request_correction)
     spa($this)->postJson('/api/v1/core/role-assignments', grantBody($this->t, $grantee['membership'], 'OPR', ['PLANT', $this->t['plants'][0]]))->assertCreated();
     spa($this)->postJson('/api/v1/core/role-assignments', grantBody($this->t, $grantee['membership'], 'CSA'))->assertCreated();
-    spa($this)->getJson('/api/v1/inbox')->assertOk()->assertJsonPath('meta.unread', 0);
+    spa($this)->getJson('/api/v1/inbox')->assertOk()->assertJsonPath('meta.unread', 0)->assertJsonPath('meta.actionRequired', 0);
 
     signIn($this, $otherAdmin, $this->t);
     $inbox = spa($this)->getJson('/api/v1/inbox')->assertOk()->assertJsonPath('meta.unread', 1)
