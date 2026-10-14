@@ -49,6 +49,7 @@ final class SecurityBaseline
         'prov_api.lock_request(text)' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
         'prov_api.mark_tenant_created(text,uuid,uuid)' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
         'prov_api.provision_lookup(text,text)' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
+        'prov_api.provisioned_tenants()' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
         // outbox relay surface — doc 25 §6.4 (M1 step 7b), R-30/R-33
         'outbox_api.claim_events(text,integer)' => ['owner' => 'eora_outbox_definer', 'execute' => ['eora_relay']],
         'outbox_api.complete_event(uuid,uuid)' => ['owner' => 'eora_outbox_definer', 'execute' => ['eora_relay']],

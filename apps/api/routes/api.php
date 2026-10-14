@@ -1,10 +1,12 @@
 <?php
 
+use App\Modules\Core\Http\OrgController;
 use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
 use App\Platform\Auth\Http\AuthController;
 use App\Platform\Http\Controllers\HealthController;
 use App\Platform\Inbox\Http\InboxController;
+use App\Platform\Query\Http\QueryController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -42,5 +44,21 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('members/{membership}/actions/reactivate', [MemberController::class, 'reactivate'])->name('members.reactivate');
         Route::post('role-assignments', [AccessController::class, 'assign'])->name('role-assignments.store');
         Route::post('role-assignments/{assignment}/actions/revoke', [AccessController::class, 'revoke'])->name('role-assignments.revoke');
+
+        // Master Data → organisation (doc 29 §1.1); lists are the core.* query resources
+        Route::post('companies', [OrgController::class, 'storeCompany'])->name('companies.store');
+        Route::patch('companies/{company}', [OrgController::class, 'updateCompany'])->name('companies.update');
+        Route::post('plants', [OrgController::class, 'storePlant'])->name('plants.store');
+        Route::patch('plants/{plant}', [OrgController::class, 'updatePlant'])->name('plants.update');
+        Route::post('warehouses', [OrgController::class, 'storeWarehouse'])->name('warehouses.store');
+        Route::patch('warehouses/{warehouse}', [OrgController::class, 'updateWarehouse'])->name('warehouses.update');
+        Route::post('locations', [OrgController::class, 'storeLocation'])->name('locations.store');
+        Route::patch('locations/{location}', [OrgController::class, 'updateLocation'])->name('locations.update');
+    });
+
+    // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php
+    Route::prefix('query')->name('query.')->middleware('tenant')->group(function (): void {
+        Route::get('{resource}/schema', [QueryController::class, 'schema'])->where('resource', '[a-z][a-z_]*\.[a-z][a-z_]*')->name('schema');
+        Route::get('{resource}', [QueryController::class, 'index'])->where('resource', '[a-z][a-z_]*\.[a-z][a-z_]*')->name('index');
     });
 });

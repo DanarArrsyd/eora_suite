@@ -51,6 +51,15 @@ Legend: **V** view · **C** create/edit draft · **S** submit · **P** post/exec
 
 APR role adds `A` on configured entities; it never adds `P` on the same document it approves.
 
+### Master data (M2, doc 29 §3 M2-D1, D-072)
+| Resource | CSA | PPC | MAT | INV | QCS | PRL, QCI, FGW, DLV, AUD |
+|---|---|---|---|---|---|---|
+| `master.org` (company, plant, warehouse, location, work center, machine, die) | VC | V | V | V | V | V |
+| `master.part` (item, UOM, spec, customer, customer part, supplier) | VC | VC | VC | VC | V | V |
+| `master.routing` (process type, routing, BOM, BOM–routing map) | VCSA | VCS | V | V | V | V |
+| `master.conversion` (NW, conversion profile) | VCSA | V | V | V | VA | V |
+C = create and edit (organisation and part master have no approval lifecycle). `master.*.approve` is sensitive (D-B1-25); maker ≠ checker per version (D-060). TENANT_ADMIN, OPR, MAD and APR get no master permission by default. Export uses `exchange.export` with the view permission. Existing tenants receive later template additions through `eora:tenants:sync`.
+
 ## 3. Separation-of-duties rules (enforced in policy layer)
 | SoD-ID | Conflict | Rule |
 |---|---|---|

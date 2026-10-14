@@ -1,6 +1,10 @@
 <?php
 
 declare(strict_types=1);
+use App\Modules\Core\Queries\CompaniesQuery;
+use App\Modules\Core\Queries\LocationsQuery;
+use App\Modules\Core\Queries\PlantsQuery;
+use App\Modules\Core\Queries\WarehousesQuery;
 
 return [
     /*
@@ -35,6 +39,14 @@ return [
     // D-B1-06: factory NAT addresses/CIDRs that get the higher per-IP login limit (60/min instead of 20/min), e.g.
     // "203.0.113.10,198.51.100.0/24". Empty by default.
     'login_nat_allowlist' => array_values(array_filter(array_map('trim', explode(',', (string) env('EORA_LOGIN_NAT_ALLOWLIST', ''))))),
+
+    // Query resources (ADR-0008): name => QueryDefinition class, registered by the modules.
+    'queries' => [
+        'core.companies' => CompaniesQuery::class,
+        'core.plants' => PlantsQuery::class,
+        'core.warehouses' => WarehousesQuery::class,
+        'core.locations' => LocationsQuery::class,
+    ],
 
     'member_invite_per_hour' => env('EORA_MEMBER_INVITE_PER_HOUR') === null ? null : (int) env('EORA_MEMBER_INVITE_PER_HOUR'),
 ];
