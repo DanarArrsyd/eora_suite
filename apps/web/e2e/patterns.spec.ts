@@ -205,7 +205,7 @@ test.describe('pattern showcase and notifications', () => {
   test('bell panel lists actionable items equal to the badge and links to the inbox page', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/ppic');
-    await page.getByRole('button', { name: 'Notifications: 2 need action' }).click();
+    await page.getByRole('button', { name: 'Notifications: 2 need action, 2 unread' }).click();
     const panel = page.getByRole('dialog', { name: 'Notifications' });
     await expect(panel.getByRole('button', { name: /Needs action/ })).toContainText('2');
     await axe(page, 'bell panel');

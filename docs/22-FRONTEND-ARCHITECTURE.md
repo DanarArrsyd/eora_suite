@@ -182,3 +182,15 @@ Owner: date filters must be a real calendar, no plain browser controls in any fi
 | E2E (mocked API) | 123/123 (specs moved from `selectOption` to the `choose()` helper; new: search by initials + Enter, keyboard date choice with future dates disabled, end-date-only range from a malformed URL) |
 | Visual check | Chrome pane at 1440: topbar calendar, filter select, date range with keyboard preview, search results |
 
+### M1 F3a — Live inbox (2026-10-14, milestone M1 / D-066)
+Scope: the bell panel and `/system/notifications` read the signed-in user's server inbox (`GET /inbox`, `POST /inbox/read`; doc 07, doc 24 §7) instead of the mock adapter.
+- `@eora/features/patterns`: `liveNotificationSource` (maps kind → category, severity, action flag; follows only same-origin deep links), `useInbox()` shared by bell and page (refetch every 60 s and on focus; mock source only without a session, still labelled).
+- Bell (D-025): the number counts only items that need action; unread information shows as a dot, never a number; accessible name states both ("Notifications: 2 need action, 2 unread"). Both come from `GET /inbox` `meta.actionRequired` / `meta.unread`, totals over the whole inbox (the list itself is the latest 50). The bell panel opens on Needs action.
+- List: Warning / Critical labelled with text; Mark as read sends the id; Mark all as read posts without ids so the server marks the whole inbox; live deep links open and the server re-checks access.
+| Gate | Result |
+|---|---|
+| Format · typecheck · lint | clean |
+| Unit + component | 111/111 (new `live.test.ts`: mapping, off-site deep links ignored, category) |
+| E2E (mocked API) | 127/127 (fixture inbox for every spec; new `inbox.spec.ts`: no mock label, severity, mark one / mark all without ids, bell dot without action items, bell totals beyond the loaded page) |
+| Real stack | inserted one local WARNING notification → page shows it with Warning label, bell dot, Mark as read clears it (Unread 1 → 0) |
+

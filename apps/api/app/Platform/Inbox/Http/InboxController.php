@@ -20,9 +20,19 @@ final class InboxController
     {
         $db = $this->db();
         $rows = $db->select('select id, kind, severity, action_required, title, body, deep_link, created_at, read_at from inbox_notifications order by created_at desc, id desc limit 50');
-        $unread = (int) $db->selectOne('select count(*) as n from inbox_notifications where read_at is null')->n;
+        // totals over the whole inbox, not the latest-50 page: the bell badge and dot must not lose older items
+        $totals = $db->selectOne('select count(*) filter (where read_at is null) as unread, count(*) filter (where action_required) as action_required from inbox_notifications');
 
-        return NotificationResource::collection($rows)->additional(['meta' => ['unread' => $unread]])->response();
+        return response()->json([
+            /** The latest 50 notifications, newest first. */
+            'data' => NotificationResource::collection($rows),
+            'meta' => [
+                /** Unread notifications in the whole inbox. */
+                'unread' => (int) $totals->unread,
+                /** Notifications that need the user's action in the whole inbox; reading does not clear them (D-025). */
+                'actionRequired' => (int) $totals->action_required,
+            ],
+        ]);
     }
 
     /** Marks the given notifications (or all, when `ids` is absent) as read; unknown ids are ignored. */

@@ -27,7 +27,7 @@ import {
   type IsoDate,
 } from '@eora/ui';
 import { ROLE_LABELS, type RoleKey, type TopbarContext } from '../navigation';
-import { NotificationCenter } from '../patterns/notifications';
+import { NotificationCenter, useInbox } from '../patterns/notifications';
 import { useShellSession, type ShellIdentity } from './session';
 
 /* ===================== Breadcrumb ===================== */
@@ -327,17 +327,28 @@ export function TopbarOverflow({ context }: { context: TopbarContext | undefined
 }
 
 /* ===================== Notification bell (panel list arrives in Phase 2) ===================== */
-export function NotificationBell({ actionCount }: { actionCount: number }) {
+/**
+ * Bell: the numeric badge counts only items needing the user's action (D-025); unread information is a dot, never a
+ * number. Signed in, both come from the live inbox; review pages without a session use the mock navigation counts.
+ */
+export function NotificationBell({ actionCount: mockCount }: { actionCount: number }) {
   const [open, setOpen] = React.useState(false);
+  const { q, source } = useInbox();
+  // totals of the whole inbox, never derived from the loaded page (older items keep their badge)
+  const actionCount = source.isMock ? mockCount : (q.data?.actionRequired ?? 0);
+  const unread = source.isMock ? 0 : (q.data?.unread ?? 0);
+  const label = [actionCount ? `${actionCount} need action` : '', unread ? `${unread} unread` : ''].filter(Boolean).join(', ');
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         className="relative inline-grid size-9 place-items-center rounded-md text-ink-2 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-ring max-md:size-11"
-        aria-label={actionCount ? `Notifications: ${actionCount} need action` : 'Notifications'}
+        aria-label={label ? `Notifications: ${label}` : 'Notifications'}
       >
         <Bell aria-hidden="true" className="size-5" />
         {actionCount ? (
           <NumericBadge count={actionCount} label="need action" className="absolute -top-0.5 -right-1 shadow-[0_0_0_2px_var(--color-bg-surface)]" />
+        ) : unread ? (
+          <span aria-hidden="true" className="absolute top-1.5 right-1.5 size-2 rounded-full bg-accent shadow-[0_0_0_2px_var(--color-bg-surface)]" />
         ) : null}
       </PopoverTrigger>
       <PopoverContent aria-label="Notifications" className="w-[min(420px,calc(100vw-16px))] p-0">

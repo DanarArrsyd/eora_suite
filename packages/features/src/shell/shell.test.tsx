@@ -7,15 +7,15 @@ let pathname = '/ppic/control-tower';
 vi.mock('next/navigation', () => ({ usePathname: () => pathname, useRouter: () => ({ push: vi.fn() }) }));
 
 import { AppShell } from './app-shell';
-import { ShellSessionProvider } from './session';
+import { Providers } from '../test/providers';
 
 function renderShell() {
   return render(
-    <ShellSessionProvider>
+    <Providers>
       <AppShell>
         <h1>Page content</h1>
       </AppShell>
-    </ShellSessionProvider>,
+    </Providers>,
   );
 }
 

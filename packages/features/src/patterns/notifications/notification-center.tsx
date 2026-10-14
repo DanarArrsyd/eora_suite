@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BellRing, ClipboardCheck, Lock, Scale, Stamp, SquareCheckBig } from 'lucide-react';
 import { Badge, Button, EmptyState, ErrorState, LoadingState, MockDataLabel, cn } from '@eora/ui';
 import { useShellSession } from '../../shell/session';
+import { liveNotificationSource } from './live';
 import { mockNotificationSource } from './notifications.mock';
 import type { InboxNotification, NotificationCategory, NotificationSource } from './types';
 
@@ -15,12 +16,33 @@ type Filter = 'all' | 'action' | 'unread';
 const fmt = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
 
 /**
+ * The inbox query shared by the bell and the Notifications page: the live server inbox when signed in (refreshed every
+ * minute and on focus), the labelled mock inbox in review pages without a session.
+ */
+export function useInbox(override?: NotificationSource) {
+  const { role, identity } = useShellSession();
+  const qc = useQueryClient();
+  const source = override ?? (identity ? liveNotificationSource : mockNotificationSource);
+  const queryKey = ['notifications', source.isMock ? `mock:${role}` : `live:${identity?.tenant.id ?? ''}`];
+  const q = useQuery({
+    queryKey,
+    queryFn: ({ signal }) => source.list(role, signal),
+    refetchInterval: source.isMock ? false : 60_000,
+  });
+  const mark = useMutation({
+    mutationFn: (ids: string[] | 'all') => (ids === 'all' ? source.markAllRead(role) : source.markRead(role, ids)),
+    onSuccess: () => qc.invalidateQueries({ queryKey }),
+  });
+  return { q, mark, source };
+}
+
+/**
  * EoraNotificationCenter — persisted inbox (doc 07). Filters: All / Needs action / Unread. Deep links are shown only when the
  * current role can open the target module; otherwise the item says which access is missing (server re-checks on open).
  */
 export function NotificationCenter({
   variant,
-  source = mockNotificationSource,
+  source: override,
   onNavigate,
 }: {
   variant: 'panel' | 'page';
@@ -28,20 +50,17 @@ export function NotificationCenter({
   onNavigate?: () => void;
 }) {
   const { role, source: nav } = useShellSession();
-  const qc = useQueryClient();
+  const { q, mark, source } = useInbox(override);
   const [filter, setFilter] = React.useState<Filter>(variant === 'panel' ? 'action' : 'all');
-  const q = useQuery({ queryKey: ['notifications', role], queryFn: ({ signal }) => source.list(role, signal) });
-  const mark = useMutation({
-    mutationFn: (ids: string[]) => source.markRead(role, ids),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications', role] }),
-  });
   const allowed = nav.allowedModules(role);
-  const canOpen = (n: InboxNotification) => !!n.href && (allowed === '*' || (!!n.module && allowed.includes(n.module)));
+  // live links: the server re-checks access when the page opens; mock links follow the prototype role
+  const canOpen = (n: InboxNotification) => !!n.href && (!source.isMock || allowed === '*' || (!!n.module && allowed.includes(n.module)));
 
-  const items = q.data ?? [];
-  const counts = { all: items.length, action: items.filter((n) => n.actionable).length, unread: items.filter((n) => !n.read).length };
+  const items = q.data?.items ?? [];
+  // Needs action / Unread are totals of the whole inbox; the list shows the latest notifications
+  const counts = { all: items.length, action: q.data?.actionRequired ?? 0, unread: q.data?.unread ?? 0 };
   const shown = items.filter((n) => (filter === 'action' ? n.actionable : filter === 'unread' ? !n.read : true)).slice(0, variant === 'panel' ? 5 : undefined);
-  const unreadIds = items.filter((n) => !n.read).map((n) => n.id);
+
   const labels: Record<Filter, string> = { all: 'All', action: 'Needs action', unread: 'Unread' };
 
   return (
@@ -69,7 +88,7 @@ export function NotificationCenter({
         <div className="flex items-center gap-2">
           {source.isMock ? <MockDataLabel /> : null}
           {q.isSuccess ? (
-            <Button size="sm" variant="ghost" className="text-link" disabled={!unreadIds.length || mark.isPending} onClick={() => mark.mutate(unreadIds)}>
+            <Button size="sm" variant="ghost" className="text-link" disabled={!counts.unread || mark.isPending} onClick={() => mark.mutate('all')}>
               Mark all as read
             </Button>
           ) : null}
@@ -90,7 +109,11 @@ export function NotificationCenter({
       {q.isSuccess && shown.length === 0 ? (
         <EmptyState
           title={filter === 'action' ? 'Nothing needs your action' : filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
-          description="New approvals, QC results and variance cases appear here."
+          description={
+            source.isMock
+              ? 'New approvals, QC results and variance cases appear here.'
+              : 'Security notices and, as modules go live, approvals and QC results appear here.'
+          }
         />
       ) : null}
       {shown.length ? (
@@ -116,6 +139,11 @@ export function NotificationCenter({
                     <span>{n.title}</span>
                     {!n.read ? <span className="sr-only">(unread)</span> : null}
                     {n.actionable ? <Badge tone="warning">Needs action</Badge> : null}
+                    {n.severity === 'CRITICAL' ? (
+                      <Badge tone="danger">Critical</Badge>
+                    ) : n.severity === 'WARNING' ? (
+                      <Badge tone="warning">Warning</Badge>
+                    ) : null}
                   </p>
                   <p className="m-0 mt-0.5 text-[13px] text-ink-2">{n.body}</p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-2">

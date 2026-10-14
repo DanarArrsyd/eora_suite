@@ -1864,16 +1864,19 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Array of `NotificationResource` */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
+                        /** @description The latest 50 notifications, newest first. */
                         data: components["schemas"]["NotificationResource"][];
                         meta: {
+                            /** @description Unread notifications in the whole inbox. */
                             unread: number;
+                            /** @description Notifications that need the user's action in the whole inbox; reading does not clear them (D-025). */
+                            actionRequired: number;
                         };
                     };
                 };

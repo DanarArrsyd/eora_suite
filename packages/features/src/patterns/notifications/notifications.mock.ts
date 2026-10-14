@@ -161,11 +161,17 @@ export const mockNotificationSource: NotificationSource = {
   async list(role, signal) {
     await wait(150, signal);
     state[role] ??= SEED[role].map((n) => ({ ...n }));
-    return state[role].map((n) => ({ ...n }));
+    const items = state[role].map((n) => ({ ...n }));
+    return { items, unread: items.filter((n) => !n.read).length, actionRequired: items.filter((n) => n.actionable).length };
   },
   async markRead(role, ids) {
     await wait(80);
     state[role] ??= SEED[role].map((n) => ({ ...n }));
     state[role] = state[role].map((n) => (ids.includes(n.id) ? { ...n, read: true } : n));
+  },
+  async markAllRead(role) {
+    await wait(80);
+    state[role] ??= SEED[role].map((n) => ({ ...n }));
+    state[role] = state[role].map((n) => ({ ...n, read: true }));
   },
 };

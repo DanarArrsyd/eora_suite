@@ -1,3 +1,4 @@
 export * from './types';
-export { NotificationCenter } from './notification-center';
+export { NotificationCenter, useInbox } from './notification-center';
+export { liveNotificationSource } from './live';
 export { mockNotificationSource } from './notifications.mock';

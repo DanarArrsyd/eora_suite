@@ -171,6 +171,7 @@ These were proposed in the audit and are required to make D-009..D-019 implement
 ## Change log
 | Date | Change | Owner | Affected |
 |---|---|---|---|
+| 2026-10-14 | M1 frontend F3a implemented (no new decision): bell and Notifications page on the live inbox API; bell number = action-required items only (D-025), unread as a dot | Claude Code (record) | doc 22, `packages/features`, `apps/web` |
 | 2026-10-14 | Owner UI feedback implemented (no new decision): no native select/date controls in filters and forms (EORA Select, Calendar with ISO weeks, date pickers); global search ranks permitted pages with highlighting | Product owner (request), Claude Code (record) | `docs/uiux/EORA-COMPONENT-STANDARDS.md`, doc 22, `packages/ui`, `packages/features`, `apps/web` |
 | 2026-10-14 | M1 frontend F2 implemented (no new decision): Administration → Users and Roles & Permissions on the live API; `membership` status-badge domain added for tenant membership statuses (doc 25 §2.6); `/auth/me` `tenants[].timezone` added so role end dates use the tenant zone (D-044) | Claude Code (record) | doc 22, `apps/web`, `packages/features`, `apps/api` |
 | 2026-10-13 | D-070 recorded and implemented in PR #17 (M1 frontend F1 review): plant list/switch limited to assignment scopes; tenant/plant switches recorded as security events; Compose `EORA_FRONTEND_URL` points at the web app on port 3100 | Product owner (decision), Claude Code (record) | docs 13, 25, `apps/api`, `compose.yaml` |
