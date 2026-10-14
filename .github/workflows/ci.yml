@@ -210,3 +210,55 @@ jobs:
       - name: Stop services
         if: always()
         run: docker compose down -v
+
+  # M1 exit, doc 28 §3 item 3 / doc 25 §15.3: the real flow (provision → invitation via Mailpit → accept → login → picker →
+  # plant switch → forgot/reset → logout) in Chrome against the Compose stack, same origin through the Next.js rewrites.
+  stack-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EORA_DB_PASSWORD: ci-only-throwaway
+      EORA_DB_OWNER_PASSWORD: ci-only-throwaway-owner-00000000
+      EORA_DB_APP_PASSWORD: ci-only-throwaway-app-0000000000
+      EORA_DB_AUTH_WEB_PASSWORD: ci-only-throwaway-authweb-000000
+      EORA_DB_AUTH_DELIVERY_PASSWORD: ci-only-throwaway-delivery-00000
+      EORA_DB_PROVISIONER_PASSWORD: ci-only-throwaway-prov-000000000
+      EORA_DB_RELAY_PASSWORD: ci-only-throwaway-relay-00000000
+      EORA_PEPPER_KEY: d2000000d2000000d2000000d2000000d2000000d2000000d2000000d2000000
+      EORA_CTX_KEY_KID1: c1000000c1000000c1000000c1000000c1000000c1000000c1000000c1000000
+      # rewrites are fixed at build time: the web build proxies /api and /sanctum to the stack's API
+      EORA_API_ORIGIN: http://127.0.0.1:8000
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Start the stack and wait for health
+        run: |
+          key="base64:$(openssl rand -base64 32)"
+          echo "EORA_APP_KEY=$key" >> "$GITHUB_ENV"   # the runner commands in the spec use the same key
+          EORA_APP_KEY="$key" docker compose up -d --build --wait --wait-timeout 300
+      - name: Install
+        run: $PNPM install --frozen-lockfile
+      - name: Production web build
+        run: $PNPM --filter @eora/web build
+      - name: Install Google Chrome for Playwright
+        working-directory: apps/web
+        run: npx playwright install --with-deps chrome
+      - name: Stack E2E
+        working-directory: apps/web
+        run: npx playwright test -c playwright.stack.config.ts
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-e2e-traces
+          path: apps/web/test-results
+          retention-days: 7
+      - name: Stop services
+        if: always()
+        run: docker compose down -v
