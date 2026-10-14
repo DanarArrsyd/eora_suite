@@ -17,6 +17,54 @@ export const SESSION = {
   permissions: [] as string[],
 };
 
+/** Synthetic inbox (doc 07 shape): two items need action, one unread warning, one read. */
+export const INBOX = [
+  {
+    id: '00000000-0000-7000-8000-00000000c001',
+    kind: 'approval.requested',
+    severity: 'INFO',
+    actionRequired: true,
+    title: 'Sample: stock adjustment awaits your approval',
+    body: 'Sample request ADJ-0012 for RM-WH1.',
+    deepLink: '/dashboard/approvals',
+    createdAt: '2026-10-09T02:15:00Z',
+    readAt: null,
+  },
+  {
+    id: '00000000-0000-7000-8000-00000000c002',
+    kind: 'quality.inspection_due',
+    severity: 'INFO',
+    actionRequired: true,
+    title: 'Sample: inspection lot due',
+    body: 'Sample lot IL-2207 is waiting for inspection.',
+    deepLink: '/quality',
+    createdAt: '2026-10-09T01:40:00Z',
+    readAt: '2026-10-09T01:50:00Z',
+  },
+  {
+    id: '00000000-0000-7000-8000-00000000c003',
+    kind: 'access.sensitive_role_granted',
+    severity: 'WARNING',
+    actionRequired: false,
+    title: 'Sensitive role granted',
+    body: 'Sample: CSA (Company Super Admin) was granted to a member at TENANT scope.',
+    deepLink: null,
+    createdAt: '2026-10-08T09:00:00Z',
+    readAt: null,
+  },
+  {
+    id: '00000000-0000-7000-8000-00000000c004',
+    kind: 'access.privileged_password_reset',
+    severity: 'WARNING',
+    actionRequired: false,
+    title: 'Password reset on a privileged account',
+    body: 'Sample: the password of a member was reset.',
+    deepLink: null,
+    createdAt: '2026-10-07T09:00:00Z',
+    readAt: '2026-10-07T10:00:00Z',
+  },
+];
+
 export type MockResponse = { status: number; json?: unknown };
 
 /** Answers `path` (relative to /api/v1) with a fixed response; later registrations win. */
@@ -61,6 +109,8 @@ export const test = base.extend<{ session: void; page: Page }>({
     async ({ page }, provide) => {
       await page.route('**/sanctum/csrf-cookie', (route) => route.fulfill({ status: 204, headers: { 'set-cookie': 'XSRF-TOKEN=e2e-token; Path=/' } }));
       await mockApi(page, '/auth/me', { status: 200, json: SESSION });
+      await mockApi(page, '/inbox', { status: 200, json: { data: INBOX, meta: { unread: INBOX.filter((n) => !n.readAt).length } } });
+      await mockApi(page, '/inbox/read', { status: 200, json: { meta: { updated: 1 } } });
       await provide();
     },
     { auto: true },

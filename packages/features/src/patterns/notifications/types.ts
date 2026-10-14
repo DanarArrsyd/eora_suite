@@ -12,6 +12,8 @@ export type InboxNotification = {
   read: boolean;
   /** Stays until the underlying task is done — reading does not clear it (D-025 actionable badges). */
   actionable: boolean;
+  /** Server severity; WARNING / CRITICAL are labelled in the list (colour never alone). */
+  severity?: 'INFO' | 'WARNING' | 'CRITICAL';
   href?: string;
   /** Module whose access is required to open `href`. */
   module?: string;
