@@ -39,7 +39,7 @@
 ## 3. Acceptance (exit M1)
 1. Semua tes doc 25 §12 hijau di setiap PR, dijalankan sebagai role non-superuser: T-ISO-01..05, T-CTX (PoC-CTX-01..14 + 05b yang diport), T-LOGIN, T-INV, T-RST, T-RBAC, T-ESC, T-PROV, T-SEV, dan seterusnya.
 2. **Gate performa:** context ≤ 0,3 ms p95 per transaksi dan ≤ 15 µs per referensi tabel ber-RLS (D-055), diukur di CI.
-3. Playwright same-origin: provision → undangan terkirim → terima → login → picker → plant switch → lupa/reset → logout, termasuk pengecekan cookie (doc 25 §15.3).
+3. Playwright same-origin: provision → undangan terkirim → terima → login → picker → plant switch → lupa/reset → logout, termasuk pengecekan cookie (doc 25 §15.3). ✅ *(2026-10-14: CI job `stack-e2e`, `apps/web/e2e/stack/m1-access.spec.ts`; lihat `apps/api/README.md` §Stack E2E)*
 4. Round-trip migrate/rollback dan hardening §10.
 5. OpenAPI mencakup semua endpoint B1 termasuk error; typed client diregenerasi tanpa drift.
 6. Quality gate frontend doc 22 §4 hijau (lint, typecheck, unit, e2e, axe).

@@ -242,6 +242,22 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   finished by running it again with the same `--password`. A complete demo tenant is refused without any write. Reset =
   fresh local database (`docker compose down -v`) or a second demo tenant with another `--code`. Step-by-step UAT:
   `docs/uat/M1-UAT.md`.
+- `eora:demo:plant <tenant-id> <code> <name>` (same runner, refused in production) adds a plant to the tenant's first
+  company as the provisioner in the tenant's signed context (audited `plant.created`, `via: demo-plant`), so the plant
+  switch can be tried before master-data maintenance (M2). Used by the stack E2E (below).
+
+## Stack E2E (M1 exit, doc 28 §3 item 3, doc 25 §15.3)
+- `apps/web/e2e/stack/m1-access.spec.ts`, config `apps/web/playwright.stack.config.ts`, CI job `stack-e2e`. Chrome drives the
+  production web build on `http://localhost:3100` against the Compose stack, same origin (Next.js rewrites, ADR-0006):
+  provision two tenants for one administrator (`--deliver=email`) + plant P2 → both invitations from Mailpit accepted →
+  login (session rotated; `__Host-eora_session` Secure, HttpOnly, SameSite=Lax, host-only; `XSRF-TOKEN` readable) →
+  picker → plant switch persisted server-side → logout (replayed cookie 401) → forgot/reset from Mailpit (other session
+  signed out, old password refused) → logout.
+- Locally against another Compose project: build the web app with `EORA_API_ORIGIN` = that stack's API (rewrites are
+  fixed at build), then in `apps/web`:
+  `EORA_STACK_COMPOSE="docker compose -f <repo>/compose.yaml -p <project> --env-file <env>" EORA_STACK_MAILPIT=http://127.0.0.1:<mailpit-port> npx playwright test -c playwright.stack.config.ts`
+  (`EORA_STACK_RUN_ARGS` adds `compose run` arguments, e.g. a source mount instead of rebuilding the shared image).
+  Port 3100 must be free; every run creates fresh synthetic tenants (`e2e-alpha-<hex>`, `admin@e2e-<hex>.test`).
 
 ## Endpoints (B0)
 | Method | Path | Purpose |

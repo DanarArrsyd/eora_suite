@@ -622,7 +622,7 @@ Grantor ⊇ grantee; SoD-06 self-elevation always blocked (no thresholds in earl
 ## 15. Acceptance criteria (B1 exit)
 1. §9 objects exist; runtime, auth, delivery and test connections use their non-superuser roles; T-RLS-GUARD, T-GRANT-01 green.
 2. All §12 tests green on every PR (docker job includes PgBouncer and a capturing mail transport).
-3. Provision → invitation delivered → accept → login → tenant picker → plant switch → forgot/reset → logout works same-origin in Playwright, cookies asserted.
+3. Provision → invitation delivered → accept → login → tenant picker → plant switch → forgot/reset → logout works same-origin in Playwright, cookies asserted. ✅ *(M1, 2026-10-14: CI job `stack-e2e`)*
 4. Migrate/rollback round-trip; §10 hardening implemented.
 5. OpenAPI documents all B1 endpoints incl. errors; typed client regenerated; no drift.
 6. Docs updated (ADR-0001/0006, docs 05, 17, 18, 24, register). B2 not started.
