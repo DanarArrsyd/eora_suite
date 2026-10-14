@@ -159,7 +159,8 @@ final class AuthController
      * Tenant picker (DD-07): only a tenant where the user holds an ACTIVE membership; session regenerated.
      *
      * The switch is recorded as security event `workspace.tenant_selected` of the chosen tenant before the session
-     * changes: no record, no switch.
+     * changes: no record, no switch. When exactly one plant is in the user's scope it becomes the active plant at once
+     * (D-071), recorded as `workspace.plant_selected` with detail `SOLE_PLANT` in the same transaction.
      */
     public function selectTenant(Request $request): JsonResponse
     {
@@ -173,8 +174,18 @@ final class AuthController
             throw new NotFoundHttpException; // not a member: indistinguishable from a missing tenant
         }
         $context = new TenantContext($tenant, $user);
-        SecurityEventRecorder::write($this->transaction, $context, [$this->workspaceEvent('workspace.tenant_selected', 'tenants', $tenant, 200, $request)]);
-        $this->auth->switchTenant($tenant);
+        $sole = $this->transaction->run($context, function (EoraPostgresConnection $db) use ($context, $tenant, $request): ?string {
+            $plants = $this->authorizer->plants($db);
+            $sole = count($plants) === 1 ? (string) $plants[0]->id : null;
+            $events = [$this->workspaceEvent('workspace.tenant_selected', 'tenants', $tenant, 200, $request)];
+            if ($sole !== null) {
+                $events[] = $this->workspaceEvent('workspace.plant_selected', 'plants', $sole, 200, $request, 'SOLE_PLANT');
+            }
+            SecurityEventRecorder::insert($db, $context, $events);
+
+            return $sole;
+        });
+        $this->auth->switchTenant($tenant, $sole);
 
         return $this->me();
     }
@@ -339,7 +350,7 @@ final class AuthController
         )->credential_version);
     }
 
-    private function workspaceEvent(string $action, string $resource, string $id, int $status, Request $request): SecurityEvent
+    private function workspaceEvent(string $action, string $resource, string $id, int $status, Request $request, ?string $detail = null): SecurityEvent
     {
         $correlation = (string) (Context::get('correlation_id') ?? '');
 
@@ -352,6 +363,7 @@ final class AuthController
             correlationId: $correlation !== '' ? $correlation : null,
             ipHash: $this->hasher->hash($request->ip()),
             userAgentHash: $this->hasher->hash((string) $request->userAgent()),
+            detailCode: $detail,
         );
     }
 

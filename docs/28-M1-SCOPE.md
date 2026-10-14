@@ -44,7 +44,7 @@
 5. OpenAPI mencakup semua endpoint B1 termasuk error; typed client diregenerasi tanpa drift.
 6. Quality gate frontend doc 22 §4 hijau (lint, typecheck, unit, e2e, axe).
 7. Dokumen ter-update dalam PR yang sama (ADR-0001/0006, docs 05, 17, 18, 24, 13).
-8. **Demo ke owner:** Anda menjalankan skrip UAT di lokal dan menyatakan OK.
+8. **Demo ke owner:** Anda menjalankan skrip UAT di lokal dan menyatakan OK. ✅ *(2026-10-14, D-071 — M1 selesai; M2 butuh approval scope sendiri)*
 
 ## 4. Cara kerja
 - Branch `feat/m1-access`, beberapa PR berurutan sesuai langkah §1. CI hijau di setiap PR, tanpa auto-merge, push dan merge atas instruksi Anda.

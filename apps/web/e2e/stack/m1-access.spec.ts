@@ -216,13 +216,11 @@ test('M1 access end to end on the real stack', async ({ page, browser }) => {
       .getByRole('list', { name: 'Workspaces' })
       .getByRole('button', { name: new RegExp(BETA.name) })
       .click();
-    // a tenant switch starts without a plant, also when only one plant is in scope (current behaviour, UAT step 4)
-    await page.getByRole('button', { name: `Workspace: ${BETA.name}, No plant selected. Change` }).click();
-    const plants = page.getByRole('dialog', { name: 'Workspace' }).getByRole('combobox', { name: 'Plant' });
-    await plants.click();
-    await expect(page.getByRole('option')).toHaveText(['P1 · Plant 1']); // only the beta tenant's plant
-    await page.getByRole('option', { name: 'P1 · Plant 1' }).click();
-    await expect(page.getByRole('button', { name: new RegExp(`^Workspace: ${BETA.name}, P1 · Plant 1`) })).toBeVisible();
+    // the only plant in scope opens with the tenant (D-071); the list holds just the beta tenant's plant
+    await page.getByRole('button', { name: new RegExp(`^Workspace: ${BETA.name}, P1 · Plant 1`) }).click();
+    await page.getByRole('dialog', { name: 'Workspace' }).getByRole('combobox', { name: 'Plant' }).click();
+    await expect(page.getByRole('option')).toHaveText(['P1 · Plant 1']);
+    await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
 
     await page.getByRole('button', { name: /Account menu/ }).click();

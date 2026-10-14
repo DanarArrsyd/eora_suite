@@ -60,10 +60,11 @@ final class AuthSession
     }
 
     /** Switching tenant regenerates the session id and clears the plant (ADR-0006). */
-    public function switchTenant(string $tenantId): void
+    /** A tenant switch starts without a plant, or with the only plant in the user's scope (D-071). */
+    public function switchTenant(string $tenantId, ?string $plantId = null): void
     {
         $this->session->regenerate(true);
-        $this->session->put(self::KEY, ['tenant_id' => $tenantId, 'plant_id' => null] + $this->state());
+        $this->session->put(self::KEY, ['tenant_id' => $tenantId, 'plant_id' => $plantId] + $this->state());
     }
 
     public function switchPlant(string $plantId): void

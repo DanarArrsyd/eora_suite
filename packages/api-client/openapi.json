@@ -1671,7 +1671,7 @@
         "/auth/tenant": {
             "post": {
                 "operationId": "v1.auth.tenant",
-                "description": "The switch is recorded as security event `workspace.tenant_selected` of the chosen tenant before the session\nchanges: no record, no switch.",
+                "description": "The switch is recorded as security event `workspace.tenant_selected` of the chosen tenant before the session\nchanges: no record, no switch. When exactly one plant is in the user's scope it becomes the active plant at once\n(D-071), recorded as `workspace.plant_selected` with detail `SOLE_PLANT` in the same transaction.",
                 "summary": "Tenant picker (DD-07): only a tenant where the user holds an ACTIVE membership; session regenerated",
                 "tags": [
                     "Auth"

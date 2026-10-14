@@ -47,11 +47,11 @@ it('runs the whole flow: invitation email → accept → login → tenant → pl
     spa($this)->getJson('/api/v1/auth/me')->assertUnauthorized()->assertJsonPath('code', 'UNAUTHENTICATED');
 })->group('integration', 'auth');
 
-/** @return list<array{action: string, requested_id: string, http_status: int}> */
+/** @return list<array{action: string, requested_id: string, http_status: int, detail_code: ?string}> */
 function workspaceEvents(array $tenant, string $userId): array
 {
     return array_map(static fn ($e) => (array) $e, AccessFixtures::run($tenant, fn (EoraPostgresConnection $db) => $db->select(
-        "select action, requested_id, http_status from security_events where source = 'app' and action like 'workspace.%' and user_id = ? order by occurred_at, id",
+        "select action, requested_id, http_status, detail_code from security_events where source = 'app' and action like 'workspace.%' and user_id = ? order by occurred_at, id",
         [$userId],
     )));
 }
@@ -91,10 +91,36 @@ it('records every tenant and plant switch, and a refused plant, as security even
     spa($this)->postJson('/api/v1/auth/plant', ['plantId' => $this->t['plants'][1]])->assertNotFound();
 
     expect(workspaceEvents($this->t, $u['id']))->toBe([
-        ['action' => 'workspace.tenant_selected', 'requested_id' => str_replace('-', '', $this->t['tenant']), 'http_status' => 200],
-        ['action' => 'workspace.plant_selected', 'requested_id' => str_replace('-', '', $this->t['plants'][0]), 'http_status' => 200],
-        ['action' => 'workspace.plant_denied', 'requested_id' => str_replace('-', '', $this->t['plants'][1]), 'http_status' => 404],
+        ['action' => 'workspace.tenant_selected', 'requested_id' => str_replace('-', '', $this->t['tenant']), 'http_status' => 200, 'detail_code' => null],
+        // the only plant in scope is selected with the tenant (D-071)
+        ['action' => 'workspace.plant_selected', 'requested_id' => str_replace('-', '', $this->t['plants'][0]), 'http_status' => 200, 'detail_code' => 'SOLE_PLANT'],
+        ['action' => 'workspace.plant_selected', 'requested_id' => str_replace('-', '', $this->t['plants'][0]), 'http_status' => 200, 'detail_code' => null],
+        ['action' => 'workspace.plant_denied', 'requested_id' => str_replace('-', '', $this->t['plants'][1]), 'http_status' => 404, 'detail_code' => null],
     ]);
+})->group('integration', 'auth');
+
+it('opens the only plant in scope with the tenant; several plants or none leave the choice open (D-071)', function () {
+    AccessFixtures::roles($this->t);
+    $one = member($this, $this->t);
+    AccessFixtures::grant($this->t, $one['id'], 'QCI', ['PLANT', $this->t['plants'][1]]);
+    spa($this)->postJson('/api/v1/auth/login', $one)->assertOk();
+    spa($this)->postJson('/api/v1/auth/tenant', ['tenantId' => $this->t['tenant']])->assertOk()
+        ->assertJsonCount(1, 'plants')->assertJsonPath('activePlantId', $this->t['plants'][1]);
+    spa($this)->getJson('/api/v1/auth/me')->assertOk()->assertJsonPath('activePlantId', $this->t['plants'][1]);
+    spa($this)->postJson('/api/v1/auth/logout')->assertNoContent();
+
+    $many = member($this, $this->t);
+    AccessFixtures::grant($this->t, $many['id'], 'AUD');
+    spa($this)->postJson('/api/v1/auth/login', $many)->assertOk();
+    spa($this)->postJson('/api/v1/auth/tenant', ['tenantId' => $this->t['tenant']])->assertOk()
+        ->assertJsonCount(2, 'plants')->assertJsonPath('activePlantId', null);
+    spa($this)->postJson('/api/v1/auth/logout')->assertNoContent();
+
+    $none = member($this, $this->t);
+    spa($this)->postJson('/api/v1/auth/login', $none)->assertOk();
+    spa($this)->postJson('/api/v1/auth/tenant', ['tenantId' => $this->t['tenant']])->assertOk()
+        ->assertJsonCount(0, 'plants')->assertJsonPath('activePlantId', null);
+    expect(array_column(workspaceEvents($this->t, $none['id']), 'action'))->toBe(['workspace.tenant_selected']);
 })->group('integration', 'auth');
 
 it('answers every failed login with the same 401 body', function () {
