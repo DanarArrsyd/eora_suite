@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Platform\Demo;
 
 use App\Platform\Auth\PasswordPolicy;
+use App\Platform\Provisioning\ProvisioningException;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -31,7 +32,8 @@ final class SeedDemoTenant extends Command
             return self::FAILURE;
         }
 
-        $password = (string) ($this->option('password') ?: 'Demo-'.Str::password(16, symbols: false));
+        $given = (string) $this->option('password') !== '';
+        $password = $given ? (string) $this->option('password') : 'Demo-'.Str::password(16, symbols: false);
         $check = Validator::make(['password' => $password], ['password' => ['string', 'min:12', 'max:1024', new PasswordPolicy]]);
         if ($check->fails()) {
             $this->error((string) $check->errors()->first('password'));
@@ -41,7 +43,7 @@ final class SeedDemoTenant extends Command
 
         try {
             $spec = new DemoSpec((string) $this->option('code'), (string) $this->option('name'));
-            $accounts = $seeder->seed($spec, $password);
+            ['resumed' => $resumed, 'accounts' => $accounts] = $seeder->seed($spec, $password, $given);
         } catch (InvalidArgumentException $e) {
             $this->error($e->getMessage());
 
@@ -52,11 +54,19 @@ final class SeedDemoTenant extends Command
             $this->line('Or seed a second demo tenant next to it: --code=demo-stamping-2');
 
             return self::FAILURE;
+        } catch (DemoResumeNeedsPassword $e) {
+            $this->error($e->getMessage().' Run again with --password=<the password printed by the interrupted run>.');
+
+            return self::FAILURE;
+        } catch (ProvisioningException $e) {
+            $this->error($e->getMessage());
+
+            return self::FAILURE;
         }
 
-        $this->info("Demo tenant \"{$spec->name}\" ({$spec->code}) created with ".count($accounts).' active users. All data is synthetic.');
+        $this->info("Demo tenant \"{$spec->name}\" ({$spec->code}) ".($resumed ? 'completed' : 'created').' with '.count($accounts).' active users. All data is synthetic.');
         $this->table(['Role', 'Name', 'E-mail', 'Scope'], array_map(static fn (array $a) => [$a['role'], $a['name'], $a['email'], $a['scope']], $accounts));
-        $this->line('Password for every demo account (shown once, not stored): '.$password);
+        $this->line($resumed && $given ? 'Password for every demo account: the one you passed with --password.' : 'Password for every demo account (shown once, not stored): '.$password);
         $this->line('Sign in at '.rtrim((string) config('eora.frontend_url'), '/').'/login');
 
         return self::SUCCESS;

@@ -14,8 +14,8 @@ final readonly class DemoSpec
 {
     public function __construct(public string $code = 'demo-stamping', public string $name = 'Demo Stamping')
     {
-        if (preg_match('/^[a-z0-9][a-z0-9-]{1,40}$/', $code) !== 1) {
-            throw new InvalidArgumentException('The demo tenant code must be 2–41 characters a-z, 0-9 or "-".');
+        if (preg_match('/^[a-z0-9][a-z0-9-]{1,39}$/', $code) !== 1) {
+            throw new InvalidArgumentException('The demo tenant code must be 2–40 characters a-z, 0-9 or "-".');
         }
     }
 

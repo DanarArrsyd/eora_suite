@@ -238,8 +238,10 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
 - Only production paths: `TenantProvisioner` (first administrator), the provisioner role in the tenant's signed context
   for further members and assignments (system actor, audited with `via: demo-seed`), console invitation delivery,
   `auth_api.consume_invitation` for the first password, activation as the user under RLS.
-- Never changes an existing tenant: a taken code is refused. Reset = fresh local database (`docker compose down -v`) or a
-  second demo tenant with another `--code`. Step-by-step UAT: `docs/uat/M1-UAT.md`.
+- Resumable: every step is idempotent, so a run interrupted by a transient failure (identity cap, delivery, database) is
+  finished by running it again with the same `--password`. A complete demo tenant is refused without any write. Reset =
+  fresh local database (`docker compose down -v`) or a second demo tenant with another `--code`. Step-by-step UAT:
+  `docs/uat/M1-UAT.md`.
 
 ## Endpoints (B0)
 | Method | Path | Purpose |
