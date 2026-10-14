@@ -1,6 +1,6 @@
 # 29 — M2 Scope: Core master data (B2) — lembar persetujuan
 
-**Status:** **USULAN 2026-10-14 — belum disetujui.** Tidak ada migration, API atau UI M2 sebelum Anda menyetujui lembar ini (D-054).
+**Status:** **DISETUJUI 2026-10-14 (D-072)** — owner: "setuju scope M2 sesuai usulan" (termasuk M2-D1..D6 sesuai usulan). Implementasi di branch `feat/m2-…`, PR berurutan mengikuti §1.
 **Basis:** doc 26 v14 (B2, keputusan §11 disetujui D-058), D-059 (O-003: opsi M default, S per item), D-060 (maker ≠ checker, tanpa threshold), D-044 (kalender), D-046 (G-MPS-5/7), doc 17 §2, doc 18 §2, doc 08, ADR-0001/0007/0008/0013, `docs/uiux/`. M1 selesai (D-071).
 **Tujuan M2:** Anda bisa **mengisi dan memelihara master data manufaktur** — plant, gudang/lokasi, work center, mesin, dies, item, UOM, customer, customer part, supplier, routing multi-operasi dan BOM — lewat layar, dan master bervolume besar juga lewat **import Excel** (daftar template di §1 langkah 6), dengan versi + approval dua orang untuk routing/BOM/map dan audit untuk semuanya. Belum ada stok, transaksi atau planning.
 
@@ -27,6 +27,8 @@
 - Seeder demo diperluas: "Demo Stamping" dengan item sintetis, 4 customer, routing contoh doc 26 B2-AT-02 (Part A/B/C), BOM + map, beberapa dies dan mesin.
 - File Excel contoh per template (data sintetis), termasuk satu file dengan error yang disengaja.
 - Skrip UAT M2 langkah demi langkah (`docs/uat/M2-UAT.md`).
+
+**Progres:** langkah 1a (fondasi: permission `master.*`, `eora:tenants:sync`, QueryDefinition `GET /api/v1/query/{resource}`, company/plant/gudang/lokasi + lokasi virtual) — PR `feat/m2-step1-org`. Berikutnya 1b (work center + lokasi `MAT_AT_PROD`, mesin, dies; `die_items` pindah ke langkah 2 bersama item) dan 1c (layar Master Data organisasi).
 
 ## 2. Di luar scope M2
 - Stok, ledger dan posting (M3); Sales Order, WO, MPS/MRP (M4/M5); snapshot routing di WO (B5).
@@ -63,4 +65,4 @@
 - Berhenti hanya bila ada temuan keamanan atau keputusan baru yang benar-benar dibutuhkan; keputusan bisnis tidak diisi sendiri.
 - Ukuran: lebih besar dari M1 di sisi layar (11 area master data) dan import; tidak ada tanggal yang dijanjikan.
 
-**Pilihan owner:** ☐ Setuju scope M2 · ☐ Setuju dengan revisi (sebutkan) · ☐ Keputusan M2-D1..D6 sesuai usulan / revisi
+**Pilihan owner:** ☑ Setuju scope M2 · ☑ Keputusan M2-D1..D6 sesuai usulan (2026-10-14)

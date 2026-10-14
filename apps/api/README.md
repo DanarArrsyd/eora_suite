@@ -259,6 +259,17 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   (`EORA_STACK_RUN_ARGS` adds `compose run` arguments, e.g. a source mount instead of rebuilding the shared image).
   Port 3100 must be free; every run creates fresh synthetic tenants (`e2e-alpha-<hex>`, `admin@e2e-<hex>.test`).
 
+## Master data — organisation (M2 step 1, doc 29, D-072)
+- Permissions `master.org|part|routing|conversion.*` (migration `000800`, doc 18 master-data table). After deploying a
+  catalogue migration run `eora:tenants:sync` in the one-shot runner — template roles of every provisioned tenant get
+  the missing permissions and plants their virtual locations (provisioner in each tenant's signed context, audited,
+  idempotent): `docker compose run --rm --entrypoint php db-migrate artisan eora:tenants:sync`.
+- Tables `warehouses`, `locations` (migration `000900`): codes immutable (column grants), `V_*` virtual locations per
+  plant from a trigger on `plants`, physical locations inside a warehouse of the same plant.
+- Query resources (`App\Platform\Query`: `QueryDefinition`, `Field`, `QueryRunner`; registry `config/eora.php`
+  `queries`): `GET /api/v1/query/{resource}` + `/schema`, doc 24 §5.2. Module code lives in `app/Modules/Core`.
+- Commands in `App\Modules\Core\Http\OrgController`; edits need `If-Match` (`App\Platform\Http\Concurrency`).
+
 ## Endpoints (B0)
 | Method | Path | Purpose |
 |---|---|---|

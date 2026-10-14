@@ -82,6 +82,7 @@ Offset (`total`) for master data and small lists; **cursor/keyset** for ledgers,
 | 404 | `NOT_FOUND` (also for other tenants' ids — no existence disclosure) |
 | 409 | `INSUFFICIENT_STOCK`, `INSUFFICIENT_AVAILABLE`, `PERIOD_CLOSED`, `IDEMPOTENCY_KEY_REUSED`, `INVALID_STATE_TRANSITION`, `REVERSAL_BLOCKED_BY_DOWNSTREAM`, `BLANKET_EXCEEDED`, `REVISION_MAPPING_AMBIGUOUS` |
 | 412 | `VERSION_CONFLICT` |
+| 428 | `PRECONDITION_REQUIRED` (edit without `If-Match`, M2) |
 | 422 | `VALIDATION_FAILED`, `FILTER_NOT_ALLOWED`, `UOM_MISMATCH`, `MEASUREMENT_REQUIRED` |
 | 429 | `RATE_LIMITED` |
 | 503 | `RETRYABLE_CONFLICT`, `READ_MODEL_UNAVAILABLE` |
@@ -91,6 +92,11 @@ The frontend maps `403 FORBIDDEN/SCOPE_FORBIDDEN` → `SourceError('forbidden')`
 - `503 RETRYABLE_CONFLICT` with `Retry-After` is returned for serialization failure, deadlock and lock timeout (SQLSTATE 40001, 40P01, 55P03); nothing was committed.
 - `403 SCOPE_FORBIDDEN` / `SOD_VIOLATION` are recorded as `access.scope_forbidden` / `access.sod_violation` security events (doc 25 §8).
 - Administration (M1 step 5): `GET /api/v1/core/roles`, `GET /api/v1/core/members`, `POST /api/v1/core/role-assignments` (`{membershipId, roleId, scopeType, companyId?, plantId?, validUntil?, reason}` → 201), `POST /api/v1/core/role-assignments/{id}/actions/revoke` (`{reason}` → 200). Member administration (step 5b): `POST /api/v1/core/members/invitations` (`{email}` → 201), `POST /api/v1/core/members/{id}/actions/resend-invitation` (→ 202), `…/actions/suspend`, `…/actions/reactivate` (→ 200). Inbox (step 7a): `GET /api/v1/inbox` (latest 50 of the signed-in user in the active tenant + whole-inbox totals `meta.unread`, `meta.actionRequired`), `POST /api/v1/inbox/read` (`{ids?: uuid[]}`; absent = all). Every v1 error response is documented as `application/problem+json` with the endpoint's catalogued codes (step 7c, `ProblemResponses`); Scramble's inferred Laravel error shapes are removed.
+
+### 5.2 Implemented in M2 step 1 (B2, D-072)
+- Query resources (§3, ADR-0008, offset mode): `GET /api/v1/query/{resource}` and `GET /api/v1/query/{resource}/schema`. Grammar: `filter[k]=v` / `filter[k][]=…` (enum, uuid, boolean; text = case-insensitive prefix), `q` (prefix on codes, contains on names; wildcards literal; ≤ 100 chars), `sort=-a,b` (+ id tiebreaker), `page[number]`, `page[size]` (default 50, clamped to the resource maximum 200). Response `{data, meta: {total, page: {number, size}, asOf, timezone}}`. Unknown resource → 404; unknown filter → 422 `FILTER_NOT_ALLOWED`; bad value/sort → 422 `VALIDATION_FAILED`. Rows limited to the scopes of the resource's view permission. `scopeHash`, `counts=views`, `options/{field}`, saved views and exports are not built yet (later M2 steps / doc 08).
+- Resources: `core.companies`, `core.plants`, `core.warehouses`, `core.locations` (permission `master.org.view`).
+- Commands (`master.org.create` in a scope covering the record): `POST /api/v1/core/companies` `{code, legalName}`, `PATCH /core/companies/{id}` `{legalName}`; `POST /core/plants` `{companyId, code, name, timezone?}`, `PATCH /core/plants/{id}` `{name}`; `POST /core/warehouses` `{plantId, code, name, warehouseType}`, `PATCH /core/warehouses/{id}` `{name?, warehouseType?, status?}`; `POST /core/locations` `{warehouseId, code, name, locationType}`, `PATCH /core/locations/{id}` `{name?, status?}`. Create → 201, edit → 200, both with the list representation and `ETag: "<version>"`; edits require `If-Match` (428 / 412). Codes are immutable; virtual locations cannot be changed (409).
 
 ## 6. Security on every endpoint
 Session + CSRF (non-GET), tenant from session, permission + scope policy, rate limits (doc 05), audit for commands and sensitive reads, response never contains other-tenant ids; export files tenant-prefixed and served through short-lived signed URLs.

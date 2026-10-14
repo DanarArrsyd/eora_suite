@@ -87,10 +87,18 @@ LANGUAGE sql SECURITY DEFINER SET search_path = '' STABLE AS $fn$
    WHERE p.tenant_code = provision_lookup.tenant_code AND p.request_key = provision_lookup.request_key;
 $fn$;
 
+-- Tenants whose provisioning finished (operator maintenance, e.g. `eora:tenants:sync` after a catalogue migration, D-072).
+-- Ids only; every further read or write happens in that tenant's signed context.
+CREATE OR REPLACE FUNCTION prov_api.provisioned_tenants()
+RETURNS TABLE (tenant_id uuid)
+LANGUAGE sql SECURITY DEFINER SET search_path = '' STABLE AS $fn$
+  SELECT p.tenant_id FROM prov.provisioning_requests p WHERE p.status = 'TENANT_CREATED' ORDER BY p.created_at, p.tenant_id;
+$fn$;
+
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA prov_api FROM PUBLIC;
 
 RESET ROLE;
 
 GRANT USAGE ON SCHEMA prov_api TO eora_provisioner;
 GRANT EXECUTE ON FUNCTION prov_api.begin_provisioning(text, text, text), prov_api.lock_request(text),
-  prov_api.mark_tenant_created(text, uuid, uuid), prov_api.provision_lookup(text, text) TO eora_provisioner;
+  prov_api.mark_tenant_created(text, uuid, uuid), prov_api.provision_lookup(text, text), prov_api.provisioned_tenants() TO eora_provisioner;

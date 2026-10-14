@@ -57,7 +57,7 @@ erDiagram
 | `tenants` | id, code, status, plan, timezone (default Asia/Jakarta), data_region | **not** RLS-scoped; platform table |
 | `companies` | tenant_id, id, legal_name | |
 | `plants` | tenant_id, id, company_id, code, timezone, shift_calendar_id | |
-| `warehouses`, `locations` | tenant_id, id, plant_id, `location_type` (ADR-0002 §3), work_center_id nullable | virtual locations seeded per plant |
+| `warehouses`, `locations` | tenant_id, id, plant_id, `location_type` (ADR-0002 §3), work_center_id nullable | virtual locations seeded per plant — **implemented M2 step 1 (migration `000900`)**: `warehouses.warehouse_type` RAW_MATERIAL/FINISHED_GOODS/GENERAL, status; locations of a warehouse share its plant (composite FK); `V_*` = code, no warehouse, always active, created by an AFTER INSERT trigger on `plants`; codes immutable |
 | `work_centers`, `machines`, `dies` | tenant_id, id, plant_id, die stroke counters | |
 | `users` | id, display_name, locale, email_display | global profile only; login identity (normalized email, account status) and credentials live in `auth.identities`, reachable only through reviewed definer functions — never by the business runtime role (doc 25 §2.1–§2.2, proposed) |
 | `memberships` | tenant_id, id, user_id, status | user ↔ tenant |

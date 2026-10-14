@@ -32,6 +32,13 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
 
     private const array SCOPED_403 = [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION']];
 
+    private const array MASTER_403 = [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN']];
+
+    /** Master-data edit (doc 24 §4): If-Match required (428), stale version (412). */
+    private const array MASTER_EDIT = self::TENANT_WRITE + self::MASTER_403 + [
+        404 => ['NOT_FOUND'], 412 => ['VERSION_CONFLICT'], 422 => ['VALIDATION_FAILED'], 428 => ['PRECONDITION_REQUIRED'],
+    ];
+
     /**
      * Route name => status => error codes (doc 24 §5 catalogue).
      *
@@ -59,6 +66,18 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.core.members.reactivate' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
         'v1.core.role-assignments.store' => self::TENANT_WRITE + self::SCOPED_403 + [409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.core.role-assignments.revoke' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        // query resources (ADR-0008, doc 24 §3) — M2 step 1
+        'v1.query.index' => self::TENANT_READ + [404 => ['NOT_FOUND'], 422 => ['FILTER_NOT_ALLOWED', 'VALIDATION_FAILED']],
+        'v1.query.schema' => self::TENANT_READ + [404 => ['NOT_FOUND']],
+        // Master Data → organisation (doc 29 §1.1)
+        'v1.core.companies.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.companies.update' => self::MASTER_EDIT,
+        'v1.core.plants.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.plants.update' => self::MASTER_EDIT,
+        'v1.core.warehouses.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.warehouses.update' => self::MASTER_EDIT,
+        'v1.core.locations.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.locations.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
     ];
 
     /** Laravel-shaped error components Scramble registers; replaced by the problem responses above. */

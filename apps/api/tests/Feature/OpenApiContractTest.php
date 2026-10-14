@@ -38,7 +38,7 @@ it('leaves the liveness contract unchanged (200 only)', function () {
 it('documents every v1 error as problem+json with codes from the doc 24 §5 catalogue', function () {
     $catalogue = ['MALFORMED_REQUEST', 'UNAUTHENTICATED', 'SESSION_EXPIRED', 'FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION', 'STEP_UP_REQUIRED',
         'NOT_FOUND', 'METHOD_NOT_ALLOWED', 'INVALID_STATE_TRANSITION', 'VERSION_CONFLICT', 'CSRF_TOKEN_MISMATCH', 'VALIDATION_FAILED',
-        'RATE_LIMITED', 'RETRYABLE_CONFLICT', 'INTERNAL_ERROR'];
+        'RATE_LIMITED', 'RETRYABLE_CONFLICT', 'INTERNAL_ERROR', 'FILTER_NOT_ALLOWED', 'PRECONDITION_REQUIRED'];
     $routes = collect(Route::getRoutes()->getRoutes())->map->getName()->filter(fn ($n) => is_string($n) && str_starts_with($n, 'v1.'))->values();
     $declared = array_keys(ProblemResponses::ERRORS);
 
