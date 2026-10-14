@@ -229,6 +229,20 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   (comma-separated IPs/CIDRs, D-B1-06). The client IP is taken from `X-Forwarded-For` only through the hops listed in
   `EORA_TRUSTED_PROXIES` (exact IPs/CIDRs; empty = trust none, never `*`). Review of all limits: doc 25 §16.
 
+## Demo data for UAT (M1, doc 28 §1)
+- `eora:demo:seed [--code=demo-stamping] [--name="Demo Stamping"] [--password=…]` in the one-shot runner:
+  `docker compose run --rm --entrypoint php db-migrate artisan eora:demo:seed`. Refused when `APP_ENV=production`.
+- Creates a synthetic tenant (company `DEMO`, plant `P1`, production day 07:00, Asia/Jakarta) and one ACTIVE user per role
+  template (doc 18 §1): `<role>@<code>.test` (reserved `.test` domain), each with its template's default scope (PLANT
+  roles on P1). One shared password (given, or generated and printed once; never stored).
+- Only production paths: `TenantProvisioner` (first administrator), the provisioner role in the tenant's signed context
+  for further members and assignments (system actor, audited with `via: demo-seed`), console invitation delivery,
+  `auth_api.consume_invitation` for the first password, activation as the user under RLS.
+- Resumable: every step is idempotent, so a run interrupted by a transient failure (identity cap, delivery, database) is
+  finished by running it again with the same `--password`. A complete demo tenant is refused without any write. Reset =
+  fresh local database (`docker compose down -v`) or a second demo tenant with another `--code`. Step-by-step UAT:
+  `docs/uat/M1-UAT.md`.
+
 ## Endpoints (B0)
 | Method | Path | Purpose |
 |---|---|---|
