@@ -55,8 +55,9 @@ abstract class QueryDefinition
 
     /**
      * SQL predicate limiting rows to $scopes: the tenant scope sees everything; a company scope its company (and, for
-     * plant-bound rows, that company's plants); a plant scope only its plant. A resource bound to neither plant nor
-     * company is visible tenant-wide to anyone holding the view permission.
+     * plant-bound rows, that company's plants); a plant scope only its plant — or, for a resource bound to companies
+     * only (no plant column), the plant's company. A resource bound to neither plant nor company is visible
+     * tenant-wide to anyone holding the view permission.
      *
      * @param  list<Scope>  $scopes
      * @return array{0: string, 1: list<string>}
@@ -73,8 +74,8 @@ abstract class QueryDefinition
             if ($scope->type === Scope::TENANT) {
                 return ['true', []];
             }
-            if ($scope->type === Scope::COMPANY) {
-                $companies[] = (string) $scope->companyId;
+            if ($scope->type === Scope::COMPANY || $plant === null) {
+                $companies[] = (string) $scope->companyId; // a plant scope reaches its company on company-only resources
             } else {
                 $plants[] = (string) $scope->plantId;
             }

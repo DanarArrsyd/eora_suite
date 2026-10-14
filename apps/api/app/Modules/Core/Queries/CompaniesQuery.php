@@ -7,7 +7,7 @@ namespace App\Modules\Core\Queries;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
-/** `core.companies` — companies of the tenant (not data-scoped: names only, needed to pick a plant's company). */
+/** `core.companies` — companies inside the caller's `master.org.view` scopes (a plant scope sees its plant's company). */
 final class CompaniesQuery extends QueryDefinition
 {
     public function resource(): string
@@ -30,13 +30,17 @@ final class CompaniesQuery extends QueryDefinition
         return 'c.id';
     }
 
+    public function companyColumn(): string
+    {
+        return 'c.id';
+    }
+
     public function fields(): array
     {
         return [
             new Field('id', 'c.id', Field::UUID),
             new Field('code', 'c.code', sortable: true, filterable: true, search: 'prefix'),
             new Field('legalName', 'c.legal_name', sortable: true, search: 'contains'),
-            new Field('plantCount', '(select count(*) from plants p where p.company_id = c.id)', Field::INTEGER),
             new Field('updatedAt', 'c.updated_at', Field::INSTANT, sortable: true),
             new Field('version', 'c.version', Field::INTEGER),
         ];

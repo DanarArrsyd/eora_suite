@@ -130,12 +130,17 @@ it('keeps plant-scoped users inside their plant, and users without the permissio
     foreach ($this->t['plants'] as $i => $plant) {
         spa($this)->postJson('/api/v1/core/warehouses', ['plantId' => $plant, 'code' => "W{$i}", 'name' => "W{$i}", 'warehouseType' => 'GENERAL'])->assertCreated();
     }
+    $second = spa($this)->postJson('/api/v1/core/companies', ['code' => 'CO2', 'legalName' => 'Second company'])->assertCreated()->json('data.id');
+    spa($this)->postJson('/api/v1/core/plants', ['companyId' => $second, 'code' => 'Q1', 'name' => 'Other company plant'])->assertCreated();
+    spa($this)->getJson('/api/v1/query/core.companies')->assertOk()->assertJsonPath('meta.total', 2);
     spa($this)->postJson('/api/v1/auth/logout')->assertNoContent();
 
     // MAT holds master.org.view in plant 1 only
     orgUser($this, $this->t, 'MAT', ['PLANT', $this->t['plants'][0]]);
     spa($this)->getJson('/api/v1/query/core.warehouses')->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.code', 'W0');
     spa($this)->getJson('/api/v1/query/core.plants')->assertOk()->assertJsonPath('meta.total', 1);
+    // a plant scope reaches its own company only, never the tenant's other companies
+    spa($this)->getJson('/api/v1/query/core.companies')->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.code', 'CO1');
     spa($this)->postJson('/api/v1/core/warehouses', ['plantId' => $this->t['plants'][0], 'code' => 'X', 'name' => 'X', 'warehouseType' => 'GENERAL'])
         ->assertForbidden()->assertJsonPath('code', 'FORBIDDEN'); // view only
     spa($this)->postJson('/api/v1/auth/logout')->assertNoContent();
