@@ -2,7 +2,7 @@
 
 **Status:** **USULAN 2026-10-14 — belum disetujui.** Tidak ada migration, API atau UI M2 sebelum Anda menyetujui lembar ini (D-054).
 **Basis:** doc 26 v14 (B2, keputusan §11 disetujui D-058), D-059 (O-003: opsi M default, S per item), D-060 (maker ≠ checker, tanpa threshold), D-044 (kalender), D-046 (G-MPS-5/7), doc 17 §2, doc 18 §2, doc 08, ADR-0001/0007/0008/0013, `docs/uiux/`. M1 selesai (D-071).
-**Tujuan M2:** Anda bisa **mengisi dan memelihara master data manufaktur** — plant, gudang/lokasi, work center, mesin, dies, item, UOM, customer, customer part, supplier, routing multi-operasi dan BOM — lewat layar dan lewat **import Excel**, dengan versi, approval dua orang dan audit. Belum ada stok, transaksi atau planning.
+**Tujuan M2:** Anda bisa **mengisi dan memelihara master data manufaktur** — plant, gudang/lokasi, work center, mesin, dies, item, UOM, customer, customer part, supplier, routing multi-operasi dan BOM — lewat layar, dan master bervolume besar juga lewat **import Excel** (daftar template di §1 langkah 6), dengan versi + approval dua orang untuk routing/BOM/map dan audit untuk semuanya. Belum ada stok, transaksi atau planning.
 
 ## 1. Dalam scope
 **Backend (`apps/api`), PR berurutan (setiap langkah: migration + rollback, tes T-ISO/RLS sebagai role non-superuser, OpenAPI, docs)**
@@ -11,7 +11,10 @@
 3. **Routing:** `process_types` (didefinisikan tenant), `routings` per item + plant (D-B2-05), `routing_versions` (SY per versi, D-B2-02; rentang efektif inklusif + exclusion constraint `btree_gist`, D-B2-08), `routing_operations` (+ mesin, tooling, inspeksi), routing alternatif (D-B2-04). Approval dan supersession lewat `lifecycle_api.approve_routing_version` (SECURITY DEFINER, `eora_lifecycle_definer`, signed context, maker ≠ checker, tanpa efektivitas mundur — doc 26 §2.4a, D-B2-14). Allowlist definer di CI diperbarui.
 4. **BOM:** `bom_versions` / `bom_lines` (`gross_qty_per` dalam UOM material, scrap/yield dipakai sekali), `bom_routing_maps` + baris (satu map APPROVED per pasangan versi, D-B2-01 a), immutable setelah approve, konsistensi item via composite FK (doc 26 §2.5).
 5. **Engineering data konversi:** `item_weights` (NW, berversi) dan `conversion_profiles` (SHEET / COIL, input tervalidasi per `formula_code` dari doc 02, status DRAFT → VALIDATED → RETIRED). **Hanya menyimpan dan memvalidasi data**; perhitungan GYV/PvS/UMV tetap B8 (M5).
-6. **Import Excel (exit B2, doc 11):** template berversi untuk item, customer, customer part, process type, work center, mesin, dies + die-item, routing, BOM, map BOM–routing; pipeline doc 26 §5 (staging, preview + file error, reservasi atomik, lease + fencing, commit per chunk 500, retry tanpa commit ganda); all-or-nothing untuk routing/BOM/map, hanya baris valid untuk item/customer/customer part (D-B2-07); hasil import selalu **DRAFT**, tetap harus di-approve.
+6. **Import Excel (exit B2, doc 11):** template berversi untuk gudang + lokasi, UOM + konversi UOM per item, material spec, item, customer, customer part, supplier, process type, work center, mesin, dies + die-item, routing, BOM, map BOM–routing. **Hanya lewat layar** (jumlahnya kecil atau butuh validasi engineering per record): company/plant, `item_weights` (NW) dan `conversion_profiles`.
+   - Pipeline doc 26 §5: staging, preview + file error, reservasi atomik, lease + fencing, commit per chunk 500, retry tanpa commit ganda.
+   - All-or-nothing untuk routing/BOM/map; hanya baris valid untuk template lain (D-B2-07; doc 26 menyebut item/customer/customer part — usulan: aturan yang sama untuk template master baru di atas).
+   - **Routing, BOM dan map** hasil import masuk sebagai versi/revisi **DRAFT** dan tetap harus di-approve orang kedua (tidak ada bypass approval). Master lain **tidak punya siklus approval**: baris valid langsung tersimpan dengan status normalnya (mis. item `ACTIVE`), diaudit per commit.
 7. **Pencarian dan daftar:** QueryDefinition (ADR-0008) untuk semua master di atas, filter/sort/pagination server-side, `q` prefix + trigram (`pg_trgm`, D-B2-09), export lewat query yang sama, cek EXPLAIN untuk daftar besar.
 8. **Permission master data** (lihat keputusan M2-D1) + template role, audit `audit_events` untuk create/update/submit/approve/supersede/retire/import.
 
@@ -40,9 +43,12 @@
 | M2-D3 | Penyimpanan file + scan | Compose menambah **MinIO** (S3-compatible, versi dipin, ADR-0007); upload dicek tipe (XLSX saja), ukuran (≤ 10 MB), zip-bomb, makro/eksternal link ditolak. Antivirus (ClamAV atau layanan hosting) diputuskan di M6 bersama O-008; titik scan sudah disiapkan. | ADR-0007 masih PROPOSED untuk S3; antivirus di laptop lokal berat dan bergantung pilihan hosting. |
 | M2-D4 | Kode item | Kode bebas dari tenant (`^[A-Z0-9][A-Z0-9._/-]{0,39}$`, huruf besar), tanpa auto-numbering di M2 (D-049 untuk dokumen transaksi, bukan master). | Pelanggan stamping biasanya memakai nomor part sendiri. |
 | M2-D5 | Demo tengah milestone | Satu demo di akhir M2; **opsional** demo antara setelah langkah 1–2 (organisasi + part) bila Anda ingin menilai layar daftar/form lebih awal. | M2 besar; masukan UI lebih awal mengurangi rework di routing/BOM. |
+| M2-D6 | Bacaan B2-AT-70 | Diuji seperti di §4 butir 1 (baris ter-commit yang berubah sebelum retry dilewati); doc 26 §10 dikoreksi kata-katanya di PR langkah 6 | Kalimat doc 26 mengandaikan approval item yang tidak ada di model item |
 
 ## 4. Acceptance (exit M2)
-1. Skenario doc 26 §10 (B2-AT-01..21) hijau sebagai tes otomatis, termasuk impor 1.278 item + set sintetis lebih besar tanpa batas maksimum.
+1. Skenario doc 26 §10 yang menjadi milik B2 hijau sebagai tes otomatis: **B2-AT-01..14, 18, 20..23, 25..44, 46..55, 57..62, 69..73** — termasuk impor 1.278 item + set sintetis lebih besar tanpa batas maksimum, approval/isolasi definer (AT-25..36), tooling per plant (AT-37..41), integritas map (AT-42..44, 46, 53..55, 57) dan fencing import (AT-47..52, 58..62, 69..73).
+   - **Tidak** di M2 (hook milik slice lain, tabelnya belum ada): AT-15, 24, 45, 56, 74 (B5 — snapshot WO); AT-16, 17, 63..68, 75, 76 (B6 — posting dan `consumption_line_allocations`); AT-19 (B8). Tes ini ditulis saat slice tersebut.
+   - AT-70 berbicara tentang draft item yang di-approve, padahal item tidak punya approval (doc 26 §2.2); di M2 diuji sebagai: baris yang sudah di-commit lalu diubah lewat layar sebelum retry tetap dilewati retry (tanpa update, tanpa gagal). Lihat M2-D6.
 2. Isolasi: T-ISO diperluas ke semua tabel B2 (composite FK, forced RLS), tes sebagai role non-superuser; allowlist definer persis di CI.
 3. Approval dua orang: preparer tidak bisa approve versinya sendiri, juga lewat SQL langsung; versi APPROVED/SUPERSEDED tidak bisa diubah (trigger), approval paralel tidak menghasilkan versi tumpang tindih (B2-AT-21).
 4. Import: upload ganda file yang sama → satu job; retry tidak meng-commit baris dua kali; worker hilang → job tidak terkunci selamanya; hasil import DRAFT.
@@ -57,4 +63,4 @@
 - Berhenti hanya bila ada temuan keamanan atau keputusan baru yang benar-benar dibutuhkan; keputusan bisnis tidak diisi sendiri.
 - Ukuran: lebih besar dari M1 di sisi layar (11 area master data) dan import; tidak ada tanggal yang dijanjikan.
 
-**Pilihan owner:** ☐ Setuju scope M2 · ☐ Setuju dengan revisi (sebutkan) · ☐ Keputusan M2-D1..D5 sesuai usulan / revisi
+**Pilihan owner:** ☐ Setuju scope M2 · ☐ Setuju dengan revisi (sebutkan) · ☐ Keputusan M2-D1..D6 sesuai usulan / revisi
