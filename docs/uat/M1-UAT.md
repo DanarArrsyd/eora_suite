@@ -27,7 +27,7 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat. Modul lain (PPIC, Ma
 | 1 | Buka `http://localhost:3100`. | Diarahkan ke **Sign in**. | |
 | 2 | Login `tenant-admin@demo-stamping.test` dengan password salah. | Satu pesan umum: e-mail atau password salah / akun terkunci sementara. Tidak menyebut mana yang salah. | |
 | 3 | Login dengan password demo yang benar. | Masuk langsung ke workspace (hanya 1 tenant, tanpa picker). Topbar: **Demo Stamping**. | |
-| 4 | Klik pemilih workspace di topbar, pilih plant **P1 · Plant 1 (demo)**. | Topbar menampilkan plant P1. | |
+| 4 | Lihat pemilih workspace di topbar (plant satu-satunya langsung aktif, D-071; kalau ada P2 dari `eora:demo:plant`, pilih plant sendiri). | Topbar menampilkan plant **P1 · Plant 1 (demo)**. | |
 | 5 | Buka **Administration → Users**. | 14 user, semua **Active**, kolom role berisi role + scope (mis. `QCI · Plant P1 · Plant 1 (demo)`). | |
 | 6 | Klik **Invite user**, isi `uat.baru@demo-stamping.test`, kirim. | Pesan "Invitation sent…". User baru muncul di tab **Invited**, kolom role "No role". | |
 | 7 | Buka Mailpit, buka e-mail undangan, klik link. Set password baru (min. 12 karakter). | "Your account is ready". | |

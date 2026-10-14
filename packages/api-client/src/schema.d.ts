@@ -137,7 +137,8 @@ export interface paths {
         /**
          * Tenant picker (DD-07): only a tenant where the user holds an ACTIVE membership; session regenerated
          * @description The switch is recorded as security event `workspace.tenant_selected` of the chosen tenant before the session
-         *     changes: no record, no switch.
+         *     changes: no record, no switch. When exactly one plant is in the user's scope it becomes the active plant at once
+         *     (D-071), recorded as `workspace.plant_selected` with detail `SOLE_PLANT` in the same transaction.
          */
         post: operations["v1.auth.tenant"];
         delete?: never;
