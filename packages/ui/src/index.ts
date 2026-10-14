@@ -1,7 +1,11 @@
 export { cn } from './lib/cn';
 export { useReturnFocus } from './lib/return-focus';
 export { Button, IconButton, buttonVariants, type ButtonProps, type IconButtonProps } from './components/button';
-export { Input, Select, Textarea } from './components/input';
+export { Input, Textarea } from './components/input';
+export { Select, type SelectOption, type SelectProps } from './components/select';
+export { Calendar, type CalendarProps, type DateRange } from './components/calendar';
+export { DatePicker, DateRangePicker } from './components/date-picker';
+export * from './lib/dates';
 export { Field, type FieldControlProps } from './components/field';
 export { Badge, StatusBadge, NumericBadge, badgeVariants, type BadgeProps } from './components/badge';
 export { Card, CardHeader, CardTitle, CardDescription, CardContent } from './components/card';

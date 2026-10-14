@@ -1,10 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import { Calendar, ChevronDown, Lock, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronDown, SlidersHorizontal, X } from 'lucide-react';
 import {
   Button,
   Checkbox,
+  DateRangePicker,
   DialogPrimitive as D,
   useReturnFocus,
   Field,
@@ -15,6 +16,8 @@ import {
   PopoverTrigger,
   Select,
   cn,
+  isIsoDate,
+  type DateRange,
 } from '@eora/ui';
 import { activeFilterCount, useMediaQuery, type FilterValue, type FilterValues } from '../../data';
 import { formatRange, parseRange, type FilterField } from './types';
@@ -103,19 +106,17 @@ function SegmentControl({ field, value, draft, onChange }: ControlProps) {
     );
   }
   if (field.type === 'daterange') {
-    const r = parseRange(str);
     return (
-      <Popover>
-        <div className={segCls}>
-          <PopoverTrigger className={cn(segInput, str && segActive)} aria-label={`${field.label}${str ? `: ${r.from || '…'} to ${r.to || '…'}` : ''}`}>
-            {str ? `${r.from || '…'} – ${r.to || '…'}` : field.label}
-          </PopoverTrigger>
-          <Calendar aria-hidden="true" className="pointer-events-none absolute right-2.5 size-4 text-ink-2" />
-        </div>
-        <PopoverContent align="start" aria-label={field.label} className="w-auto p-3">
-          <DateRangeInputs label={field.label} from={r.from} to={r.to} onChange={(f, t) => onChange(formatRange(f, t))} />
-        </PopoverContent>
-      </Popover>
+      <div className={segCls}>
+        <DateRangePicker
+          variant="segment"
+          label={field.label}
+          placeholder={field.label}
+          active={!!str}
+          value={toRange(str)}
+          onChange={(r) => onChange(fromRange(r))}
+        />
+      </div>
     );
   }
   if (field.type === 'multiselect') {
@@ -141,25 +142,18 @@ function SegmentControl({ field, value, draft, onChange }: ControlProps) {
   // select / entity
   return (
     <div className={segCls} title={field.locked ? 'From your workspace' : undefined}>
-      <select
+      <Select
+        variant="segment"
         aria-label={field.locked ? `${field.label} (from your workspace)` : field.label}
         value={str}
-        disabled={field.locked || loading}
-        onChange={(e) => onChange(e.target.value || undefined)}
-        className={cn(segInput, str && segActive)}
-      >
-        <option value="">{loading ? `${field.label}: loading…` : field.label}</option>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      {field.locked ? (
-        <Lock aria-hidden="true" className="pointer-events-none absolute right-2.5 size-3.5 text-ink-2" />
-      ) : (
-        <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 size-4 text-ink-2" />
-      )}
+        onValueChange={(v) => onChange(v || undefined)}
+        options={options}
+        placeholder={loading ? `${field.label}: loading…` : field.label}
+        emptyLabel={`Any ${field.label.toLowerCase()}`}
+        disabled={loading}
+        locked={field.locked}
+        active={!!str}
+      />
     </div>
   );
 }
@@ -174,8 +168,9 @@ function StackedControl({ field, value, draft, onChange }: ControlProps) {
     );
   }
   if (field.type === 'daterange') {
-    const r = parseRange(str);
-    return <DateRangeInputs label={field.label} from={r.from} to={r.to} onChange={(f, t) => onChange(formatRange(f, t))} touch />;
+    return (
+      <Field label={field.label}>{(c) => <DateRangePicker {...c} label={field.label} value={toRange(str)} onChange={(r) => onChange(fromRange(r))} />}</Field>
+    );
   }
   return (
     <Field label={field.label} hint={field.locked ? 'From your workspace' : undefined}>
@@ -183,14 +178,16 @@ function StackedControl({ field, value, draft, onChange }: ControlProps) {
         field.type === 'text' || field.type === 'search' ? (
           <Input {...c} value={str} placeholder={field.placeholder} onChange={(e) => onChange(e.target.value || undefined)} />
         ) : (
-          <Select {...c} value={str} disabled={field.locked || loading} onChange={(e) => onChange(e.target.value || undefined)}>
-            <option value="">{loading ? 'Loading…' : `Any ${field.label.toLowerCase()}`}</option>
-            {options.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
+          <Select
+            {...c}
+            value={str}
+            onValueChange={(v) => onChange(v || undefined)}
+            options={options}
+            placeholder={loading ? 'Loading…' : `Any ${field.label.toLowerCase()}`}
+            emptyLabel={`Any ${field.label.toLowerCase()}`}
+            disabled={loading}
+            locked={field.locked}
+          />
         )
       }
     </Field>
@@ -232,31 +229,14 @@ function CheckboxList({
   );
 }
 
-function DateRangeInputs({
-  label,
-  from,
-  to,
-  onChange,
-  touch,
-}: {
-  label: string;
-  from: string;
-  to: string;
-  onChange: (from: string, to: string) => void;
-  touch?: boolean;
-}) {
-  const invalid = !!from && !!to && from > to;
-  return (
-    <fieldset className="m-0 min-w-0 border-0 p-0">
-      <legend className={cn('mb-1.5 text-[13px] font-medium', !touch && 'sr-only')}>{label}</legend>
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="From" error={invalid ? 'Start is after end' : undefined}>
-          {(c) => <Input {...c} type="date" value={from} max={to || undefined} onChange={(e) => onChange(e.target.value, to)} />}
-        </Field>
-        <Field label="To">{(c) => <Input {...c} type="date" value={to} min={from || undefined} onChange={(e) => onChange(from, e.target.value)} />}</Field>
-      </div>
-    </fieldset>
-  );
+/** URL values are untrusted: a malformed or stale date (`?f.date=abc..`) is dropped instead of reaching the calendar. */
+export function toRange(str: string): DateRange {
+  const r = parseRange(str);
+  return { from: isIsoDate(r.from) ? r.from : '', to: isIsoDate(r.to) ? r.to : '' };
+}
+
+function fromRange(r: DateRange): string | undefined {
+  return r.from || r.to ? formatRange(r.from, r.to) : undefined;
 }
 
 /* ------------------------------------------------------------------ FilterBar ------------------------------------------------------------------ */

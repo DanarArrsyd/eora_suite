@@ -17,13 +17,13 @@ test('Ctrl+K and Cmd+K open search; Escape closes and returns focus', async ({ p
   const trigger = page.locator('[data-search="compact"]');
   await trigger.focus();
   await page.keyboard.press('Control+k');
-  await expect(page.getByRole('dialog', { name: 'Search records' })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Search records' })).toBeFocused();
+  await expect(page.getByRole('dialog', { name: 'Search' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Search' })).toBeFocused();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'Search records' })).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Search' })).toBeHidden();
   await expect(trigger).toBeFocused();
   await page.keyboard.press('Meta+k');
-  await expect(page.getByRole('dialog', { name: 'Search records' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Search' })).toBeVisible();
 });
 
 test('focus ring visible on every tab stop in the shell (first 25)', async ({ page }) => {
@@ -98,4 +98,33 @@ test('200% zoom proxy (640 CSS px): mobile layout, content reachable, no overflo
   const last = page.getByText('Loading raw material lots…');
   await last.scrollIntoViewIfNeeded();
   await expect(last).toBeInViewport();
+});
+
+test('search finds pages by name or initials, highlights the match and opens it with Enter', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ppic/control-tower');
+  await page.keyboard.press('Control+k');
+  const box = page.getByRole('combobox', { name: 'Search' });
+  await box.fill('mps');
+  await expect(page.getByRole('option').first()).toContainText('Master Production Schedule');
+  await box.fill('work orders');
+  const first = page.getByRole('option').first();
+  await expect(first).toHaveAttribute('aria-selected', 'true');
+  await expect(first.locator('mark')).toHaveText(['Work', 'Orders']);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/ppic\/work-orders$/);
+  await expect(page.getByRole('dialog', { name: 'Search' })).toBeHidden();
+});
+
+test('production date is chosen in a calendar with the keyboard (ISO weeks, no future dates)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ppic/control-tower');
+  await page.getByRole('button', { name: /^Production date: 09 Oct/ }).click();
+  const grid = page.getByRole('grid', { name: 'Production date, October 2026' });
+  await expect(grid).toBeVisible();
+  await expect(grid.getByRole('button', { name: 'Saturday, 10 October 2026' })).toBeDisabled();
+  await grid.getByRole('button', { name: /Friday, 9 October 2026/ }).focus();
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /^Production date: 08 Oct/ })).toBeVisible();
 });

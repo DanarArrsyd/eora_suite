@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { axeViolations } from '../../../ui/src/test/axe';
 
 let pathname = '/ppic/control-tower';
-vi.mock('next/navigation', () => ({ usePathname: () => pathname }));
+vi.mock('next/navigation', () => ({ usePathname: () => pathname, useRouter: () => ({ push: vi.fn() }) }));
 
 import { AppShell } from './app-shell';
 import { ShellSessionProvider } from './session';
@@ -62,11 +62,11 @@ describe('AppShell', () => {
     renderShell();
     const user = userEvent.setup();
     await user.keyboard('{Control>}k{/Control}');
-    expect(screen.getByRole('dialog', { name: 'Search records' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Search' })).toBeInTheDocument();
     await user.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog', { name: 'Search records' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Search' })).not.toBeInTheDocument();
     await user.keyboard('{Meta>}k{/Meta}');
-    expect(screen.getByRole('dialog', { name: 'Search records' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Search' })).toBeInTheDocument();
   });
 
   it('collapses groups with an accessible toggle', async () => {

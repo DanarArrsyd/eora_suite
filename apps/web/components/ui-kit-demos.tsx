@@ -62,6 +62,7 @@ function Section({ title, description, children }: { title: string; description:
 export function UiKitDemos() {
   const [qty, setQty] = React.useState('');
   const [view, setView] = React.useState('all');
+  const [warehouse, setWarehouse] = React.useState('RM-WH1');
   const qtyError = qty !== '' && !/^\d+(\.\d{1,3})?$/.test(qty) ? 'Enter a number with up to 3 decimals, e.g. 612.400' : undefined;
   return (
     <div className="flex flex-col gap-5">
@@ -106,10 +107,15 @@ export function UiKitDemos() {
           </Field>
           <Field label="Warehouse">
             {(p) => (
-              <Select {...p} defaultValue="RM-WH1">
-                <option>RM-WH1</option>
-                <option>RM-WH2</option>
-              </Select>
+              <Select
+                {...p}
+                value={warehouse}
+                onValueChange={setWarehouse}
+                options={[
+                  { value: 'RM-WH1', label: 'RM-WH1' },
+                  { value: 'RM-WH2', label: 'RM-WH2' },
+                ]}
+              />
             )}
           </Field>
           <Field label="Disabled input">{(p) => <Input {...p} disabled defaultValue="Posted — read only" />}</Field>

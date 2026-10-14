@@ -21,7 +21,10 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Calendar as DateGrid,
   Select,
+  formatDate,
+  type IsoDate,
 } from '@eora/ui';
 import { ROLE_LABELS, type RoleKey, type TopbarContext } from '../navigation';
 import { NotificationCenter } from '../patterns/notifications';
@@ -118,37 +121,59 @@ export function GlobalSearchTriggers({ hasContext, onOpen }: SearchTriggerProps)
 }
 
 /* ===================== Page context (period / warehouse) ===================== */
+/** Prototype page context (mock data): one shared value for the topbar control and the phone overflow panel. */
+type PageContextValue = { date: IsoDate; shift: string; warehouse: string };
+const SAMPLE_BUSINESS_DATE: IsoDate = '2026-10-09';
+const SHIFTS = [
+  { value: 'all', label: 'All shifts' },
+  { value: 'S1', label: 'S1 07:00–15:00' },
+  { value: 'S2', label: 'S2 15:00–23:00' },
+  { value: 'S3', label: 'S3 23:00–07:00', description: 'Ends on the next calendar day' },
+];
+const WAREHOUSES = [
+  { value: 'RM-WH1', label: 'RM-WH1' },
+  { value: 'RM-WH2', label: 'RM-WH2' },
+];
+let pageContext: PageContextValue = { date: SAMPLE_BUSINESS_DATE, shift: 'all', warehouse: 'RM-WH1' };
+const pageContextListeners = new Set<() => void>();
+function setPageContext(patch: Partial<PageContextValue>) {
+  pageContext = { ...pageContext, ...patch };
+  pageContextListeners.forEach((l) => l());
+}
+function usePageContextValue(): PageContextValue {
+  return React.useSyncExternalStore(
+    (l) => {
+      pageContextListeners.add(l);
+      return () => pageContextListeners.delete(l);
+    },
+    () => pageContext,
+    () => pageContext,
+  );
+}
+
 function ContextFields({ kind }: { kind: TopbarContext }) {
+  const ctx = usePageContextValue();
   return kind === 'period' ? (
     <div className="flex flex-col gap-3 p-3">
-      <Field label="Production date">
-        {(p) => (
-          <Select {...p} defaultValue="2026-10-09">
-            <option value="2026-10-09">09 Oct 2026</option>
-            <option value="2026-10-08">08 Oct 2026</option>
-          </Select>
-        )}
-      </Field>
+      <div className="flex flex-col gap-1.5">
+        <p className="m-0 text-[13px] font-medium text-ink">Production date</p>
+        <DateGrid
+          mode="single"
+          label="Production date"
+          value={ctx.date}
+          onChange={(date) => setPageContext({ date })}
+          max={SAMPLE_BUSINESS_DATE}
+          today={SAMPLE_BUSINESS_DATE}
+        />
+      </div>
       <Field label="Shift" hint="Shift cut-off follows the plant shift calendar.">
-        {(p) => (
-          <Select {...p} defaultValue="all">
-            <option value="all">All shifts</option>
-            <option value="S1">S1 07:00–15:00</option>
-            <option value="S2">S2 15:00–23:00</option>
-            <option value="S3">S3 23:00–07:00</option>
-          </Select>
-        )}
+        {(p) => <Select {...p} value={ctx.shift} onValueChange={(shift) => setPageContext({ shift })} options={SHIFTS} />}
       </Field>
     </div>
   ) : (
     <div className="p-3">
       <Field label="Warehouse">
-        {(p) => (
-          <Select {...p} defaultValue="RM-WH1">
-            <option>RM-WH1</option>
-            <option>RM-WH2</option>
-          </Select>
-        )}
+        {(p) => <Select {...p} value={ctx.warehouse} onValueChange={(warehouse) => setPageContext({ warehouse })} options={WAREHOUSES} />}
       </Field>
     </div>
   );
@@ -160,7 +185,8 @@ const ctxButton =
 export function PageContextControl({ kind }: { kind: TopbarContext }) {
   const Icon = kind === 'period' ? Calendar : Warehouse;
   const label = kind === 'period' ? 'Production date' : 'Warehouse';
-  const value = kind === 'period' ? '09 Oct · All shifts' : 'RM-WH1';
+  const ctx = usePageContextValue();
+  const value = kind === 'period' ? `${formatDate(ctx.date).slice(0, 6)} · ${ctx.shift === 'all' ? 'All shifts' : ctx.shift}` : ctx.warehouse;
   return (
     <Popover>
       <PopoverTrigger className={cn(ctxButton, 'max-md:hidden')} aria-label={`${label}: ${value}. Change`}>
@@ -171,7 +197,7 @@ export function PageContextControl({ kind }: { kind: TopbarContext }) {
         </span>
         <ChevronDown aria-hidden="true" className="size-4 text-ink-2" />
       </PopoverTrigger>
-      <PopoverContent aria-label={label}>
+      <PopoverContent aria-label={label} className={kind === 'period' ? 'w-auto' : undefined}>
         <ContextFields kind={kind} />
       </PopoverContent>
     </Popover>
@@ -197,14 +223,9 @@ function LiveWorkspaceFields({ identity }: { identity: ShellIdentity }) {
             {...p}
             value={identity.tenant.id}
             disabled={busy || identity.tenants.length < 2}
-            onChange={(e) => run(() => identity.selectTenant(e.target.value))}
-          >
-            {identity.tenants.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </Select>
+            onValueChange={(id) => run(() => identity.selectTenant(id))}
+            options={identity.tenants.map((t) => ({ value: t.id, label: t.name, description: t.code }))}
+          />
         )}
       </Field>
       <Field label="Plant" hint="Data in plant-scoped views follows the selected plant.">
@@ -213,20 +234,21 @@ function LiveWorkspaceFields({ identity }: { identity: ShellIdentity }) {
             {...p}
             value={identity.activePlantId ?? ''}
             disabled={busy || identity.plants.length === 0}
-            onChange={(e) => run(() => identity.selectPlant(e.target.value))}
-          >
-            {identity.activePlantId ? null : <option value="">Select a plant</option>}
-            {identity.plants.map((pl) => (
-              <option key={pl.id} value={pl.id}>
-                {pl.code} · {pl.name}
-              </option>
-            ))}
-          </Select>
+            onValueChange={(id) => run(() => identity.selectPlant(id))}
+            options={identity.plants.map((pl) => ({ value: pl.id, label: `${pl.code} · ${pl.name}` }))}
+            placeholder={identity.plants.length ? 'Select a plant' : 'No plant in your scope'}
+          />
         )}
       </Field>
       {error ? <InlineAlert tone="danger" title={error} /> : null}
     </div>
   );
+}
+
+/** Prototype workspace without a session (component tests, review pages): local value only. */
+function SampleSelect({ initial, ...props }: Omit<React.ComponentProps<typeof Select>, 'value' | 'onValueChange'> & { initial: string }) {
+  const [value, setValue] = React.useState(initial);
+  return <Select {...props} value={value} onValueChange={setValue} />;
 }
 
 function WorkspaceFields() {
@@ -236,18 +258,26 @@ function WorkspaceFields() {
     <div className="flex flex-col gap-3 p-3">
       <Field label="Company">
         {(p) => (
-          <Select {...p} defaultValue="PT Sample Manufaktur">
-            <option>PT Sample Manufaktur</option>
-            <option>PT Sample Komponen</option>
-          </Select>
+          <SampleSelect
+            {...p}
+            initial="PT Sample Manufaktur"
+            options={[
+              { value: 'PT Sample Manufaktur', label: 'PT Sample Manufaktur' },
+              { value: 'PT Sample Komponen', label: 'PT Sample Komponen' },
+            ]}
+          />
         )}
       </Field>
       <Field label="Plant" hint="Only companies and plants assigned to you are listed. Switching reloads data in the new scope.">
         {(p) => (
-          <Select {...p} defaultValue="Plant A · Cikarang">
-            <option>Plant A · Cikarang</option>
-            <option>Plant B · Karawang</option>
-          </Select>
+          <SampleSelect
+            {...p}
+            initial="Plant A · Cikarang"
+            options={[
+              { value: 'Plant A · Cikarang', label: 'Plant A · Cikarang' },
+              { value: 'Plant B · Karawang', label: 'Plant B · Karawang' },
+            ]}
+          />
         )}
       </Field>
     </div>

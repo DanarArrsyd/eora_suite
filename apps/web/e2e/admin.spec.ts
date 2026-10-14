@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, mockApi, problem, SESSION, test, type Page } from './fixtures';
+import { expect, mockApi, problem, SESSION, test, type Page, choose } from './fixtures';
 
 /* M1 Administration → Users, Roles & Permissions (doc 28 §1) against a mocked API; the real flow runs in the stack E2E. */
 
@@ -137,11 +137,11 @@ test('users: assign a plant-scoped role with a reason; the template scope is sug
   await page.getByRole('button', { name: 'Manage Budi Santoso' }).click();
   const drawer = page.getByRole('dialog', { name: 'Budi Santoso' });
   await drawer.getByRole('button', { name: 'Assign role' }).click();
-  await drawer.getByRole('combobox', { name: /^Role/ }).selectOption('r-qci');
-  await expect(drawer.getByLabel(/^Scope/)).toHaveValue('PLANT');
+  await choose(page, drawer.getByRole('combobox', { name: /^Role/ }), 'Quality Inspector (QCI)');
+  await expect(drawer.getByRole('combobox', { name: /^Scope/ })).toHaveText(/One plant \(suggested\)/);
   await drawer.getByRole('button', { name: 'Assign role' }).click();
   await expect(drawer.getByText('Choose a plant').last()).toBeVisible();
-  await drawer.getByLabel(/^Plant/).selectOption(PLANT.id);
+  await choose(page, drawer.getByRole('combobox', { name: /^Plant/ }), `${PLANT.code} · ${PLANT.name}`);
   await drawer.getByLabel(/^Reason/).fill('QC line 2, ticket UAT-01');
   await drawer.getByRole('button', { name: 'Assign role' }).click();
   await expect(drawer.getByText('Quality Inspector assigned to Budi Santoso')).toBeVisible();
@@ -172,7 +172,7 @@ test('users: a scope refusal is explained and nothing is claimed as saved', asyn
   await page.getByRole('button', { name: 'Manage Budi Santoso' }).click();
   const drawer = page.getByRole('dialog', { name: 'Budi Santoso' });
   await drawer.getByRole('button', { name: 'Assign role' }).click();
-  await drawer.getByRole('combobox', { name: /^Role/ }).selectOption('r-admin');
+  await choose(page, drawer.getByRole('combobox', { name: /^Role/ }), 'Tenant Administrator (TENANT_ADMIN)');
   await drawer.getByLabel(/^Reason/).fill('needs admin');
   await drawer.getByRole('button', { name: 'Assign role' }).click();
   await expect(drawer.getByRole('alert')).toContainText('This is outside the scope you administer.');
