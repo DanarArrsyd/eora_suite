@@ -119,8 +119,8 @@ export function MasterEditor<T extends MasterRow>({
   canEdit: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Called after a save; `partial` names what was saved when a later write failed. */
-  onSaved: (message: string, partial?: boolean) => void;
+  /** Called after a save; `partial` names what was saved when a later write failed; `created` is the create response. */
+  onSaved: (message: string, partial?: boolean, created?: unknown) => void;
 }) {
   const editing = row !== null;
   // codes and parents are fixed once created: the drawer title names the record, its facts show the parents
@@ -173,9 +173,12 @@ export function MasterEditor<T extends MasterRow>({
               onSubmit={async (values: FormValues) => {
                 const clean = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])) as FormValues;
                 try {
-                  if (row) await config.update(row, clean);
-                  else await config.create(clean);
-                  onSaved(editing ? `${row.code} saved` : `${config.singular[0]?.toUpperCase()}${config.singular.slice(1)} ${clean.code ?? ''} created`.trim());
+                  const created = row ? await config.update(row, clean) : await config.create(clean);
+                  onSaved(
+                    editing ? `${row.code} saved` : `${config.singular[0]?.toUpperCase()}${config.singular.slice(1)} ${clean.code ?? ''} created`.trim(),
+                    false,
+                    row ? undefined : created,
+                  );
                   return { ok: true, message: editing ? 'Saved' : 'Created' };
                 } catch (e) {
                   if (e instanceof PartialSave) {

@@ -68,6 +68,11 @@ export type MasterResource<T extends MasterRow> = {
   update: (row: T, values: FormValues) => Promise<unknown>;
   /** Extra read-only facts shown at the top of the edit drawer. */
   facts?: (row: T) => { label: string; value: React.ReactNode }[];
+  /**
+   * The record has its own page (e.g. a routing with versions and operations): rows open it instead of the edit drawer,
+   * and a newly created record opens it. Receives the row, or the created record from the create response.
+   */
+  openHref?: (row: T) => string;
   /** A reason the record cannot be edited (e.g. virtual locations). */
   readOnly?: (row: T) => string | undefined;
 };

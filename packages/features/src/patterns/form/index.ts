@@ -5,6 +5,7 @@ export {
   FormSelectField,
   FormDateField,
   FormQuantityField,
+  FormCheckboxListField,
   type SubmitContext,
   type SubmitResult,
 } from './eora-form';
