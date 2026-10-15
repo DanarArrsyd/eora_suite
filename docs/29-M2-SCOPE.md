@@ -32,7 +32,7 @@
 
 ## 2. Di luar scope M2
 - Stok, ledger dan posting (M3); Sales Order, WO, MPS/MRP (M4/M5); snapshot routing di WO (B5).
-- Perhitungan varians dan rekonsiliasi (B8); O-033 tetap OPEN dan tidak menyentuh M2.
+- Perhitungan varians dan rekonsiliasi (B8); O-033 diputuskan D-075 (2026-10-15: batas ukur timbangan berlaku); tetap di luar M2, dipakai di B8.
 - Proses subcontract (D-B2-11), modul transfer tooling, APS/penjadwalan.
 - Approval policy yang bisa dikonfigurasi dan threshold (D-060: semua approval versi = orang kedua yang independen).
 - Provider storage dan antivirus produksi (M6, bersama hosting O-008) — lihat M2-D3.
