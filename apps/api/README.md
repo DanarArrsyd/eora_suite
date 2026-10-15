@@ -281,7 +281,8 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
 - Routings (step 3a, migration `001300`, `App\Modules\Planning\Http\RoutingController`, `/api/v1/planning/*`):
   process types, routings with versions (DRAFT → SUBMITTED → APPROVED → SUPERSEDED, REJECTED → DRAFT), operations with
   machines, dies and inspection requirements. Only `lifecycle_api.approve_routing_version` (bootstrap `50_lifecycle.sql`,
-  owner NOLOGIN `eora_lifecycle_definer`) approves and supersedes; the version trigger checks `current_user`. After
+  owner NOLOGIN `eora_lifecycle_definer`) approves and supersedes; the version trigger checks `current_user`. Nobody who
+  edited a version (recorded in `routing_version_contributors`) approves or rejects it. After
   changing `50_lifecycle.sql` re-run `db-bootstrap`.
 
 ## Endpoints (B0)

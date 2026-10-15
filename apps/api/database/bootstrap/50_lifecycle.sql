@@ -13,7 +13,7 @@ SET ROLE eora_lifecycle_definer;
 -- Approves a SUBMITTED routing version for the signed actor and supersedes the version it replaces, in the caller's
 -- transaction. Returns the id of the superseded version (or NULL). Error codes (SQLSTATE):
 --   EO010 actor lacks master.routing.approve in a scope covering the routing's plant (or no trusted actor/tenant)
---   EO011 the actor prepared this version (maker ≠ checker, SoD-08)
+--   EO011 the actor prepared or edited this version (maker ≠ checker, SoD-08)
 --   EO012 lifecycle: not SUBMITTED, starts in the past, or does not start after the version it would replace
 --   EO013 content no longer valid: no operation, no standard yield, a machine outside its operation's work center,
 --         or a tool that is not in the routing's plant or not linked to the item
@@ -65,9 +65,11 @@ BEGIN
     RAISE EXCEPTION 'not allowed to approve this routing' USING ERRCODE = 'EO010';
   END IF;
 
-  -- 4. maker ≠ checker
-  IF ver.prepared_by = ctx_actor THEN
-    RAISE EXCEPTION 'the preparer cannot approve the version' USING ERRCODE = 'EO011';
+  -- 4. maker ≠ checker: neither the preparer nor anyone who edited, submitted, withdrew or reopened the version
+  IF ver.prepared_by = ctx_actor OR EXISTS (
+    SELECT 1 FROM public.routing_version_contributors rc WHERE rc.routing_version_id = ver.id AND rc.actor = ctx_actor
+  ) THEN
+    RAISE EXCEPTION 'an author of the version cannot approve it' USING ERRCODE = 'EO011';
   END IF;
 
   -- 5b. lifecycle validity (no retroactive effectivity, D-B2-14)

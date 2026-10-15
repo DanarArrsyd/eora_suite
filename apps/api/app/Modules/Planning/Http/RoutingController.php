@@ -344,7 +344,7 @@ final class RoutingController
         } catch (QueryException $e) {
             throw match ((string) $e->getCode()) {
                 'EO010' => new DomainProblem(403, 'SCOPE_FORBIDDEN', 'Forbidden'),
-                'EO011' => new DomainProblem(403, 'SOD_VIOLATION', 'Not your own version', 'A routing version is approved by someone other than its preparer.'),
+                'EO011' => new DomainProblem(403, 'SOD_VIOLATION', 'Not your own version', 'A routing version is approved by someone who did not prepare or edit it.'),
                 'EO012' => new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Cannot approve', self::reason($e)),
                 'EO013' => ValidationException::withMessages(['version' => self::reason($e)]),
                 'P0002' => new NotFoundHttpException,
@@ -487,8 +487,13 @@ final class RoutingController
 
     private function refuseOwn(EoraPostgresConnection $db, stdClass $ver): void
     {
-        if ($db->selectOne('select 1 as self from ctx_api.context() c where c.actor = ?', [$ver->prepared_by]) !== null) {
-            throw new DomainProblem(403, 'SOD_VIOLATION', 'Not your own version', 'A routing version is reviewed by someone other than its preparer.');
+        $author = $db->selectOne(
+            'select 1 as self from ctx_api.context() c
+              where c.actor = ? or exists (select 1 from routing_version_contributors rc where rc.routing_version_id = ? and rc.actor = c.actor)',
+            [$ver->prepared_by, $ver->id],
+        );
+        if ($author !== null) {
+            throw new DomainProblem(403, 'SOD_VIOLATION', 'Not your own version', 'A routing version is reviewed by someone who did not prepare or edit it.');
         }
     }
 

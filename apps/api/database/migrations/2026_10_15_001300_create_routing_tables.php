@@ -287,6 +287,70 @@ return new class extends Migration
             CREATE TRIGGER guard_draft BEFORE INSERT OR UPDATE OR DELETE ON routing_operation_tools FOR EACH ROW EXECUTE FUNCTION eora_guard_routing_content();
             CREATE TRIGGER guard_draft BEFORE INSERT OR UPDATE OR DELETE ON routing_operation_inspections FOR EACH ROW EXECUTE FUNCTION eora_guard_routing_content();
 
+            -- Maker ≠ checker covers every author, not only the preparer: each actor who creates, edits, submits,
+            -- withdraws or reopens a version — or changes its operations — is recorded here by the database (actor from
+            -- the signed context, never a parameter). Reviewing (SUBMITTED → REJECTED) and the lifecycle function do not
+            -- count. Rows are never updated or deleted; a direct INSERT can only add the caller itself.
+            CREATE TABLE routing_version_contributors (
+              tenant_id uuid NOT NULL,
+              routing_version_id uuid NOT NULL,
+              actor uuid NOT NULL,
+              first_at timestamptz NOT NULL DEFAULT now(),
+              PRIMARY KEY (tenant_id, routing_version_id, actor),
+              FOREIGN KEY (tenant_id, routing_version_id) REFERENCES routing_versions (tenant_id, id)
+            );
+            ALTER TABLE routing_version_contributors ENABLE ROW LEVEL SECURITY, FORCE ROW LEVEL SECURITY;
+            CREATE POLICY tenant_read ON routing_version_contributors FOR SELECT TO eora_app
+              USING (tenant_id = (SELECT c.tenant FROM ctx_api.context() c));
+            CREATE POLICY self_insert ON routing_version_contributors FOR INSERT TO eora_app
+              WITH CHECK (tenant_id = (SELECT c.tenant FROM ctx_api.context() c) AND actor = (SELECT c.actor FROM ctx_api.context() c));
+            GRANT SELECT, INSERT ON routing_version_contributors TO eora_app;
+
+            CREATE OR REPLACE FUNCTION eora_note_routing_contributor() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            DECLARE
+              row_data record;
+              ver_id uuid;
+              ctx_tenant uuid;
+              ctx_actor uuid;
+            BEGIN
+              IF current_user = 'eora_lifecycle_definer' THEN
+                RETURN NULL;
+              END IF;
+              IF TG_OP = 'DELETE' THEN
+                row_data := OLD;
+              ELSE
+                row_data := NEW;
+              END IF;
+              IF TG_TABLE_NAME = 'routing_versions' THEN
+                IF TG_OP = 'UPDATE' AND NEW.status = 'REJECTED' THEN
+                  RETURN NULL;
+                END IF;
+                ver_id := row_data.id;
+              ELSIF TG_TABLE_NAME = 'routing_operations' THEN
+                ver_id := row_data.routing_version_id;
+              ELSE
+                SELECT o.routing_version_id INTO ver_id FROM public.routing_operations o WHERE o.id = row_data.operation_id;
+              END IF;
+              -- a cascade from a deleted operation: the operation's own delete was recorded
+              IF ver_id IS NULL THEN
+                RETURN NULL;
+              END IF;
+              SELECT c.tenant, c.actor INTO ctx_tenant, ctx_actor FROM ctx_api.context() c;
+              IF ctx_actor IS NULL THEN
+                RAISE EXCEPTION 'no signed actor context' USING ERRCODE = '42501';
+              END IF;
+              INSERT INTO public.routing_version_contributors (tenant_id, routing_version_id, actor)
+                VALUES (ctx_tenant, ver_id, ctx_actor) ON CONFLICT DO NOTHING;
+              RETURN NULL;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_note_routing_contributor() FROM PUBLIC;
+            CREATE TRIGGER note_contributor AFTER INSERT OR UPDATE ON routing_versions FOR EACH ROW EXECUTE FUNCTION eora_note_routing_contributor();
+            CREATE TRIGGER note_contributor AFTER INSERT OR UPDATE OR DELETE ON routing_operations FOR EACH ROW EXECUTE FUNCTION eora_note_routing_contributor();
+            CREATE TRIGGER note_contributor AFTER INSERT OR UPDATE OR DELETE ON routing_operation_machines FOR EACH ROW EXECUTE FUNCTION eora_note_routing_contributor();
+            CREATE TRIGGER note_contributor AFTER INSERT OR UPDATE OR DELETE ON routing_operation_tools FOR EACH ROW EXECUTE FUNCTION eora_note_routing_contributor();
+            CREATE TRIGGER note_contributor AFTER INSERT OR UPDATE OR DELETE ON routing_operation_inspections FOR EACH ROW EXECUTE FUNCTION eora_note_routing_contributor();
+
             -- eligible machine: in its operation's work center
             CREATE OR REPLACE FUNCTION eora_check_operation_machine() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
             BEGIN
@@ -349,12 +413,14 @@ return new class extends Migration
     public function down(): void
     {
         DB::unprepared(<<<'SQL'
+            DROP TABLE routing_version_contributors;
             DROP TABLE routing_operation_inspections;
             DROP TABLE routing_operation_tools;
             DROP TABLE routing_operation_machines;
             DROP TABLE routing_operations;
             DROP TABLE routing_versions;
             DROP TABLE routings;
+            DROP FUNCTION eora_note_routing_contributor();
             DROP FUNCTION eora_check_operation_tool();
             DROP FUNCTION eora_check_operation_machine();
             DROP FUNCTION eora_guard_routing_content();

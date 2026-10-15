@@ -304,3 +304,33 @@ it('keeps process type codes unique and edits them at their version', function (
         ->assertJsonPath('data.name', 'Press bending')->assertJsonPath('data.status', 'INACTIVE');
     patchWith($this, '/api/v1/planning/process-types/'.$pt['id'], ['name' => 'Again'], 1)->assertStatus(412);
 })->group('integration', 'master');
+
+it('refuses approval by anyone who edited the version, not only its preparer (maker ≠ checker)', function () {
+    orgUser($this, $this->t, 'CSA');
+    $s = rtSetup($this, $this->t);
+    [, $v] = rtDraft($this, $this->t, $s);
+
+    // a second author changes the operations of the draft the first one prepared
+    rtSwitch($this, $this->t, 'CSA');
+    $ops = rtOperations($s);
+    $ops[0]['stdCycleSeconds'] = 3;
+    $v = spa($this)->putJson('/api/v1/planning/routing-versions/'.$v['id'].'/operations', ['operations' => $ops], ['If-Match' => '"'.$v['version'].'"'])
+        ->assertOk()->json('data');
+    spa($this)->postJson('/api/v1/planning/routing-versions/'.$v['id'].'/actions/submit')->assertOk();
+
+    spa($this)->postJson('/api/v1/planning/routing-versions/'.$v['id'].'/actions/approve')->assertForbidden()->assertJsonPath('code', 'SOD_VIOLATION');
+    spa($this)->postJson('/api/v1/planning/routing-versions/'.$v['id'].'/actions/reject', ['reason' => 'mine too'])->assertForbidden()->assertJsonPath('code', 'SOD_VIOLATION');
+
+    // contributors are recorded by the database; nobody removes themselves or adds someone else
+    expect(fn () => AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->delete(
+        'delete from routing_version_contributors where routing_version_id = ?', [$v['id']],
+    )))->toThrow(QueryException::class);
+    $stranger = member($this, $this->t);
+    expect(fn () => AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        'insert into routing_version_contributors (tenant_id, routing_version_id, actor) values (?, ?, ?)', [$this->t['tenant'], $v['id'], $stranger['id']],
+    )))->toThrow(QueryException::class);
+
+    // a third person, who never touched it, approves
+    rtSwitch($this, $this->t, 'CSA');
+    spa($this)->postJson('/api/v1/planning/routing-versions/'.$v['id'].'/actions/approve')->assertOk()->assertJsonPath('data.status', 'APPROVED');
+})->group('integration', 'master');
