@@ -72,7 +72,9 @@ it('maps one customer part number to exactly one item on every day; a new mappin
         "update customer_items set effective_to = '2026-12-31' where id = ?", [$first['id']],
     )))->toThrow(QueryException::class);
 
-    patchWith($this, '/api/v1/core/customer-items/'.$first['id'], ['customerDrawingRev' => 'D'], $closed['version'])->assertOk()->assertJsonPath('data.customerDrawingRev', 'D');
+    patchWith($this, '/api/v1/core/customer-items/'.$first['id'], ['customerDrawingRev' => '0'], $closed['version'])->assertOk()->assertJsonPath('data.customerDrawingRev', '0');
+    spa($this)->postJson('/api/v1/core/customer-items', ['customerId' => $customer['id'], 'itemId' => $a['id'], 'customerPartNo' => '   ', 'effectiveFrom' => $today])
+        ->assertStatus(422)->assertJsonValidationErrors(['customerPartNo']);
 })->group('integration', 'master');
 
 it('refuses mappings to inactive customers or items and hides other tenants', function () {

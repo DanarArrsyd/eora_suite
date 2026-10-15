@@ -96,6 +96,9 @@ final class PartnerController
             'effectiveFrom' => ['required', 'date_format:Y-m-d'],
         ]);
         $partNo = trim($data['customerPartNo']);
+        if ($partNo === '') {
+            throw ValidationException::withMessages(['customerPartNo' => 'Enter the customer part number.']);
+        }
         $db = $this->db();
         $this->authorizer->requireAnywhere($db, self::PART);
         $customer = $db->selectOne('select id, status from customers where id = ?', [strtolower($data['customerId'])])
@@ -126,7 +129,7 @@ final class PartnerController
         $id = (string) $db->selectOne(
             'insert into customer_items (tenant_id, customer_id, item_id, customer_part_no, customer_drawing_rev, effective_from)
              values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?) returning id',
-            [$customer->id, $item->id, $partNo, ($data['customerDrawingRev'] ?? '') ?: null, $data['effectiveFrom']],
+            [$customer->id, $item->id, $partNo, self::optionalText($data['customerDrawingRev'] ?? null), $data['effectiveFrom']],
         )->id;
         $this->audit->record($db, 'customer_item.created', 'customer_item', $id, null, $this->state($db, 'customer_items', $id), [
             'customerId' => (string) $customer->id, 'itemId' => (string) $item->id,
@@ -149,7 +152,7 @@ final class PartnerController
 
         $changes = [];
         if (array_key_exists('customerDrawingRev', $data)) {
-            $changes['customer_drawing_rev'] = ($data['customerDrawingRev'] ?? '') ?: null;
+            $changes['customer_drawing_rev'] = self::optionalText($data['customerDrawingRev']);
         }
         if (isset($data['status'])) {
             $changes['status'] = $data['status'];
