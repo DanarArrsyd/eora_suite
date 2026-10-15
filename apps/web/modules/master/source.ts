@@ -1,0 +1,60 @@
+'use client';
+
+import { api, call } from '@eora/features/auth';
+import type { ListQuery, ListResult, ListSource, Option } from '@eora/features/data';
+
+/*
+ * Live list source for the query resources (ADR-0008, doc 24 §3, §5.2): ListQuery → GET /api/v1/query/{resource}.
+ * The server filters, sorts and pages; the client only serializes the query and renders rows.
+ */
+
+/** doc 24 §3.1 grammar: filter[k]=v, filter[k][]=a&…, q, sort=-a,b, page[number], page[size]. */
+export function queryString(query: Pick<ListQuery, 'filters' | 'search' | 'sort' | 'page' | 'pageSize'>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query.filters)) {
+    if (Array.isArray(value)) value.forEach((v) => v && params.append(`filter[${key}][]`, v));
+    else if (value) params.set(`filter[${key}]`, value);
+  }
+  if (query.search.trim()) params.set('q', query.search.trim());
+  if (query.sort.length) params.set('sort', query.sort.map((s) => (s.desc ? '-' : '') + s.id).join(','));
+  params.set('page[number]', String(query.page));
+  params.set('page[size]', String(query.pageSize));
+  return params.toString();
+}
+
+type Envelope = { data: unknown[]; meta: { total: number; asOf: string; timezone: string } };
+
+async function fetchPage(resource: string, qs: string, signal?: AbortSignal): Promise<Envelope> {
+  return (await call(() => api.GET('/query/{resource}', { params: { path: { resource } }, querySerializer: () => qs, signal }))) as Envelope;
+}
+
+export function querySource<T>(resource: string): ListSource<T> {
+  return {
+    resource,
+    isMock: false,
+    async list(query: ListQuery, signal?: AbortSignal): Promise<ListResult<T>> {
+      const page = await fetchPage(resource, queryString(query), signal);
+      return { rows: page.data as T[], meta: { total: page.meta.total, asOf: page.meta.asOf, timezone: page.meta.timezone } };
+    },
+  };
+}
+
+/**
+ * Options for a picker from a query resource: every row the caller may see, sorted by code, read page by page (the
+ * server caps a page at 200). Master lists of this kind stay small; the cap of 50 pages only guards a runaway loop.
+ */
+export async function queryOptions(
+  resource: string,
+  label: (row: Record<string, unknown>) => string,
+  filters: Record<string, string> = {},
+  signal?: AbortSignal,
+): Promise<Option[]> {
+  const options: Option[] = [];
+  for (let page = 1; page <= 50; page++) {
+    const qs = queryString({ filters, search: '', sort: [{ id: 'code', desc: false }], page, pageSize: 200 });
+    const result = await fetchPage(resource, qs, signal);
+    options.push(...(result.data as Record<string, unknown>[]).map((r) => ({ value: String(r.id), label: label(r) })));
+    if (options.length >= result.meta.total || result.data.length === 0) break;
+  }
+  return options;
+}

@@ -28,7 +28,7 @@
 - File Excel contoh per template (data sintetis), termasuk satu file dengan error yang disengaja.
 - Skrip UAT M2 langkah demi langkah (`docs/uat/M2-UAT.md`).
 
-**Progres:** langkah 1a (fondasi: permission `master.*`, `eora:tenants:sync`, QueryDefinition `GET /api/v1/query/{resource}`, company/plant/gudang/lokasi + lokasi virtual) — PR `feat/m2-step1-org`. Langkah 1a selesai (PR #25). Langkah 1b (work center + lokasi `MAT_AT_PROD`, mesin, dies) — PR `feat/m2-step1b-wc`; `die_items` pindah ke langkah 2 bersama item. Berikutnya 1c (layar Master Data organisasi).
+**Progres:** langkah 1a (fondasi: permission `master.*`, `eora:tenants:sync`, QueryDefinition `GET /api/v1/query/{resource}`, company/plant/gudang/lokasi + lokasi virtual) — PR `feat/m2-step1-org`. Langkah 1a selesai (PR #25), 1b selesai (PR #26; `die_items` pindah ke langkah 2 bersama item). Langkah 1c (layar organisasi di item navigasi yang sudah disetujui, Administration → Organization: Company; Plants & Warehouses = seksi Plants/Warehouses/Locations; Work Centers = seksi Work centers/Machines/Dies & tooling. Memindah Machines/Dies dari Maintenance → Assets = usulan, belum disetujui) — PR `feat/m2-step1c-org-screens`. Setelah 1c: demo antara opsional (M2-D5), lalu langkah 2 (item, UOM, customer, supplier).
 
 ## 2. Di luar scope M2
 - Stok, ledger dan posting (M3); Sales Order, WO, MPS/MRP (M4/M5); snapshot routing di WO (B5).
