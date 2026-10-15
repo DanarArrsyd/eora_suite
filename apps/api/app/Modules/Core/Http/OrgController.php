@@ -164,10 +164,10 @@ final class OrgController
     {
         $data = $request->validate([
             'warehouseId' => ['required', 'uuid'],
-            'code' => ['required', 'string', self::CODE, 'not_regex:/^V_/'],
+            'code' => ['required', 'string', self::CODE, 'not_regex:/^(V_|MAP-)/'],
             'name' => ['required', 'string', 'min:1', 'max:200'],
             'locationType' => ['required', Rule::in(LocationsQuery::WAREHOUSE_TYPES)],
-        ], ['code.not_regex' => 'Codes starting with V_ are reserved for virtual locations.']);
+        ], ['code.not_regex' => 'Codes starting with V_ or MAP- are reserved for virtual and Material at Production locations.']);
         $db = $this->db();
         $this->authorizer->requireAnywhere($db, self::CREATE);
         $warehouse = $db->selectOne('select id, plant_id, status from warehouses where id = ?', [strtolower($data['warehouseId'])])

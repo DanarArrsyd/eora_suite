@@ -41,6 +41,16 @@ it('gives every work center exactly one Material at Production location, never a
         [$this->t['tenant'], $this->t['plants'][0], $wc['id']],
     )))->toThrow(QueryException::class);
 
+    // MAP- belongs to the generated locations: refused for user locations by the API and by the database
+    $wh = spa($this)->postJson('/api/v1/core/warehouses', ['plantId' => $this->t['plants'][0], 'code' => 'RM1', 'name' => 'RM', 'warehouseType' => 'RAW_MATERIAL'])->json('data');
+    spa($this)->postJson('/api/v1/core/locations', ['warehouseId' => $wh['id'], 'code' => 'MAP-PRS-02', 'name' => 'x', 'locationType' => 'STAGING'])
+        ->assertStatus(422)->assertJsonValidationErrors(['code']);
+    expect(fn () => AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into locations (tenant_id, plant_id, warehouse_id, code, name, location_type) values (?, ?, ?, 'MAP-PRS-02', 'x', 'STAGING')",
+        [$this->t['tenant'], $this->t['plants'][0], $wh['id']],
+    )))->toThrow(QueryException::class);
+    workCenter($this, $this->t['plants'][0], 'PRS-02'); // its MAP-PRS-02 cannot have been taken
+
     // capacity is optional (NULL = not configured) and can be cleared again
     $cleared = patchWith($this, '/api/v1/core/work-centers/'.$wc['id'], ['availableHoursPerShift' => null], 1)->assertOk()->json('data');
     expect($cleared['availableHoursPerShift'])->toBeNull();

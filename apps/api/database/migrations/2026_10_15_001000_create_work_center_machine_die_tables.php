@@ -46,6 +46,8 @@ return new class extends Migration
             ALTER TABLE locations ADD CONSTRAINT locations_work_center_fk
               FOREIGN KEY (tenant_id, plant_id, work_center_id) REFERENCES work_centers (tenant_id, plant_id, id);
             ALTER TABLE locations ADD CONSTRAINT locations_mat_at_prod_wc CHECK ((location_type = 'MAT_AT_PROD') = (work_center_id IS NOT NULL));
+            -- the MAP- prefix belongs to the generated Material at Production locations (no collision with user codes)
+            ALTER TABLE locations ADD CONSTRAINT locations_map_prefix CHECK (location_type = 'MAT_AT_PROD' OR code NOT LIKE 'MAP-%');
             CREATE UNIQUE INDEX locations_mat_at_prod_uq ON locations (tenant_id, work_center_id) WHERE work_center_id IS NOT NULL;
 
             CREATE TABLE machines (
@@ -133,7 +135,12 @@ return new class extends Migration
             DROP TABLE machines;
             DROP TRIGGER mat_at_prod_location ON work_centers;
             DROP FUNCTION eora_work_center_location();
-            -- MAT_AT_PROD rows sit behind forced RLS (not the owner's to delete); after a rollback they remain unlinked
+            -- the generated MAT_AT_PROD rows go with their work centers. They sit behind forced RLS, so the table owner lifts
+            -- FORCE for this statement only, inside the migration transaction, and restores it before anything else runs.
+            ALTER TABLE locations NO FORCE ROW LEVEL SECURITY;
+            DELETE FROM locations WHERE location_type = 'MAT_AT_PROD';
+            ALTER TABLE locations FORCE ROW LEVEL SECURITY;
+            ALTER TABLE locations DROP CONSTRAINT IF EXISTS locations_map_prefix;
             DROP INDEX locations_mat_at_prod_uq;
             ALTER TABLE locations DROP CONSTRAINT locations_mat_at_prod_wc;
             ALTER TABLE locations DROP CONSTRAINT locations_work_center_fk;
