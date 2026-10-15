@@ -28,7 +28,8 @@ final class LocationsQuery extends QueryDefinition
     public function from(): string
     {
         return 'locations l join plants p on p.tenant_id = l.tenant_id and p.id = l.plant_id
-                 left join warehouses w on w.tenant_id = l.tenant_id and w.id = l.warehouse_id';
+                 left join warehouses w on w.tenant_id = l.tenant_id and w.id = l.warehouse_id
+                 left join work_centers wc on wc.tenant_id = l.tenant_id and wc.id = l.work_center_id';
     }
 
     public function idColumn(): string
@@ -60,6 +61,8 @@ final class LocationsQuery extends QueryDefinition
             new Field('plantCode', 'p.code', sortable: true),
             new Field('warehouseId', 'l.warehouse_id', Field::UUID, filterable: true),
             new Field('warehouseCode', 'w.code', sortable: true),
+            new Field('workCenterId', 'l.work_center_id', Field::UUID, filterable: true),
+            new Field('workCenterCode', 'wc.code', sortable: true),
             new Field('updatedAt', 'l.updated_at', Field::INSTANT, sortable: true),
             new Field('version', 'l.version', Field::INTEGER),
         ];

@@ -78,6 +78,12 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.core.warehouses.update' => self::MASTER_EDIT,
         'v1.core.locations.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
         'v1.core.locations.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.core.work-centers.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.work-centers.update' => self::MASTER_EDIT,
+        'v1.core.machines.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.machines.update' => self::MASTER_EDIT,
+        'v1.core.dies.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.dies.update' => self::MASTER_EDIT,
     ];
 
     /** Laravel-shaped error components Scramble registers; replaced by the problem responses above. */
