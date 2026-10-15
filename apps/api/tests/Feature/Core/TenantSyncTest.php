@@ -38,5 +38,6 @@ it('adds template permissions introduced later to every provisioned tenant, audi
     $before = $inTenant(fn (EoraPostgresConnection $db) => (int) $db->selectOne('select count(*) as n from audit_events')->n);
     $this->artisan('eora:tenants:sync')->assertSuccessful();
     expect($inTenant(fn (EoraPostgresConnection $db) => (int) $db->selectOne('select count(*) as n from audit_events')->n))->toBe($before)
-        ->and($inTenant(fn (EoraPostgresConnection $db) => (int) $db->selectOne("select count(*) as n from locations where location_type like 'V\\_%'")->n))->toBe(6);
+        ->and($inTenant(fn (EoraPostgresConnection $db) => (int) $db->selectOne("select count(*) as n from locations where location_type like 'V\\_%'")->n))->toBe(6)
+        ->and(array_column($inTenant(fn (EoraPostgresConnection $db) => $db->select('select code from uoms order by code')), 'code'))->toBe(['KG', 'PCS', 'SHEET']);
 })->group('integration', 'master');

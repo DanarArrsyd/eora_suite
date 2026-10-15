@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Core\Http\OrgController;
+use App\Modules\Core\Http\PartController;
 use App\Modules\Core\Http\ResourceController;
 use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
@@ -61,6 +62,16 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::patch('machines/{machine}', [ResourceController::class, 'updateMachine'])->name('machines.update');
         Route::post('dies', [ResourceController::class, 'storeDie'])->name('dies.store');
         Route::patch('dies/{die}', [ResourceController::class, 'updateDie'])->name('dies.update');
+
+        // Master Data → part master (doc 29 §1.2)
+        Route::post('uoms', [PartController::class, 'storeUom'])->name('uoms.store');
+        Route::patch('uoms/{uom}', [PartController::class, 'updateUom'])->name('uoms.update');
+        Route::post('items', [PartController::class, 'storeItem'])->name('items.store');
+        Route::patch('items/{item}', [PartController::class, 'updateItem'])->name('items.update');
+        Route::put('items/{item}/material-spec', [PartController::class, 'putMaterialSpec'])->name('items.material-spec');
+        Route::post('uom-conversions', [PartController::class, 'storeUomConversion'])->name('uom-conversions.store');
+        Route::post('die-items', [PartController::class, 'storeDieItem'])->name('die-items.store');
+        Route::patch('die-items/{dieItem}', [PartController::class, 'updateDieItem'])->name('die-items.update');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

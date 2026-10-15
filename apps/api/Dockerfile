@@ -22,7 +22,11 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
 COPY composer.json composer.lock ./
-RUN composer install --no-interaction --prefer-dist --no-scripts --no-autoloader
+# Same locked versions either way: GitHub's archive endpoint (codeload) sometimes answers 404 for a zip it serves
+# minutes later, so a failed dist install is retried once and then installed from the locked git commits.
+RUN composer install --no-interaction --prefer-dist --no-scripts --no-autoloader \
+    || (sleep 15 && composer install --no-interaction --prefer-dist --no-scripts --no-autoloader) \
+    || composer install --no-interaction --prefer-source --no-scripts --no-autoloader
 COPY . .
 # Configuration comes from the container environment (compose). .dockerignore keeps the host .env out;
 # an empty .env stops phpdotenv probing a missing file (PHPUnit reports that as a warning). Never put secrets here.
