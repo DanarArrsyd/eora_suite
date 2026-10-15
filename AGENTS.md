@@ -13,3 +13,5 @@ Every frontend/UI task must review the approved EORA Design System in `docs/uiux
 
 ## Skill discovery and application
 At each task start, discover and read the **Caveman** and relevant **Frontend** skills if installed in the agent environment. Apply them to analysis/design and later implementation as appropriate; report exactly which skill instructions were found and read. Do not assume availability, fabricate invocation or bypass the approval gate. Follow the detailed procedure in `CLAUDE.md`.
+
+Every later feature, rule, screen or permission change follows `docs/30-CHANGE-PLAYBOOK.md` (D-077).
