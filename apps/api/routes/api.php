@@ -2,6 +2,7 @@
 
 use App\Modules\Core\Http\OrgController;
 use App\Modules\Core\Http\PartController;
+use App\Modules\Core\Http\PartnerController;
 use App\Modules\Core\Http\ResourceController;
 use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
@@ -72,6 +73,14 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('uom-conversions', [PartController::class, 'storeUomConversion'])->name('uom-conversions.store');
         Route::post('die-items', [PartController::class, 'storeDieItem'])->name('die-items.store');
         Route::patch('die-items/{dieItem}', [PartController::class, 'updateDieItem'])->name('die-items.update');
+
+        // Master Data → partners (doc 29 §1.2)
+        Route::post('customers', [PartnerController::class, 'storeCustomer'])->name('customers.store');
+        Route::patch('customers/{customer}', [PartnerController::class, 'updateCustomer'])->name('customers.update');
+        Route::post('suppliers', [PartnerController::class, 'storeSupplier'])->name('suppliers.store');
+        Route::patch('suppliers/{supplier}', [PartnerController::class, 'updateSupplier'])->name('suppliers.update');
+        Route::post('customer-items', [PartnerController::class, 'storeCustomerItem'])->name('customer-items.store');
+        Route::patch('customer-items/{customerItem}', [PartnerController::class, 'updateCustomerItem'])->name('customer-items.update');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

@@ -271,6 +271,9 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
 - Part master (step 2a, migration `001100`, `PartController`): units (starter KG/PCS/SHEET per tenant from a trigger on
   `tenants`, existing tenants via `eora:tenants:sync`), items, material specs, versioned item UOM conversions, die ↔ item
   links. Extensions `btree_gist` + `pg_trgm` live in schema `ext` (bootstrap `02_database.sql`; owner has USAGE).
+- Partners (step 2b, migration `001200`, `PartnerController`): customers, suppliers, customer part mapping (one item per
+  customer part number per day; a new mapping closes the open one). D-073: part and partner master need
+  `master.part.create` in any scope.
 - Commands in `App\Modules\Core\Http\OrgController` (companies, plants, warehouses, locations) and `ResourceController`
   (work centers, machines, dies — step 1b, migration `001000`; every work center gets one `MAT_AT_PROD` location
   `MAP-<code>` from a trigger); shared write path `MasterWrites`; edits need `If-Match` (`App\Platform\Http\Concurrency`).
