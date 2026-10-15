@@ -170,6 +170,8 @@ final class PartController
             'density_g_cm3' => $data['densityGCm3'] ?? null,
         ];
 
+        // serialize the first creation: concurrent first-time PUTs wait here and then edit the created specification
+        $db->selectOne('select id from items where id = ? for update', [$id]);
         $spec = $db->selectOne('select id from material_specs where item_id = ?', [$id]);
         if ($spec === null) {
             $specId = (string) $db->selectOne(
@@ -178,11 +180,11 @@ final class PartController
             )->id;
             $this->audit->record($db, 'material_spec.created', 'material_spec', $specId, null, $this->state($db, 'material_specs', $specId), ['itemId' => $id]);
 
-            return $this->respond($db, new ItemsQuery, $id, 201);
+            return $this->respondSpec($db, $id, 201);
         }
         $this->update($db, 'material_specs', 'material_spec', (string) $spec->id, Concurrency::expectedVersion($request), $values, 'material_spec.updated');
 
-        return $this->respond($db, new ItemsQuery, $id);
+        return $this->respondSpec($db, $id);
     }
 
     /**
@@ -270,6 +272,14 @@ final class PartController
         $this->update($db, 'die_items', 'die_item', $id, $version, $this->pick($data, ['partsPerStroke' => 'parts_per_stroke', 'status' => 'status']), 'die_item.updated', $plant);
 
         return $this->respond($db, new DieItemsQuery, $id);
+    }
+
+    /** The item row, with the specification's version as ETag (the version the next spec edit must send). */
+    private function respondSpec(EoraPostgresConnection $db, string $item, int $status = 200): JsonResponse
+    {
+        $row = $this->rows->find($db, new ItemsQuery, $item) ?? throw new \LogicException('Written row not visible.');
+
+        return Concurrency::withVersion(response()->json(['data' => $row], $status), (int) $row['specVersion']);
     }
 
     /** A drawing revision belongs to a drawing number. */

@@ -97,10 +97,12 @@ it('creates the material specification once, then edits it at its version', func
 
     spa($this)->putJson($uri, ['grade' => 'SPCC', 'thicknessMm' => 1.2, 'widthMm' => 1219, 'densityGCm3' => 7.85])->assertCreated()
         ->assertJsonPath('data.specGrade', 'SPCC')->assertJsonPath('data.specThicknessMm', '1.200')->assertJsonPath('data.specDensityGCm3', '7.8500')
-        ->assertJsonPath('data.specVersion', 1);
+        ->assertJsonPath('data.specVersion', 1)->assertHeader('ETag', '"1"');
+    // an item edit moves the item version only; the spec ETag stays the spec's own
+    patchWith($this, '/api/v1/core/items/'.$item['id'], ['name' => 'SPCC coil 1.2'], 1)->assertOk()->assertHeader('ETag', '"2"');
     spa($this)->putJson($uri, ['grade' => 'SPCC-SD'])->assertStatus(428)->assertJsonPath('code', 'PRECONDITION_REQUIRED');
     spa($this)->putJson($uri, ['grade' => 'SPCC-SD', 'thicknessMm' => 1.2, 'widthMm' => 1219, 'densityGCm3' => 7.85], ['If-Match' => '"1"'])->assertOk()
-        ->assertJsonPath('data.specGrade', 'SPCC-SD')->assertJsonPath('data.specVersion', 2);
+        ->assertJsonPath('data.specGrade', 'SPCC-SD')->assertJsonPath('data.specVersion', 2)->assertHeader('ETag', '"2"');
     spa($this)->putJson($uri, ['thicknessMm' => -1], ['If-Match' => '"2"'])->assertStatus(422)->assertJsonValidationErrors(['thicknessMm']);
 })->group('integration', 'master');
 
