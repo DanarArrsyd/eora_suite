@@ -84,6 +84,15 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.core.machines.update' => self::MASTER_EDIT,
         'v1.core.dies.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
         'v1.core.dies.update' => self::MASTER_EDIT,
+        'v1.core.uoms.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.uoms.update' => self::MASTER_EDIT,
+        'v1.core.items.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.items.update' => self::MASTER_EDIT,
+        // creates (201) without If-Match, edits the existing specification at its version
+        'v1.core.items.material-spec' => self::MASTER_EDIT,
+        'v1.core.uom-conversions.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.die-items.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.die-items.update' => self::MASTER_EDIT,
     ];
 
     /** Laravel-shaped error components Scramble registers; replaced by the problem responses above. */

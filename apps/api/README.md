@@ -268,6 +268,9 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   plant from a trigger on `plants`, physical locations inside a warehouse of the same plant.
 - Query resources (`App\Platform\Query`: `QueryDefinition`, `Field`, `QueryRunner`; registry `config/eora.php`
   `queries`): `GET /api/v1/query/{resource}` + `/schema`, doc 24 §5.2. Module code lives in `app/Modules/Core`.
+- Part master (step 2a, migration `001100`, `PartController`): units (starter KG/PCS/SHEET per tenant from a trigger on
+  `tenants`, existing tenants via `eora:tenants:sync`), items, material specs, versioned item UOM conversions, die ↔ item
+  links. Extensions `btree_gist` + `pg_trgm` live in schema `ext` (bootstrap `02_database.sql`; owner has USAGE).
 - Commands in `App\Modules\Core\Http\OrgController` (companies, plants, warehouses, locations) and `ResourceController`
   (work centers, machines, dies — step 1b, migration `001000`; every work center gets one `MAT_AT_PROD` location
   `MAP-<code>` from a trigger); shared write path `MasterWrites`; edits need `If-Match` (`App\Platform\Http\Concurrency`).

@@ -43,8 +43,13 @@ $do$;
 -- Extensions live in "ext", owned by the bootstrap superuser; only definer owners may use them.
 CREATE SCHEMA IF NOT EXISTS ext;
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA ext;
+-- M2 (D-058): btree_gist for effective-date exclusion constraints (D-B2-08), pg_trgm for code/name search (D-B2-09).
+-- The migrations owner needs USAGE to name their operator classes in indexes; runtime roles never call them directly
+-- (index use and default GiST operator classes need no privilege).
+CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA ext;
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA ext;
 REVOKE ALL ON SCHEMA ext FROM PUBLIC;
-GRANT USAGE ON SCHEMA ext TO eora_auth_definer, eora_ctx_verifier;
+GRANT USAGE ON SCHEMA ext TO eora_auth_definer, eora_ctx_verifier, eora_owner;
 
 -- Definer-owned schemas (doc 25 §2.1, §2.5, §5.5, §6.4). No PUBLIC access; grants are added with their objects.
 CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION eora_auth_definer;

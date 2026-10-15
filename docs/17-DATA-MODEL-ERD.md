@@ -70,6 +70,7 @@ erDiagram
 
 ### Master data
 `items (type: RAW, SEMI_FINISHED, FINISHED, SCRAP, CONSUMABLE; base_uom; lot_controlled; inspection_required)`, `uoms`, `uom_conversions (item-specific, versioned)`, `material_specs (grade, thickness_mm, width_mm, density_g_cm3, nominal)`, `bom_versions/lines`, `routing_versions/operations (standard_yield SY, version, effective_from)`, `item_weights (NW, version)`, `conversion_profiles (item_id, input_form SHEET|COIL, inputs JSONB validated by formula_code schema, status DRAFT|VALIDATED|RETIRED, version, effective_from, validated_by)`, `customers`, `customer_items (customer part ↔ item)`.
+**Implemented M2 step 2a (migration `001100`):** `uoms` per tenant (class, decimals fixed; starter KG 3 dp, PCS 0, SHEET 0 per tenant), `items` (M2-D4 code, base unit fixed, `incoming_release_required` D-062, drawing no/rev, status ACTIVE/INACTIVE/OBSOLETE, prefix + trigram indexes), `material_specs` (one per item), `uom_conversions` (item-specific, one factor per unordered unit pair per day, inclusive ranges + `btree_gist` exclusion, closed once, never back-dated), `die_items` (parts per stroke, status).
 
 ### Demand
 `sales_order_headers (customer, status, revision)`, `sales_order_lines (demand_id, item, ordered_qty, uom, status derived, revision)`, `po_so_links (customer_po_line → so_line, UNIQUE per po_line)` — D-030/D-034 (logical only; no migration).
