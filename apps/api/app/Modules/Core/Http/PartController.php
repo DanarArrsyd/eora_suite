@@ -104,7 +104,7 @@ final class PartController
             'insert into items (tenant_id, code, name, item_type, base_uom_id, lot_controlled, inspection_required, incoming_release_required, drawing_no, drawing_rev)
              values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?) returning id',
             [$data['code'], $data['name'], $data['itemType'], $uom->id, (bool) ($data['lotControlled'] ?? true), (bool) ($data['inspectionRequired'] ?? false),
-                (bool) ($data['incomingReleaseRequired'] ?? false), ($data['drawingNo'] ?? '') ?: null, ($data['drawingRev'] ?? '') ?: null],
+                (bool) ($data['incomingReleaseRequired'] ?? false), self::optionalText($data['drawingNo'] ?? null), self::optionalText($data['drawingRev'] ?? null)],
             'An item with this code already exists.');
         $this->audit->record($db, 'item.created', 'item', $id, null, $this->state($db, 'items', $id), ['code' => $data['code'], 'itemType' => $data['itemType']]);
 
@@ -135,7 +135,7 @@ final class PartController
         ]);
         foreach (['drawingNo' => 'drawing_no', 'drawingRev' => 'drawing_rev'] as $key => $column) {
             if (array_key_exists($key, $data)) {
-                $changes[$column] = $data[$key] === '' ? null : $data[$key];
+                $changes[$column] = self::optionalText($data[$key]);
             }
         }
         $current = $db->selectOne('select drawing_no, drawing_rev from items where id = ?', [$id]);

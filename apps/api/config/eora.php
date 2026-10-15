@@ -2,12 +2,15 @@
 
 declare(strict_types=1);
 use App\Modules\Core\Queries\CompaniesQuery;
+use App\Modules\Core\Queries\CustomerItemsQuery;
+use App\Modules\Core\Queries\CustomersQuery;
 use App\Modules\Core\Queries\DieItemsQuery;
 use App\Modules\Core\Queries\DiesQuery;
 use App\Modules\Core\Queries\ItemsQuery;
 use App\Modules\Core\Queries\LocationsQuery;
 use App\Modules\Core\Queries\MachinesQuery;
 use App\Modules\Core\Queries\PlantsQuery;
+use App\Modules\Core\Queries\SuppliersQuery;
 use App\Modules\Core\Queries\UomConversionsQuery;
 use App\Modules\Core\Queries\UomsQuery;
 use App\Modules\Core\Queries\WarehousesQuery;
@@ -60,6 +63,9 @@ return [
         'core.items' => ItemsQuery::class,
         'core.uom_conversions' => UomConversionsQuery::class,
         'core.die_items' => DieItemsQuery::class,
+        'core.customers' => CustomersQuery::class,
+        'core.suppliers' => SuppliersQuery::class,
+        'core.customer_items' => CustomerItemsQuery::class,
     ],
 
     'member_invite_per_hour' => env('EORA_MEMBER_INVITE_PER_HOUR') === null ? null : (int) env('EORA_MEMBER_INVITE_PER_HOUR'),

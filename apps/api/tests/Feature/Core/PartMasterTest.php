@@ -45,7 +45,8 @@ it('starts every tenant with KG, PCS and SHEET; code, class and decimals never c
 
 it('keeps item codes upper-case and unique, the base unit fixed, and checks drawing data', function () {
     orgUser($this, $this->t, 'CSA');
-    $item = newItem($this, $this->t, 'BRK-100.A/2', ['drawingNo' => 'DWG-77', 'drawingRev' => 'B', 'incomingReleaseRequired' => true]);
+    $item = newItem($this, $this->t, 'BRK-100.A/2', ['drawingNo' => 'DWG-77', 'drawingRev' => '0', 'incomingReleaseRequired' => true]);
+    expect($item['drawingRev'])->toBe('0'); // revision 0 is a revision
     expect($item['baseUomCode'])->toBe('PCS')->and($item['lotControlled'])->toBeTrue()->and($item['incomingReleaseRequired'])->toBeTrue()
         ->and($item['specId'])->toBeNull()->and($item['status'])->toBe('ACTIVE');
 

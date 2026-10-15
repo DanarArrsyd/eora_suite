@@ -93,6 +93,12 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.core.uom-conversions.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
         'v1.core.die-items.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
         'v1.core.die-items.update' => self::MASTER_EDIT,
+        'v1.core.customers.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.customers.update' => self::MASTER_EDIT,
+        'v1.core.suppliers.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.suppliers.update' => self::MASTER_EDIT,
+        'v1.core.customer-items.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.core.customer-items.update' => self::MASTER_EDIT,
     ];
 
     /** Laravel-shaped error components Scramble registers; replaced by the problem responses above. */

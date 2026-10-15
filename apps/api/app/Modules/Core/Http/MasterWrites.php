@@ -94,4 +94,12 @@ trait MasterWrites
 
         return Concurrency::withVersion(response()->json(['data' => $row], $status), (int) $row['version']);
     }
+
+    /** Optional text: trimmed, empty → NULL; any other value (including "0") is kept. */
+    protected static function optionalText(mixed $value): ?string
+    {
+        $text = is_string($value) ? trim($value) : null;
+
+        return $text === null || $text === '' ? null : $text;
+    }
 }

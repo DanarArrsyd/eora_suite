@@ -652,6 +652,111 @@ export interface paths {
         patch: operations["v1.core.die-items.update"];
         trace?: never;
     };
+    "/core/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a customer */
+        post: operations["v1.core.customers.store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/core/customers/{customer}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename a customer or change its status (If-Match) */
+        patch: operations["v1.core.customers.update"];
+        trace?: never;
+    };
+    "/core/suppliers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a supplier */
+        post: operations["v1.core.suppliers.store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/core/suppliers/{supplier}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename a supplier or change its status (If-Match) */
+        patch: operations["v1.core.suppliers.update"];
+        trace?: never;
+    };
+    "/core/customer-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Map a customer part number to one of our items from a day on. If the same customer part has an open mapping that
+         *     starts earlier, it is closed the day before; a mapping that starts on or after that day is a conflict (422)
+         */
+        post: operations["v1.core.customer-items.store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/core/customer-items/{customerItem}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a mapping's customer drawing revision or status (If-Match) */
+        patch: operations["v1.core.customer-items.update"];
+        trace?: never;
+    };
     "/query/{resource}/schema": {
         parameters: {
             query?: never;
@@ -5922,6 +6027,1089 @@ export interface operations {
             content: {
                 "application/json": {
                     partsPerStroke?: number;
+                    /** @enum {string} */
+                    status?: "ACTIVE" | "INACTIVE";
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description UNAUTHENTICATED, SESSION_EXPIRED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 401;
+                        /** @enum {string} */
+                        code: "UNAUTHENTICATED" | "SESSION_EXPIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description FORBIDDEN, SCOPE_FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 403;
+                        /** @enum {string} */
+                        code: "FORBIDDEN" | "SCOPE_FORBIDDEN";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 404;
+                        /** @enum {string} */
+                        code: "NOT_FOUND";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description VERSION_CONFLICT */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 412;
+                        /** @enum {string} */
+                        code: "VERSION_CONFLICT";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description CSRF_TOKEN_MISMATCH */
+            419: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 419;
+                        /** @enum {string} */
+                        code: "CSRF_TOKEN_MISMATCH";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description VALIDATION_FAILED */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 422;
+                        /** @enum {string} */
+                        code: "VALIDATION_FAILED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                        errors?: {
+                            [key: string]: string[];
+                        };
+                    };
+                };
+            };
+            /** @description PRECONDITION_REQUIRED */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 428;
+                        /** @enum {string} */
+                        code: "PRECONDITION_REQUIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description RETRYABLE_CONFLICT */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before retrying. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 503;
+                        /** @enum {string} */
+                        code: "RETRYABLE_CONFLICT";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+        };
+    };
+    "v1.core.customers.store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    code: string;
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description UNAUTHENTICATED, SESSION_EXPIRED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 401;
+                        /** @enum {string} */
+                        code: "UNAUTHENTICATED" | "SESSION_EXPIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description FORBIDDEN, SCOPE_FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 403;
+                        /** @enum {string} */
+                        code: "FORBIDDEN" | "SCOPE_FORBIDDEN";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description CSRF_TOKEN_MISMATCH */
+            419: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 419;
+                        /** @enum {string} */
+                        code: "CSRF_TOKEN_MISMATCH";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description VALIDATION_FAILED */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 422;
+                        /** @enum {string} */
+                        code: "VALIDATION_FAILED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                        errors?: {
+                            [key: string]: string[];
+                        };
+                    };
+                };
+            };
+            /** @description RETRYABLE_CONFLICT */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before retrying. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 503;
+                        /** @enum {string} */
+                        code: "RETRYABLE_CONFLICT";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+        };
+    };
+    "v1.core.customers.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customer: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    /** @enum {string} */
+                    status?: "ACTIVE" | "INACTIVE";
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description UNAUTHENTICATED, SESSION_EXPIRED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 401;
+                        /** @enum {string} */
+                        code: "UNAUTHENTICATED" | "SESSION_EXPIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description FORBIDDEN, SCOPE_FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 403;
+                        /** @enum {string} */
+                        code: "FORBIDDEN" | "SCOPE_FORBIDDEN";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 404;
+                        /** @enum {string} */
+                        code: "NOT_FOUND";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description VERSION_CONFLICT */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 412;
+                        /** @enum {string} */
+                        code: "VERSION_CONFLICT";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description CSRF_TOKEN_MISMATCH */
+            419: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 419;
+                        /** @enum {string} */
+                        code: "CSRF_TOKEN_MISMATCH";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description VALIDATION_FAILED */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 422;
+                        /** @enum {string} */
+                        code: "VALIDATION_FAILED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                        errors?: {
+                            [key: string]: string[];
+                        };
+                    };
+                };
+            };
+            /** @description PRECONDITION_REQUIRED */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 428;
+                        /** @enum {string} */
+                        code: "PRECONDITION_REQUIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description RETRYABLE_CONFLICT */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before retrying. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 503;
+                        /** @enum {string} */
+                        code: "RETRYABLE_CONFLICT";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+        };
+    };
+    "v1.core.suppliers.store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    code: string;
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description UNAUTHENTICATED, SESSION_EXPIRED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 401;
+                        /** @enum {string} */
+                        code: "UNAUTHENTICATED" | "SESSION_EXPIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description FORBIDDEN, SCOPE_FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 403;
+                        /** @enum {string} */
+                        code: "FORBIDDEN" | "SCOPE_FORBIDDEN";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description CSRF_TOKEN_MISMATCH */
+            419: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 419;
+                        /** @enum {string} */
+                        code: "CSRF_TOKEN_MISMATCH";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description VALIDATION_FAILED */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 422;
+                        /** @enum {string} */
+                        code: "VALIDATION_FAILED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                        errors?: {
+                            [key: string]: string[];
+                        };
+                    };
+                };
+            };
+            /** @description RETRYABLE_CONFLICT */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before retrying. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 503;
+                        /** @enum {string} */
+                        code: "RETRYABLE_CONFLICT";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+        };
+    };
+    "v1.core.suppliers.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                supplier: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    /** @enum {string} */
+                    status?: "ACTIVE" | "INACTIVE";
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description UNAUTHENTICATED, SESSION_EXPIRED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 401;
+                        /** @enum {string} */
+                        code: "UNAUTHENTICATED" | "SESSION_EXPIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description FORBIDDEN, SCOPE_FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 403;
+                        /** @enum {string} */
+                        code: "FORBIDDEN" | "SCOPE_FORBIDDEN";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 404;
+                        /** @enum {string} */
+                        code: "NOT_FOUND";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description VERSION_CONFLICT */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 412;
+                        /** @enum {string} */
+                        code: "VERSION_CONFLICT";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description CSRF_TOKEN_MISMATCH */
+            419: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 419;
+                        /** @enum {string} */
+                        code: "CSRF_TOKEN_MISMATCH";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description VALIDATION_FAILED */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 422;
+                        /** @enum {string} */
+                        code: "VALIDATION_FAILED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                        errors?: {
+                            [key: string]: string[];
+                        };
+                    };
+                };
+            };
+            /** @description PRECONDITION_REQUIRED */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 428;
+                        /** @enum {string} */
+                        code: "PRECONDITION_REQUIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description RETRYABLE_CONFLICT */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before retrying. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 503;
+                        /** @enum {string} */
+                        code: "RETRYABLE_CONFLICT";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+        };
+    };
+    "v1.core.customer-items.store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    customerId: string;
+                    /** Format: uuid */
+                    itemId: string;
+                    customerPartNo: string;
+                    customerDrawingRev?: string | null;
+                    /** Format: date */
+                    effectiveFrom: string;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description UNAUTHENTICATED, SESSION_EXPIRED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 401;
+                        /** @enum {string} */
+                        code: "UNAUTHENTICATED" | "SESSION_EXPIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description FORBIDDEN, SCOPE_FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 403;
+                        /** @enum {string} */
+                        code: "FORBIDDEN" | "SCOPE_FORBIDDEN";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description CSRF_TOKEN_MISMATCH */
+            419: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 419;
+                        /** @enum {string} */
+                        code: "CSRF_TOKEN_MISMATCH";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description VALIDATION_FAILED */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 422;
+                        /** @enum {string} */
+                        code: "VALIDATION_FAILED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                        errors?: {
+                            [key: string]: string[];
+                        };
+                    };
+                };
+            };
+            /** @description RETRYABLE_CONFLICT */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before retrying. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 503;
+                        /** @enum {string} */
+                        code: "RETRYABLE_CONFLICT";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+        };
+    };
+    "v1.core.customer-items.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerItem: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    customerDrawingRev?: string | null;
                     /** @enum {string} */
                     status?: "ACTIVE" | "INACTIVE";
                 };
