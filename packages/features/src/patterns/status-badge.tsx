@@ -29,6 +29,14 @@ export const STATUS_CATALOGUE = {
     CANCELLED: { label: 'Cancelled', tone: 'neutral' },
     CLOSED: { label: 'Closed', tone: 'neutral' },
   },
+  /** Versioned engineering master — routing versions, BOM revisions (doc 26 §2.4a): edited as Draft, approved by a second person. */
+  version: {
+    DRAFT: { label: 'Draft', tone: 'neutral' },
+    SUBMITTED: { label: 'Submitted', tone: 'info' },
+    REJECTED: { label: 'Rejected', tone: 'warning' },
+    APPROVED: { label: 'Approved', tone: 'success' },
+    SUPERSEDED: { label: 'Superseded', tone: 'neutral' },
+  },
   /** Delivery Schedule Line (doc 16 §12, D-034). */
   schedule: {
     DRAFT: { label: 'Draft', tone: 'neutral' },

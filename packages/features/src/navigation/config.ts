@@ -435,25 +435,40 @@ export const NAV_MODULES: readonly NavModule[] = [
     ],
   },
   {
-    // D-074: one module for the part, partner and (later) engineering master
+    // D-074, D-076: one module for every maintained master record — organisation, parts, partners, engineering. Each item
+    // carries its own view permission (the module shows when the user holds any of them).
     id: 'master',
     label: 'Master Data',
     icon: Database,
     permission: 'master.part.view',
     groups: [
       {
+        label: 'Organization',
+        items: [
+          { id: 'plants', label: 'Plants & Warehouses', icon: MapPin, release: 'R1', permission: 'master.org.view', phase: 'later' },
+          { id: 'work-centers', label: 'Work Centers', icon: Factory, release: 'R1', permission: 'master.org.view', phase: 'later' },
+        ],
+      },
+      {
         label: 'Parts',
         items: [
-          { id: 'items', label: 'Items', icon: Package, release: 'R1', phase: 'later' },
-          { id: 'units', label: 'Units & Conversions', icon: Ruler, release: 'R1', phase: 'later' },
+          { id: 'items', label: 'Items', icon: Package, release: 'R1', permission: 'master.part.view', phase: 'later' },
+          { id: 'units', label: 'Units & Conversions', icon: Ruler, release: 'R1', permission: 'master.part.view', phase: 'later' },
         ],
       },
       {
         label: 'Partners',
         items: [
-          { id: 'customers', label: 'Customers', icon: Building, release: 'R1', phase: 'later' },
-          { id: 'customer-parts', label: 'Customer Part Mapping', icon: Link, release: 'R1', phase: 'later' },
-          { id: 'suppliers', label: 'Suppliers', icon: Handshake, release: 'R1', phase: 'later' },
+          { id: 'customers', label: 'Customers', icon: Building, release: 'R1', permission: 'master.part.view', phase: 'later' },
+          { id: 'customer-parts', label: 'Customer Part Mapping', icon: Link, release: 'R1', permission: 'master.part.view', phase: 'later' },
+          { id: 'suppliers', label: 'Suppliers', icon: Handshake, release: 'R1', permission: 'master.part.view', phase: 'later' },
+        ],
+      },
+      {
+        label: 'Engineering',
+        items: [
+          { id: 'process-types', label: 'Process Types', icon: Cog, release: 'R1', permission: 'master.routing.view', phase: 'later' },
+          { id: 'routings', label: 'Routings', icon: GitBranch, release: 'R1', permission: 'master.routing.view', phase: 'later' },
         ],
       },
     ],
@@ -468,16 +483,15 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Organization',
         items: [
-          { id: 'company', label: 'Company', icon: Building2, release: 'R1', phase: 'later' },
-          { id: 'plants', label: 'Plants & Warehouses', icon: MapPin, release: 'R1', phase: 'later' },
-          { id: 'work-centers', label: 'Work Centers', icon: Factory, release: 'R1', phase: 'later' },
+          // Plants & Warehouses and Work Centers moved to Master Data (D-076); the old links redirect (next.config)
+          { id: 'company', label: 'Company', icon: Building2, release: 'R1', permission: 'master.org.view', phase: 'later' },
         ],
       },
       {
         label: 'Access',
         items: [
-          { id: 'users', label: 'Users', icon: Users, release: 'R1', phase: 'later' },
-          { id: 'roles', label: 'Roles & Permissions', icon: KeyRound, release: 'R1', phase: 'later' },
+          { id: 'users', label: 'Users', icon: Users, release: 'R1', permission: 'core.users_roles.view', phase: 'later' },
+          { id: 'roles', label: 'Roles & Permissions', icon: KeyRound, release: 'R1', permission: 'core.users_roles.view', phase: 'later' },
           { id: 'approval-policies', label: 'Approval Policies', icon: Stamp, release: 'R1', phase: 'later' },
         ],
       },

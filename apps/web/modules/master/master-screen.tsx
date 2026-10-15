@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus } from 'lucide-react';
+import { FolderOpen, Pencil, Plus } from 'lucide-react';
 import { useMe } from '@eora/features/auth';
 import { activeFilterCount, useDensityPreference, usePageSizePreference, type FilterValues } from '@eora/features/data';
 import {
@@ -23,7 +23,7 @@ import {
 } from '@eora/features/patterns';
 import { Button, EmptyState, InlineAlert, LoadingState, PermissionDeniedState, Tooltip } from '@eora/ui';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { MasterEditor } from './editor';
 import { querySource } from './source';
 import type { MasterResource, MasterRow } from './types';
@@ -45,6 +45,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const canCreate = permissions.includes(perm.create) && !config.noCreate;
   const source = React.useMemo(() => querySource<T>(config.resource), [config.resource]);
   const client = useQueryClient();
+  const router = useRouter();
   const [density, setDensity] = useDensityPreference();
   const [prefSize, setPrefSize] = usePageSizePreference();
   const urlConfig = React.useMemo<ListUrlConfig>(
@@ -211,12 +212,15 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
             )
           }
           rowActions={{
-            primary: (r) => ({
-              id: 'open',
-              label: config.appendOnly || config.readOnly?.(r) || !canCreate ? 'View' : 'Edit',
-              icon: Pencil,
-              onSelect: () => setEditor({ open: true, row: r }),
-            }),
+            primary: (r) =>
+              config.openHref
+                ? { id: 'open', label: 'Open', icon: FolderOpen, onSelect: () => router.push(config.openHref!(r)) }
+                : {
+                    id: 'open',
+                    label: config.appendOnly || config.readOnly?.(r) || !canCreate ? 'View' : 'Edit',
+                    icon: Pencil,
+                    onSelect: () => setEditor({ open: true, row: r }),
+                  },
           }}
         />
       </ListWorkspace>
@@ -226,10 +230,13 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
         canEdit={canCreate}
         open={editor.open}
         onOpenChange={(open) => setEditor((e) => ({ ...e, open }))}
-        onSaved={(message, partial) => {
+        onSaved={(message, partial, created) => {
           setEditor({ open: false, row: null });
-          setNotice({ title: message, partial: !!partial });
           void client.invalidateQueries({ queryKey: ['master'] });
+          // a record with its own page opens there once created
+          const record = (created as { data?: T } | undefined)?.data;
+          if (config.openHref && record?.id && !partial) router.push(config.openHref(record));
+          else setNotice({ title: message, partial: !!partial });
         }}
       />
     </EnterprisePage>

@@ -14,7 +14,7 @@ import {
 } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
-import { Button, DatePicker, Field, InlineAlert, Input, Select, Textarea, cn, type IsoDate } from '@eora/ui';
+import { Button, Checkbox, DatePicker, Field, InlineAlert, Input, Select, Textarea, cn, type IsoDate } from '@eora/ui';
 
 export type SubmitContext = {
   /** Stable for this form instance until a submission succeeds — the server deduplicates retries (CLAUDE.md: idempotent writes). */
@@ -261,5 +261,57 @@ export function FormQuantityField({ name, label, hint, required, className, uom,
         </div>
       )}
     </Field>
+  );
+}
+
+/**
+ * Several choices from a short list (e.g. the machines an operation may run on): a fieldset of checkboxes bound to a
+ * `string[]` value. Keyboard and screen readers get native checkboxes; an empty list shows `emptyText` instead.
+ */
+export function FormCheckboxListField({
+  name,
+  label,
+  hint,
+  className,
+  options,
+  emptyText,
+}: Omit<BaseFieldProps, 'required'> & { options: { value: string; label: string; description?: string }[]; emptyText: string }) {
+  const { field } = useController({ name });
+  const error = useFieldError(name);
+  const id = React.useId();
+  const value = (field.value as string[] | undefined) ?? [];
+  const toggle = (v: string, on: boolean) => field.onChange(on ? [...value, v] : value.filter((x) => x !== v));
+  return (
+    <fieldset className={cn('m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0', className)} aria-describedby={hint || error ? `${id}-help` : undefined}>
+      <legend className="mb-1.5 p-0 text-[13px] font-medium text-ink">{label}</legend>
+      {options.length === 0 ? (
+        <p className="m-0 text-[13px] text-ink-2">{emptyText}</p>
+      ) : (
+        <ul className="m-0 flex list-none flex-col gap-1 p-0">
+          {options.map((o) => (
+            <li key={o.value}>
+              <label className="flex min-h-9 cursor-pointer items-start gap-2.5 py-1 text-[13.5px] text-ink max-md:min-h-11">
+                <Checkbox
+                  checked={value.includes(o.value)}
+                  onChange={(e) => toggle(o.value, e.currentTarget.checked)}
+                  onBlur={field.onBlur}
+                  className="mt-0.5"
+                />
+                <span className="min-w-0">
+                  {o.label}
+                  {o.description ? <span className="block text-[12px] text-ink-2">{o.description}</span> : null}
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+      {hint || error ? (
+        <div id={`${id}-help`} className="text-[12px]">
+          {hint ? <p className="m-0 text-ink-2">{hint}</p> : null}
+          {error ? <p className="m-0 text-stat-err-fg">{error}</p> : null}
+        </div>
+      ) : null}
+    </fieldset>
   );
 }

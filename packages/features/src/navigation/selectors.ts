@@ -7,6 +7,8 @@ export type VisibilityOptions = {
   releases?: readonly Release[];
   /** Production builds hide items that depend on OPEN decisions. */
   showPendingDecisions?: boolean;
+  /** The signed-in user's permission hints; when given, items naming a `permission` the user lacks are hidden (the server still decides). */
+  permissions?: readonly string[];
 };
 
 const DEFAULT_RELEASES: readonly Release[] = ['R1', 'R2'];
@@ -15,6 +17,7 @@ export function isItemVisible(item: NavItem, opts: VisibilityOptions): boolean {
   const releases = opts.releases ?? DEFAULT_RELEASES;
   if (!releases.includes(item.release)) return false;
   if (item.decision && !opts.showPendingDecisions) return false;
+  if (item.permission && opts.permissions && !opts.permissions.includes(item.permission)) return false;
   return true;
 }
 

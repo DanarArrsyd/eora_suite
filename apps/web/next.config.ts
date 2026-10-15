@@ -8,6 +8,13 @@ const nextConfig: NextConfig = {
   agentRules: false,
   // ADR-0006: the browser must see ONE origin (session cookie + CSRF, no CORS). In local development Next.js proxies
   // the API paths to Laravel; in deployed environments the reverse proxy does the same path routing.
+  // D-076: organisation master moved from Administration to Master Data; old links (and their ?show= sections) keep working
+  async redirects() {
+    return [
+      { source: '/admin/plants', destination: '/master/plants', permanent: false },
+      { source: '/admin/work-centers', destination: '/master/work-centers', permanent: false },
+    ];
+  },
   async rewrites() {
     const api = process.env.EORA_API_ORIGIN ?? 'http://127.0.0.1:8000';
 

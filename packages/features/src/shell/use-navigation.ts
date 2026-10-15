@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { usePathname } from 'next/navigation';
-import { NAV_MODULES, matchRoute, moduleBadge, visibleModules, type BadgeCounts, type NavModule, type RouteMatch } from '../navigation';
+import { NAV_MODULES, isItemVisible, matchRoute, moduleBadge, visibleModules, type BadgeCounts, type NavModule, type RouteMatch } from '../navigation';
 import { useShellSession } from './session';
 
 export type ShellNavigation = {
@@ -18,6 +18,9 @@ export type ShellNavigation = {
   pathname: string;
 };
 
+/** Modules running on the live API, whose menus follow the user's permission hints item by item. */
+const LIVE_MODULES = new Set(['master', 'admin']);
+
 /** Navigation state derived from the single config + session role + current route. */
 export function useShellNavigation(): ShellNavigation {
   const pathname = usePathname() ?? '/';
@@ -25,15 +28,29 @@ export function useShellNavigation(): ShellNavigation {
   const permissions = identity?.permissions;
   const modules = React.useMemo(() => {
     let allowed = source.allowedModules(role);
-    // Administration runs on the live API: shown from the user's permission hints (access or organisation master
-    // data), not from the prototype role. Each page checks its own permission; the server enforces every call.
+    // Administration and Master Data run on the live API: shown from the user's permission hints, not from the
+    // prototype role. Each page checks its own permission; the server enforces every call.
     if (permissions) {
       const others = allowed === '*' ? NAV_MODULES.map((m) => m.id) : [...allowed];
       const admin = permissions.includes('core.users_roles.view') || permissions.includes('master.org.view');
-      const master = permissions.includes('master.part.view');
+      // Master Data (D-076): organisation, part/partner and engineering master; each item carries its own view permission
+      const master = ['master.org.view', 'master.part.view', 'master.routing.view'].some((p) => permissions.includes(p));
       allowed = [...others.filter((id) => id !== 'admin' && id !== 'master'), ...(master ? ['master'] : []), ...(admin ? ['admin'] : [])];
     }
-    return visibleModules(NAV_MODULES, { allowedModules: allowed, showPendingDecisions: false });
+    const visible = visibleModules(NAV_MODULES, { allowedModules: allowed, showPendingDecisions: false });
+    // live modules also hide the items whose own view permission the user lacks; prototype modules keep their menus
+    return visible
+      .map((m) =>
+        permissions && LIVE_MODULES.has(m.id)
+          ? {
+              ...m,
+              groups: m.groups
+                .map((g) => ({ ...g, items: g.items.filter((i) => isItemVisible(i, { allowedModules: '*', permissions })) }))
+                .filter((g) => g.items.length > 0),
+            }
+          : m,
+      )
+      .filter((m) => m.groups.length > 0);
   }, [role, source, permissions]);
   const counts = React.useMemo(() => source.badgeCounts(role), [role, source]);
   const match = React.useMemo(() => matchRoute(modules, pathname), [modules, pathname]);

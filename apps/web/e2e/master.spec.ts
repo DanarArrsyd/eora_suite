@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, mockApi, problem, SESSION, test, type Page, choose } from './fixtures';
 
-/* M2 step 1c (doc 29 §1): Administration → organisation master data against a mocked API (query resources, doc 24 §5.2). */
+/* M2 step 1c (doc 29 §1): organisation master data (Master Data module since D-076) against a mocked API (query resources, doc 24 §5.2). */
 
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const WRITER = { ...SESSION, permissions: ['master.org.create', 'master.org.view'] };
@@ -45,7 +45,7 @@ test('work centers: live rows with capacity, Material at Production location and
   await setup(page);
   const asked = page.waitForRequest((r) => r.url().includes('/query/core.work_centers?'));
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/admin/work-centers');
+  await page.goto('/master/work-centers');
   const qs = new URL((await asked).url()).searchParams;
   expect(qs.get('sort')).toBe('plantCode,code');
   expect(qs.get('page[number]')).toBe('1');
@@ -67,7 +67,7 @@ test('work centers: create sends upper-case code and a number for hours; status 
     body = route.request().postDataJSON() as Record<string, unknown>;
     return { status: 201, json: { data: { ...WC, code: 'WLD-02' } } };
   });
-  await page.goto('/admin/work-centers');
+  await page.goto('/master/work-centers');
   await expect(page.getByText('No work centers yet')).toBeVisible();
   await page.getByRole('button', { name: 'New work center' }).click();
   const drawer = page.getByRole('dialog', { name: 'New work center' });
@@ -92,7 +92,7 @@ test('work centers: an edit sends only the changed fields at the row version; a 
       ? problem(412, 'VERSION_CONFLICT', 'Changed by someone else')
       : { status: 200, json: { data: { ...WC, availableHoursPerShift: null, version: 4 } } };
   });
-  await page.goto('/admin/work-centers');
+  await page.goto('/master/work-centers');
   await page.getByRole('button', { name: /Edit PRS-01/ }).click();
   const drawer = page.getByRole('dialog', { name: 'PRS-01' });
   await expect(drawer.getByRole('textbox', { name: 'Code', exact: true })).toHaveCount(0); // codes are fixed: shown in the title, not as a field
@@ -109,7 +109,7 @@ test('work centers: an edit sends only the changed fields at the row version; a 
 
 test('a viewer sees the list but cannot create or change records', async ({ page }) => {
   await setup(page, VIEWER);
-  await page.goto('/admin/work-centers');
+  await page.goto('/master/work-centers');
   await expect(page.getByRole('button', { name: /New work center\. Your roles do not allow/ })).toHaveAttribute('aria-disabled', 'true');
   await page.getByRole('button', { name: /View PRS-01/ }).click();
   await expect(page.getByRole('dialog', { name: 'PRS-01' }).getByText('Your roles allow viewing organisation master data, not changing it.')).toBeVisible();
@@ -135,7 +135,7 @@ test('locations: virtual and Material at Production locations open read-only', a
     ...extra,
   });
   await mockApi(page, '/query/core.locations?*', page1([loc('MAP-PRS-01', 'MAT_AT_PROD', { workCenterCode: 'PRS-01' }), loc('V_OPENING', 'V_OPENING')]));
-  await page.goto('/admin/plants?show=locations');
+  await page.goto('/master/plants?show=locations');
   const table = page.getByRole('table', { name: 'Locations' });
   await expect(table.getByRole('row', { name: /MAP-PRS-01/ })).toContainText('Work center PRS-01');
   await table.getByRole('button', { name: /View V_OPENING/ }).click();
@@ -144,12 +144,12 @@ test('locations: virtual and Material at Production locations open read-only', a
 
 test('master screens: no permission → a clear denial; phone layout without horizontal overflow', async ({ page }) => {
   await setup(page, { ...SESSION, permissions: ['core.users_roles.view'] });
-  await page.goto('/admin/plants');
+  await page.goto('/master/plants');
   await expect(page.getByRole('heading', { name: 'Plants is not available for your roles' })).toBeVisible();
 
   await setup(page);
   await page.setViewportSize({ width: 375, height: 800 });
-  await page.goto('/admin/work-centers');
+  await page.goto('/master/work-centers');
   await expect(page.getByText('MAP-PRS-01')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await axe(page);
@@ -164,13 +164,13 @@ test('plants & warehouses: sections switch in the page, keep their place in the 
     body = route.request().postDataJSON() as Record<string, unknown>;
     return { status: 201, json: { data: { ...PLANT, timezone: 'Asia/Makassar', companyId: 'c', companyCode: 'CO1', companyName: 'Demo Co' } } };
   });
-  await page.goto('/admin/plants');
+  await page.goto('/master/plants');
   await expect(page.getByRole('heading', { level: 1, name: 'Plants & Warehouses' })).toBeVisible();
   const sections = page.getByRole('navigation', { name: 'Plants & Warehouses sections' });
   await expect(sections.getByRole('link', { name: 'Plants' })).toHaveAttribute('aria-current', 'page');
 
   await sections.getByRole('link', { name: 'Warehouses' }).click();
-  await expect(page).toHaveURL(/\/admin\/plants\?show=warehouses$/);
+  await expect(page).toHaveURL(/\/master\/plants\?show=warehouses$/);
   await expect(page.getByRole('button', { name: 'New warehouse' })).toBeVisible();
   await page.getByRole('searchbox', { name: 'Search warehouses' }).fill('rm');
   await expect(page).toHaveURL(/show=warehouses/); // list state keeps the section
@@ -205,7 +205,7 @@ test('pickers read every page of a long list, not only the first 200 rows', asyn
     return { status: 200, json: { data: all.slice((n - 1) * size, n * size), meta: { ...META, total: all.length } } };
   });
   await mockApi(page, '/query/core.machines?*', page1([]));
-  await page.goto('/admin/work-centers?show=machines');
+  await page.goto('/master/work-centers?show=machines');
   await page.getByRole('button', { name: 'New machine' }).click();
   await choose(page, page.getByRole('dialog', { name: 'New machine' }).getByRole('combobox', { name: 'Work center' }), 'P1 / WC-230 · Line 230');
 });

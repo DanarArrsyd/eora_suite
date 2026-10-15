@@ -40,21 +40,26 @@ export function querySource<T>(resource: string): ListSource<T> {
 }
 
 /**
- * Options for a picker from a query resource: every row the caller may see, sorted by code, read page by page (the
- * server caps a page at 200). Master lists of this kind stay small; the cap of 50 pages only guards a runaway loop.
+ * Every row of a query resource the caller may see, sorted by code, read page by page (the server caps a page at 200).
+ * Master lists of this kind stay small; the cap of 50 pages only guards a runaway loop.
  */
+export async function queryAll<T = Record<string, unknown>>(resource: string, filters: Record<string, string> = {}, signal?: AbortSignal): Promise<T[]> {
+  const rows: T[] = [];
+  for (let page = 1; page <= 50; page++) {
+    const qs = queryString({ filters, search: '', sort: [{ id: 'code', desc: false }], page, pageSize: 200 });
+    const result = await fetchPage(resource, qs, signal);
+    rows.push(...(result.data as T[]));
+    if (rows.length >= result.meta.total || result.data.length === 0) break;
+  }
+  return rows;
+}
+
+/** Options for a picker from a query resource: every visible row, `value` = its id. */
 export async function queryOptions(
   resource: string,
   label: (row: Record<string, unknown>) => string,
   filters: Record<string, string> = {},
   signal?: AbortSignal,
 ): Promise<Option[]> {
-  const options: Option[] = [];
-  for (let page = 1; page <= 50; page++) {
-    const qs = queryString({ filters, search: '', sort: [{ id: 'code', desc: false }], page, pageSize: 200 });
-    const result = await fetchPage(resource, qs, signal);
-    options.push(...(result.data as Record<string, unknown>[]).map((r) => ({ value: String(r.id), label: label(r) })));
-    if (options.length >= result.meta.total || result.data.length === 0) break;
-  }
-  return options;
+  return (await queryAll(resource, filters, signal)).map((r) => ({ value: String(r.id), label: label(r) }));
 }
