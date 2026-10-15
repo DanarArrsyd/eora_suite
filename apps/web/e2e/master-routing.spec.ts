@@ -53,6 +53,7 @@ const OP = {
 };
 const V1 = {
   id: ROUTING.currentVersionId,
+  routingId: ROUTING.id,
   versionNo: 1,
   status: 'APPROVED',
   effectiveFrom: '2026-10-15',
@@ -105,6 +106,7 @@ async function axe(page: Page) {
 test('master data menu: Organization, Parts, Partners and Engineering; old Administration links redirect (D-076)', async ({ page }) => {
   await setup(page, { ...APPROVER, permissions: [...APPROVER.permissions, 'master.org.view'] });
   await mockApi(page, '/query/core.plants?*', page1([]));
+  await mockApi(page, '/query/core.warehouses?*', page1([]));
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/admin/plants?show=warehouses');
   await expect(page).toHaveURL(/\/master\/plants\?show=warehouses$/);
@@ -187,4 +189,83 @@ test('a planner without approval rights is never offered Approve', async ({ page
   await page.goto(`/master/routings?routing=${ROUTING.id}`);
   await expect(page.getByRole('button', { name: 'Withdraw to edit' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+});
+
+test('a version id of another routing in the URL is ignored; the routing shows its own open version', async ({ page }) => {
+  await setup(page);
+  let foreignAsked = false;
+  await page.route('**/api/v1/planning/routing-versions/00000000-0000-7000-8000-0000000009f9', (route) => {
+    foreignAsked = true;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { ...V2, id: 'x', routingId: 'other', operations: [] } }),
+    });
+  });
+  await page.goto(`/master/routings?routing=${ROUTING.id}&version=00000000-0000-7000-8000-0000000009f9`);
+  await expect(page.getByRole('navigation', { name: 'Versions' }).getByRole('link', { name: /Version 2/ })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('table', { name: 'Operations of version 2' })).toBeVisible();
+  expect(foreignAsked).toBe(false);
+});
+
+test('editing an operation keeps hidden attributes; a new work center clears the chosen machines', async ({ page }) => {
+  await setup(page);
+  await mockApi(
+    page,
+    '/query/core.work_centers?*',
+    page1([
+      { id: OP.workCenterId, code: 'PRS-01', name: 'Press line 1', status: 'ACTIVE', version: 1 },
+      { id: '00000000-0000-7000-8000-0000000001f2', code: 'PRS-02', name: 'Press line 2', status: 'ACTIVE', version: 1 },
+    ]),
+  );
+  const bodies: { operations: Record<string, unknown>[] }[] = [];
+  await page.route(`**/api/v1/planning/routing-versions/${V2.id}/operations`, (route) => {
+    bodies.push(route.request().postDataJSON());
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { ...V2, operations: [OP] } }) });
+  });
+  await page.goto(`/master/routings?routing=${ROUTING.id}`);
+  await page.getByRole('button', { name: /Edit .*Blanking/ }).click();
+  const drawer = page.getByRole('dialog', { name: 'Operation 10' });
+  await drawer.getByRole('textbox', { name: 'Cycle time (s)' }).fill('4');
+  await drawer.getByRole('button', { name: 'Save operation' }).click();
+  await expect(drawer).toBeHidden();
+  expect(bodies[0]!.operations[0]).toMatchObject({
+    stdCycleSeconds: 4,
+    machines: [{ machineId: OP.machines[0]!.machineId, isPreferred: true, cycleSecondsOverride: null }],
+    tools: [{ dieId: OP.tools[0]!.dieId, quantity: 1, cavitiesUsed: 2 }],
+  });
+
+  await page.getByRole('button', { name: /Edit .*Blanking/ }).click();
+  const again = page.getByRole('dialog', { name: 'Operation 10' });
+  await expect(again.getByRole('checkbox', { name: 'M-200 · Press 200 t' })).toBeChecked();
+  await choose(page, again.getByRole('combobox', { name: 'Work center' }), 'PRS-02 · Press line 2');
+  await again.getByRole('button', { name: 'Save operation' }).click();
+  await expect(again).toBeHidden();
+  expect(bodies[1]!.operations[0]).toMatchObject({ workCenterId: '00000000-0000-7000-8000-0000000001f2', machines: [] });
+});
+
+test('a routing is deactivated at its version; a refused activation says why', async ({ page }) => {
+  await setup(page);
+  const patches: { body: unknown; ifMatch?: string }[] = [];
+  await page.route(`**/api/v1/planning/routings/${ROUTING.id}`, (route) => {
+    patches.push({ body: route.request().postDataJSON(), ifMatch: route.request().headers()['if-match'] });
+    return route.fulfill({
+      status: 422,
+      contentType: 'application/problem+json',
+      body: JSON.stringify({
+        type: 'x',
+        title: 'Validation failed',
+        status: 422,
+        code: 'VALIDATION_FAILED',
+        errors: { status: ['This item already has an active primary routing in this plant.'] },
+      }),
+    });
+  });
+  await page.goto(`/master/routings?routing=${ROUTING.id}`);
+  const sent = page.waitForRequest((r) => r.method() === 'PATCH' && r.url().endsWith(`/planning/routings/${ROUTING.id}`));
+  await page.getByRole('button', { name: 'Deactivate routing R1' }).click();
+  await sent;
+  await expect(page.getByText('This item already has an active primary routing in this plant.')).toBeVisible();
+  expect(patches[0]).toEqual({ body: { status: 'INACTIVE' }, ifMatch: '"1"' });
+  await expect(page.getByText('This item already has an active primary routing in this plant.')).toBeVisible();
 });

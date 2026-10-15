@@ -18,6 +18,7 @@ import {
   FormSelectField,
   FormTextareaField,
   FormTextField,
+  useFormContext,
   useWatch,
   type EoraColumn,
 } from '@eora/features/patterns';
@@ -55,6 +56,7 @@ import { queryAll, queryOptions, querySource } from './source';
 type VersionStatus = 'DRAFT' | 'SUBMITTED' | 'REJECTED' | 'APPROVED' | 'SUPERSEDED';
 type VersionRow = {
   id: string;
+  routingId: string;
   versionNo: number;
   status: VersionStatus;
   effectiveFrom: string;
@@ -187,15 +189,43 @@ function RoutingPage({ id }: { id: string }) {
     enabled: can.view,
   });
   const r = routing.data;
-  const selectedId = params?.get('version') ?? r?.pendingVersionId ?? r?.currentVersionId ?? versions.data?.[0]?.id ?? null;
+  // a `version` from the URL counts only when it is a version of this routing (a stale or edited link never selects
+  // another routing's version); until the list is loaded nothing is selected
+  const asked = params?.get('version');
+  const selectedId = !versions.data
+    ? null
+    : ((asked && versions.data.some((v) => v.id === asked) ? asked : null) ?? r?.pendingVersionId ?? r?.currentVersionId ?? versions.data[0]?.id ?? null);
   const detail = useQuery({
     queryKey: ['master', 'routing-version', selectedId],
     queryFn: async () =>
       ((await call(() => api.GET('/planning/routing-versions/{version}', { params: { path: { version: selectedId! } } }))) as { data: VersionDetail }).data,
+    select: (v: VersionDetail) => (v.routingId === id ? v : null),
     enabled: can.view && !!selectedId,
   });
 
   const refresh = () => client.invalidateQueries({ queryKey: ['master'] });
+  const [statusBusy, setStatusBusy] = React.useState(false);
+  const [statusError, setStatusError] = React.useState<string | null>(null);
+  /** Active ↔ Inactive at the routing's version; a second active primary for the item and plant is refused (422). */
+  const toggleStatus = async () => {
+    if (!routing.data) return;
+    setStatusError(null);
+    setStatusBusy(true);
+    const next = routing.data.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    try {
+      await call(() =>
+        api.PATCH('/planning/routings/{routing}', { params: { path: { routing: id } }, headers: ifMatch(routing.data!.version), body: { status: next } }),
+      );
+      setNotice(next === 'ACTIVE' ? `Routing ${routing.data.code} activated` : `Routing ${routing.data.code} deactivated`);
+      void refresh();
+    } catch (e) {
+      const err = e as { status?: number; fieldErrors?: Record<string, string> } | null;
+      setStatusError(err?.status === 422 && err.fieldErrors?.status ? err.fieldErrors.status : conflictMessage(e, 'The status did not change.'));
+      if (err?.status === 412) void refresh();
+    } finally {
+      setStatusBusy(false);
+    }
+  };
   const showVersion = (versionId: string) => router.replace(`/master/routings?routing=${id}&version=${versionId}`);
 
   if (me.isPending || (can.view && routing.isPending)) return <LoadingState title="Loading routing" />;
@@ -253,6 +283,15 @@ function RoutingPage({ id }: { id: string }) {
             <ArrowLeft aria-hidden="true" className="size-4" />
             All routings
           </Button>
+          {can.create ? (
+            <Button
+              disabled={statusBusy}
+              onClick={() => void toggleStatus()}
+              aria-label={r.status === 'ACTIVE' ? `Deactivate routing ${r.code}` : `Activate routing ${r.code}`}
+            >
+              {r.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+            </Button>
+          ) : null}
           <NewVersionButton routing={r} reason={newVersionReason} onCreated={(versionId) => (void refresh(), showVersion(versionId))} />
         </>
       }
@@ -269,8 +308,13 @@ function RoutingPage({ id }: { id: string }) {
           }
         />
       ) : null}
+      {statusError ? (
+        <InlineAlert tone="danger" title="Status not changed" className="mb-4">
+          {statusError}
+        </InlineAlert>
+      ) : null}
       <VersionStrip versions={versions.data ?? []} selectedId={selectedId} routingId={id} currentId={r.currentVersionId} />
-      {detail.isPending && selectedId ? (
+      {(detail.isPending && selectedId) || (versions.isPending && !versions.isError) ? (
         <LoadingState title="Loading version" />
       ) : detail.isError ? (
         <ErrorState
@@ -779,8 +823,19 @@ function OperationDrawer({
                 isCountPoint: v.isCountPoint === 'true',
                 inspectionRequired: v.inspectionRequired === 'true',
                 requiresTooling: v.requiresTooling === 'true',
-                machines: v.machines.map((m) => ({ machineId: m, isPreferred: m === v.preferredMachine, cycleSecondsOverride: null })),
-                tools: v.tools.map((d) => ({ dieId: d, quantity: 1, cavitiesUsed: null })),
+                // attributes the drawer does not show (cycle overrides, die quantity, cavities) keep their stored values
+                machines: v.machines.map((m) => {
+                  const kept = op?.machines.find((x) => x.machineId === m);
+                  return {
+                    machineId: m,
+                    isPreferred: m === v.preferredMachine,
+                    cycleSecondsOverride: kept?.cycleSecondsOverride == null ? null : Number(kept.cycleSecondsOverride),
+                  };
+                }),
+                tools: v.tools.map((d) => {
+                  const kept = op?.tools.find((x) => x.dieId === d);
+                  return { dieId: d, quantity: kept?.quantity ?? 1, cavitiesUsed: kept?.cavitiesUsed ?? null };
+                }),
                 inspections: v.inspections
                   .split('\n')
                   .map((line) => line.trim())
@@ -875,6 +930,15 @@ function OperationDrawer({
 /** Machines of the chosen work center; the list follows the work center field. */
 function MachineFields() {
   const workCenterId = useWatch({ name: 'workCenterId' }) as string;
+  const { setValue } = useFormContext();
+  // machines belong to one work center: a different work center starts with none chosen
+  const previous = React.useRef(workCenterId);
+  React.useEffect(() => {
+    if (previous.current === workCenterId) return;
+    previous.current = workCenterId;
+    setValue('machines', [], { shouldDirty: true });
+    setValue('preferredMachine', '', { shouldDirty: true });
+  }, [workCenterId, setValue]);
   const chosen = (useWatch({ name: 'machines' }) as string[] | undefined) ?? [];
   const machines = useQuery({
     queryKey: ['master', 'picker', 'machines-of', workCenterId],
