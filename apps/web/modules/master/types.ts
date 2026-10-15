@@ -8,12 +8,12 @@ import type { Option, SortRule } from '@eora/features/data';
 export type MasterRow = { id: string; code: string; version: number; status?: string };
 
 /** Picker lists loaded from other query resources. */
-export type OptionSource = 'companies' | 'plants' | 'warehouses' | 'workCenters';
+export type OptionSource = 'companies' | 'plants' | 'warehouses' | 'workCenters' | 'uoms' | 'items' | 'customers' | 'dies';
 
 export type FieldSpec = {
   key: string;
   label: string;
-  kind: 'text' | 'select' | 'number';
+  kind: 'text' | 'select' | 'number' | 'date';
   required?: boolean;
   hint?: string;
   /** Static options, or a live picker. */
@@ -24,6 +24,10 @@ export type FieldSpec = {
   editOnly?: boolean;
   /** Codes: upper-cased while typing. */
   code?: boolean;
+  /** Allowed code characters (default A-Z, 0-9, "_", "-"). */
+  codePattern?: { pattern: RegExp; message: string };
+  /** Date fields: no day before today (tenant calendar). */
+  notBeforeToday?: boolean;
   maxLength?: number;
   /** For number fields: allowed decimals (0 = whole numbers). */
   decimals?: number;
@@ -34,9 +38,15 @@ export type FieldSpec = {
 export type FormValues = Record<string, string>;
 
 export type MasterResource<T extends MasterRow> = {
-  /** Navigation item id (`/admin/<id>`). */
+  /** Section id (`?show=<id>`). */
   id: string;
   resource: string;
+  /** View / change permission hints (default: organisation master). The server decides. */
+  permission?: { view: string; create: string; label: string };
+  /** No create action on this screen (records come from elsewhere). */
+  noCreate?: boolean;
+  /** Records are added but never edited (e.g. versions); the drawer only shows them. */
+  appendOnly?: string;
   title: string;
   description: string;
   /** Plural and singular nouns for counts, empty states and buttons. */

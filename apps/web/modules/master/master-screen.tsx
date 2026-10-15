@@ -29,8 +29,7 @@ import { querySource } from './source';
 import type { MasterResource, MasterRow } from './types';
 
 /** doc 18 master-data table: lists need `master.org.view`, changes `master.org.create` (the server decides scope). */
-export const ORG_PERMISSION = { view: 'master.org.view', create: 'master.org.create' } as const;
-const CREATE_REASON = 'Your roles do not allow changes to organisation master data.';
+export const ORG_PERMISSION = { view: 'master.org.view', create: 'master.org.create', label: 'organisation master data' } as const;
 const EMPTY: never[] = [];
 
 /**
@@ -41,8 +40,9 @@ const EMPTY: never[] = [];
 export function MasterScreen<T extends MasterRow>({ config, heading }: { config: MasterResource<T>; heading?: { title: string; sections: React.ReactNode } }) {
   const me = useMe();
   const permissions = me.data?.permissions ?? [];
-  const canView = permissions.includes(ORG_PERMISSION.view);
-  const canCreate = permissions.includes(ORG_PERMISSION.create);
+  const perm = config.permission ?? ORG_PERMISSION;
+  const canView = permissions.includes(perm.view);
+  const canCreate = permissions.includes(perm.create) && !config.noCreate;
   const source = React.useMemo(() => querySource<T>(config.resource), [config.resource]);
   const client = useQueryClient();
   const [density, setDensity] = useDensityPreference();
@@ -77,7 +77,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
       <div className="p-6 max-md:p-4">
         <PermissionDeniedState
           title={`${config.title} is not available for your roles`}
-          description="Ask a tenant administrator for a role that includes organisation master data."
+          description={`Ask a tenant administrator for a role that includes ${perm.label}.`}
         />
       </div>
     );
@@ -88,6 +88,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const filtersApplied = activeFilterCount(query.filters);
   const hasFilters = filtersApplied > 0 || !!query.search;
   const createLabel = `New ${config.singular}`;
+  const createReason = `Your roles do not allow changes to ${perm.label}.`;
 
   const createButton = canCreate ? (
     <Button variant="primary" onClick={() => setEditor({ open: true, row: null })}>
@@ -95,8 +96,8 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
       {createLabel}
     </Button>
   ) : (
-    <Tooltip content={CREATE_REASON}>
-      <Button variant="primary" aria-disabled="true" aria-label={`${createLabel}. ${CREATE_REASON}`} onClick={(e) => e.preventDefault()}>
+    <Tooltip content={createReason}>
+      <Button variant="primary" aria-disabled="true" aria-label={`${createLabel}. ${createReason}`} onClick={(e) => e.preventDefault()}>
         <Plus aria-hidden="true" className="size-4" />
         {createLabel}
       </Button>
@@ -212,7 +213,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
           rowActions={{
             primary: (r) => ({
               id: 'open',
-              label: config.readOnly?.(r) || !canCreate ? 'View' : 'Edit',
+              label: config.appendOnly || config.readOnly?.(r) || !canCreate ? 'View' : 'Edit',
               icon: Pencil,
               onSelect: () => setEditor({ open: true, row: r }),
             }),
@@ -242,21 +243,22 @@ export function MasterGroupScreen({ group }: { group: MasterGroup }) {
   const pathname = usePathname() ?? '/';
   const show = useSearchParams()?.get('show');
   const active = group.parts.find((p) => p.id === show) ?? group.parts[0]!;
-  const sections = (
-    <nav aria-label={`${group.title} sections`} className="mb-4 flex gap-1 overflow-x-auto border-b border-line">
-      {group.parts.map((p) => (
-        <Link
-          key={p.id}
-          href={`${pathname}?show=${p.id}`}
-          replace
-          aria-current={p.id === active.id ? 'page' : undefined}
-          className="-mb-px inline-flex h-10 items-center border-b-2 border-transparent px-3 text-[13.5px] font-medium whitespace-nowrap text-ink-2 no-underline hover:text-ink focus-visible:outline-2 focus-visible:outline-ring aria-[current=page]:border-accent aria-[current=page]:font-semibold aria-[current=page]:text-accent max-md:h-11"
-        >
-          {p.title}
-        </Link>
-      ))}
-    </nav>
-  );
+  const sections =
+    group.parts.length < 2 ? null : (
+      <nav aria-label={`${group.title} sections`} className="mb-4 flex gap-1 overflow-x-auto border-b border-line">
+        {group.parts.map((p) => (
+          <Link
+            key={p.id}
+            href={`${pathname}?show=${p.id}`}
+            replace
+            aria-current={p.id === active.id ? 'page' : undefined}
+            className="-mb-px inline-flex h-10 items-center border-b-2 border-transparent px-3 text-[13.5px] font-medium whitespace-nowrap text-ink-2 no-underline hover:text-ink focus-visible:outline-2 focus-visible:outline-ring aria-[current=page]:border-accent aria-[current=page]:font-semibold aria-[current=page]:text-accent max-md:h-11"
+          >
+            {p.title}
+          </Link>
+        ))}
+      </nav>
+    );
   // one screen per section: the key resets list state and drawers when switching
   return <MasterScreen key={active.id} config={active} heading={{ title: group.title, sections }} />;
 }

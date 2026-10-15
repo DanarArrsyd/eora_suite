@@ -26,6 +26,8 @@ import {
   Cog,
   Component,
   Cylinder,
+  Database,
+  Handshake,
   Download,
   Factory,
   FileChartColumn,
@@ -428,6 +430,30 @@ export const NAV_MODULES: readonly NavModule[] = [
         items: [
           { id: 'export-center', label: 'Export Center', icon: Download, release: 'R1', phase: 'later' },
           { id: 'import-jobs', label: 'Import Jobs', icon: Upload, release: 'R2', phase: 'later' },
+        ],
+      },
+    ],
+  },
+  {
+    // D-074: one module for the part, partner and (later) engineering master
+    id: 'master',
+    label: 'Master Data',
+    icon: Database,
+    permission: 'master.part.view',
+    groups: [
+      {
+        label: 'Parts',
+        items: [
+          { id: 'items', label: 'Items', icon: Package, release: 'R1', phase: 'later' },
+          { id: 'units', label: 'Units & Conversions', icon: Ruler, release: 'R1', phase: 'later' },
+        ],
+      },
+      {
+        label: 'Partners',
+        items: [
+          { id: 'customers', label: 'Customers', icon: Building, release: 'R1', phase: 'later' },
+          { id: 'customer-parts', label: 'Customer Part Mapping', icon: Link, release: 'R1', phase: 'later' },
+          { id: 'suppliers', label: 'Suppliers', icon: Handshake, release: 'R1', phase: 'later' },
         ],
       },
     ],

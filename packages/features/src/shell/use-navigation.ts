@@ -30,7 +30,8 @@ export function useShellNavigation(): ShellNavigation {
     if (permissions) {
       const others = allowed === '*' ? NAV_MODULES.map((m) => m.id) : [...allowed];
       const admin = permissions.includes('core.users_roles.view') || permissions.includes('master.org.view');
-      allowed = [...others.filter((id) => id !== 'admin'), ...(admin ? ['admin'] : [])];
+      const master = permissions.includes('master.part.view');
+      allowed = [...others.filter((id) => id !== 'admin' && id !== 'master'), ...(master ? ['master'] : []), ...(admin ? ['admin'] : [])];
     }
     return visibleModules(NAV_MODULES, { allowedModules: allowed, showPendingDecisions: false });
   }, [role, source, permissions]);
