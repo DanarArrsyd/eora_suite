@@ -12,6 +12,8 @@ export type ListUrlConfig = {
   defaultPageSize: number;
   /** Scope filters from the workspace (e.g. plant). Always applied, never written to or removable from the URL. */
   lockedFilters?: FilterValues;
+  /** Page-level parameters the list must carry along unchanged (e.g. `show` selecting a section). */
+  keepParams?: readonly string[];
 };
 
 export type ListUrlState = {
@@ -94,8 +96,14 @@ export function useListUrlState(cfg: ListUrlConfig): ListUrlState {
   // Every change starts from the *current* URL, not from a possibly stale render.
   const update = React.useCallback(
     (change: (current: ListQuery) => ListQuery) => {
-      const current = readListQuery(new URLSearchParams(window.location.search), cfg);
-      const qs = writeListQuery(change(current), cfg).toString();
+      const url = new URLSearchParams(window.location.search);
+      const current = readListQuery(url, cfg);
+      const next = writeListQuery(change(current), cfg);
+      for (const key of cfg.keepParams ?? []) {
+        const v = url.get(key);
+        if (v !== null) next.set(key, v);
+      }
+      const qs = next.toString();
       window.history.replaceState(null, '', qs ? `${pathname}?${qs}` : pathname);
     },
     [pathname, cfg],

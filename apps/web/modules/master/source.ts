@@ -39,14 +39,22 @@ export function querySource<T>(resource: string): ListSource<T> {
   };
 }
 
-/** Options for a picker from a query resource (first 200 rows the caller may see, sorted by code). */
+/**
+ * Options for a picker from a query resource: every row the caller may see, sorted by code, read page by page (the
+ * server caps a page at 200). Master lists of this kind stay small; the cap of 50 pages only guards a runaway loop.
+ */
 export async function queryOptions(
   resource: string,
   label: (row: Record<string, unknown>) => string,
   filters: Record<string, string> = {},
   signal?: AbortSignal,
 ): Promise<Option[]> {
-  const qs = queryString({ filters, search: '', sort: [{ id: 'code', desc: false }], page: 1, pageSize: 200 });
-  const page = await fetchPage(resource, qs, signal);
-  return (page.data as Record<string, unknown>[]).map((r) => ({ value: String(r.id), label: label(r) }));
+  const options: Option[] = [];
+  for (let page = 1; page <= 50; page++) {
+    const qs = queryString({ filters, search: '', sort: [{ id: 'code', desc: false }], page, pageSize: 200 });
+    const result = await fetchPage(resource, qs, signal);
+    options.push(...(result.data as Record<string, unknown>[]).map((r) => ({ value: String(r.id), label: label(r) })));
+    if (options.length >= result.meta.total || result.data.length === 0) break;
+  }
+  return options;
 }

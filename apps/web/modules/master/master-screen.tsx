@@ -22,6 +22,8 @@ import {
   type ListUrlConfig,
 } from '@eora/features/patterns';
 import { Button, EmptyState, InlineAlert, LoadingState, PermissionDeniedState, Tooltip } from '@eora/ui';
+import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { MasterEditor } from './editor';
 import { querySource } from './source';
 import type { MasterResource, MasterRow } from './types';
@@ -36,7 +38,7 @@ const EMPTY: never[] = [];
  * breadcrumb, title, primary action, search + filters, table, pagination, create/edit drawer. Rows come live from
  * GET /api/v1/query/{resource}; filtering, sorting and paging are server-side and kept in the URL.
  */
-export function MasterScreen<T extends MasterRow>({ config }: { config: MasterResource<T> }) {
+export function MasterScreen<T extends MasterRow>({ config, heading }: { config: MasterResource<T>; heading?: { title: string; sections: React.ReactNode } }) {
   const me = useMe();
   const permissions = me.data?.permissions ?? [];
   const canView = permissions.includes(ORG_PERMISSION.view);
@@ -46,7 +48,13 @@ export function MasterScreen<T extends MasterRow>({ config }: { config: MasterRe
   const [density, setDensity] = useDensityPreference();
   const [prefSize, setPrefSize] = usePageSizePreference();
   const urlConfig = React.useMemo<ListUrlConfig>(
-    () => ({ filterKeys: config.filters.map((f) => f.key), defaultSort: config.defaultSort, defaultView: 'all', defaultPageSize: Number(prefSize) }),
+    () => ({
+      filterKeys: config.filters.map((f) => f.key),
+      defaultSort: config.defaultSort,
+      defaultView: 'all',
+      defaultPageSize: Number(prefSize),
+      keepParams: ['show'],
+    }),
     [config.filters, config.defaultSort, prefSize],
   );
   const list = useListUrlState(urlConfig);
@@ -96,7 +104,8 @@ export function MasterScreen<T extends MasterRow>({ config }: { config: MasterRe
   );
 
   return (
-    <EnterprisePage title={config.title} description={config.description} actions={createButton}>
+    <EnterprisePage title={heading?.title ?? config.title} description={config.description} actions={createButton}>
+      {heading?.sections}
       {notice ? (
         <InlineAlert
           tone="success"
@@ -224,4 +233,30 @@ export function MasterScreen<T extends MasterRow>({ config }: { config: MasterRe
       />
     </EnterprisePage>
   );
+}
+
+/** Several master resources behind one navigation item (e.g. Plants & Warehouses), switched with `?show=<id>`. */
+export type MasterGroup = { title: string; parts: MasterResource<MasterRow>[] };
+
+export function MasterGroupScreen({ group }: { group: MasterGroup }) {
+  const pathname = usePathname() ?? '/';
+  const show = useSearchParams()?.get('show');
+  const active = group.parts.find((p) => p.id === show) ?? group.parts[0]!;
+  const sections = (
+    <nav aria-label={`${group.title} sections`} className="mb-4 flex gap-1 overflow-x-auto border-b border-line">
+      {group.parts.map((p) => (
+        <Link
+          key={p.id}
+          href={`${pathname}?show=${p.id}`}
+          replace
+          aria-current={p.id === active.id ? 'page' : undefined}
+          className="-mb-px inline-flex h-10 items-center border-b-2 border-transparent px-3 text-[13.5px] font-medium whitespace-nowrap text-ink-2 no-underline hover:text-ink focus-visible:outline-2 focus-visible:outline-ring aria-[current=page]:border-accent aria-[current=page]:font-semibold aria-[current=page]:text-accent max-md:h-11"
+        >
+          {p.title}
+        </Link>
+      ))}
+    </nav>
+  );
+  // one screen per section: the key resets list state and drawers when switching
+  return <MasterScreen key={active.id} config={active} heading={{ title: group.title, sections }} />;
 }

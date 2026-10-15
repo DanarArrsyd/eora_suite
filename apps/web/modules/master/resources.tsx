@@ -2,6 +2,7 @@ import { api, call } from '@eora/features/auth';
 import type { Option } from '@eora/features/data';
 import { DomainStatusBadge, type FilterField } from '@eora/features/patterns';
 import { queryOptions } from './source';
+import type { MasterGroup } from './master-screen';
 import type { FormValues, MasterResource, MasterRow } from './types';
 
 /*
@@ -104,6 +105,11 @@ const DIE_TYPES = opts([
   ['JIG', 'Jig'],
   ['FIXTURE', 'Fixture'],
 ]);
+/** IANA zones known to the browser (the server checks them against its own list). */
+const TIME_ZONES: Option[] = (typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : ['Asia/Jakarta']).map((z) => ({
+  value: z,
+  label: z.replaceAll('_', ' '),
+}));
 const DIE_STATUS = [...STATUS_OPTIONS, { value: 'MAINTENANCE', label: 'In maintenance' }];
 const label = (options: Option[], value: string | null | undefined) => options.find((o) => o.value === value)?.label ?? value ?? '—';
 
@@ -180,14 +186,23 @@ export const PLANTS: MasterResource<PlantRow> = {
     { key: 'companyId', label: 'Company', kind: 'select', required: true, options: 'companies', createOnly: true },
     { key: 'code', label: 'Code', kind: 'text', required: true, code: true, maxLength: 20, createOnly: true, hint: CODE_HINT },
     { key: 'name', label: 'Name', kind: 'text', required: true, maxLength: 200 },
+    {
+      key: 'timezone',
+      label: 'Time zone',
+      kind: 'select',
+      required: true,
+      options: TIME_ZONES,
+      createOnly: true,
+      hint: 'Fixed once created: production dates and planning weeks of this plant follow it.',
+    },
   ],
-  blank: { companyId: '', code: '', name: '' },
+  blank: { companyId: '', code: '', name: '', timezone: '' },
   toForm: (r) => ({ companyId: r.companyId, code: r.code, name: r.name }),
   facts: (r) => [
     { label: 'Company', value: `${r.companyCode} · ${r.companyName}` },
     { label: 'Time zone', value: r.timezone },
   ],
-  create: (v) => call(() => api.POST('/core/plants', { body: { companyId: v.companyId!, code: v.code!, name: v.name! } })),
+  create: (v) => call(() => api.POST('/core/plants', { body: { companyId: v.companyId!, code: v.code!, name: v.name!, timezone: v.timezone as never } })),
   update: (r, v) => call(() => api.PATCH('/core/plants/{plant}', { params: { path: { plant: r.id } }, headers: ifMatch(r), body: { name: v.name! } })),
 };
 
@@ -546,12 +561,9 @@ export const DIES: MasterResource<DieRow> = {
   },
 };
 
-export const MASTER_SCREENS = {
-  company: COMPANIES,
-  plants: PLANTS,
-  warehouses: WAREHOUSES,
-  locations: LOCATIONS,
-  'work-centers': WORK_CENTERS,
-  machines: MACHINES,
-  dies: DIES,
+/** Approved navigation items (Administration → Organization) and the resources each one shows. */
+export const MASTER_SCREENS: Record<string, MasterGroup> = {
+  company: { title: 'Company', parts: [COMPANIES as never] },
+  plants: { title: 'Plants & Warehouses', parts: [PLANTS, WAREHOUSES, LOCATIONS] as never },
+  'work-centers': { title: 'Work Centers', parts: [WORK_CENTERS, MACHINES, DIES] as never },
 };

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
+import { useMe } from '@eora/features/auth';
 import { EoraForm, FormSelectField, FormTextField } from '@eora/features/patterns';
 import type { Option } from '@eora/features/data';
 import { Button, Drawer, DrawerContent, InlineAlert } from '@eora/ui';
@@ -108,7 +109,13 @@ export function MasterEditor<T extends MasterRow>({
     ? (config.readOnly?.(row) ?? (canEdit ? undefined : 'Your roles allow viewing organisation master data, not changing it.'))
     : undefined;
   const schema = React.useMemo(() => schemaFor(fields), [fields]);
-  const defaults = React.useMemo(() => (row ? config.toForm(row) : config.blank), [row, config]);
+  const me = useMe();
+  // a new plant starts in the workspace time zone (D-044), changeable before it is created
+  const tenantZone = me.data?.tenants.find((t) => t.id === me.data?.activeTenantId)?.timezone ?? 'Asia/Jakarta';
+  const defaults = React.useMemo(
+    () => (row ? config.toForm(row) : 'timezone' in config.blank && !config.blank.timezone ? { ...config.blank, timezone: tenantZone } : config.blank),
+    [row, config, tenantZone],
+  );
   const title = editing ? `${row.code}` : `New ${config.singular}`;
 
   return (

@@ -135,7 +135,7 @@ test('locations: virtual and Material at Production locations open read-only', a
     ...extra,
   });
   await mockApi(page, '/query/core.locations?*', page1([loc('MAP-PRS-01', 'MAT_AT_PROD', { workCenterCode: 'PRS-01' }), loc('V_OPENING', 'V_OPENING')]));
-  await page.goto('/admin/locations');
+  await page.goto('/admin/plants?show=locations');
   const table = page.getByRole('table', { name: 'Locations' });
   await expect(table.getByRole('row', { name: /MAP-PRS-01/ })).toContainText('Work center PRS-01');
   await table.getByRole('button', { name: /View V_OPENING/ }).click();
@@ -153,4 +153,59 @@ test('master screens: no permission → a clear denial; phone layout without hor
   await expect(page.getByText('MAP-PRS-01')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await axe(page);
+});
+
+test('plants & warehouses: sections switch in the page, keep their place in the URL; a new plant sends its time zone', async ({ page }) => {
+  await setup(page);
+  await mockApi(page, '/query/core.companies?*', page1([{ id: '00000000-0000-7000-8000-0000000000c1', code: 'CO1', legalName: 'Demo Co', version: 1 }]));
+  await mockApi(page, '/query/core.warehouses?*', page1([]));
+  let body: Record<string, unknown> | null = null;
+  await mockApi(page, '/core/plants', (route) => {
+    body = route.request().postDataJSON() as Record<string, unknown>;
+    return { status: 201, json: { data: { ...PLANT, timezone: 'Asia/Makassar', companyId: 'c', companyCode: 'CO1', companyName: 'Demo Co' } } };
+  });
+  await page.goto('/admin/plants');
+  await expect(page.getByRole('heading', { level: 1, name: 'Plants & Warehouses' })).toBeVisible();
+  const sections = page.getByRole('navigation', { name: 'Plants & Warehouses sections' });
+  await expect(sections.getByRole('link', { name: 'Plants' })).toHaveAttribute('aria-current', 'page');
+
+  await sections.getByRole('link', { name: 'Warehouses' }).click();
+  await expect(page).toHaveURL(/\/admin\/plants\?show=warehouses$/);
+  await expect(page.getByRole('button', { name: 'New warehouse' })).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Search warehouses' }).fill('rm');
+  await expect(page).toHaveURL(/show=warehouses/); // list state keeps the section
+  await expect(page).toHaveURL(/q=rm/);
+
+  await sections.getByRole('link', { name: 'Plants' }).click();
+  await page.getByRole('button', { name: 'New plant' }).click();
+  const drawer = page.getByRole('dialog', { name: 'New plant' });
+  await expect(drawer.getByRole('combobox', { name: 'Time zone' })).toContainText('Asia/Jakarta'); // the workspace zone
+  await choose(page, drawer.getByRole('combobox', { name: 'Company' }), 'CO1 · Demo Co');
+  await drawer.getByRole('textbox', { name: 'Code', exact: true }).fill('p2');
+  await drawer.getByRole('textbox', { name: 'Name', exact: true }).fill('Plant 2');
+  await choose(page, drawer.getByRole('combobox', { name: 'Time zone' }), 'Asia/Makassar');
+  await drawer.getByRole('button', { name: 'Create plant' }).click();
+  await expect(page.getByText('Plant P2 created')).toBeVisible();
+  expect(body).toEqual({ companyId: '00000000-0000-7000-8000-0000000000c1', code: 'P2', name: 'Plant 2', timezone: 'Asia/Makassar' });
+});
+
+test('pickers read every page of a long list, not only the first 200 rows', async ({ page }) => {
+  await setup(page);
+  const wc = (i: number) => ({
+    ...WC,
+    id: `00000000-0000-7000-8000-${String(i).padStart(12, '0')}`,
+    code: `WC-${String(i).padStart(3, '0')}`,
+    name: `Line ${i}`,
+  });
+  await mockApi(page, '/query/core.work_centers?*', (route) => {
+    const qs = new URL(route.request().url()).searchParams;
+    const n = Number(qs.get('page[number]'));
+    const size = Number(qs.get('page[size]'));
+    const all = Array.from({ length: 230 }, (_, i) => wc(i + 1));
+    return { status: 200, json: { data: all.slice((n - 1) * size, n * size), meta: { ...META, total: all.length } } };
+  });
+  await mockApi(page, '/query/core.machines?*', page1([]));
+  await page.goto('/admin/work-centers?show=machines');
+  await page.getByRole('button', { name: 'New machine' }).click();
+  await choose(page, page.getByRole('dialog', { name: 'New machine' }).getByRole('combobox', { name: 'Work center' }), 'P1 / WC-230 · Line 230');
 });

@@ -375,6 +375,13 @@ export const NAV_MODULES: readonly NavModule[] = [
     permission: 'maintenance.view',
     groups: [
       {
+        label: 'Assets',
+        items: [
+          { id: 'machines', label: 'Machines', icon: Cog, release: 'R2', phase: 'later' },
+          { id: 'dies', label: 'Dies & Tooling', icon: Hammer, release: 'R2', phase: 'later' },
+        ],
+      },
+      {
         label: 'Work',
         items: [
           { id: 'breakdowns', label: 'Breakdowns', icon: OctagonAlert, release: 'R2', phase: 'later' },
@@ -436,12 +443,8 @@ export const NAV_MODULES: readonly NavModule[] = [
         label: 'Organization',
         items: [
           { id: 'company', label: 'Company', icon: Building2, release: 'R1', phase: 'later' },
-          { id: 'plants', label: 'Plants', icon: MapPin, release: 'R1', phase: 'later' },
-          { id: 'warehouses', label: 'Warehouses', icon: Warehouse, release: 'R1', phase: 'later' },
-          { id: 'locations', label: 'Locations', icon: LayoutGrid, release: 'R1', phase: 'later' },
+          { id: 'plants', label: 'Plants & Warehouses', icon: MapPin, release: 'R1', phase: 'later' },
           { id: 'work-centers', label: 'Work Centers', icon: Factory, release: 'R1', phase: 'later' },
-          { id: 'machines', label: 'Machines', icon: Cog, release: 'R1', phase: 'later' },
-          { id: 'dies', label: 'Dies & Tooling', icon: Hammer, release: 'R1', phase: 'later' },
         ],
       },
       {
