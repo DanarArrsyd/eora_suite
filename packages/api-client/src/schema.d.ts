@@ -1105,8 +1105,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * SUBMITTED → APPROVED by a second person, superseding the version it replaces. The database function decides:
-         *     trusted actor, active membership, permission in the plant's scope, maker ≠ checker, lifecycle and content
+         * SUBMITTED → APPROVED by a second person, superseding the version it replaces. The database function decides
+         *     (trusted actor, active membership, permission in the plant's scope, maker ≠ checker, lifecycle, content) and
+         *     writes both audit events itself
          */
         post: operations["v1.planning.routing-versions.approve"];
         delete?: never;

@@ -22172,7 +22172,7 @@
         "/planning/routing-versions/{version}/actions/approve": {
             "post": {
                 "operationId": "v1.planning.routing-versions.approve",
-                "summary": "SUBMITTED \u2192 APPROVED by a second person, superseding the version it replaces. The database function decides:\ntrusted actor, active membership, permission in the plant's scope, maker \u2260 checker, lifecycle and content",
+                "summary": "SUBMITTED \u2192 APPROVED by a second person, superseding the version it replaces. The database function decides\n(trusted actor, active membership, permission in the plant's scope, maker \u2260 checker, lifecycle, content) and\nwrites both audit events itself",
                 "tags": [
                     "Routing"
                 ],
