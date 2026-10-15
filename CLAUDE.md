@@ -37,6 +37,7 @@ You are acting as principal manufacturing systems business analyst, solution arc
 - **Git:** repository `github.com/DanarArrsyd/eora_suite` (private, `main`, D-050); feature branches + pull requests for slices (D-051). Push only when the owner instructs for that task; never force-push, rewrite history, `reset --hard` or `clean -fd` without explicit instruction; run a secret scan before every push. Netting: weekly MPS bucket with daily dates kept (D-041); revisions never move shipped quantity (D-038); blanket remainder = Unscheduled Blanket Balance (D-039).
 
 ## Shared UI and quality rules
+- Every change after M2 step 3a follows `docs/30-CHANGE-PLAYBOOK.md` (D-077): classify it, change it in its single source of truth, decision/BR row when behaviour changes, never edit a merged migration, keep history by versions/effective dates, tell users via the milestone UAT script.
 - Reuse `EoraFilterBar`, `EoraDataTable`, `EoraForm`, status badges, approvals, notifications, import wizard, report viewer. Schema-driven filters; URL-synced state; server-side pagination/filter/sort; permission-aware export using the same query scope.
 - Define accessibility, keyboard and mobile scanning flows, empty/loading/error/offline states, grayscale print layouts, responsive behavior.
 - Do not build generic decorative dashboards, fake data metrics or copied SAP/Oracle UI.

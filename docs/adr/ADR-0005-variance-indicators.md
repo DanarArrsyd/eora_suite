@@ -49,7 +49,7 @@ Calculation stores `formula_code`, `CP`/`SY`/`NW` versions and all inputs (snaps
 
 ### Tolerance
 Configured per tenant → plant → item → operation (most specific wins), separately for GYV and UMV:
-`breach = |v| > abs_tol AND |v%| > pct_tol`. For UMV, effective `abs_tol ≥ scale_resolution × number_of_weighings` (measurement floor). If no tolerance configured (D-061): **strict** — any FINAL `|v|` above the measurement floor (GYV: ≥ 1 pc) opens a case. **OPEN contradiction O-033:** D-061 / BR-REC-03 say "any non-zero" variance, without the measurement-floor exception; the owner decides which threshold applies before B8 (M5). Until then neither reading is normative for implementation. Negative breaches open cases too.
+`breach = |v| > abs_tol AND |v%| > pct_tol`. For UMV, effective `abs_tol ≥ scale_resolution × number_of_weighings` (measurement floor). If no tolerance configured (D-061): **strict** — any FINAL `|v|` above the measurement floor (GYV: ≥ 1 pc) opens a case. *(O-033 decided by D-075, 2026-10-15: the measurement floor applies; D-061's "any non-zero" is read as "any value above the measurement floor".)*
 
 ### Status and finality
 Each indicator per scope has status `NOT_CALCULABLE → PROVISIONAL → FINAL`; `FINAL` may return to `PROVISIONAL` only through a reversal of an included document (history kept as calculation versions).
