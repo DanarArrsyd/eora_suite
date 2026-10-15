@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Core\Http\OrgController;
+use App\Modules\Core\Http\ResourceController;
 use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
 use App\Platform\Auth\Http\AuthController;
@@ -54,6 +55,12 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::patch('warehouses/{warehouse}', [OrgController::class, 'updateWarehouse'])->name('warehouses.update');
         Route::post('locations', [OrgController::class, 'storeLocation'])->name('locations.store');
         Route::patch('locations/{location}', [OrgController::class, 'updateLocation'])->name('locations.update');
+        Route::post('work-centers', [ResourceController::class, 'storeWorkCenter'])->name('work-centers.store');
+        Route::patch('work-centers/{workCenter}', [ResourceController::class, 'updateWorkCenter'])->name('work-centers.update');
+        Route::post('machines', [ResourceController::class, 'storeMachine'])->name('machines.store');
+        Route::patch('machines/{machine}', [ResourceController::class, 'updateMachine'])->name('machines.update');
+        Route::post('dies', [ResourceController::class, 'storeDie'])->name('dies.store');
+        Route::patch('dies/{die}', [ResourceController::class, 'updateDie'])->name('dies.update');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

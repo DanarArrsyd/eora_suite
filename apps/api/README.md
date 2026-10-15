@@ -268,7 +268,9 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   plant from a trigger on `plants`, physical locations inside a warehouse of the same plant.
 - Query resources (`App\Platform\Query`: `QueryDefinition`, `Field`, `QueryRunner`; registry `config/eora.php`
   `queries`): `GET /api/v1/query/{resource}` + `/schema`, doc 24 §5.2. Module code lives in `app/Modules/Core`.
-- Commands in `App\Modules\Core\Http\OrgController`; edits need `If-Match` (`App\Platform\Http\Concurrency`).
+- Commands in `App\Modules\Core\Http\OrgController` (companies, plants, warehouses, locations) and `ResourceController`
+  (work centers, machines, dies — step 1b, migration `001000`; every work center gets one `MAT_AT_PROD` location
+  `MAP-<code>` from a trigger); shared write path `MasterWrites`; edits need `If-Match` (`App\Platform\Http\Concurrency`).
 
 ## Endpoints (B0)
 | Method | Path | Purpose |

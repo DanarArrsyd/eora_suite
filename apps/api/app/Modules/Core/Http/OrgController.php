@@ -11,20 +11,14 @@ use App\Modules\Core\Queries\WarehousesQuery;
 use App\Platform\Access\Authorizer;
 use App\Platform\Access\Scope;
 use App\Platform\Audit\AuditRecorder;
-use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
 use App\Platform\Http\Concurrency;
-use App\Platform\Query\QueryDefinition;
 use App\Platform\Query\QueryRunner;
 use DateTimeZone;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use LogicException;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Master Data → organisation (doc 29 §1.1, doc 26 §2.1): companies, plants, warehouses, locations. Runs inside the
@@ -34,6 +28,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 final class OrgController
 {
+    use MasterWrites;
+
     private const string CREATE = 'master.org.create';
 
     public const string CODE = 'regex:/^[A-Z0-9][A-Z0-9_-]{0,19}$/';
@@ -71,7 +67,7 @@ final class OrgController
         $id = $this->existing($db, 'companies', $company);
         $this->authorizer->authorize($db, self::CREATE, Scope::company($id));
 
-        $this->update($db, 'companies', $id, $version, ['legal_name' => $data['legalName']], 'company.updated');
+        $this->update($db, 'companies', 'company', $id, $version, ['legal_name' => $data['legalName']], 'company.updated');
 
         return $this->respond($db, new CompaniesQuery, $id);
     }
@@ -111,7 +107,7 @@ final class OrgController
         $id = $this->existing($db, 'plants', $plant);
         $this->authorizer->authorize($db, self::CREATE, $this->plantScope($db, $id));
 
-        $this->update($db, 'plants', $id, $version, ['name' => $data['name']], 'plant.updated', $id);
+        $this->update($db, 'plants', 'plant', $id, $version, ['name' => $data['name']], 'plant.updated', $id);
 
         return $this->respond($db, new PlantsQuery, $id);
     }
@@ -156,7 +152,7 @@ final class OrgController
         $plant = (string) $db->selectOne('select plant_id from warehouses where id = ?', [$id])->plant_id;
         $this->authorizer->authorize($db, self::CREATE, $this->plantScope($db, $plant));
 
-        $this->update($db, 'warehouses', $id, $version, array_filter([
+        $this->update($db, 'warehouses', 'warehouse', $id, $version, array_filter([
             'name' => $data['name'] ?? null, 'warehouse_type' => $data['warehouseType'] ?? null, 'status' => $data['status'] ?? null,
         ], static fn ($v) => $v !== null), 'warehouse.updated', $plant);
 
@@ -168,10 +164,10 @@ final class OrgController
     {
         $data = $request->validate([
             'warehouseId' => ['required', 'uuid'],
-            'code' => ['required', 'string', self::CODE, 'not_regex:/^V_/'],
+            'code' => ['required', 'string', self::CODE, 'not_regex:/^(V_|MAP-)/'],
             'name' => ['required', 'string', 'min:1', 'max:200'],
             'locationType' => ['required', Rule::in(LocationsQuery::WAREHOUSE_TYPES)],
-        ], ['code.not_regex' => 'Codes starting with V_ are reserved for virtual locations.']);
+        ], ['code.not_regex' => 'Codes starting with V_ or MAP- are reserved for virtual and Material at Production locations.']);
         $db = $this->db();
         $this->authorizer->requireAnywhere($db, self::CREATE);
         $warehouse = $db->selectOne('select id, plant_id, status from warehouses where id = ?', [strtolower($data['warehouseId'])])
@@ -206,79 +202,10 @@ final class OrgController
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Virtual location', 'Virtual locations are part of every plant and cannot be changed.');
         }
 
-        $this->update($db, 'locations', $id, $version, array_filter([
+        $this->update($db, 'locations', 'location', $id, $version, array_filter([
             'name' => $data['name'] ?? null, 'status' => $data['status'] ?? null,
         ], static fn ($v) => $v !== null), 'location.updated', (string) $row->plant_id);
 
         return $this->respond($db, new LocationsQuery, $id);
-    }
-
-    private function db(): EoraPostgresConnection
-    {
-        $db = DB::connection();
-
-        return $db instanceof EoraPostgresConnection ? $db : throw new LogicException('Master data requires the EORA PostgreSQL connection.');
-    }
-
-    /** Lower-cased id of a visible row, or 404 (also for malformed ids and other tenants' ids). */
-    private function existing(EoraPostgresConnection $db, string $table, string $id): string
-    {
-        $id = strtolower($id);
-        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $id) !== 1
-            || $db->selectOne("select 1 as ok from {$table} where id = ?", [$id]) === null) {
-            throw new NotFoundHttpException;
-        }
-
-        return $id;
-    }
-
-    private function plantScope(EoraPostgresConnection $db, string $plant): Scope
-    {
-        return Scope::plant($plant, (string) $db->selectOne('select company_id from plants where id = ?', [$plant])->company_id);
-    }
-
-    /** @param  list<mixed>  $bindings */
-    private function insert(EoraPostgresConnection $db, string $sql, array $bindings, string $duplicate): string
-    {
-        try {
-            return (string) $db->selectOne($sql, $bindings)->id;
-        } catch (QueryException $e) {
-            if ($e->getCode() === '23505') {
-                throw ValidationException::withMessages(['code' => $duplicate]);
-            }
-            throw $e;
-        }
-    }
-
-    /**
-     * Applies $changes to the row at $version (412 if another version committed first) and audits before/after.
-     *
-     * @param  array<string, string>  $changes  column => value (column names are code, never input)
-     */
-    private function update(EoraPostgresConnection $db, string $table, string $id, int $version, array $changes, string $action, ?string $plant = null): void
-    {
-        if ($changes === []) {
-            throw ValidationException::withMessages(['name' => 'Nothing to change.']);
-        }
-        $before = $this->state($db, $table, $id);
-        $set = implode(', ', array_map(static fn (string $c) => "{$c} = ?", array_keys($changes)));
-        if ($db->update("update {$table} set {$set} where id = ? and version = ?", [...array_values($changes), $id, $version]) === 0) {
-            throw Concurrency::conflict();
-        }
-        $entity = ['companies' => 'company', 'plants' => 'plant', 'warehouses' => 'warehouse', 'locations' => 'location'][$table];
-        $this->audit->record($db, $action, $entity, $id, $before, $this->state($db, $table, $id), ['changed' => array_keys($changes)], $plant);
-    }
-
-    /** @return array<string, mixed> the stored row, the same projection before and after a change */
-    private function state(EoraPostgresConnection $db, string $table, string $id): array
-    {
-        return (array) $db->selectOne("select * from {$table} where id = ?", [$id]);
-    }
-
-    private function respond(EoraPostgresConnection $db, QueryDefinition $definition, string $id, int $status = 200): JsonResponse
-    {
-        $row = $this->rows->find($db, $definition, $id) ?? throw new LogicException('Written row not visible.');
-
-        return Concurrency::withVersion(response()->json(['data' => $row], $status), (int) $row['version']);
     }
 }

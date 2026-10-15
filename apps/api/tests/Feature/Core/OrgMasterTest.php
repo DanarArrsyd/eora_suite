@@ -19,21 +19,6 @@ beforeEach(function () {
     AccessFixtures::roles($this->t);
 });
 
-/** @return array<string, mixed> */
-function orgUser(object $test, array $t, string $role, array $scope = ['TENANT']): array
-{
-    $u = member($test, $t);
-    AccessFixtures::grant($t, $u['id'], $role, $scope);
-    signIn($test, $u, $t);
-
-    return $u;
-}
-
-function patchWith(object $test, string $uri, array $body, ?int $version)
-{
-    return spa($test)->patchJson($uri, $body, $version === null ? [] : ['If-Match' => '"'.$version.'"']);
-}
-
 it('maps the master-data permissions to the templates (M2-D1); approve is sensitive', function () {
     $rows = DB::connection('pgsql')->select(
         "select tp.template_code as t, tp.permission_code as p from role_template_permissions tp where tp.permission_code like 'master.%' order by 1, 2",

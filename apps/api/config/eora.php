@@ -2,9 +2,12 @@
 
 declare(strict_types=1);
 use App\Modules\Core\Queries\CompaniesQuery;
+use App\Modules\Core\Queries\DiesQuery;
 use App\Modules\Core\Queries\LocationsQuery;
+use App\Modules\Core\Queries\MachinesQuery;
 use App\Modules\Core\Queries\PlantsQuery;
 use App\Modules\Core\Queries\WarehousesQuery;
+use App\Modules\Core\Queries\WorkCentersQuery;
 
 return [
     /*
@@ -46,6 +49,9 @@ return [
         'core.plants' => PlantsQuery::class,
         'core.warehouses' => WarehousesQuery::class,
         'core.locations' => LocationsQuery::class,
+        'core.work_centers' => WorkCentersQuery::class,
+        'core.machines' => MachinesQuery::class,
+        'core.dies' => DiesQuery::class,
     ],
 
     'member_invite_per_hour' => env('EORA_MEMBER_INVITE_PER_HOUR') === null ? null : (int) env('EORA_MEMBER_INVITE_PER_HOUR'),
