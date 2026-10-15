@@ -246,6 +246,7 @@ Password **change** for a signed-in user in B1 = the same email-confirmed reset 
 | `eora_prov_definer` | **no** | schemas `prov`, `prov_api` | owner only (provisioning registry) |
 | `eora_outbox_definer` | **no** | `outbox_api` functions; column grants on `outbox_events` per §6.4 (SELECT: `id, tenant_id, status, claim_token, claimed_until, attempts, max_attempts, next_attempt_at`; UPDATE: `status, claim_token, claimed_until, attempts, next_attempt_at, last_error_code, dispatched_at, dead_at`) through policies `TO eora_outbox_definer` | owner only (outbox claim, R-30, R-33) |
 | `eora_relay` | yes | nothing | `EXECUTE` on `outbox_api.claim_events`, `complete_event`, `fail_event` only; no table privilege | outbox relay process (also holds `eora_app` credentials for handlers) |
+| `eora_lifecycle_definer` | **no** | schema `lifecycle_api` (`approve_routing_version(uuid)`, EXECUTE for `eora_app` only) | member of `eora_app` WITH INHERIT TRUE, SET FALSE: reads and writes through `eora_app`'s grants and tenant policies only; the routing-version trigger accepts APPROVED/SUPERSEDED transitions only when `current_user = 'eora_lifecycle_definer'` (doc 26 §2.4a, M2 step 3a) |
 | `eora_ctx_verifier` | **no** | schemas `ctx` (key table) and `ctx_api` (verification functions) | owner only — signed tenant context, D-B1-24 approved (D-055) |
 No role is a member of `eora_owner` or `eora_auth_definer`; `REVOKE ALL ON SCHEMA public, auth, auth_api FROM PUBLIC`.
 

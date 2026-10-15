@@ -14,7 +14,7 @@ final class SecurityBaseline
     public const array RUNTIME_ROLES = ['eora_app', 'eora_auth_web', 'eora_auth_delivery', 'eora_provisioner', 'eora_relay'];
 
     /** NOLOGIN owners of reviewed definer code; nobody may be a member of them. */
-    public const array DEFINER_OWNERS = ['eora_auth_definer', 'eora_prov_definer', 'eora_outbox_definer', 'eora_ctx_verifier'];
+    public const array DEFINER_OWNERS = ['eora_auth_definer', 'eora_prov_definer', 'eora_outbox_definer', 'eora_lifecycle_definer', 'eora_ctx_verifier'];
 
     public const string MIGRATIONS_OWNER = 'eora_owner';
 
@@ -50,6 +50,8 @@ final class SecurityBaseline
         'prov_api.mark_tenant_created(text,uuid,uuid)' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
         'prov_api.provision_lookup(text,text)' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
         'prov_api.provisioned_tenants()' => ['owner' => 'eora_prov_definer', 'execute' => ['eora_provisioner']],
+        // routing approval — doc 26 §2.4a, M2 step 3 (D-072)
+        'lifecycle_api.approve_routing_version(uuid)' => ['owner' => 'eora_lifecycle_definer', 'execute' => ['eora_app']],
         // outbox relay surface — doc 25 §6.4 (M1 step 7b), R-30/R-33
         'outbox_api.claim_events(text,integer)' => ['owner' => 'eora_outbox_definer', 'execute' => ['eora_relay']],
         'outbox_api.complete_event(uuid,uuid)' => ['owner' => 'eora_outbox_definer', 'execute' => ['eora_relay']],
@@ -78,5 +80,5 @@ final class SecurityBaseline
     ];
 
     /** Schemas whose objects are reachable only through explicit grants (no PUBLIC privilege at all). */
-    public const array PRIVATE_SCHEMAS = ['public', 'ext', 'auth', 'auth_api', 'prov', 'prov_api', 'outbox_api', 'ctx', 'ctx_api'];
+    public const array PRIVATE_SCHEMAS = ['public', 'ext', 'auth', 'auth_api', 'prov', 'prov_api', 'outbox_api', 'lifecycle_api', 'ctx', 'ctx_api'];
 }

@@ -10,6 +10,7 @@ use App\Modules\Core\Queries\SuppliersQuery;
 use App\Platform\Access\Authorizer;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Http\Concurrency;
+use App\Platform\Http\MasterWrites;
 use App\Platform\Query\QueryRunner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

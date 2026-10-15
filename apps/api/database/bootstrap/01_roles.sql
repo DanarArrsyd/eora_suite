@@ -11,7 +11,7 @@ SET pg_stat_statements.track_utility = off;
 
 -- NOLOGIN owners of reviewed definer code; nobody is ever a member of them.
 SELECT format('CREATE ROLE %I NOLOGIN', r)
-FROM unnest(ARRAY['eora_auth_definer', 'eora_prov_definer', 'eora_outbox_definer', 'eora_ctx_verifier']) AS r
+FROM unnest(ARRAY['eora_auth_definer', 'eora_prov_definer', 'eora_outbox_definer', 'eora_lifecycle_definer', 'eora_ctx_verifier']) AS r
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) \gexec
 -- LOGIN roles: migrations owner and the runtime roles (one per privilege domain, doc 25 §2.1).
 SELECT format('CREATE ROLE %I LOGIN', r)
@@ -21,7 +21,7 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) \gexec
 -- Attributes are re-asserted every run, so drift is repaired: no superuser, no BYPASSRLS, no role/database creation.
 SELECT format('ALTER ROLE %I %s NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS', r,
               CASE WHEN r LIKE '%\_definer' OR r = 'eora_ctx_verifier' THEN 'NOLOGIN' ELSE 'LOGIN' END)
-FROM unnest(ARRAY['eora_auth_definer', 'eora_prov_definer', 'eora_outbox_definer', 'eora_ctx_verifier',
+FROM unnest(ARRAY['eora_auth_definer', 'eora_prov_definer', 'eora_outbox_definer', 'eora_lifecycle_definer', 'eora_ctx_verifier',
                   'eora_owner', 'eora_app', 'eora_auth_web', 'eora_auth_delivery', 'eora_provisioner', 'eora_relay']) AS r \gexec
 
 ALTER ROLE eora_owner PASSWORD :'owner_pw';
@@ -33,6 +33,10 @@ ALTER ROLE eora_relay PASSWORD :'relay_pw';
 
 -- The provisioner inherits eora_app's privileges but can never SET ROLE to it (doc 25 §2.1, §13).
 GRANT eora_app TO eora_provisioner WITH INHERIT TRUE, SET FALSE;
+-- The routing-approval definer (doc 26 §2.4a, M2 step 3) reads and writes through eora_app's tenant policies and grants
+-- (same signed-context scope, never wider). The reverse never holds: no login role can become eora_lifecycle_definer,
+-- which is what the version guard trigger checks with current_user.
+GRANT eora_app TO eora_lifecycle_definer WITH INHERIT TRUE, SET FALSE;
 
 -- Runtime hardening (D-056 P-03, D-B1-11): bound parameters (tokens, secrets) never reach the server log;
 -- statement/lock/idle timeouts as role defaults (jobs and provisioning raise statement_timeout locally).

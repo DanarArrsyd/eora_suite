@@ -276,7 +276,13 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   `master.part.create` in any scope.
 - Commands in `App\Modules\Core\Http\OrgController` (companies, plants, warehouses, locations) and `ResourceController`
   (work centers, machines, dies — step 1b, migration `001000`; every work center gets one `MAT_AT_PROD` location
-  `MAP-<code>` from a trigger); shared write path `MasterWrites`; edits need `If-Match` (`App\Platform\Http\Concurrency`).
+  `MAP-<code>` from a trigger); shared write path `App\Platform\Http\MasterWrites`; edits need `If-Match`
+  (`App\Platform\Http\Concurrency`).
+- Routings (step 3a, migration `001300`, `App\Modules\Planning\Http\RoutingController`, `/api/v1/planning/*`):
+  process types, routings with versions (DRAFT → SUBMITTED → APPROVED → SUPERSEDED, REJECTED → DRAFT), operations with
+  machines, dies and inspection requirements. Only `lifecycle_api.approve_routing_version` (bootstrap `50_lifecycle.sql`,
+  owner NOLOGIN `eora_lifecycle_definer`) approves and supersedes; the version trigger checks `current_user`. After
+  changing `50_lifecycle.sql` re-run `db-bootstrap`.
 
 ## Endpoints (B0)
 | Method | Path | Purpose |

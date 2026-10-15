@@ -61,6 +61,17 @@ it('has no member of the migrations owner or of any definer owner', function () 
     expect($members)->toBe([]);
 })->group('integration', 'schema');
 
+it('lets the routing-approval definer use eora_app privileges without SET ROLE, and nobody become it', function () {
+    $grant = owner()->selectOne(
+        "select am.inherit_option, am.set_option from pg_auth_members am
+          where am.roleid = 'eora_app'::regrole and am.member = 'eora_lifecycle_definer'::regrole",
+    );
+
+    expect($grant)->not->toBeNull()
+        ->and($grant->inherit_option)->toBeTrue()
+        ->and($grant->set_option)->toBeFalse();
+})->group('integration', 'schema');
+
 it('grants the provisioner eora_app privileges without SET ROLE', function () {
     $grant = owner()->selectOne(
         "select am.inherit_option, am.set_option from pg_auth_members am
@@ -165,7 +176,7 @@ it('gives PUBLIC no privilege on the database or on any EORA schema', function (
 it('places the definer-owned schemas under their NOLOGIN owners', function () {
     $owners = owner()->select(
         "select nspname, pg_get_userbyid(nspowner) as owner from pg_namespace
-          where nspname in ('auth', 'auth_api', 'prov', 'prov_api', 'outbox_api', 'ctx', 'ctx_api') order by 1",
+          where nspname in ('auth', 'auth_api', 'prov', 'prov_api', 'outbox_api', 'lifecycle_api', 'ctx', 'ctx_api') order by 1",
     );
 
     expect(collect($owners)->pluck('owner', 'nspname')->all())->toBe([
@@ -173,6 +184,7 @@ it('places the definer-owned schemas under their NOLOGIN owners', function () {
         'auth_api' => 'eora_auth_definer',
         'ctx' => 'eora_ctx_verifier',
         'ctx_api' => 'eora_ctx_verifier',
+        'lifecycle_api' => 'eora_lifecycle_definer',
         'outbox_api' => 'eora_outbox_definer',
         'prov' => 'eora_prov_definer',
         'prov_api' => 'eora_prov_definer',
