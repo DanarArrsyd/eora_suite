@@ -209,7 +209,7 @@ it('approves by a second person, audits it, and supersedes the previous version 
         "select action, actor from audit_events where entity_type = 'routing_version' and action in ('routing_version.approved', 'routing_version.superseded') order by occurred_at, id",
     ));
     expect(array_column(array_map(fn ($r) => (array) $r, $audit), 'action'))
-        ->toBe(['routing_version.approved', 'routing_version.approved', 'routing_version.superseded']);
+        ->toBe(['routing_version.approved', 'routing_version.superseded', 'routing_version.approved']); // written by the lifecycle function
     expect($audit[0]->actor)->toBe($checker['id']);
 
     // approved and superseded versions never change again

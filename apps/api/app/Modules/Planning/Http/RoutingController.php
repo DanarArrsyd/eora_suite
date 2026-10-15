@@ -329,18 +329,18 @@ final class RoutingController
     }
 
     /**
-     * SUBMITTED → APPROVED by a second person, superseding the version it replaces. The database function decides:
-     * trusted actor, active membership, permission in the plant's scope, maker ≠ checker, lifecycle and content.
+     * SUBMITTED → APPROVED by a second person, superseding the version it replaces. The database function decides
+     * (trusted actor, active membership, permission in the plant's scope, maker ≠ checker, lifecycle, content) and
+     * writes both audit events itself.
      */
     public function approve(string $version): JsonResponse
     {
         $db = $this->db();
         $this->authorizer->requireAnywhere($db, self::APPROVE);
         $id = $this->existing($db, 'routing_versions', $version);
-        $before = $this->state($db, 'routing_versions', $id);
 
         try {
-            $superseded = $db->selectOne('select lifecycle_api.approve_routing_version(?) as superseded', [$id])->superseded;
+            $db->selectOne('select lifecycle_api.approve_routing_version(?) as superseded', [$id]);
         } catch (QueryException $e) {
             throw match ((string) $e->getCode()) {
                 'EO010' => new DomainProblem(403, 'SCOPE_FORBIDDEN', 'Forbidden'),
@@ -350,11 +350,6 @@ final class RoutingController
                 'P0002' => new NotFoundHttpException,
                 default => $e,
             };
-        }
-        $plant = (string) $before['plant_id'];
-        $this->audit->record($db, 'routing_version.approved', 'routing_version', $id, $before, $this->state($db, 'routing_versions', $id), ['supersedes' => $superseded], $plant);
-        if ($superseded !== null) {
-            $this->audit->record($db, 'routing_version.superseded', 'routing_version', (string) $superseded, null, $this->state($db, 'routing_versions', (string) $superseded), ['supersededBy' => $id], $plant);
         }
 
         return $this->respondVersion($db, $id);

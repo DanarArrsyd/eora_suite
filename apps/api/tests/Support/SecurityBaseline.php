@@ -26,7 +26,8 @@ final class SecurityBaseline
      */
     public const array DEFINER_FUNCTIONS = [
         // signed tenant context verifier — D-055, ADR-0001 Amendment 2, doc 25 §5.5 (reviewed in the D-B1-24 PoC)
-        'ctx_api.context()' => ['owner' => 'eora_ctx_verifier', 'execute' => ['eora_app']],
+        // (the routing-approval definer reads the signed actor itself, doc 26 §2.4a)
+        'ctx_api.context()' => ['owner' => 'eora_ctx_verifier', 'execute' => ['eora_app', 'eora_lifecycle_definer']],
         // identity and credential surface — doc 25 §2.8 (one grantee each)
         'auth_api.cleanup_orphan_identities(integer)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_delivery']],
         'auth_api.consume_password_reset(text,text)' => ['owner' => 'eora_auth_definer', 'execute' => ['eora_auth_web']],

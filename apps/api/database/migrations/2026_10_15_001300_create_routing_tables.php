@@ -407,12 +407,54 @@ return new class extends Migration
             GRANT UPDATE (status, effective_from, effective_to, change_reason, standard_yield, submitted_at, reject_reason,
                           approved_by, approved_at, superseded_by_version_id, superseded_at) ON routing_versions TO eora_app;
             GRANT DELETE ON routing_operations, routing_operation_machines, routing_operation_tools, routing_operation_inspections TO eora_app;
+
+            -- Routing-approval definer (doc 26 §2.4a): member of no role; exactly the columns the approval reads and writes,
+            -- through tenant policies bound to the signed context like eora_app's (never wider). Its only writes: the
+            -- approval/supersession columns of routing_versions and its two audit events. UPDATE (status) on routings only
+            -- makes the SELECT … FOR UPDATE lock possible; the function never updates a routing.
+            GRANT SELECT (id, timezone, status) ON tenants TO eora_lifecycle_definer;
+            GRANT SELECT (id, tenant_id, company_id) ON plants TO eora_lifecycle_definer;
+            GRANT SELECT (id, tenant_id, user_id, status) ON memberships TO eora_lifecycle_definer;
+            GRANT SELECT (tenant_id, membership_id, role_id, scope_type, company_id, plant_id, valid_from, valid_until, revoked_at) ON role_assignments TO eora_lifecycle_definer;
+            GRANT SELECT (tenant_id, role_id, permission_code) ON role_permissions TO eora_lifecycle_definer;
+            GRANT SELECT (id, tenant_id, work_center_id) ON machines TO eora_lifecycle_definer;
+            GRANT SELECT (id, tenant_id, plant_id) ON dies TO eora_lifecycle_definer;
+            GRANT SELECT (tenant_id, die_id, item_id, status) ON die_items TO eora_lifecycle_definer;
+            GRANT SELECT (id, tenant_id, plant_id, item_id) ON routings TO eora_lifecycle_definer;
+            GRANT UPDATE (status) ON routings TO eora_lifecycle_definer;
+            GRANT SELECT ON routing_versions TO eora_lifecycle_definer;
+            GRANT UPDATE (status, effective_to, superseded_by_version_id, superseded_at, approved_by, approved_at) ON routing_versions TO eora_lifecycle_definer;
+            GRANT SELECT (id, tenant_id, routing_version_id, work_center_id) ON routing_operations TO eora_lifecycle_definer;
+            GRANT SELECT (tenant_id, operation_id, machine_id) ON routing_operation_machines TO eora_lifecycle_definer;
+            GRANT SELECT (tenant_id, operation_id, die_id) ON routing_operation_tools TO eora_lifecycle_definer;
+            GRANT SELECT (tenant_id, routing_version_id, actor) ON routing_version_contributors TO eora_lifecycle_definer;
+            GRANT INSERT (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail) ON audit_events TO eora_lifecycle_definer;
+            CREATE POLICY lifecycle_definer ON tenants TO eora_lifecycle_definer USING (id = (SELECT c.tenant FROM ctx_api.context() c));
+            DO $do$
+            DECLARE t text;
+            BEGIN
+              FOREACH t IN ARRAY ARRAY['plants', 'memberships', 'role_assignments', 'role_permissions', 'machines', 'dies', 'die_items',
+                                       'routings', 'routing_versions', 'routing_operations', 'routing_operation_machines',
+                                       'routing_operation_tools', 'routing_version_contributors', 'audit_events'] LOOP
+                EXECUTE format('CREATE POLICY lifecycle_definer ON %I TO eora_lifecycle_definer USING (tenant_id = (SELECT c.tenant FROM ctx_api.context() c)) WITH CHECK (tenant_id = (SELECT c.tenant FROM ctx_api.context() c))', t);
+              END LOOP;
+            END
+            $do$;
             SQL);
     }
 
     public function down(): void
     {
         DB::unprepared(<<<'SQL'
+            DO $do$
+            DECLARE t text;
+            BEGIN
+              FOREACH t IN ARRAY ARRAY['tenants', 'plants', 'memberships', 'role_assignments', 'role_permissions', 'machines', 'dies', 'die_items', 'audit_events'] LOOP
+                EXECUTE format('DROP POLICY lifecycle_definer ON %I', t);
+              END LOOP;
+            END
+            $do$;
+            REVOKE ALL ON tenants, plants, memberships, role_assignments, role_permissions, machines, dies, die_items, audit_events FROM eora_lifecycle_definer;
             DROP TABLE routing_version_contributors;
             DROP TABLE routing_operation_inspections;
             DROP TABLE routing_operation_tools;

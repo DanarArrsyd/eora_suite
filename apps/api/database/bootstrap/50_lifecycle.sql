@@ -1,7 +1,7 @@
 -- EORA routing approval (doc 26 §2.4a, D-058 D-B2-06/14/15, D-060, D-072). Run by bootstrap.sh as the bootstrap
--- superuser after 40_outbox.sql. Idempotent. The function is owned by the NOLOGIN eora_lifecycle_definer (member of
--- eora_app with INHERIT, without SET: it reads and writes through eora_app's tenant policies only) and executable by
--- eora_app alone (definer allowlist). It is the only path that makes a routing version APPROVED or SUPERSEDED: the
+-- superuser after 40_outbox.sql. Idempotent. The function is owned by the NOLOGIN eora_lifecycle_definer (member of no
+-- role; column grants and tenant policies of its own, migration 001300) and executable by eora_app alone (definer
+-- allowlist). It is the only path that makes a routing version APPROVED or SUPERSEDED: the
 -- version guard trigger (migration 001300) checks current_user = 'eora_lifecycle_definer', which no login role can
 -- become. Tables are created by migrations; plpgsql resolves them at call time.
 \set ON_ERROR_STOP on
@@ -18,6 +18,8 @@ SET ROLE eora_lifecycle_definer;
 --   EO013 content no longer valid: no operation, no standard yield, a machine outside its operation's work center,
 --         or a tool that is not in the routing's plant or not linked to the item
 --   P0002 unknown version (also another tenant's: RLS hides it)
+-- Both audit events (routing_version.approved, routing_version.superseded) are written here, in the same transaction,
+-- with before/after hashes (sha256 of the row's jsonb text); the audit trigger stamps the trusted actor.
 CREATE OR REPLACE FUNCTION lifecycle_api.approve_routing_version(version_id uuid)
 RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
@@ -30,6 +32,8 @@ DECLARE
   today date;
   previous record;
   superseded uuid;
+  before_row jsonb;
+  after_row jsonb;
 BEGIN
   -- 1. trusted actor and tenant: the signed context only, never a setting or a parameter
   SELECT c.tenant, c.actor INTO ctx_tenant, ctx_actor FROM ctx_api.context() c;
@@ -116,13 +120,27 @@ BEGIN
     IF previous.effective_from >= ver.effective_from THEN
       RAISE EXCEPTION 'the new version must start after the version it replaces' USING ERRCODE = 'EO012';
     END IF;
+    SELECT pg_catalog.to_jsonb(rv) INTO before_row FROM public.routing_versions rv WHERE rv.id = previous.id;
     UPDATE public.routing_versions
        SET status = 'SUPERSEDED', effective_to = ver.effective_from - 1, superseded_by_version_id = ver.id, superseded_at = pg_catalog.now()
      WHERE id = previous.id;
+    SELECT pg_catalog.to_jsonb(rv) INTO after_row FROM public.routing_versions rv WHERE rv.id = previous.id;
+    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+    VALUES (ctx_tenant, 'routing_version.superseded', 'routing_version', previous.id, rt.plant_id,
+            pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
+            pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
+            pg_catalog.jsonb_build_object('supersededBy', ver.id));
     superseded := previous.id;
   END LOOP;
 
+  SELECT pg_catalog.to_jsonb(rv) INTO before_row FROM public.routing_versions rv WHERE rv.id = ver.id;
   UPDATE public.routing_versions SET status = 'APPROVED', approved_by = ctx_actor, approved_at = pg_catalog.now() WHERE id = ver.id;
+  SELECT pg_catalog.to_jsonb(rv) INTO after_row FROM public.routing_versions rv WHERE rv.id = ver.id;
+  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+  VALUES (ctx_tenant, 'routing_version.approved', 'routing_version', ver.id, rt.plant_id,
+          pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
+          pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
+          CASE WHEN superseded IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('supersedes', superseded) END);
 
   RETURN superseded;
 END
@@ -131,6 +149,10 @@ $fn$;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA lifecycle_api FROM PUBLIC;
 
 RESET ROLE;
+
+-- the signed context (doc 25 §5.5): the definer reads actor and tenant itself
+GRANT USAGE ON SCHEMA ctx_api TO eora_lifecycle_definer;
+GRANT EXECUTE ON FUNCTION ctx_api.context() TO eora_lifecycle_definer;
 
 GRANT USAGE ON SCHEMA lifecycle_api TO eora_app;
 GRANT EXECUTE ON FUNCTION lifecycle_api.approve_routing_version(uuid) TO eora_app;

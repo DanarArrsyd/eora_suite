@@ -61,15 +61,22 @@ it('has no member of the migrations owner or of any definer owner', function () 
     expect($members)->toBe([]);
 })->group('integration', 'schema');
 
-it('lets the routing-approval definer use eora_app privileges without SET ROLE, and nobody become it', function () {
-    $grant = owner()->selectOne(
-        "select am.inherit_option, am.set_option from pg_auth_members am
-          where am.roleid = 'eora_app'::regrole and am.member = 'eora_lifecycle_definer'::regrole",
-    );
+it('keeps the routing-approval definer a member of no role, holding only its own column grants', function () {
+    $memberOf = owner()->select("select roleid::regrole::text as role from pg_auth_members where member = 'eora_lifecycle_definer'::regrole");
+    expect($memberOf)->toBe([]);
 
-    expect($grant)->not->toBeNull()
-        ->and($grant->inherit_option)->toBeTrue()
-        ->and($grant->set_option)->toBeFalse();
+    // least privilege: no table-wide write privilege; column INSERT only on audit_events, column UPDATE only on
+    // routing_versions (approval/supersession) and routings (the lock)
+    $tableWrites = owner()->select(
+        "select table_name from information_schema.table_privileges
+          where grantee = 'eora_lifecycle_definer' and privilege_type in ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE')",
+    );
+    expect($tableWrites)->toBe([]);
+    $columnWrites = owner()->select(
+        "select distinct privilege_type || ':' || table_name as w from information_schema.column_privileges
+          where grantee = 'eora_lifecycle_definer' and privilege_type in ('INSERT', 'UPDATE') order by 1",
+    );
+    expect(array_column(array_map(fn ($r) => (array) $r, $columnWrites), 'w'))->toBe(['INSERT:audit_events', 'UPDATE:routing_versions', 'UPDATE:routings']);
 })->group('integration', 'schema');
 
 it('grants the provisioner eora_app privileges without SET ROLE', function () {

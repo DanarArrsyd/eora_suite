@@ -33,10 +33,16 @@ ALTER ROLE eora_relay PASSWORD :'relay_pw';
 
 -- The provisioner inherits eora_app's privileges but can never SET ROLE to it (doc 25 §2.1, §13).
 GRANT eora_app TO eora_provisioner WITH INHERIT TRUE, SET FALSE;
--- The routing-approval definer (doc 26 §2.4a, M2 step 3) reads and writes through eora_app's tenant policies and grants
--- (same signed-context scope, never wider). The reverse never holds: no login role can become eora_lifecycle_definer,
--- which is what the version guard trigger checks with current_user.
-GRANT eora_app TO eora_lifecycle_definer WITH INHERIT TRUE, SET FALSE;
+-- The routing-approval definer (doc 26 §2.4a, M2 step 3) is a member of no role: it holds only the column grants and
+-- tenant policies of migration 001300 (least privilege). No login role can become it, which is what the version guard
+-- trigger checks with current_user. (An earlier draft made it a member of eora_app; removed if present.)
+DO $do$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_auth_members WHERE roleid = 'eora_app'::regrole AND member = 'eora_lifecycle_definer'::regrole) THEN
+    REVOKE eora_app FROM eora_lifecycle_definer;
+  END IF;
+END
+$do$;
 
 -- Runtime hardening (D-056 P-03, D-B1-11): bound parameters (tokens, secrets) never reach the server log;
 -- statement/lock/idle timeouts as role defaults (jobs and provisioning raise statement_timeout locally).
