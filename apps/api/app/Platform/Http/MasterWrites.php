@@ -2,12 +2,11 @@
 
 declare(strict_types=1);
 
-namespace App\Modules\Core\Http;
+namespace App\Platform\Http;
 
 use App\Platform\Access\Scope;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Database\EoraPostgresConnection;
-use App\Platform\Http\Concurrency;
 use App\Platform\Query\QueryDefinition;
 use App\Platform\Query\QueryRunner;
 use Illuminate\Database\QueryException;

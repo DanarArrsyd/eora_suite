@@ -15,6 +15,9 @@ use App\Modules\Core\Queries\UomConversionsQuery;
 use App\Modules\Core\Queries\UomsQuery;
 use App\Modules\Core\Queries\WarehousesQuery;
 use App\Modules\Core\Queries\WorkCentersQuery;
+use App\Modules\Planning\Queries\ProcessTypesQuery;
+use App\Modules\Planning\Queries\RoutingsQuery;
+use App\Modules\Planning\Queries\RoutingVersionsQuery;
 
 return [
     /*
@@ -66,6 +69,9 @@ return [
         'core.customers' => CustomersQuery::class,
         'core.suppliers' => SuppliersQuery::class,
         'core.customer_items' => CustomerItemsQuery::class,
+        'planning.process_types' => ProcessTypesQuery::class,
+        'planning.routings' => RoutingsQuery::class,
+        'planning.routing_versions' => RoutingVersionsQuery::class,
     ],
 
     'member_invite_per_hour' => env('EORA_MEMBER_INVITE_PER_HOUR') === null ? null : (int) env('EORA_MEMBER_INVITE_PER_HOUR'),

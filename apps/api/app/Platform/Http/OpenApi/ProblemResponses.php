@@ -99,6 +99,21 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.core.suppliers.update' => self::MASTER_EDIT,
         'v1.core.customer-items.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
         'v1.core.customer-items.update' => self::MASTER_EDIT,
+        // Master Data → routings (doc 29 §1.3)
+        'v1.planning.process-types.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.planning.process-types.update' => self::MASTER_EDIT,
+        'v1.planning.routings.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.planning.routings.update' => self::MASTER_EDIT,
+        'v1.planning.routings.versions.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.routing-versions.show' => self::TENANT_READ + self::MASTER_403 + [404 => ['NOT_FOUND']],
+        'v1.planning.routing-versions.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.routing-versions.operations' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.routing-versions.submit' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.routing-versions.withdraw' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.routing-versions.reject' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.routing-versions.reopen' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        // maker ≠ checker and the plant scope are decided by lifecycle_api.approve_routing_version
+        'v1.planning.routing-versions.approve' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
     ];
 
     /** Laravel-shaped error components Scramble registers; replaced by the problem responses above. */

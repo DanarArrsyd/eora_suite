@@ -11,7 +11,7 @@ SET pg_stat_statements.track_utility = off;
 
 -- NOLOGIN owners of reviewed definer code; nobody is ever a member of them.
 SELECT format('CREATE ROLE %I NOLOGIN', r)
-FROM unnest(ARRAY['eora_auth_definer', 'eora_prov_definer', 'eora_outbox_definer', 'eora_ctx_verifier']) AS r
+FROM unnest(ARRAY['eora_auth_definer', 'eora_prov_definer', 'eora_outbox_definer', 'eora_lifecycle_definer', 'eora_ctx_verifier']) AS r
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) \gexec
 -- LOGIN roles: migrations owner and the runtime roles (one per privilege domain, doc 25 §2.1).
 SELECT format('CREATE ROLE %I LOGIN', r)
@@ -21,7 +21,7 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) \gexec
 -- Attributes are re-asserted every run, so drift is repaired: no superuser, no BYPASSRLS, no role/database creation.
 SELECT format('ALTER ROLE %I %s NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS', r,
               CASE WHEN r LIKE '%\_definer' OR r = 'eora_ctx_verifier' THEN 'NOLOGIN' ELSE 'LOGIN' END)
-FROM unnest(ARRAY['eora_auth_definer', 'eora_prov_definer', 'eora_outbox_definer', 'eora_ctx_verifier',
+FROM unnest(ARRAY['eora_auth_definer', 'eora_prov_definer', 'eora_outbox_definer', 'eora_lifecycle_definer', 'eora_ctx_verifier',
                   'eora_owner', 'eora_app', 'eora_auth_web', 'eora_auth_delivery', 'eora_provisioner', 'eora_relay']) AS r \gexec
 
 ALTER ROLE eora_owner PASSWORD :'owner_pw';
@@ -33,6 +33,16 @@ ALTER ROLE eora_relay PASSWORD :'relay_pw';
 
 -- The provisioner inherits eora_app's privileges but can never SET ROLE to it (doc 25 §2.1, §13).
 GRANT eora_app TO eora_provisioner WITH INHERIT TRUE, SET FALSE;
+-- The routing-approval definer (doc 26 §2.4a, M2 step 3) is a member of no role: it holds only the column grants and
+-- tenant policies of migration 001300 (least privilege). No login role can become it, which is what the version guard
+-- trigger checks with current_user. (An earlier draft made it a member of eora_app; removed if present.)
+DO $do$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_auth_members WHERE roleid = 'eora_app'::regrole AND member = 'eora_lifecycle_definer'::regrole) THEN
+    REVOKE eora_app FROM eora_lifecycle_definer;
+  END IF;
+END
+$do$;
 
 -- Runtime hardening (D-056 P-03, D-B1-11): bound parameters (tokens, secrets) never reach the server log;
 -- statement/lock/idle timeouts as role defaults (jobs and provisioning raise statement_timeout locally).

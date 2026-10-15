@@ -12,7 +12,7 @@ SELECT format('GRANT CONNECT ON DATABASE %I TO eora_app, eora_auth_web, eora_aut
 
 -- public: only eora_owner creates objects; runtime roles get per-table grants from migrations.
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
-GRANT USAGE ON SCHEMA public TO eora_app, eora_provisioner, eora_auth_definer, eora_prov_definer, eora_outbox_definer;
+GRANT USAGE ON SCHEMA public TO eora_app, eora_provisioner, eora_auth_definer, eora_prov_definer, eora_outbox_definer, eora_lifecycle_definer;
 
 -- Objects created by the bootstrap superuser before B1 (B0 infrastructure migration) move to eora_owner.
 DO $do$
@@ -57,13 +57,15 @@ CREATE SCHEMA IF NOT EXISTS auth_api AUTHORIZATION eora_auth_definer;
 CREATE SCHEMA IF NOT EXISTS prov AUTHORIZATION eora_prov_definer;
 CREATE SCHEMA IF NOT EXISTS prov_api AUTHORIZATION eora_prov_definer;
 CREATE SCHEMA IF NOT EXISTS outbox_api AUTHORIZATION eora_outbox_definer;
+CREATE SCHEMA IF NOT EXISTS lifecycle_api AUTHORIZATION eora_lifecycle_definer;
 CREATE SCHEMA IF NOT EXISTS ctx AUTHORIZATION eora_ctx_verifier;
 CREATE SCHEMA IF NOT EXISTS ctx_api AUTHORIZATION eora_ctx_verifier;
 ALTER SCHEMA auth OWNER TO eora_auth_definer;
 ALTER SCHEMA auth_api OWNER TO eora_auth_definer;
 ALTER SCHEMA prov OWNER TO eora_prov_definer;
 ALTER SCHEMA prov_api OWNER TO eora_prov_definer;
+ALTER SCHEMA lifecycle_api OWNER TO eora_lifecycle_definer;
 ALTER SCHEMA outbox_api OWNER TO eora_outbox_definer;
 ALTER SCHEMA ctx OWNER TO eora_ctx_verifier;
 ALTER SCHEMA ctx_api OWNER TO eora_ctx_verifier;
-REVOKE ALL ON SCHEMA auth, auth_api, prov, prov_api, outbox_api, ctx, ctx_api FROM PUBLIC;
+REVOKE ALL ON SCHEMA auth, auth_api, prov, prov_api, outbox_api, lifecycle_api, ctx, ctx_api FROM PUBLIC;

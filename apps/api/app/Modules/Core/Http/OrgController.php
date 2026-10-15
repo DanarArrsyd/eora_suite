@@ -13,6 +13,7 @@ use App\Platform\Access\Scope;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Exceptions\DomainProblem;
 use App\Platform\Http\Concurrency;
+use App\Platform\Http\MasterWrites;
 use App\Platform\Query\QueryRunner;
 use DateTimeZone;
 use Illuminate\Http\JsonResponse;

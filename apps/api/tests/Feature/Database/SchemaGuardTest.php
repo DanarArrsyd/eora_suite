@@ -61,6 +61,24 @@ it('has no member of the migrations owner or of any definer owner', function () 
     expect($members)->toBe([]);
 })->group('integration', 'schema');
 
+it('keeps the routing-approval definer a member of no role, holding only its own column grants', function () {
+    $memberOf = owner()->select("select roleid::regrole::text as role from pg_auth_members where member = 'eora_lifecycle_definer'::regrole");
+    expect($memberOf)->toBe([]);
+
+    // least privilege: no table-wide write privilege; column INSERT only on audit_events, column UPDATE only on
+    // routing_versions (approval/supersession) and routings (the lock)
+    $tableWrites = owner()->select(
+        "select table_name from information_schema.table_privileges
+          where grantee = 'eora_lifecycle_definer' and privilege_type in ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE')",
+    );
+    expect($tableWrites)->toBe([]);
+    $columnWrites = owner()->select(
+        "select distinct privilege_type || ':' || table_name as w from information_schema.column_privileges
+          where grantee = 'eora_lifecycle_definer' and privilege_type in ('INSERT', 'UPDATE') order by 1",
+    );
+    expect(array_column(array_map(fn ($r) => (array) $r, $columnWrites), 'w'))->toBe(['INSERT:audit_events', 'UPDATE:routing_versions', 'UPDATE:routings']);
+})->group('integration', 'schema');
+
 it('grants the provisioner eora_app privileges without SET ROLE', function () {
     $grant = owner()->selectOne(
         "select am.inherit_option, am.set_option from pg_auth_members am
@@ -165,7 +183,7 @@ it('gives PUBLIC no privilege on the database or on any EORA schema', function (
 it('places the definer-owned schemas under their NOLOGIN owners', function () {
     $owners = owner()->select(
         "select nspname, pg_get_userbyid(nspowner) as owner from pg_namespace
-          where nspname in ('auth', 'auth_api', 'prov', 'prov_api', 'outbox_api', 'ctx', 'ctx_api') order by 1",
+          where nspname in ('auth', 'auth_api', 'prov', 'prov_api', 'outbox_api', 'lifecycle_api', 'ctx', 'ctx_api') order by 1",
     );
 
     expect(collect($owners)->pluck('owner', 'nspname')->all())->toBe([
@@ -173,6 +191,7 @@ it('places the definer-owned schemas under their NOLOGIN owners', function () {
         'auth_api' => 'eora_auth_definer',
         'ctx' => 'eora_ctx_verifier',
         'ctx_api' => 'eora_ctx_verifier',
+        'lifecycle_api' => 'eora_lifecycle_definer',
         'outbox_api' => 'eora_outbox_definer',
         'prov' => 'eora_prov_definer',
         'prov_api' => 'eora_prov_definer',
