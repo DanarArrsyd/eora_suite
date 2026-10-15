@@ -91,10 +91,10 @@ Rule: pages never declare menus; they declare `module`, `item` and breadcrumb on
 | Inventory | Stock → Stock Overview, Raw Material, Semi-Finished Material, Finished Goods, Material at Production · Ledger → Movement Ledger, Allocations · Control → Stock Count (R2), Adjustments, Reversals, Period Close (R2) |
 | Warehouse | Inbound → FG Receipt, Putaway · Outbound → Handling Units, Picking, Packing (R2) |
 | Delivery | Shipping → Delivery Orders, Shipments, Proof of Delivery (R2) · Monitoring → Outstanding Demand |
-| Maintenance (R2) | Assets → Machines, Dies & Tooling · Work → Breakdowns, Preventive Maintenance |
+| Maintenance (R2) | Work → Breakdowns, Preventive Maintenance *(Assets → Machines, Dies & Tooling moved to Administration → Organization in M2 step 1c, 2026-10-15: they are organisation master data maintained there; maintenance work on them stays here — PROPOSED, owner review in PR)* |
 | Traceability | Lot Trace → Backward Trace, Forward Trace, Genealogy Graph (R2) · Reconciliation → Reconciliation Cases |
 | Analytics | Insights → Dashboards (R2), Reports · Data Exchange → Export Center, Import Jobs (R2) |
-| Administration | Organization → Company, Plants & Warehouses, Work Centers · Access → Users, Roles & Permissions, Approval Policies · System → Audit Log, Notification Settings (R2), Tenant Settings |
+| Administration | Organization → Company, Plants, Warehouses, Locations, Work Centers, Machines, Dies & Tooling *(live from M2 step 1c; shown with `master.org.view` or `core.users_roles.view`, each page checks its own permission)* · Access → Users, Roles & Permissions, Approval Policies · System → Audit Log, Notification Settings (R2), Tenant Settings |
 Label notes (O-017 approved, D-024): "Material Loss" → **Material Variance** for menus and general indicators; **Actual Material Loss** and **Physical Stock Discrepancy** remain as proven outcomes inside investigations and stock counts. "Finish Good" → **Finished Goods** everywhere. **Sales Orders** (D-030) and **Master Production Schedule** (D-031) are approved for V1 basic scope and placed in **R1** (D-035); Delivery Schedules follow the SO line demand identity (D-034). ~~Pending O-011 / O-014 tags~~ removed.
 
 ## 8. Responsive behaviour

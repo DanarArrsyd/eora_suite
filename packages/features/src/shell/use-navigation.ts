@@ -25,10 +25,12 @@ export function useShellNavigation(): ShellNavigation {
   const permissions = identity?.permissions;
   const modules = React.useMemo(() => {
     let allowed = source.allowedModules(role);
-    // Administration runs on the live API: shown from the user's permission hint, not from the prototype role.
+    // Administration runs on the live API: shown from the user's permission hints (access or organisation master
+    // data), not from the prototype role. Each page checks its own permission; the server enforces every call.
     if (permissions) {
       const others = allowed === '*' ? NAV_MODULES.map((m) => m.id) : [...allowed];
-      allowed = [...others.filter((id) => id !== 'admin'), ...(permissions.includes('core.users_roles.view') ? ['admin'] : [])];
+      const admin = permissions.includes('core.users_roles.view') || permissions.includes('master.org.view');
+      allowed = [...others.filter((id) => id !== 'admin'), ...(admin ? ['admin'] : [])];
     }
     return visibleModules(NAV_MODULES, { allowedModules: allowed, showPendingDecisions: false });
   }, [role, source, permissions]);

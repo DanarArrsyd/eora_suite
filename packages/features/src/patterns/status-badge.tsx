@@ -38,6 +38,12 @@ export const STATUS_CATALOGUE = {
     SUPERSEDED: { label: 'Superseded', tone: 'neutral' },
     CANCELLED: { label: 'Cancelled', tone: 'neutral' },
   },
+  /** Master-data record state (doc 29): whether a plant resource takes new use; MAINTENANCE for tooling only. */
+  master: {
+    ACTIVE: { label: 'Active', tone: 'success' },
+    INACTIVE: { label: 'Inactive', tone: 'neutral' },
+    MAINTENANCE: { label: 'In maintenance', tone: 'warning' },
+  },
   /** Tenant membership (doc 25 §2.6, doc 17): access to the workspace, independent of role assignments. */
   membership: {
     INVITED: { label: 'Invited', tone: 'info' },
