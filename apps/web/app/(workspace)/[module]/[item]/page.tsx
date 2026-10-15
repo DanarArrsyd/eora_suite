@@ -6,6 +6,8 @@ import { LoadingState } from '@eora/ui';
 import { PlannedPage } from '@/components/planned-page';
 import { ADMIN_IMPLEMENTED } from '@/modules/admin/implemented';
 import { AdminScreen } from '@/modules/admin/registry';
+import { DEMAND_MASTER_IMPLEMENTED, MASTER_IMPLEMENTED } from '@/modules/master/implemented';
+import { MasterDataScreen } from '@/modules/master/registry';
 import { PPIC_IMPLEMENTED } from '@/modules/ppic/implemented';
 import { PpicScreen } from '@/modules/ppic/registry';
 
@@ -39,6 +41,17 @@ export default async function ItemPage({ params }: { params: Promise<Params> }) 
     return (
       <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
         <AdminScreen item={item} />
+      </Suspense>
+    );
+  }
+  if (
+    (module === 'master' && (MASTER_IMPLEMENTED as readonly string[]).includes(item)) ||
+    (module === 'demand' && (DEMAND_MASTER_IMPLEMENTED as readonly string[]).includes(item))
+  ) {
+    // M2 step 2c part and partner master on the live API (D-074); Demand's master items open the same screens
+    return (
+      <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
+        <MasterDataScreen item={item} />
       </Suspense>
     );
   }

@@ -2,18 +2,22 @@ import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { useMe } from '@eora/features/auth';
-import { EoraForm, FormSelectField, FormTextField } from '@eora/features/patterns';
+import { EoraForm, FormDateField, FormSelectField, FormTextField } from '@eora/features/patterns';
 import type { Option } from '@eora/features/data';
-import { Button, Drawer, DrawerContent, InlineAlert } from '@eora/ui';
+import { Button, Drawer, DrawerContent, InlineAlert, type IsoDate } from '@eora/ui';
 import { formFailure } from '@/modules/admin/errors';
 import { queryOptions } from './source';
-import type { FieldSpec, FormValues, MasterResource, MasterRow, OptionSource } from './types';
+import { PartialSave, type FieldSpec, type FormValues, type MasterResource, type MasterRow, type OptionSource } from './types';
 
 const PICKERS: Record<OptionSource, { resource: string; label: (r: Record<string, unknown>) => string; activeOnly?: boolean }> = {
   companies: { resource: 'core.companies', label: (r) => `${String(r.code)} · ${String(r.legalName)}` },
   plants: { resource: 'core.plants', label: (r) => `${String(r.code)} · ${String(r.name)}` },
   warehouses: { resource: 'core.warehouses', label: (r) => `${String(r.plantCode)} / ${String(r.code)} · ${String(r.name)}`, activeOnly: true },
   workCenters: { resource: 'core.work_centers', label: (r) => `${String(r.plantCode)} / ${String(r.code)} · ${String(r.name)}`, activeOnly: true },
+  uoms: { resource: 'core.uoms', label: (r) => `${String(r.code)} · ${String(r.name)}`, activeOnly: true },
+  items: { resource: 'core.items', label: (r) => `${String(r.code)} · ${String(r.name)}`, activeOnly: true },
+  customers: { resource: 'core.customers', label: (r) => `${String(r.code)} · ${String(r.name)}`, activeOnly: true },
+  dies: { resource: 'core.dies', label: (r) => `${String(r.plantCode)} / ${String(r.code)} · ${String(r.name)}` },
 };
 
 function usePicker(source: OptionSource | undefined) {
@@ -34,7 +38,10 @@ function schemaFor(fields: FieldSpec[]) {
     if (f.maxLength) s = s.max(f.maxLength, `Use at most ${f.maxLength} characters.`);
     if (f.required) s = s.min(1, `Enter ${f.label.toLowerCase()}.`);
     let field: z.ZodType<string> = s;
-    if (f.code) field = s.regex(/^$|^[A-Z0-9][A-Z0-9_-]*$/, 'Use A-Z, 0-9, "_" or "-", starting with a letter or digit.');
+    if (f.code) {
+      const rule = f.codePattern ?? { pattern: /^[A-Z0-9][A-Z0-9_-]*$/, message: 'Use A-Z, 0-9, "_" or "-", starting with a letter or digit.' };
+      field = s.refine((v) => v === '' || rule.pattern.test(v), rule.message);
+    }
     if (f.kind === 'number') {
       const decimals = f.decimals ?? 0;
       const pattern = decimals === 0 ? /^$|^\d+$/ : new RegExp(`^$|^\\d+(\\.\\d{1,${decimals}})?$`);
@@ -50,8 +57,20 @@ function schemaFor(fields: FieldSpec[]) {
   return z.object(shape);
 }
 
-function FieldControl({ field }: { field: FieldSpec }) {
+function FieldControl({ field, today }: { field: FieldSpec; today: string }) {
   const picker = usePicker(typeof field.options === 'string' ? field.options : undefined);
+  if (field.kind === 'date') {
+    return (
+      <FormDateField
+        name={field.key}
+        label={field.label}
+        hint={field.hint}
+        required={field.required}
+        min={field.notBeforeToday ? (today as IsoDate) : undefined}
+        today={today as IsoDate}
+      />
+    );
+  }
   if (field.kind === 'select') {
     const options: Option[] = Array.isArray(field.options) ? field.options : (picker.data ?? []);
     const hint = picker.isError ? 'The list could not be loaded. Close and reopen to try again.' : field.hint;
@@ -100,13 +119,16 @@ export function MasterEditor<T extends MasterRow>({
   canEdit: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSaved: (message: string) => void;
+  /** Called after a save; `partial` names what was saved when a later write failed. */
+  onSaved: (message: string, partial?: boolean) => void;
 }) {
   const editing = row !== null;
   // codes and parents are fixed once created: the drawer title names the record, its facts show the parents
   const fields = editing ? config.fields.filter((f) => !f.createOnly) : config.fields.filter((f) => !f.editOnly);
   const lockedReason = row
-    ? (config.readOnly?.(row) ?? (canEdit ? undefined : 'Your roles allow viewing organisation master data, not changing it.'))
+    ? (config.appendOnly ??
+      config.readOnly?.(row) ??
+      (canEdit ? undefined : `Your roles allow viewing ${config.permission?.label ?? 'organisation master data'}, not changing it.`))
     : undefined;
   const schema = React.useMemo(() => schemaFor(fields), [fields]);
   const me = useMe();
@@ -156,12 +178,16 @@ export function MasterEditor<T extends MasterRow>({
                   onSaved(editing ? `${row.code} saved` : `${config.singular[0]?.toUpperCase()}${config.singular.slice(1)} ${clean.code ?? ''} created`.trim());
                   return { ok: true, message: editing ? 'Saved' : 'Created' };
                 } catch (e) {
+                  if (e instanceof PartialSave) {
+                    onSaved(e.message, true);
+                    return { ok: true };
+                  }
                   return conflictAware(e);
                 }
               }}
             >
               {fields.map((f) => (
-                <FieldControl key={f.key} field={f} />
+                <FieldControl key={f.key} field={f} today={todayIn(tenantZone)} />
               ))}
             </EoraForm>
           )}
@@ -177,4 +203,9 @@ function conflictAware(error: unknown) {
     return { ok: false as const, message: 'Someone changed this record after you opened it. Close the drawer, reopen the record and apply your change again.' };
   }
   return formFailure(error, 'Nothing was saved.');
+}
+
+/** Today's date (YYYY-MM-DD) in the workspace time zone (D-044). */
+function todayIn(timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }

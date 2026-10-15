@@ -94,6 +94,7 @@ Rule: pages never declare menus; they declare `module`, `item` and breadcrumb on
 | Maintenance (R2) | Assets → Machines, Dies & Tooling · Work → Breakdowns, Preventive Maintenance |
 | Traceability | Lot Trace → Backward Trace, Forward Trace, Genealogy Graph (R2) · Reconciliation → Reconciliation Cases |
 | Analytics | Insights → Dashboards (R2), Reports · Data Exchange → Export Center, Import Jobs (R2) |
+| Master Data (D-074) | Parts → Items, Units & Conversions · Partners → Customers, Customer Part Mapping, Suppliers *(Engineering → Process Types, Routings, BOMs arrive with M2 steps 3–4)*; shown with `master.part.view` |
 | Administration | Organization → Company, Plants & Warehouses, Work Centers · Access → Users, Roles & Permissions, Approval Policies · System → Audit Log, Notification Settings (R2), Tenant Settings |
 Label notes (O-017 approved, D-024): "Material Loss" → **Material Variance** for menus and general indicators; **Actual Material Loss** and **Physical Stock Discrepancy** remain as proven outcomes inside investigations and stock counts. "Finish Good" → **Finished Goods** everywhere. **Sales Orders** (D-030) and **Master Production Schedule** (D-031) are approved for V1 basic scope and placed in **R1** (D-035); Delivery Schedules follow the SO line demand identity (D-034). ~~Pending O-011 / O-014 tags~~ removed.
 
