@@ -148,3 +148,30 @@ test('demand → customers opens the same live screen; a viewer cannot change pa
     'true',
   );
 });
+
+test('items: when the item saves but its specification fails, the screen says exactly what was saved', async ({ page }) => {
+  await setup(page);
+  await mockApi(page, '/query/core.items?*', page1([]));
+  await page.route('**/api/v1/core/items**', (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ data: ITEM }) })
+      : route.fulfill({
+          status: 503,
+          contentType: 'application/problem+json',
+          body: JSON.stringify({ type: 'x', title: 'Try again', status: 503, code: 'RETRYABLE_CONFLICT', detail: 'The database was busy.' }),
+        }),
+  );
+  await page.goto('/master/items');
+  await page.getByRole('button', { name: 'New item' }).click();
+  const drawer = page.getByRole('dialog', { name: 'New item' });
+  await drawer.getByRole('textbox', { name: 'Code', exact: true }).fill('COIL-X');
+  await drawer.getByRole('textbox', { name: 'Name', exact: true }).fill('Coil X');
+  await choose(page, drawer.getByRole('combobox', { name: 'Type' }), 'Raw material');
+  await choose(page, drawer.getByRole('combobox', { name: 'Base unit' }), 'KG · Kilogram');
+  await drawer.getByRole('textbox', { name: 'Material grade' }).fill('SPCC');
+  await drawer.getByRole('button', { name: 'Create item' }).click();
+
+  await expect(drawer).toBeHidden(); // the item exists: the form is not offered again with a now-duplicate code
+  await expect(page.getByText('Saved in part')).toBeVisible();
+  await expect(page.getByText('Item COIL-X was created, but its material specification was not saved: The database was busy.', { exact: false })).toBeVisible();
+});

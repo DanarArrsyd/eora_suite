@@ -62,7 +62,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const panel = useFilterPanel();
   const [visibility, setVisibility] = React.useState<ColumnVisibility>({});
   const [editor, setEditor] = React.useState<{ open: boolean; row: T | null }>({ open: false, row: null });
-  const [notice, setNotice] = React.useState<string | null>(null);
+  const [notice, setNotice] = React.useState<{ title: string; partial: boolean } | null>(null);
 
   const rows = useQuery({
     queryKey: ['master', config.resource, query],
@@ -109,8 +109,8 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
       {heading?.sections}
       {notice ? (
         <InlineAlert
-          tone="success"
-          title={notice}
+          tone={notice.partial ? 'warning' : 'success'}
+          title={notice.partial ? 'Saved in part' : notice.title}
           className="mb-4"
           action={
             <Button size="sm" onClick={() => setNotice(null)}>
@@ -118,7 +118,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
             </Button>
           }
         >
-          The list shows the saved record.
+          {notice.partial ? notice.title : 'The list shows the saved record.'}
         </InlineAlert>
       ) : null}
       <ListWorkspace
@@ -226,9 +226,9 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
         canEdit={canCreate}
         open={editor.open}
         onOpenChange={(open) => setEditor((e) => ({ ...e, open }))}
-        onSaved={(message) => {
+        onSaved={(message, partial) => {
           setEditor({ open: false, row: null });
-          setNotice(message);
+          setNotice({ title: message, partial: !!partial });
           void client.invalidateQueries({ queryKey: ['master'] });
         }}
       />

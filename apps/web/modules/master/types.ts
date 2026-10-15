@@ -71,3 +71,14 @@ export type MasterResource<T extends MasterRow> = {
   /** A reason the record cannot be edited (e.g. virtual locations). */
   readOnly?: (row: T) => string | undefined;
 };
+
+/**
+ * A save whose first write committed and a later one failed (e.g. the item was saved, its specification was not).
+ * The screen refreshes, closes the drawer and says exactly which part was saved; nothing is reported as unsaved.
+ */
+export class PartialSave extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PartialSave';
+  }
+}

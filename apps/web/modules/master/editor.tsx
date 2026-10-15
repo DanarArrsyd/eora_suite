@@ -7,7 +7,7 @@ import type { Option } from '@eora/features/data';
 import { Button, Drawer, DrawerContent, InlineAlert, type IsoDate } from '@eora/ui';
 import { formFailure } from '@/modules/admin/errors';
 import { queryOptions } from './source';
-import type { FieldSpec, FormValues, MasterResource, MasterRow, OptionSource } from './types';
+import { PartialSave, type FieldSpec, type FormValues, type MasterResource, type MasterRow, type OptionSource } from './types';
 
 const PICKERS: Record<OptionSource, { resource: string; label: (r: Record<string, unknown>) => string; activeOnly?: boolean }> = {
   companies: { resource: 'core.companies', label: (r) => `${String(r.code)} · ${String(r.legalName)}` },
@@ -119,7 +119,8 @@ export function MasterEditor<T extends MasterRow>({
   canEdit: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSaved: (message: string) => void;
+  /** Called after a save; `partial` names what was saved when a later write failed. */
+  onSaved: (message: string, partial?: boolean) => void;
 }) {
   const editing = row !== null;
   // codes and parents are fixed once created: the drawer title names the record, its facts show the parents
@@ -177,6 +178,10 @@ export function MasterEditor<T extends MasterRow>({
                   onSaved(editing ? `${row.code} saved` : `${config.singular[0]?.toUpperCase()}${config.singular.slice(1)} ${clean.code ?? ''} created`.trim());
                   return { ok: true, message: editing ? 'Saved' : 'Created' };
                 } catch (e) {
+                  if (e instanceof PartialSave) {
+                    onSaved(e.message, true);
+                    return { ok: true };
+                  }
                   return conflictAware(e);
                 }
               }}

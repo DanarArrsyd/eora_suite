@@ -1,10 +1,10 @@
-import { api, call } from '@eora/features/auth';
+import { api, call, failureMessage } from '@eora/features/auth';
 import type { Option } from '@eora/features/data';
 import { DomainStatusBadge, type FilterField } from '@eora/features/patterns';
 import type { MasterGroup } from './master-screen';
 import { STATUS_OPTIONS } from './resources';
 import { queryOptions } from './source';
-import type { FormValues, MasterResource, MasterRow } from './types';
+import { PartialSave, type FormValues, type MasterResource, type MasterRow } from './types';
 
 /*
  * Part and partner master (doc 29 §1.2, doc 26 §2.2, D-073, D-074): units, items with their material specification,
@@ -165,6 +165,16 @@ const ITEM_CODE = { pattern: /^[A-Z0-9][A-Z0-9._/-]*$/, message: 'Use A-Z, 0-9, 
 const SPEC_KEYS = ['specGrade', 'specThicknessMm', 'specWidthMm', 'specDensityGCm3'] as const;
 const num = (v: string | null) => (v === null ? '' : String(Number(v)));
 
+/** Saves the specification after its item; a failure here never hides that the item itself was saved. */
+async function saveSpecAfter(saved: string, itemId: string, v: FormValues, specVersion: number | null) {
+  try {
+    await saveSpec(itemId, v, specVersion);
+  } catch (e) {
+    const reason = (e as { status?: number } | null)?.status === 412 ? 'someone changed it in the meantime.' : failureMessage(e, 'the request failed.');
+    throw new PartialSave(`${saved}, but its material specification was not saved: ${reason} Open the item and save the specification again.`);
+  }
+}
+
 async function saveSpec(itemId: string, v: FormValues, specVersion: number | null) {
   const body = {
     grade: v.specGrade || null,
@@ -312,7 +322,7 @@ export const ITEMS: MasterResource<ItemRow> = {
         },
       }),
     );
-    if (SPEC_KEYS.some((k) => v[k])) await saveSpec((created as { data: { id: string } }).data.id, v, null);
+    if (SPEC_KEYS.some((k) => v[k])) await saveSpecAfter(`Item ${v.code} was created`, (created as { data: { id: string } }).data.id, v, null);
     return created;
   },
   update: async (r, v) => {
@@ -327,13 +337,18 @@ export const ITEMS: MasterResource<ItemRow> = {
       'drawingRev',
       'status',
     ]);
-    if (Object.keys(diff).length) {
+    const itemChanged = Object.keys(diff).length > 0;
+    if (itemChanged) {
       const body: Record<string, unknown> = { ...diff };
       for (const k of ['lotControlled', 'inspectionRequired', 'incomingReleaseRequired']) if (k in diff) body[k] = yes(diff[k]);
       for (const k of ['drawingNo', 'drawingRev']) if (k in diff) body[k] = diff[k] || null;
       await call(() => api.PATCH('/core/items/{item}', { params: { path: { item: r.id } }, headers: ifMatch(r.version), body: body as never }));
     }
-    if (SPEC_KEYS.some((k) => (v[k] ?? '') !== (before[k] ?? ''))) await saveSpec(r.id, v, r.specVersion);
+    if (SPEC_KEYS.some((k) => (v[k] ?? '') !== (before[k] ?? ''))) {
+      // only the specification changed: a failure is an ordinary failed save (nothing was written)
+      if (itemChanged) await saveSpecAfter(`The changes to ${r.code} were saved`, r.id, v, r.specVersion);
+      else await saveSpec(r.id, v, r.specVersion);
+    }
   },
 };
 
