@@ -204,14 +204,21 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.bom_lines l WHERE l.bom_version_id = ver.id) THEN
     RAISE EXCEPTION 'a BOM version needs at least one line' USING ERRCODE = 'EO013';
   END IF;
-  -- components reachable through the approved BOMs of the components must never include the item itself
+  -- One BOM approval at a time per tenant: the cycle check below reads the approved BOM graph, and two concurrent
+  -- approvals (A → B and B → A) must not both pass before seeing each other (READ COMMITTED: statements after the lock
+  -- see the other transaction's committed approval).
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('eora.bom_graph:' || ctx_tenant::text, 0));
+
+  -- components reachable through the BOMs in force on or after this version's start must never include the item itself;
+  -- a superseded version still counts until its effective_to (it is replaced only from the new version's start)
   IF EXISTS (
     WITH RECURSIVE reach(item_id) AS (
       SELECT l.component_item_id FROM public.bom_lines l WHERE l.bom_version_id = ver.id
       UNION
       SELECT l.component_item_id
         FROM reach r
-        JOIN public.bom_versions bv ON bv.item_id = r.item_id AND bv.status = 'APPROVED'
+        JOIN public.bom_versions bv ON bv.item_id = r.item_id AND bv.status IN ('APPROVED', 'SUPERSEDED')
+                                   AND (bv.effective_to IS NULL OR bv.effective_to >= ver.effective_from)
         JOIN public.bom_lines l ON l.bom_version_id = bv.id
     )
     SELECT 1 FROM reach WHERE reach.item_id = ver.item_id

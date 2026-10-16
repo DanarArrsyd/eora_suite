@@ -260,3 +260,28 @@ it('drops stale map lines when a withdrawn BOM version changes; the map cannot b
     spa($this)->getJson('/api/v1/planning/bom-routing-maps/'.$map['id'])->assertJsonPath('data.lineCount', 0);
     spa($this)->postJson('/api/v1/planning/bom-routing-maps/'.$map['id'].'/actions/submit')->assertStatus(422);
 })->group('integration', 'master');
+
+it('counts a superseded version that is still in force when checking for component cycles', function () {
+    orgUser($this, $this->t, 'CSA');
+    $a = bomItem($this, $this->t, 'PART-A-BLK', 'SEMI_FINISHED');
+    $b = bomItem($this, $this->t, 'PART-A-BND', 'SEMI_FINISHED');
+    $c = bomItem($this, $this->t, 'COIL-1', 'RAW', 'KG');
+    // A v1 (from today) consumes B; A v2 (from tomorrow) consumes C, which supersedes v1 from tomorrow only
+    $a1 = bomDraft($this, $this->t, $a, [[$b, '1']]);
+    spa($this)->postJson('/api/v1/planning/bom-versions/'.$a1['id'].'/actions/submit')->assertOk();
+    rtSwitch($this, $this->t, 'CSA');
+    spa($this)->postJson('/api/v1/planning/bom-versions/'.$a1['id'].'/actions/approve')->assertOk();
+    $a2 = spa($this)->postJson('/api/v1/planning/bom-versions', ['itemId' => $a['id'], 'effectiveFrom' => rtDay($this->t, 1), 'changeReason' => 'coil instead'])->assertCreated()->json('data');
+    spa($this)->putJson('/api/v1/planning/bom-versions/'.$a2['id'].'/lines', ['lines' => [['lineNo' => 10, 'componentItemId' => $c['id'], 'grossQtyPer' => '1', 'uomId' => $c['baseUomId']]]], ['If-Match' => '"'.$a2['version'].'"'])->assertOk();
+    spa($this)->postJson('/api/v1/planning/bom-versions/'.$a2['id'].'/actions/submit')->assertOk();
+    rtSwitch($this, $this->t, 'CSA');
+    spa($this)->postJson('/api/v1/planning/bom-versions/'.$a2['id'].'/actions/approve')->assertOk();
+    spa($this)->getJson('/api/v1/planning/bom-versions/'.$a1['id'])->assertJsonPath('data.status', 'SUPERSEDED')->assertJsonPath('data.effectiveTo', rtDay($this->t));
+
+    // B from today consuming A would close A v1 → B → A today
+    $b1 = bomDraft($this, $this->t, $b, [[$a, '1']]);
+    spa($this)->postJson('/api/v1/planning/bom-versions/'.$b1['id'].'/actions/submit')->assertOk();
+    rtSwitch($this, $this->t, 'CSA');
+    spa($this)->postJson('/api/v1/planning/bom-versions/'.$b1['id'].'/actions/approve')->assertStatus(422)
+        ->assertJsonPath('errors.version.0', 'The components would consume the item itself (a cycle through the BOMs).');
+})->group('integration', 'master');
