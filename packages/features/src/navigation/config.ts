@@ -469,6 +469,7 @@ export const NAV_MODULES: readonly NavModule[] = [
         items: [
           { id: 'process-types', label: 'Process Types', icon: Cog, release: 'R1', permission: 'master.routing.view', phase: 'later' },
           { id: 'routings', label: 'Routings', icon: GitBranch, release: 'R1', permission: 'master.routing.view', phase: 'later' },
+          { id: 'boms', label: 'BOMs', icon: Layers, release: 'R1', permission: 'master.routing.view', phase: 'later' },
         ],
       },
     ],

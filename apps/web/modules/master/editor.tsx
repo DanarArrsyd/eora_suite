@@ -9,13 +9,23 @@ import { formFailure } from '@/modules/admin/errors';
 import { queryOptions } from './source';
 import { PartialSave, type FieldSpec, type FormValues, type MasterResource, type MasterRow, type OptionSource } from './types';
 
-const PICKERS: Record<OptionSource, { resource: string; label: (r: Record<string, unknown>) => string; activeOnly?: boolean }> = {
+const PICKERS: Record<
+  OptionSource,
+  { resource: string; label: (r: Record<string, unknown>) => string; activeOnly?: boolean; filters?: Record<string, string[]> }
+> = {
   companies: { resource: 'core.companies', label: (r) => `${String(r.code)} · ${String(r.legalName)}` },
   plants: { resource: 'core.plants', label: (r) => `${String(r.code)} · ${String(r.name)}` },
   warehouses: { resource: 'core.warehouses', label: (r) => `${String(r.plantCode)} / ${String(r.code)} · ${String(r.name)}`, activeOnly: true },
   workCenters: { resource: 'core.work_centers', label: (r) => `${String(r.plantCode)} / ${String(r.code)} · ${String(r.name)}`, activeOnly: true },
   uoms: { resource: 'core.uoms', label: (r) => `${String(r.code)} · ${String(r.name)}`, activeOnly: true },
   items: { resource: 'core.items', label: (r) => `${String(r.code)} · ${String(r.name)}`, activeOnly: true },
+  // items that are made, so they have a BOM (finished goods and Semi-Finished Material)
+  madeItems: {
+    resource: 'core.items',
+    label: (r) => `${String(r.code)} · ${String(r.name)}`,
+    activeOnly: true,
+    filters: { itemType: ['FINISHED', 'SEMI_FINISHED'] },
+  },
   customers: { resource: 'core.customers', label: (r) => `${String(r.code)} · ${String(r.name)}`, activeOnly: true },
   dies: { resource: 'core.dies', label: (r) => `${String(r.plantCode)} / ${String(r.code)} · ${String(r.name)}` },
 };
@@ -24,7 +34,7 @@ function usePicker(source: OptionSource | undefined) {
   const p = source ? PICKERS[source] : undefined;
   return useQuery({
     queryKey: ['master', 'picker', source],
-    queryFn: ({ signal }) => queryOptions(p!.resource, p!.label, p!.activeOnly ? { status: 'ACTIVE' } : {}, signal),
+    queryFn: ({ signal }) => queryOptions(p!.resource, p!.label, { ...(p!.activeOnly ? { status: 'ACTIVE' } : {}), ...(p!.filters ?? {}) }, signal),
     enabled: !!p,
     staleTime: 30_000,
   });

@@ -3,7 +3,6 @@
 import * as React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, FilePlus2, Pencil, Plus, Trash2 } from 'lucide-react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { z } from 'zod';
 import { api, call, useMe } from '@eora/features/auth';
@@ -34,17 +33,25 @@ import {
   ErrorState,
   InlineAlert,
   LoadingState,
-  Modal,
-  ModalBody,
-  ModalContent,
   PermissionDeniedState,
   Tooltip,
   type IsoDate,
 } from '@eora/ui';
-import { actionMessage, formFailure } from '@/modules/admin/errors';
+import { formFailure } from '@/modules/admin/errors';
 import { ROUTING_KINDS, ROUTINGS, yieldPercent, type RoutingRow } from './engineering-resources';
 import { MasterScreen } from './master-screen';
 import { queryAll, queryOptions, querySource } from './source';
+import {
+  ApprovalPanel,
+  VersionStrip,
+  conflictFailure,
+  conflictMessage,
+  dayRange,
+  todayIn,
+  when,
+  type LifecycleAction,
+  type LifecycleStatus,
+} from './version-ui';
 
 /*
  * Routing page (doc 29 §1.3, doc 26 §2.3–§2.4a, page template §3): one routing with its version history. The version
@@ -53,7 +60,7 @@ import { queryAll, queryOptions, querySource } from './source';
  * the server and the database decide, the screen only offers what the user's roles allow.
  */
 
-type VersionStatus = 'DRAFT' | 'SUBMITTED' | 'REJECTED' | 'APPROVED' | 'SUPERSEDED';
+type VersionStatus = LifecycleStatus;
 type VersionRow = {
   id: string;
   routingId: string;
@@ -123,8 +130,6 @@ const YES_NO: Option[] = [
 ];
 const basisLabel = (b: string) => CYCLE_BASES.find((o) => o.value === b)?.label.toLowerCase() ?? b;
 const ifMatch = (version: number) => ({ 'If-Match': `"${version}"` });
-const dayRange = (from: string, to: string | null) => (to ? `${from} to ${to}` : `From ${from}, until replaced`);
-const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '');
 
 function toInput(op: Operation): OperationInput {
   return {
@@ -313,7 +318,17 @@ function RoutingPage({ id }: { id: string }) {
           {statusError}
         </InlineAlert>
       ) : null}
-      <VersionStrip versions={versions.data ?? []} selectedId={selectedId} routingId={id} currentId={r.currentVersionId} />
+      <VersionStrip
+        items={(versions.data ?? []).map((v) => ({
+          id: v.id,
+          label: `Version ${v.versionNo}`,
+          status: v.status,
+          detail: dayRange(v.effectiveFrom, v.effectiveTo),
+          inUse: v.id === r.currentVersionId,
+        }))}
+        selectedId={selectedId}
+        hrefFor={(versionId) => `/master/routings?routing=${id}&version=${versionId}`}
+      />
       {(detail.isPending && selectedId) || (versions.isPending && !versions.isError) ? (
         <LoadingState title="Loading version" />
       ) : detail.isError ? (
@@ -334,8 +349,19 @@ function RoutingPage({ id }: { id: string }) {
           onChanged={refresh}
           approval={
             <ApprovalPanel
-              version={detail.data}
+              label={`Version ${detail.data.versionNo}`}
+              record={detail.data}
               can={can}
+              missing={[!detail.data.standardYield ? 'the standard yield' : null, detail.data.operations.length === 0 ? 'at least one operation' : null].filter(
+                (m): m is string => m !== null,
+              )}
+              approvedNote="Approved versions never change. Use New version to change the routing."
+              act={(action) => routingAction(detail.data!.id, action)}
+              reject={(reason) =>
+                call(() =>
+                  api.POST('/planning/routing-versions/{version}/actions/reject', { params: { path: { version: detail.data!.id } }, body: { reason } }),
+                )
+              }
               onDone={(message) => {
                 setNotice(message);
                 void refresh();
@@ -992,192 +1018,16 @@ function ToolField({ routing }: { routing: RoutingRow }) {
   );
 }
 
-type Can = { view: boolean; create: boolean; submit: boolean; approve: boolean };
-
-/**
- * Maker → checker (EoraApprovalPanel): the steps of this version and the actions the user's roles allow in its state.
- * Whether the user prepared or edited it is decided by the server (403 SOD_VIOLATION); the panel says so up front.
- */
-function ApprovalPanel({ version, can, onDone }: { version: VersionDetail; can: Can; onDone: (message: string) => void }) {
-  const [error, setError] = React.useState<string | null>(null);
-  const [busy, setBusy] = React.useState<string | null>(null);
-  const [rejecting, setRejecting] = React.useState(false);
-  const n = version.versionNo;
-
-  const act = async (action: 'submit' | 'withdraw' | 'reopen' | 'approve', done: string) => {
-    setError(null);
-    setBusy(action);
-    try {
-      const params = { path: { version: version.id } };
-      await call(() =>
-        action === 'submit'
-          ? api.POST('/planning/routing-versions/{version}/actions/submit', { params })
-          : action === 'withdraw'
-            ? api.POST('/planning/routing-versions/{version}/actions/withdraw', { params })
-            : action === 'reopen'
-              ? api.POST('/planning/routing-versions/{version}/actions/reopen', { params })
-              : api.POST('/planning/routing-versions/{version}/actions/approve', { params }),
-      );
-      onDone(done);
-    } catch (e) {
-      setError(actionMessage(e, 'Nothing changed.'));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const submittedStep = version.status === 'DRAFT' ? 'Not yet' : version.status === 'REJECTED' ? 'Rejected' : 'Done';
-  const approvedStep =
-    version.status === 'APPROVED' || version.status === 'SUPERSEDED'
-      ? `${version.approvedByName ?? 'Approved'}, ${when(version.approvedAt)}`
-      : version.status === 'SUBMITTED'
-        ? 'Waiting for a second person'
-        : 'Not yet';
-  const missing = [!version.standardYield ? 'the standard yield' : null, version.operations.length === 0 ? 'at least one operation' : null].filter(Boolean);
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Approval</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <ol className="m-0 flex list-none flex-col gap-2.5 p-0 text-[13.5px]">
-          <li>
-            <span className="text-ink-2">Prepared</span>
-            <span className="block text-ink">{version.preparedByName ?? '—'}</span>
-          </li>
-          <li>
-            <span className="text-ink-2">Submitted</span>
-            <span className="block text-ink">{submittedStep}</span>
-          </li>
-          <li>
-            <span className="text-ink-2">Approved</span>
-            <span className="block text-ink">{approvedStep}</span>
-          </li>
-        </ol>
-        <p className="m-0 text-[12.5px] text-ink-2">Approved by someone who did not prepare or edit this version.</p>
-        {error ? (
-          <InlineAlert tone="danger" title="Not done">
-            {error}
-          </InlineAlert>
-        ) : null}
-        <div className="flex flex-col gap-2">
-          {version.status === 'DRAFT' && can.submit ? (
-            <>
-              {missing.length ? <p className="m-0 text-[13px] text-ink-2">Before submitting, add {missing.join(' and ')}.</p> : null}
-              <Button variant="primary" disabled={!!busy} onClick={() => void act('submit', `Version ${n} submitted for approval`)}>
-                {busy === 'submit' ? 'Submitting…' : 'Submit for approval'}
-              </Button>
-            </>
-          ) : null}
-          {version.status === 'SUBMITTED' && can.approve ? (
-            <>
-              <Button variant="primary" disabled={!!busy} onClick={() => void act('approve', `Version ${n} approved`)}>
-                {busy === 'approve' ? 'Approving…' : 'Approve'}
-              </Button>
-              <Button disabled={!!busy} onClick={() => setRejecting(true)}>
-                Reject
-              </Button>
-            </>
-          ) : null}
-          {version.status === 'SUBMITTED' && can.submit ? (
-            <Button disabled={!!busy} onClick={() => void act('withdraw', `Version ${n} withdrawn to Draft`)}>
-              {busy === 'withdraw' ? 'Withdrawing…' : 'Withdraw to edit'}
-            </Button>
-          ) : null}
-          {version.status === 'REJECTED' && can.submit ? (
-            <Button disabled={!!busy} onClick={() => void act('reopen', `Version ${n} reopened as Draft`)}>
-              {busy === 'reopen' ? 'Reopening…' : 'Reopen to edit'}
-            </Button>
-          ) : null}
-          {version.status === 'APPROVED' || version.status === 'SUPERSEDED' ? (
-            <p className="m-0 text-[13px] text-ink-2">Approved versions never change. Use New version to change the routing.</p>
-          ) : null}
-        </div>
-      </CardContent>
-      <Modal open={rejecting} onOpenChange={setRejecting}>
-        <ModalContent title={`Reject version ${n}`} description="The preparer sees the reason and can reopen the version to rework it." closeLabel="Close">
-          <ModalBody>
-            <EoraForm
-              label={`Reject version ${n}`}
-              schema={z.object({ reason: z.string().trim().min(3, 'Say what has to change.').max(500, 'Use at most 500 characters.') })}
-              defaultValues={{ reason: '' }}
-              submitLabel="Reject version"
-              secondary={
-                <Button type="button" onClick={() => setRejecting(false)}>
-                  Cancel
-                </Button>
-              }
-              onSubmit={async (v) => {
-                try {
-                  await call(() =>
-                    api.POST('/planning/routing-versions/{version}/actions/reject', { params: { path: { version: version.id } }, body: { reason: v.reason } }),
-                  );
-                  setRejecting(false);
-                  onDone(`Version ${n} rejected`);
-                  return { ok: true };
-                } catch (e) {
-                  return formFailure(e, 'The version was not rejected.');
-                }
-              }}
-            >
-              <FormTextareaField name="reason" label="Reason" required rows={3} maxLength={500} />
-            </EoraForm>
-          </ModalBody>
-        </ModalContent>
-      </Modal>
-    </Card>
+/** One lifecycle action on a routing version. */
+function routingAction(version: string, action: LifecycleAction) {
+  const params = { path: { version } };
+  return call(() =>
+    action === 'submit'
+      ? api.POST('/planning/routing-versions/{version}/actions/submit', { params })
+      : action === 'withdraw'
+        ? api.POST('/planning/routing-versions/{version}/actions/withdraw', { params })
+        : action === 'reopen'
+          ? api.POST('/planning/routing-versions/{version}/actions/reopen', { params })
+          : api.POST('/planning/routing-versions/{version}/actions/approve', { params }),
   );
-}
-
-/** Version switcher under the page header: newest first; the one in use today is marked. */
-function VersionStrip({
-  versions,
-  selectedId,
-  routingId,
-  currentId,
-}: {
-  versions: VersionRow[];
-  selectedId: string | null;
-  routingId: string;
-  currentId: string | null;
-}) {
-  if (versions.length === 0) return null;
-  return (
-    <nav aria-label="Versions" className="mb-5 flex gap-2 overflow-x-auto pb-1">
-      {versions.map((v) => (
-        <Link
-          key={v.id}
-          href={`/master/routings?routing=${routingId}&version=${v.id}`}
-          replace
-          aria-current={v.id === selectedId ? 'page' : undefined}
-          className="flex shrink-0 flex-col gap-0.5 rounded-md border border-line bg-surface px-3 py-2 text-[13.5px] text-ink no-underline hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring aria-[current=page]:border-accent aria-[current=page]:ring-1 aria-[current=page]:ring-accent max-md:min-h-11"
-        >
-          <span className="flex items-center gap-2 font-medium whitespace-nowrap">
-            Version {v.versionNo} <DomainStatusBadge domain="version" status={v.status} />
-            {v.id === currentId ? <span className="text-[12px] font-normal text-ink-2">In use</span> : null}
-          </span>
-          <span className="text-[12.5px] whitespace-nowrap text-ink-2">{dayRange(v.effectiveFrom, v.effectiveTo)}</span>
-        </Link>
-      ))}
-    </nav>
-  );
-}
-
-/** A stale ETag means someone else saved first: say so instead of overwriting. */
-function conflictMessage(error: unknown, fallback: string): string {
-  const status = (error as { status?: number } | null)?.status;
-  if (status === 412) return 'Someone changed this version after you opened it. The page shows the latest; apply your change again.';
-  return actionMessage(error, fallback);
-}
-
-function conflictFailure(error: unknown, fallback: string) {
-  const status = (error as { status?: number } | null)?.status;
-  if (status === 412) return { ok: false as const, message: conflictMessage(error, fallback) };
-  return formFailure(error, fallback);
-}
-
-/** Today's date (YYYY-MM-DD) in the workspace time zone (D-044). */
-function todayIn(timeZone: string): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
