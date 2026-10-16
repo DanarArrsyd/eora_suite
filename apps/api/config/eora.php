@@ -15,6 +15,8 @@ use App\Modules\Core\Queries\UomConversionsQuery;
 use App\Modules\Core\Queries\UomsQuery;
 use App\Modules\Core\Queries\WarehousesQuery;
 use App\Modules\Core\Queries\WorkCentersQuery;
+use App\Modules\Planning\Queries\BomRoutingMapsQuery;
+use App\Modules\Planning\Queries\BomVersionsQuery;
 use App\Modules\Planning\Queries\ProcessTypesQuery;
 use App\Modules\Planning\Queries\RoutingsQuery;
 use App\Modules\Planning\Queries\RoutingVersionsQuery;
@@ -72,6 +74,8 @@ return [
         'planning.process_types' => ProcessTypesQuery::class,
         'planning.routings' => RoutingsQuery::class,
         'planning.routing_versions' => RoutingVersionsQuery::class,
+        'planning.bom_versions' => BomVersionsQuery::class,
+        'planning.bom_routing_maps' => BomRoutingMapsQuery::class,
     ],
 
     'member_invite_per_hour' => env('EORA_MEMBER_INVITE_PER_HOUR') === null ? null : (int) env('EORA_MEMBER_INVITE_PER_HOUR'),
