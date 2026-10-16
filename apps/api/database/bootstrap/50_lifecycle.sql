@@ -146,6 +146,208 @@ BEGIN
 END
 $fn$;
 
+-- Approves a SUBMITTED BOM version for the signed actor and supersedes the version it replaces (doc 26 §2.5, D-078).
+-- BOMs are per item and tenant-wide: master.routing.approve in any valid scope suffices (D-078). Same error codes as
+-- approve_routing_version; EO013 also for a version without lines or a component chain that reaches the item itself
+-- (Option M chains must be acyclic, doc 26 §3 point 8).
+CREATE OR REPLACE FUNCTION lifecycle_api.approve_bom_version(version_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
+DECLARE
+  ctx_tenant uuid;
+  ctx_actor uuid;
+  ver record;
+  today date;
+  previous record;
+  superseded uuid;
+  before_row jsonb;
+  after_row jsonb;
+BEGIN
+  SELECT c.tenant, c.actor INTO ctx_tenant, ctx_actor FROM ctx_api.context() c;
+  IF ctx_tenant IS NULL OR ctx_actor IS NULL THEN
+    RAISE EXCEPTION 'no trusted actor' USING ERRCODE = 'EO010';
+  END IF;
+  SELECT (pg_catalog.now() AT TIME ZONE t.timezone)::date INTO today
+    FROM public.tenants t WHERE t.id = ctx_tenant AND t.status = 'ACTIVE';
+  IF today IS NULL THEN
+    RAISE EXCEPTION 'tenant not active' USING ERRCODE = 'EO010';
+  END IF;
+
+  SELECT bv.* INTO ver FROM public.bom_versions bv WHERE bv.id = version_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'unknown BOM version' USING ERRCODE = 'P0002';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.role_assignments ra
+      JOIN public.memberships m ON m.tenant_id = ra.tenant_id AND m.id = ra.membership_id AND m.status = 'ACTIVE' AND m.user_id = ctx_actor
+      JOIN public.role_permissions rp ON rp.tenant_id = ra.tenant_id AND rp.role_id = ra.role_id AND rp.permission_code = 'master.routing.approve'
+     WHERE ra.revoked_at IS NULL AND ra.valid_from <= pg_catalog.now() AND (ra.valid_until IS NULL OR ra.valid_until > pg_catalog.now())
+  ) THEN
+    RAISE EXCEPTION 'not allowed to approve BOMs' USING ERRCODE = 'EO010';
+  END IF;
+
+  IF ver.prepared_by = ctx_actor OR EXISTS (
+    SELECT 1 FROM public.bom_version_contributors bc WHERE bc.bom_version_id = ver.id AND bc.actor = ctx_actor
+  ) THEN
+    RAISE EXCEPTION 'an author of the version cannot approve it' USING ERRCODE = 'EO011';
+  END IF;
+
+  IF ver.status <> 'SUBMITTED' THEN
+    RAISE EXCEPTION 'only a submitted version can be approved' USING ERRCODE = 'EO012';
+  END IF;
+  IF ver.effective_from < today THEN
+    RAISE EXCEPTION 'the version would take effect in the past' USING ERRCODE = 'EO012';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.bom_lines l WHERE l.bom_version_id = ver.id) THEN
+    RAISE EXCEPTION 'a BOM version needs at least one line' USING ERRCODE = 'EO013';
+  END IF;
+  -- components reachable through the approved BOMs of the components must never include the item itself
+  IF EXISTS (
+    WITH RECURSIVE reach(item_id) AS (
+      SELECT l.component_item_id FROM public.bom_lines l WHERE l.bom_version_id = ver.id
+      UNION
+      SELECT l.component_item_id
+        FROM reach r
+        JOIN public.bom_versions bv ON bv.item_id = r.item_id AND bv.status = 'APPROVED'
+        JOIN public.bom_lines l ON l.bom_version_id = bv.id
+    )
+    SELECT 1 FROM reach WHERE reach.item_id = ver.item_id
+  ) THEN
+    RAISE EXCEPTION 'the components would consume the item itself (a cycle through the BOMs)' USING ERRCODE = 'EO013';
+  END IF;
+
+  FOR previous IN
+    SELECT bv.id, bv.effective_from FROM public.bom_versions bv
+     WHERE bv.item_id = ver.item_id AND bv.status = 'APPROVED' AND bv.id <> ver.id
+       AND (bv.effective_to IS NULL OR bv.effective_to >= ver.effective_from)
+     FOR UPDATE
+  LOOP
+    IF previous.effective_from >= ver.effective_from THEN
+      RAISE EXCEPTION 'the new version must start after the version it replaces' USING ERRCODE = 'EO012';
+    END IF;
+    SELECT pg_catalog.to_jsonb(bv) INTO before_row FROM public.bom_versions bv WHERE bv.id = previous.id;
+    UPDATE public.bom_versions
+       SET status = 'SUPERSEDED', effective_to = ver.effective_from - 1, superseded_by_version_id = ver.id, superseded_at = pg_catalog.now()
+     WHERE id = previous.id;
+    SELECT pg_catalog.to_jsonb(bv) INTO after_row FROM public.bom_versions bv WHERE bv.id = previous.id;
+    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+    VALUES (ctx_tenant, 'bom_version.superseded', 'bom_version', previous.id, NULL,
+            pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
+            pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
+            pg_catalog.jsonb_build_object('supersededBy', ver.id));
+    superseded := previous.id;
+  END LOOP;
+
+  SELECT pg_catalog.to_jsonb(bv) INTO before_row FROM public.bom_versions bv WHERE bv.id = ver.id;
+  UPDATE public.bom_versions SET status = 'APPROVED', approved_by = ctx_actor, approved_at = pg_catalog.now() WHERE id = ver.id;
+  SELECT pg_catalog.to_jsonb(bv) INTO after_row FROM public.bom_versions bv WHERE bv.id = ver.id;
+  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+  VALUES (ctx_tenant, 'bom_version.approved', 'bom_version', ver.id, NULL,
+          pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
+          pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
+          CASE WHEN superseded IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('supersedes', superseded) END);
+
+  RETURN superseded;
+END
+$fn$;
+
+-- Approves a SUBMITTED BOM–routing map revision and supersedes the approved revision of the same version pair (doc 26
+-- §2.5, D-079). Permission in a scope covering the routing's plant; maker ≠ checker over every author; both versions
+-- APPROVED; every BOM line of the version mapped exactly once (the UNIQUE on map lines forbids twice).
+CREATE OR REPLACE FUNCTION lifecycle_api.approve_bom_routing_map(map_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
+DECLARE
+  ctx_tenant uuid;
+  ctx_actor uuid;
+  mp record;
+  plant_company uuid;
+  previous record;
+  superseded uuid;
+  before_row jsonb;
+  after_row jsonb;
+BEGIN
+  SELECT c.tenant, c.actor INTO ctx_tenant, ctx_actor FROM ctx_api.context() c;
+  IF ctx_tenant IS NULL OR ctx_actor IS NULL THEN
+    RAISE EXCEPTION 'no trusted actor' USING ERRCODE = 'EO010';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.tenants t WHERE t.id = ctx_tenant AND t.status = 'ACTIVE') THEN
+    RAISE EXCEPTION 'tenant not active' USING ERRCODE = 'EO010';
+  END IF;
+
+  SELECT m.* INTO mp FROM public.bom_routing_maps m WHERE m.id = map_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'unknown map' USING ERRCODE = 'P0002';
+  END IF;
+
+  SELECT p.company_id INTO plant_company FROM public.plants p WHERE p.id = mp.plant_id;
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.role_assignments ra
+      JOIN public.memberships m ON m.tenant_id = ra.tenant_id AND m.id = ra.membership_id AND m.status = 'ACTIVE' AND m.user_id = ctx_actor
+      JOIN public.role_permissions rp ON rp.tenant_id = ra.tenant_id AND rp.role_id = ra.role_id AND rp.permission_code = 'master.routing.approve'
+     WHERE ra.revoked_at IS NULL AND ra.valid_from <= pg_catalog.now() AND (ra.valid_until IS NULL OR ra.valid_until > pg_catalog.now())
+       AND (ra.scope_type = 'TENANT'
+            OR (ra.scope_type = 'COMPANY' AND ra.company_id = plant_company)
+            OR (ra.scope_type = 'PLANT' AND ra.plant_id = mp.plant_id))
+  ) THEN
+    RAISE EXCEPTION 'not allowed to approve this map' USING ERRCODE = 'EO010';
+  END IF;
+
+  IF mp.prepared_by = ctx_actor OR EXISTS (
+    SELECT 1 FROM public.bom_map_contributors mc WHERE mc.map_id = mp.id AND mc.actor = ctx_actor
+  ) THEN
+    RAISE EXCEPTION 'an author of the map cannot approve it' USING ERRCODE = 'EO011';
+  END IF;
+
+  IF mp.status <> 'SUBMITTED' THEN
+    RAISE EXCEPTION 'only a submitted map can be approved' USING ERRCODE = 'EO012';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.bom_versions b WHERE b.id = mp.bom_version_id AND b.status = 'APPROVED')
+     OR NOT EXISTS (SELECT 1 FROM public.routing_versions r WHERE r.id = mp.routing_version_id AND r.status = 'APPROVED') THEN
+    RAISE EXCEPTION 'approve the BOM version and the routing version first' USING ERRCODE = 'EO012';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.bom_lines l
+     WHERE l.bom_version_id = mp.bom_version_id
+       AND NOT EXISTS (SELECT 1 FROM public.bom_routing_map_lines ml WHERE ml.map_id = mp.id AND ml.bom_line_id = l.id)
+  ) THEN
+    RAISE EXCEPTION 'every BOM line needs an operation' USING ERRCODE = 'EO013';
+  END IF;
+
+  FOR previous IN
+    SELECT m.id FROM public.bom_routing_maps m
+     WHERE m.bom_version_id = mp.bom_version_id AND m.routing_version_id = mp.routing_version_id AND m.status = 'APPROVED' AND m.id <> mp.id
+     FOR UPDATE
+  LOOP
+    SELECT pg_catalog.to_jsonb(m) INTO before_row FROM public.bom_routing_maps m WHERE m.id = previous.id;
+    UPDATE public.bom_routing_maps SET status = 'SUPERSEDED', superseded_by_map_id = mp.id, superseded_at = pg_catalog.now() WHERE id = previous.id;
+    SELECT pg_catalog.to_jsonb(m) INTO after_row FROM public.bom_routing_maps m WHERE m.id = previous.id;
+    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+    VALUES (ctx_tenant, 'bom_routing_map.superseded', 'bom_routing_map', previous.id, mp.plant_id,
+            pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
+            pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
+            pg_catalog.jsonb_build_object('supersededBy', mp.id));
+    superseded := previous.id;
+  END LOOP;
+
+  SELECT pg_catalog.to_jsonb(m) INTO before_row FROM public.bom_routing_maps m WHERE m.id = mp.id;
+  UPDATE public.bom_routing_maps SET status = 'APPROVED', approved_by = ctx_actor, approved_at = pg_catalog.now() WHERE id = mp.id;
+  SELECT pg_catalog.to_jsonb(m) INTO after_row FROM public.bom_routing_maps m WHERE m.id = mp.id;
+  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+  VALUES (ctx_tenant, 'bom_routing_map.approved', 'bom_routing_map', mp.id, mp.plant_id,
+          pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
+          pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
+          CASE WHEN superseded IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('supersedes', superseded) END);
+
+  RETURN superseded;
+END
+$fn$;
+
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA lifecycle_api FROM PUBLIC;
 
 RESET ROLE;
@@ -156,3 +358,5 @@ GRANT EXECUTE ON FUNCTION ctx_api.context() TO eora_lifecycle_definer;
 
 GRANT USAGE ON SCHEMA lifecycle_api TO eora_app;
 GRANT EXECUTE ON FUNCTION lifecycle_api.approve_routing_version(uuid) TO eora_app;
+GRANT EXECUTE ON FUNCTION lifecycle_api.approve_bom_version(uuid) TO eora_app;
+GRANT EXECUTE ON FUNCTION lifecycle_api.approve_bom_routing_map(uuid) TO eora_app;

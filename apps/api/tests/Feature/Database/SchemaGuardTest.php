@@ -76,7 +76,7 @@ it('keeps the routing-approval definer a member of no role, holding only its own
         "select distinct privilege_type || ':' || table_name as w from information_schema.column_privileges
           where grantee = 'eora_lifecycle_definer' and privilege_type in ('INSERT', 'UPDATE') order by 1",
     );
-    expect(array_column(array_map(fn ($r) => (array) $r, $columnWrites), 'w'))->toBe(['INSERT:audit_events', 'UPDATE:routing_versions', 'UPDATE:routings']);
+    expect(array_column(array_map(fn ($r) => (array) $r, $columnWrites), 'w'))->toBe(['INSERT:audit_events', 'UPDATE:bom_routing_maps', 'UPDATE:bom_versions', 'UPDATE:routing_versions', 'UPDATE:routings']);
 })->group('integration', 'schema');
 
 it('grants the provisioner eora_app privileges without SET ROLE', function () {

@@ -4,6 +4,8 @@ use App\Modules\Core\Http\OrgController;
 use App\Modules\Core\Http\PartController;
 use App\Modules\Core\Http\PartnerController;
 use App\Modules\Core\Http\ResourceController;
+use App\Modules\Planning\Http\BomController;
+use App\Modules\Planning\Http\BomRoutingMapController;
 use App\Modules\Planning\Http\RoutingController;
 use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
@@ -99,6 +101,24 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('routing-versions/{version}/actions/reject', [RoutingController::class, 'reject'])->name('routing-versions.reject');
         Route::post('routing-versions/{version}/actions/reopen', [RoutingController::class, 'reopen'])->name('routing-versions.reopen');
         Route::post('routing-versions/{version}/actions/approve', [RoutingController::class, 'approve'])->name('routing-versions.approve');
+        // BOMs (doc 29 §1.4, doc 26 §2.5; D-078 any scope) and BOM–routing maps (D-079; routing plant scope)
+        Route::post('bom-versions', [BomController::class, 'storeVersion'])->name('bom-versions.store');
+        Route::get('bom-versions/{version}', [BomController::class, 'showVersion'])->name('bom-versions.show');
+        Route::patch('bom-versions/{version}', [BomController::class, 'updateVersion'])->name('bom-versions.update');
+        Route::put('bom-versions/{version}/lines', [BomController::class, 'putLines'])->name('bom-versions.lines');
+        Route::post('bom-versions/{version}/actions/submit', [BomController::class, 'submit'])->name('bom-versions.submit');
+        Route::post('bom-versions/{version}/actions/withdraw', [BomController::class, 'withdraw'])->name('bom-versions.withdraw');
+        Route::post('bom-versions/{version}/actions/reject', [BomController::class, 'reject'])->name('bom-versions.reject');
+        Route::post('bom-versions/{version}/actions/reopen', [BomController::class, 'reopen'])->name('bom-versions.reopen');
+        Route::post('bom-versions/{version}/actions/approve', [BomController::class, 'approve'])->name('bom-versions.approve');
+        Route::post('bom-routing-maps', [BomRoutingMapController::class, 'store'])->name('bom-routing-maps.store');
+        Route::get('bom-routing-maps/{map}', [BomRoutingMapController::class, 'show'])->name('bom-routing-maps.show');
+        Route::put('bom-routing-maps/{map}/lines', [BomRoutingMapController::class, 'putLines'])->name('bom-routing-maps.lines');
+        Route::post('bom-routing-maps/{map}/actions/submit', [BomRoutingMapController::class, 'submit'])->name('bom-routing-maps.submit');
+        Route::post('bom-routing-maps/{map}/actions/withdraw', [BomRoutingMapController::class, 'withdraw'])->name('bom-routing-maps.withdraw');
+        Route::post('bom-routing-maps/{map}/actions/reject', [BomRoutingMapController::class, 'reject'])->name('bom-routing-maps.reject');
+        Route::post('bom-routing-maps/{map}/actions/reopen', [BomRoutingMapController::class, 'reopen'])->name('bom-routing-maps.reopen');
+        Route::post('bom-routing-maps/{map}/actions/approve', [BomRoutingMapController::class, 'approve'])->name('bom-routing-maps.approve');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

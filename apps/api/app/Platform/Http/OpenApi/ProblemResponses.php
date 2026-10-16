@@ -114,6 +114,24 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.planning.routing-versions.reopen' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
         // maker ≠ checker and the plant scope are decided by lifecycle_api.approve_routing_version
         'v1.planning.routing-versions.approve' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        // BOMs (doc 29 §1.4, D-078) and BOM–routing maps (D-079)
+        'v1.planning.bom-versions.store' => self::TENANT_WRITE + self::MASTER_403 + [409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.bom-versions.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
+        'v1.planning.bom-versions.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.bom-versions.lines' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.bom-versions.submit' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.bom-versions.withdraw' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.bom-versions.reject' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.bom-versions.reopen' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.bom-versions.approve' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.bom-routing-maps.store' => self::TENANT_WRITE + self::MASTER_403 + [409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.bom-routing-maps.show' => self::TENANT_READ + self::MASTER_403 + [404 => ['NOT_FOUND']],
+        'v1.planning.bom-routing-maps.lines' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.bom-routing-maps.submit' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.bom-routing-maps.withdraw' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.bom-routing-maps.reject' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.bom-routing-maps.reopen' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.bom-routing-maps.approve' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
     ];
 
     /** Laravel-shaped error components Scramble registers; replaced by the problem responses above. */

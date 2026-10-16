@@ -284,6 +284,10 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   owner NOLOGIN `eora_lifecycle_definer`) approves and supersedes; the version trigger checks `current_user`. Nobody who
   edited a version (recorded in `routing_version_contributors`) approves or rejects it. After
   changing `50_lifecycle.sql` re-run `db-bootstrap`.
+- BOMs and BOM–routing maps (step 4a, migration `001400`, `BomController`, `BomRoutingMapController`, shared
+  `VersionLifecycle`): BOM versions per item (D-078, any scope), lines edited as one list; maps per (BOM version, routing
+  version) pair, drafted on locked versions and approved when both are approved (D-079). Approval through
+  `lifecycle_api.approve_bom_version` / `approve_bom_routing_map`.
 
 ## Endpoints (B0)
 | Method | Path | Purpose |
