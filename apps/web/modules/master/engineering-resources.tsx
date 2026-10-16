@@ -212,3 +212,100 @@ export const ROUTINGS: MasterResource<RoutingRow> = {
   update: () => Promise.resolve(undefined),
   openHref: (r) => `/master/routings?routing=${r.id}`,
 };
+
+export type BomVersionRow = MasterRow & {
+  itemId: string;
+  itemCode: string;
+  itemName: string;
+  itemType: 'FINISHED' | 'SEMI_FINISHED' | string;
+  versionNo: number;
+  status: 'DRAFT' | 'SUBMITTED' | 'REJECTED' | 'APPROVED' | 'SUPERSEDED';
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  inUse: boolean;
+  changeReason: string | null;
+  rejectReason: string | null;
+  preparedByName: string | null;
+  approvedByName: string | null;
+  approvedAt: string | null;
+  lineCount: number;
+};
+
+export const MADE_ITEM_TYPES = opts([
+  ['FINISHED', 'Finished good'],
+  ['SEMI_FINISHED', 'Semi-Finished Material'],
+]);
+const VERSION_STATUSES = opts([
+  ['DRAFT', 'Draft'],
+  ['SUBMITTED', 'Submitted'],
+  ['REJECTED', 'Rejected'],
+  ['APPROVED', 'Approved'],
+  ['SUPERSEDED', 'Superseded'],
+]);
+
+/** Master Data → Engineering → BOMs: one row per BOM version; a row opens the item's BOM page. */
+export const BOMS: MasterResource<BomVersionRow> = {
+  id: 'boms',
+  resource: 'planning.bom_versions',
+  permission: ROUTING_PERMISSION,
+  title: 'BOMs',
+  description: 'What goes into one piece of an item, line by line. A BOM applies to every plant; each change is a new version, approved by a second person.',
+  itemLabel: 'BOM versions',
+  singular: 'BOM',
+  searchPlaceholder: 'Search item code or name…',
+  rowLabel: (r) => `${r.itemCode} version ${r.versionNo}`,
+  defaultSort: [{ id: 'itemCode', desc: false }],
+  filters: [
+    { key: 'status', type: 'select', source: 'static', label: 'Status', options: VERSION_STATUSES },
+    { key: 'itemType', type: 'select', source: 'static', label: 'Item type', options: MADE_ITEM_TYPES },
+  ],
+  columns: [
+    { id: 'itemCode', header: 'Item', lead: true, sortable: true, cell: (r) => r.itemCode, sub: (r) => r.itemName },
+    {
+      id: 'versionNo',
+      header: 'Version',
+      sortable: true,
+      cell: (r) => (
+        <span className="inline-flex items-center gap-2">
+          Version {r.versionNo} <DomainStatusBadge domain="version" status={r.status} />
+        </span>
+      ),
+    },
+    {
+      id: 'effectiveFrom',
+      header: 'Effective',
+      sortable: true,
+      cell: (r) => (r.effectiveTo ? `${r.effectiveFrom} to ${r.effectiveTo}` : `From ${r.effectiveFrom}`),
+      sub: (r) => (r.inUse ? 'In use today' : undefined),
+    },
+    { id: 'lineCount', header: 'Lines', numeric: true, cell: (r) => r.lineCount },
+    { id: 'itemType', header: 'Item type', cell: (r) => label(MADE_ITEM_TYPES, r.itemType) },
+  ],
+  fields: [
+    {
+      key: 'itemId',
+      label: 'Item',
+      kind: 'select',
+      required: true,
+      options: 'madeItems',
+      createOnly: true,
+      hint: 'Finished goods and Semi-Finished Material. Bought items have no BOM.',
+    },
+    {
+      key: 'effectiveFrom',
+      label: 'Takes effect',
+      kind: 'date',
+      required: true,
+      notBeforeToday: true,
+      createOnly: true,
+      hint: 'Today or later. Lines are added on the next page.',
+    },
+    { key: 'changeReason', label: 'Reason', kind: 'text', maxLength: 500, createOnly: true, hint: 'Optional, e.g. "New part for model K2".' },
+  ],
+  blank: { itemId: '', effectiveFrom: '', changeReason: '' },
+  toForm: () => ({}),
+  create: (v) =>
+    call(() => api.POST('/planning/bom-versions', { body: { itemId: v.itemId!, effectiveFrom: v.effectiveFrom!, changeReason: v.changeReason || null } })),
+  update: () => Promise.resolve(undefined),
+  openHref: (r) => `/master/boms?item=${r.itemId}&version=${r.id}`,
+};

@@ -43,7 +43,11 @@ export function querySource<T>(resource: string): ListSource<T> {
  * Every row of a query resource the caller may see, sorted by code, read page by page (the server caps a page at 200).
  * Master lists of this kind stay small; the cap of 50 pages only guards a runaway loop.
  */
-export async function queryAll<T = Record<string, unknown>>(resource: string, filters: Record<string, string> = {}, signal?: AbortSignal): Promise<T[]> {
+export async function queryAll<T = Record<string, unknown>>(
+  resource: string,
+  filters: Record<string, string | string[]> = {},
+  signal?: AbortSignal,
+): Promise<T[]> {
   const rows: T[] = [];
   for (let page = 1; page <= 50; page++) {
     const qs = queryString({ filters, search: '', sort: [{ id: 'code', desc: false }], page, pageSize: 200 });
@@ -58,7 +62,7 @@ export async function queryAll<T = Record<string, unknown>>(resource: string, fi
 export async function queryOptions(
   resource: string,
   label: (row: Record<string, unknown>) => string,
-  filters: Record<string, string> = {},
+  filters: Record<string, string | string[]> = {},
   signal?: AbortSignal,
 ): Promise<Option[]> {
   return (await queryAll(resource, filters, signal)).map((r) => ({ value: String(r.id), label: label(r) }));
