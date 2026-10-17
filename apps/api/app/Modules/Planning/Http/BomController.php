@@ -130,7 +130,8 @@ final class BomController
     /**
      * Replace the whole line list of a DRAFT version (If-Match on the version). Quantities are per finished piece in the
      * line's material unit (O-026): the component's base unit or a unit it has a conversion to or from. A component on
-     * several lines is allowed when each of those lines says what it is for (D-B2-01, B2-AT-10).
+     * several lines is allowed when each of those lines says what it is for (D-B2-01, B2-AT-10). `conversionProfileId`
+     * (optional, D-080) names the conversion profile of the component for this item.
      */
     public function putLines(Request $request, string $version): JsonResponse
     {
@@ -142,6 +143,7 @@ final class BomController
             'lines.*.uomId' => ['required', 'uuid'],
             'lines.*.scrapAllowance' => ['nullable', 'numeric', 'min:0', 'lt:1', 'decimal:0,5'],
             'lines.*.linePurpose' => ['nullable', 'string', 'max:200'],
+            'lines.*.conversionProfileId' => ['nullable', 'uuid'],
         ]);
         $expected = Concurrency::expectedVersion($request);
         [$db, $ver] = $this->locked($version, self::CREATE, 'DRAFT');
@@ -158,10 +160,11 @@ final class BomController
         $db->delete('delete from bom_lines where bom_version_id = ?', [$id]);
         foreach ($data['lines'] as $line) {
             $db->insert(
-                'insert into bom_lines (tenant_id, bom_version_id, line_no, component_item_id, gross_qty_per, uom_id, scrap_allowance, line_purpose)
-                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?)',
+                'insert into bom_lines (tenant_id, bom_version_id, line_no, component_item_id, gross_qty_per, uom_id, scrap_allowance, line_purpose, conversion_profile_id)
+                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?)',
                 [$id, $line['lineNo'], strtolower($line['componentItemId']), (string) $line['grossQtyPer'], strtolower($line['uomId']),
-                    (string) ($line['scrapAllowance'] ?? 0), self::optionalText($line['linePurpose'] ?? null)],
+                    (string) ($line['scrapAllowance'] ?? 0), self::optionalText($line['linePurpose'] ?? null),
+                    isset($line['conversionProfileId']) ? strtolower($line['conversionProfileId']) : null],
             );
         }
         $this->audit->record($db, 'bom_version.lines_replaced', 'bom_version', $id, null, null, ['lineCount' => count($data['lines'])]);
@@ -253,6 +256,13 @@ final class BomController
         if ($repeated && self::optionalText($line['linePurpose'] ?? null) === null) {
             throw ValidationException::withMessages([$field('linePurpose') => 'This component is on more than one line: say what this line is for, e.g. "bracket side".']);
         }
+        // optional conversion profile (D-080): the one of this component for the BOM's item, still active
+        if (isset($line['conversionProfileId']) && $db->selectOne(
+            "select 1 as ok from conversion_profiles where id = ? and item_id = ? and input_item_id = ? and status = 'ACTIVE'",
+            [strtolower($line['conversionProfileId']), $ver->item_id, $item->id],
+        ) === null) {
+            throw ValidationException::withMessages([$field('conversionProfileId') => 'Choose an active conversion profile of this component for this item.']);
+        }
     }
 
     /**
@@ -279,9 +289,11 @@ final class BomController
             'id' => $l->id, 'lineNo' => $l->line_no, 'componentItemId' => $l->component_item_id, 'componentCode' => $l->component_code,
             'componentName' => $l->component_name, 'componentType' => $l->component_type, 'grossQtyPer' => $l->gross_qty_per, 'uomId' => $l->uom_id,
             'uomCode' => $l->uom_code, 'scrapAllowance' => $l->scrap_allowance, 'linePurpose' => $l->line_purpose,
+            'conversionProfileId' => $l->conversion_profile_id,
         ], $db->select(
             'select l.id, l.line_no, l.component_item_id, i.code as component_code, i.name as component_name, i.item_type as component_type,
-                    l.gross_qty_per::text as gross_qty_per, l.uom_id, u.code as uom_code, l.scrap_allowance::text as scrap_allowance, l.line_purpose
+                    l.gross_qty_per::text as gross_qty_per, l.uom_id, u.code as uom_code, l.scrap_allowance::text as scrap_allowance, l.line_purpose,
+                    l.conversion_profile_id
                from bom_lines l join items i on i.id = l.component_item_id join uoms u on u.id = l.uom_id
               where l.bom_version_id = ? order by l.line_no',
             [$id],
