@@ -8,7 +8,7 @@ import type { Option, SortRule } from '@eora/features/data';
 export type MasterRow = { id: string; code: string; version: number; status?: string };
 
 /** Picker lists loaded from other query resources. */
-export type OptionSource = 'companies' | 'plants' | 'warehouses' | 'workCenters' | 'uoms' | 'items' | 'madeItems' | 'customers' | 'dies';
+export type OptionSource = 'companies' | 'plants' | 'warehouses' | 'workCenters' | 'uoms' | 'items' | 'madeItems' | 'materials' | 'customers' | 'dies';
 
 export type FieldSpec = {
   key: string;

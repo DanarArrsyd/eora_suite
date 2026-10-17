@@ -58,6 +58,7 @@ const LINE = {
   uomCode: 'KG',
   scrapAllowance: '0.02000',
   linePurpose: null,
+  conversionProfileId: null,
 };
 const MAP = {
   id: '00000000-0000-7000-8000-000000000331',
@@ -108,6 +109,7 @@ async function setup(page: Page, me = PLANNER, version = V1, map = MAP) {
     },
   });
   await mockApi(page, '/query/core.items?*', page1([COIL, NUT]));
+  await mockApi(page, '/query/planning.conversion_profiles?*', page1([]));
   await mockApi(
     page,
     '/query/core.uoms?*',
@@ -162,9 +164,34 @@ test('BOM page: lines are replaced as one list at the version ETag; scrap allowa
   await expect(drawer).toBeHidden();
   expect(puts[0]!.ifMatch).toBe('"3"');
   expect(puts[0]!.body.lines).toEqual([
-    { lineNo: 10, componentItemId: COIL.id, grossQtyPer: 0.485, uomId: COIL.baseUomId, scrapAllowance: 0.02, linePurpose: null },
-    { lineNo: 20, componentItemId: NUT.id, grossQtyPer: 2, uomId: NUT.baseUomId, scrapAllowance: 0.015, linePurpose: null },
+    { lineNo: 10, componentItemId: COIL.id, grossQtyPer: 0.485, uomId: COIL.baseUomId, scrapAllowance: 0.02, linePurpose: null, conversionProfileId: null },
+    { lineNo: 20, componentItemId: NUT.id, grossQtyPer: 2, uomId: NUT.baseUomId, scrapAllowance: 0.015, linePurpose: null, conversionProfileId: null },
   ]);
+});
+
+test('a line can name the conversion profile of its component for this item (D-080)', async ({ page }) => {
+  await setup(page);
+  const profileQueries: string[] = [];
+  await mockApi(page, '/query/planning.conversion_profiles?*', (route) => {
+    profileQueries.push(decodeURIComponent(route.request().url()));
+    return page1([{ id: '00000000-0000-7000-8000-000000000361', inputForm: 'COIL', versionInUseNo: 1, status: 'ACTIVE', version: 1 }]);
+  });
+  const puts: { lines: Record<string, unknown>[] }[] = [];
+  await page.route(`**/api/v1/planning/bom-versions/${V1.id}/lines`, (route) => {
+    puts.push(route.request().postDataJSON());
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { ...V1, lines: [LINE] } }) });
+  });
+  await page.goto(`/master/boms?item=${ITEM}`);
+  await page.getByRole('table', { name: 'Lines of version 1' }).getByRole('button', { name: /Edit/ }).click();
+  const drawer = page.getByRole('dialog', { name: 'Line 10' });
+  await choose(page, drawer.getByRole('combobox', { name: 'Conversion profile' }), 'Coil profile, version 1 in use');
+  await drawer.getByRole('button', { name: 'Save line' }).click();
+  await expect.poll(() => puts.length).toBe(1);
+  expect(puts[0]!.lines[0]).toMatchObject({ componentItemId: COIL.id, conversionProfileId: '00000000-0000-7000-8000-000000000361' });
+  // the resource has no code field: the picker sorts by a field it has, and asks for this item and component only
+  expect(profileQueries[0]).toContain('sort=itemCode');
+  expect(profileQueries[0]).toContain(`filter[itemId]=${ITEM}`);
+  expect(profileQueries[0]).toContain(`filter[inputItemId]=${COIL.id}`);
 });
 
 test("a refused line shows the server's reason on that line's field", async ({ page }) => {

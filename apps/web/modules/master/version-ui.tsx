@@ -6,13 +6,20 @@ import { Button, Card, CardContent, CardHeader, CardTitle, InlineAlert, Modal, M
 import { actionMessage, formFailure } from '@/modules/admin/errors';
 
 /*
- * Shared pieces of the versioned engineering records approved by a second person — routing versions, BOM versions,
- * BOM–routing map revisions (doc 26 §2.4a/§2.5, EoraApprovalPanel in the component standards). One implementation, so
- * the three pages say and do the same thing.
+ * Shared pieces of the versioned engineering records checked by a second person — routing versions, BOM versions,
+ * BOM–routing map revisions (approved, doc 26 §2.4a/§2.5) and conversion data (validated, then retired by hand, D-080;
+ * EoraApprovalPanel in the component standards). One implementation, so the pages say and do the same thing.
  */
 
-export type LifecycleStatus = 'DRAFT' | 'SUBMITTED' | 'REJECTED' | 'APPROVED' | 'SUPERSEDED';
+export type LifecycleStatus = 'DRAFT' | 'SUBMITTED' | 'REJECTED' | 'APPROVED' | 'SUPERSEDED' | 'VALIDATED' | 'RETIRED';
 export type LifecycleAction = 'submit' | 'withdraw' | 'reopen' | 'approve';
+/** Approved records (routing, BOM, map) or validated ones (net weight, conversion profile). */
+export type CheckVerb = 'approve' | 'validate';
+const DONE: LifecycleStatus[] = ['APPROVED', 'SUPERSEDED', 'VALIDATED', 'RETIRED'];
+const WORDS = {
+  approve: { step: 'Approved', button: 'Approve', busy: 'Approving…', past: 'approved' },
+  validate: { step: 'Validated', button: 'Validate', busy: 'Validating…', past: 'validated' },
+} as const;
 export type Can = { view: boolean; create: boolean; submit: boolean; approve: boolean };
 
 export const dayRange = (from: string, to: string | null) => (to ? `${from} to ${to}` : `From ${from}, until replaced`);
@@ -49,6 +56,8 @@ export function ApprovalPanel({
   act,
   reject,
   onDone,
+  verb = 'approve',
+  retire,
 }: {
   /** e.g. "Version 2", "Map revision 1" — used in buttons' results and the reject dialog. */
   label: string;
@@ -58,20 +67,26 @@ export function ApprovalPanel({
   missing?: string[];
   /** Shown once approved, e.g. "Use New version to change the routing." */
   approvedNote: string;
+  /** `approve` sends the `approve` action; `validate` names it Validate (the caller maps it to its validate endpoint). */
   act: (action: LifecycleAction) => Promise<unknown>;
   reject: (reason: string) => Promise<unknown>;
   onDone: (message: string) => void;
+  verb?: CheckVerb;
+  /** Manual stop of a validated record (D-080): what retiring does to this one, and the call. */
+  retire?: { effect: string; run: () => Promise<unknown> };
 }) {
   const [error, setError] = React.useState<string | null>(null);
-  const [busy, setBusy] = React.useState<LifecycleAction | null>(null);
+  const [busy, setBusy] = React.useState<LifecycleAction | 'retire' | null>(null);
   const [rejecting, setRejecting] = React.useState(false);
+  const [retiring, setRetiring] = React.useState(false);
   const { status } = record;
+  const words = WORDS[verb];
 
-  const run = async (action: LifecycleAction, done: string) => {
+  const run = async (action: LifecycleAction | 'retire', done: string) => {
     setError(null);
     setBusy(action);
     try {
-      await act(action);
+      await (action === 'retire' ? retire!.run() : act(action));
       onDone(done);
     } catch (e) {
       setError(actionMessage(e, 'Nothing changed.'));
@@ -81,12 +96,11 @@ export function ApprovalPanel({
   };
 
   const submittedStep = status === 'DRAFT' ? 'Not yet' : status === 'REJECTED' ? 'Rejected' : 'Done';
-  const approvedStep =
-    status === 'APPROVED' || status === 'SUPERSEDED'
-      ? `${record.approvedByName ?? 'Approved'}, ${when(record.approvedAt)}`
-      : status === 'SUBMITTED'
-        ? 'Waiting for a second person'
-        : 'Not yet';
+  const approvedStep = DONE.includes(status)
+    ? `${record.approvedByName ?? words.step}, ${when(record.approvedAt)}`
+    : status === 'SUBMITTED'
+      ? 'Waiting for a second person'
+      : 'Not yet';
   const noun = label.split(' ')[0]?.toLowerCase() ?? 'record';
 
   return (
@@ -105,11 +119,13 @@ export function ApprovalPanel({
             <span className="block text-ink">{submittedStep}</span>
           </li>
           <li>
-            <span className="text-ink-2">Approved</span>
+            <span className="text-ink-2">{words.step}</span>
             <span className="block text-ink">{approvedStep}</span>
           </li>
         </ol>
-        <p className="m-0 text-[12.5px] text-ink-2">Approved by someone who did not prepare or edit this {noun}.</p>
+        <p className="m-0 text-[12.5px] text-ink-2">
+          {words.step} by someone who did not prepare or edit this {noun}.
+        </p>
         {error ? (
           <InlineAlert tone="danger" title="Not done">
             {error}
@@ -126,8 +142,8 @@ export function ApprovalPanel({
           ) : null}
           {status === 'SUBMITTED' && can.approve ? (
             <>
-              <Button variant="primary" disabled={!!busy} onClick={() => void run('approve', `${label} approved`)}>
-                {busy === 'approve' ? 'Approving…' : 'Approve'}
+              <Button variant="primary" disabled={!!busy} onClick={() => void run('approve', `${label} ${words.past}`)}>
+                {busy === 'approve' ? words.busy : words.button}
               </Button>
               <Button disabled={!!busy} onClick={() => setRejecting(true)}>
                 Reject
@@ -144,9 +160,35 @@ export function ApprovalPanel({
               {busy === 'reopen' ? 'Reopening…' : 'Reopen to edit'}
             </Button>
           ) : null}
-          {status === 'APPROVED' || status === 'SUPERSEDED' ? <p className="m-0 text-[13px] text-ink-2">{approvedNote}</p> : null}
+          {DONE.includes(status) ? <p className="m-0 text-[13px] text-ink-2">{approvedNote}</p> : null}
+          {status === 'VALIDATED' && can.approve && retire ? (
+            <Button disabled={!!busy} onClick={() => setRetiring(true)}>
+              Retire
+            </Button>
+          ) : null}
         </div>
       </CardContent>
+      {retire ? (
+        <Modal open={retiring} onOpenChange={setRetiring}>
+          <ModalContent title={`Retire ${label.toLowerCase()}`} description={retire.effect} closeLabel="Close">
+            <ModalBody>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button onClick={() => setRetiring(false)}>Cancel</Button>
+                <Button
+                  variant="primary"
+                  disabled={!!busy}
+                  onClick={() => {
+                    setRetiring(false);
+                    void run('retire', `${label} retired`);
+                  }}
+                >
+                  Retire {noun}
+                </Button>
+              </div>
+            </ModalBody>
+          </ModalContent>
+        </Modal>
+      ) : null}
       <Modal open={rejecting} onOpenChange={setRejecting}>
         <ModalContent title={`Reject ${label.toLowerCase()}`} description="The preparer sees the reason and can reopen it to rework it." closeLabel="Close">
           <ModalBody>

@@ -26,6 +26,13 @@ const PICKERS: Record<
     activeOnly: true,
     filters: { itemType: ['FINISHED', 'SEMI_FINISHED'] },
   },
+  // what a conversion profile converts from: raw coil or sheets, or Semi-Finished Material (D-080)
+  materials: {
+    resource: 'core.items',
+    label: (r) => `${String(r.code)} · ${String(r.name)}`,
+    activeOnly: true,
+    filters: { itemType: ['RAW', 'SEMI_FINISHED'] },
+  },
   customers: { resource: 'core.customers', label: (r) => `${String(r.code)} · ${String(r.name)}`, activeOnly: true },
   dies: { resource: 'core.dies', label: (r) => `${String(r.plantCode)} / ${String(r.code)} · ${String(r.name)}` },
 };

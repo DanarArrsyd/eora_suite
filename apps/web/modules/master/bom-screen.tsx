@@ -16,6 +16,8 @@ import {
   FormSelectField,
   FormTextareaField,
   FormTextField,
+  useFormContext,
+  useWatch,
   type EoraColumn,
 } from '@eora/features/patterns';
 import {
@@ -70,9 +72,18 @@ type BomLine = {
   uomCode: string;
   scrapAllowance: string;
   linePurpose: string | null;
+  conversionProfileId: string | null;
 };
 type BomDetail = BomVersionRow & { lines: BomLine[] };
-type LineInput = { lineNo: number; componentItemId: string; grossQtyPer: number; uomId: string; scrapAllowance: number; linePurpose: string | null };
+type LineInput = {
+  lineNo: number;
+  componentItemId: string;
+  grossQtyPer: number;
+  uomId: string;
+  scrapAllowance: number;
+  linePurpose: string | null;
+  conversionProfileId: string | null;
+};
 type MapRow = {
   id: string;
   plantCode: string;
@@ -120,6 +131,7 @@ function toInput(l: BomLine): LineInput {
     uomId: l.uomId,
     scrapAllowance: Number(l.scrapAllowance),
     linePurpose: l.linePurpose,
+    conversionProfileId: l.conversionProfileId,
   };
 }
 
@@ -413,6 +425,7 @@ function VersionBody({ version, can, onChanged, onNotice }: { version: BomDetail
     { id: 'qty', header: 'Quantity per piece', numeric: true, critical: true, cell: (l) => `${qty(l.grossQtyPer)} ${l.uomCode}` },
     { id: 'scrap', header: 'Scrap allowance', numeric: true, cell: (l) => (Number(l.scrapAllowance) > 0 ? percent(l.scrapAllowance) : '—') },
     { id: 'purpose', header: 'Purpose', textCol: true, cell: (l) => l.linePurpose ?? '—' },
+    { id: 'profile', header: 'Conversion profile', cell: (l) => (l.conversionProfileId ? 'Linked' : '—') },
   ];
 
   return (
@@ -634,6 +647,7 @@ const LINE_SCHEMA = z.object({
     .trim()
     .regex(/^$|^\d{1,2}(\.\d{1,3})?$/, 'Enter a percentage below 100 with at most 3 decimals, e.g. 2.5.'),
   linePurpose: z.string().trim().max(200, 'Use at most 200 characters.'),
+  conversionProfileId: z.string(),
 });
 
 function LineDrawer({
@@ -683,8 +697,17 @@ function LineDrawer({
                     uomId: line.uomId,
                     scrapAllowance: Number(line.scrapAllowance) > 0 ? String(Number((Number(line.scrapAllowance) * 100).toFixed(3))) : '',
                     linePurpose: line.linePurpose ?? '',
+                    conversionProfileId: line.conversionProfileId ?? '',
                   }
-                : { lineNo: String(next), componentItemId: '', grossQtyPer: '', uomId: '', scrapAllowance: '', linePurpose: '' }
+                : {
+                    lineNo: String(next),
+                    componentItemId: '',
+                    grossQtyPer: '',
+                    uomId: '',
+                    scrapAllowance: '',
+                    linePurpose: '',
+                    conversionProfileId: '',
+                  }
             }
             submitLabel={line ? 'Save line' : 'Add line'}
             secondary={
@@ -704,6 +727,7 @@ function LineDrawer({
                 uomId: v.uomId,
                 scrapAllowance: v.scrapAllowance === '' ? 0 : Number((Number(v.scrapAllowance) / 100).toFixed(5)),
                 linePurpose: v.linePurpose || null,
+                conversionProfileId: v.conversionProfileId || null,
               };
               const lines = [...version.lines.filter((l) => l.id !== line?.id).map(toInput), input].sort((a, b) => a.lineNo - b.lineNo);
               try {
@@ -766,10 +790,58 @@ function LineDrawer({
               autoComplete="off"
               hint='Needed when the same component is on several lines, e.g. "bracket side".'
             />
+            <ProfileField itemId={version.itemId} enabled={open} />
           </EoraForm>
         </div>
       </DrawerContent>
     </Drawer>
+  );
+}
+
+/**
+ * The conversion profile of the chosen component for this BOM's item (optional, D-080): how a coil or sheet of it turns
+ * into pieces. Offered once a component is chosen; a choice that no longer fits the component is cleared.
+ */
+function ProfileField({ itemId, enabled }: { itemId: string; enabled: boolean }) {
+  const component = useWatch({ name: 'componentItemId' }) as string;
+  const chosen = useWatch({ name: 'conversionProfileId' }) as string;
+  const { setValue } = useFormContext();
+  const profiles = useQuery({
+    queryKey: ['master', 'picker', 'conversion-profiles', itemId, component],
+    queryFn: async ({ signal }) =>
+      (
+        await queryAll<{ id: string; inputForm: string; versionInUseNo: number | null }>(
+          'planning.conversion_profiles',
+          { itemId, inputItemId: component, status: 'ACTIVE' },
+          signal,
+          'itemCode',
+        )
+      ).map((p) => ({
+        value: p.id,
+        label: `${p.inputForm === 'COIL' ? 'Coil' : 'Sheet'} profile, ${p.versionInUseNo ? `version ${p.versionInUseNo} in use` : 'none validated yet'}`,
+      })),
+    enabled: enabled && !!component,
+    staleTime: 30_000,
+  });
+  React.useEffect(() => {
+    if (profiles.data && chosen && !profiles.data.some((o) => o.value === chosen)) setValue('conversionProfileId', '');
+  }, [profiles.data, chosen, setValue]);
+  return (
+    <FormSelectField
+      name="conversionProfileId"
+      label="Conversion profile"
+      options={profiles.data ?? []}
+      placeholder={component && profiles.isPending ? 'Loading…' : 'No conversion profile'}
+      hint={
+        !component
+          ? 'Choose the component first.'
+          : profiles.isError
+            ? 'Profiles could not be loaded; the line is saved without one.'
+            : profiles.data && profiles.data.length === 0
+              ? 'This component has no active profile for this item. Add one in Conversion Data.'
+              : 'Optional. Lets reconciliation turn this material into expected pieces.'
+      }
+    />
   );
 }
 

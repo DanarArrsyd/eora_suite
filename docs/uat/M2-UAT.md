@@ -1,4 +1,4 @@
-# M2 UAT — Master Data (organisasi, part, mitra, routing)
+# M2 UAT — Master Data (organisasi, part, mitra, routing, BOM, data konversi)
 
 **Untuk:** owner (demo M2, doc 29 §4 butir 9). Skrip ini diisi bertahap: setiap PR yang mengubah layar menambah barisnya sendiri (doc 30 §6). **Data:** tenant sintetis "Demo Stamping" (`eora:demo:seed`), semua isinya fiktif. **Browser:** `http://localhost:3100`.
 
@@ -50,3 +50,18 @@ Butuh routing R1 dengan versi Approved (bagian 2) dan satu item bahan baku (mis.
 | 7 | Tutup map → **Approve** versi BOM → buka map lagi → **Approve**. | BOM Version 1 **Approved**, "In use"; map revision 1 **Approved**. | |
 | 8 | Di map yang Approved → **New revision**. | Revision 2 Draft dengan pemetaan salinan revision 1; revision 1 tetap Approved sampai revision 2 di-approve. | |
 
+## 4. Data konversi: net weight dan conversion profile (langkah 5b, D-080)
+Butuh item jadi BRK-100 dan bahan coil (satuan KG) dengan material spec terisi (tebal, densitas). Validasi harus orang kedua dengan izin `master.conversion.approve`: sebelum mulai, login `csa` → Administration → Users → beri `ppc` role **QCS** (tenant). Data konversi hanya disimpan dan divalidasi; belum ada hitungan GYV/PvS/UMV.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `csa` → Master Data → Engineering → **Conversion Data**. | Dua tab: **Net weights** dan **Conversion profiles**. | |
+| 2 | **New net weight**: BRK-100, `0.2905`, berlaku hari ini. | Halaman net weight terbuka: Version 1 **Draft**, **0.2905 kg/pc**. Tanggal sebelum hari ini tidak bisa dipilih. | |
+| 3 | **Submit for approval**, lalu **Validate** (masih `csa`). | Ditolak: "Conversion data is validated by someone who did not prepare or edit it." | |
+| 4 | Login `ppc` → buka net weight yang sama → **Validate**. | Version 1 **Validated**, "In use today", tercatat validated by ppc. | |
+| 5 | Login `csa` → **New version**: berlaku besok, `0.288`, alasan "Drawing rev C" → Submit. Login `ppc` → **Validate**. | Version 1 tetap Validated, berlaku sampai hari ini; Version 2 berlaku mulai besok. | |
+| 6 | `ppc` → Version 2 → **Retire** → konfirmasi. | Dialog menjelaskan versi ini belum mulai, jadi tidak pernah berlaku. Status **Retired**, "Retired before it took effect". | |
+| 7 | Login `csa` → tab **Conversion profiles** → **New conversion profile**: part BRK-100, material coil, berlaku hari ini. | Halaman profile terbuka: formula **Coil (COIL_V1)**; Thickness dan Density terisi dari material spec, input lain "Missing". Panel Approval: "Before submitting, add every input." | |
+| 8 | **Edit inputs** → Parts per stroke `1.5` → Save. | Ditolak di field itu: harus bilangan bulat minimal 1. Setiap input punya satuan tetap (mm, g/cm3, pc/stroke). | |
+| 9 | Isi semua input (lebar 120, pitch 320, parts per stroke 1, head + tail 1500, setup 0) → Save → Submit. Login `ppc` → **Validate**. | Version 1 **Validated**; di daftar profile kolom "Version in use" = Version 1. | |
+| 10 | Login `ppc` atau `csa` → BOMs → BOM BRK-100 → **New version** → edit baris coil → **Conversion profile**. | Pilihan: "No conversion profile" dan "Coil profile, version 1 in use". Setelah disimpan kolom Conversion profile = **Linked**. Komponen lain tidak menawarkan profile coil ini. | |
