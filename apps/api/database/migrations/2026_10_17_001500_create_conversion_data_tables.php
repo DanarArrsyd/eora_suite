@@ -54,6 +54,10 @@ return new class extends Migration
                   RETURN false;
                 END IF;
                 v := (entry ->> 'value')::numeric;
+                -- the API's bounds: at most 12 integer digits and 6 decimals (FormulaCatalog), whoever writes
+                IF pg_catalog.abs(v) >= 1000000000000 OR pg_catalog.scale(v) > 6 THEN
+                  RETURN false;
+                END IF;
                 IF (spec -> k ->> 1 = 'pos' AND v <= 0) OR (spec -> k ->> 1 = 'zero' AND v < 0)
                    OR (spec -> k ->> 1 = 'int1' AND (v < 1 OR v <> pg_catalog.trunc(v)))
                    OR (spec -> k ->> 1 = 'int0' AND (v < 0 OR v <> pg_catalog.trunc(v))) THEN

@@ -134,6 +134,14 @@ it('drafts a coil profile with the material spec geometry and refuses inputs wit
     expect(fn () => AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->update(
         "update conversion_profile_versions set inputs = inputs - 'pitch_mm' where id = ?", [$v['id']],
     )))->toThrow(QueryException::class);
+    // nor beyond the API's bounds (6 decimals, 12 integer digits), even in a draft
+    foreach (['320.1234567', '1000000000000'] as $i => $pitch) {
+        expect(fn () => AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+            "insert into conversion_profile_versions (tenant_id, profile_id, input_form, version_no, formula_code, inputs, effective_from)
+             values (?, ?, 'COIL', ?, 'COIL_V1', jsonb_build_object('pitch_mm', jsonb_build_object('value', ?::numeric, 'unit', 'mm')), ?)",
+            [$this->t['tenant'], $v['profileId'], 10 + $i, $pitch, $day],
+        )))->toThrow(QueryException::class);
+    }
 })->group('integration', 'master');
 
 it('drafts sheet profiles per part and material, copies the validated inputs, and rejects then reopens', function () {
