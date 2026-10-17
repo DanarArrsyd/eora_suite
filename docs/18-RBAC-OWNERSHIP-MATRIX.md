@@ -47,7 +47,7 @@ Legend: **V** view · **C** create/edit draft · **S** submit · **P** post/exec
 | core.users_roles | VCP | — | — | — | — | — | — | — | — | — | V |
 | core.audit | V X | — | — | — | — | — | — | — | — | V | V X |
 | exchange.export (per resource) | X | X | X | X | — | X | X | X | X | X | X |
-| exchange.import (per template) | P A | C S | C S | — | — | — | — | — | — | C S | — |
+| exchange.import (per template; D-081: post = commit, plus the target master's create permission) | C S P A | C S | C S | — | — | — | — | — | — | C S | — |
 
 APR role adds `A` on configured entities; it never adds `P` on the same document it approves.
 

@@ -7,10 +7,11 @@ cd "$(dirname "$0")/.."
 umask 077
 added=""
 for key in EORA_DB_OWNER_PASSWORD EORA_DB_APP_PASSWORD EORA_DB_AUTH_WEB_PASSWORD EORA_DB_AUTH_DELIVERY_PASSWORD \
-           EORA_DB_PROVISIONER_PASSWORD EORA_DB_RELAY_PASSWORD EORA_CTX_KEY_KID1 EORA_PEPPER_KEY; do
-  # signed-context HMAC key: 32 bytes as 64 hex characters (D-055); role passwords: 24 random bytes as hex
+           EORA_DB_PROVISIONER_PASSWORD EORA_DB_RELAY_PASSWORD EORA_CTX_KEY_KID1 EORA_PEPPER_KEY EORA_IMPORTS_KEY EORA_IMPORTS_SECRET; do
+  # signed-context HMAC key: 32 bytes as 64 hex characters (D-055); role passwords: 24 random bytes as hex;
+  # import file store (ADR-0017): access key 10 bytes, secret 24 bytes
   bytes=24
-  case "$key" in EORA_CTX_KEY_KID1|EORA_PEPPER_KEY) bytes=32 ;; esac
+  case "$key" in EORA_CTX_KEY_KID1|EORA_PEPPER_KEY) bytes=32 ;; EORA_IMPORTS_KEY) bytes=10 ;; esac
   if ! grep -Eq "^${key}=.+" .env; then
     if grep -Eq "^${key}=$" .env; then
       # empty placeholder line: replace it in place (portable sed -i)

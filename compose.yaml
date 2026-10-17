@@ -38,6 +38,11 @@ x-api-env: &api-env
   MAIL_PORT: '1025'
   MAIL_FROM_ADDRESS: no-reply@eora.local
   MAIL_FROM_NAME: EORA Suite
+  # import file store (ADR-0017): SeaweedFS S3 API in compose; never public, files go through the API
+  EORA_IMPORTS_ENDPOINT: http://seaweedfs:8333
+  EORA_IMPORTS_BUCKET: eora-imports
+  EORA_IMPORTS_KEY: ${EORA_IMPORTS_KEY:?set EORA_IMPORTS_KEY in .env (scripts/ensure-dev-secrets.sh)}
+  EORA_IMPORTS_SECRET: ${EORA_IMPORTS_SECRET:?set EORA_IMPORTS_SECRET in .env (scripts/ensure-dev-secrets.sh)}
   # signed tenant context (D-055): same key as loaded into ctx.keys by db-bootstrap
   EORA_CTX_SIGNING_KID: kid1
   EORA_CTX_SIGNING_KEY: ${EORA_CTX_KEY_KID1:?set EORA_CTX_KEY_KID1 in .env (scripts/ensure-dev-secrets.sh)}
@@ -151,6 +156,54 @@ services:
     ports:
       - '127.0.0.1:${EORA_MAILPIT_UI_PORT:-8025}:8025'
 
+  # S3-compatible file store for import files (ADR-0017; replaces MinIO of M2-D3, whose images were withdrawn — D-082)
+  seaweedfs:
+    image: chrislusf/seaweedfs:3.97
+    command: ['server', '-dir=/data', '-s3', '-s3.port=8333', '-s3.config=/etc/seaweedfs/s3.json']
+    configs:
+      - source: seaweedfs-s3
+        target: /etc/seaweedfs/s3.json
+    volumes:
+      - seaweeddata:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:9333/cluster/status || exit 1']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: the import bucket (idempotent — an existing bucket is kept)
+  seaweedfs-init:
+    image: chrislusf/seaweedfs:3.97
+    entrypoint:
+      [
+        'sh',
+        '-c',
+        'echo "s3.bucket.list" | weed shell -master=seaweedfs:9333 -filer=seaweedfs:8888 | grep -q eora-imports || echo "s3.bucket.create -name eora-imports" | weed shell -master=seaweedfs:9333 -filer=seaweedfs:8888',
+      ]
+    restart: 'no'
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+
+  # Import worker (ADR-0017 §4): validates and commits import jobs from the Redis queue `imports` as eora_app
+  import-worker:
+    image: eora-api:dev
+    entrypoint: ['php', 'artisan', 'queue:work', 'redis', '--queue=imports', '--sleep=1', '--timeout=900']
+    restart: unless-stopped
+    pull_policy: never # image built by the api service
+    healthcheck:
+      test: ['CMD-SHELL', 'kill -0 1']
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    environment:
+      <<: *api-env
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      seaweedfs-init:
+        condition: service_completed_successfully
+
   # secret-delivery worker: own process, own role (eora_auth_delivery only, doc 25 §2.1); no runtime/owner credentials
   delivery-worker:
     image: eora-api:dev
@@ -210,12 +263,20 @@ services:
     depends_on:
       db-migrate:
         condition: service_completed_successfully
+      seaweedfs-init:
+        condition: service_completed_successfully
 
 configs:
   postgres-init-test-db:
     # Local/CI only: separate database for automated tests (phpunit.xml forces DB_DATABASE=eora_test).
     content: |
       CREATE DATABASE eora_test;
+  seaweedfs-s3:
+    # S3 identity of the API and the import worker (local only; keys from .env)
+    content: |
+      {"identities": [{"name": "eora", "credentials": [{"accessKey": "${EORA_IMPORTS_KEY}", "secretKey": "${EORA_IMPORTS_SECRET}"}],
+        "actions": ["Admin", "Read", "Write", "List", "Tagging"]}]}
 
 volumes:
   pgdata:
+  seaweeddata:

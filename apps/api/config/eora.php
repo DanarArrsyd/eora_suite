@@ -1,6 +1,9 @@
 <?php
 
 declare(strict_types=1);
+use App\Modules\Core\Import\ItemsTemplate;
+use App\Modules\Core\Import\MaterialSpecsTemplate;
+use App\Modules\Core\Import\UomsTemplate;
 use App\Modules\Core\Queries\CompaniesQuery;
 use App\Modules\Core\Queries\CustomerItemsQuery;
 use App\Modules\Core\Queries\CustomersQuery;
@@ -23,6 +26,7 @@ use App\Modules\Planning\Queries\ItemWeightsQuery;
 use App\Modules\Planning\Queries\ProcessTypesQuery;
 use App\Modules\Planning\Queries\RoutingsQuery;
 use App\Modules\Planning\Queries\RoutingVersionsQuery;
+use App\Platform\Import\ImportJobsQuery;
 
 return [
     /*
@@ -82,6 +86,17 @@ return [
         'planning.item_weights' => ItemWeightsQuery::class,
         'planning.conversion_profiles' => ConversionProfilesQuery::class,
         'planning.conversion_profile_versions' => ConversionProfileVersionsQuery::class,
+        'exchange.import_jobs' => ImportJobsQuery::class,
+    ],
+
+    // Excel import (doc 29 §1.6, ADR-0017, D-081): template code => class (current version each), worker lease
+    'import_templates' => [
+        'uoms' => UomsTemplate::class,
+        'items' => ItemsTemplate::class,
+        'material_specs' => MaterialSpecsTemplate::class,
+    ],
+    'import' => [
+        'lease_seconds' => (int) env('EORA_IMPORT_LEASE_SECONDS', 300),
     ],
 
     'member_invite_per_hour' => env('EORA_MEMBER_INVITE_PER_HOUR') === null ? null : (int) env('EORA_MEMBER_INVITE_PER_HOUR'),
