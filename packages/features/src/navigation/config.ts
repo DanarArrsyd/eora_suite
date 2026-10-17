@@ -85,6 +85,7 @@ import {
   Warehouse,
   Wrench,
   HandGrab,
+  Weight,
 } from 'lucide-react';
 import type { NavModule } from './types';
 
@@ -470,6 +471,7 @@ export const NAV_MODULES: readonly NavModule[] = [
           { id: 'process-types', label: 'Process Types', icon: Cog, release: 'R1', permission: 'master.routing.view', phase: 'later' },
           { id: 'routings', label: 'Routings', icon: GitBranch, release: 'R1', permission: 'master.routing.view', phase: 'later' },
           { id: 'boms', label: 'BOMs', icon: Layers, release: 'R1', permission: 'master.routing.view', phase: 'later' },
+          { id: 'conversion-data', label: 'Conversion Data', icon: Weight, release: 'R1', permission: 'master.conversion.view', phase: 'later' },
         ],
       },
     ],
