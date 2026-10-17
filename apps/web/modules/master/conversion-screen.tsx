@@ -33,7 +33,7 @@ import {
   type ProfileVersionRow,
 } from './conversion-resources';
 import { MasterGroupScreen, type MasterGroup } from './master-screen';
-import { querySource } from './source';
+import { queryAll, querySource } from './source';
 import { ApprovalPanel, VersionStrip, conflictFailure, dayRange, todayIn, when, type Can, type LifecycleAction } from './version-ui';
 
 /*
@@ -79,13 +79,19 @@ function useToday(): string {
   return todayIn(me.data?.tenants.find((t) => t.id === me.data?.activeTenantId)?.timezone ?? 'Asia/Jakarta');
 }
 
-/** The versions of one record, newest first, and the one to show: the URL's, else the open one, else the one in use. */
-function useVersions<T extends { id: string; status: string; inUse: boolean }>(resource: string, filters: Record<string, string>, enabled: boolean) {
+/**
+ * Every version of one record, newest first (all pages: a link may ask for any old version), and the one to show: the
+ * URL's, else the open one, else the one in use.
+ */
+function useVersions<T extends { id: string; status: string; inUse: boolean; versionNo: number }>(
+  resource: string,
+  filters: Record<string, string>,
+  enabled: boolean,
+) {
   const params = useSearchParams();
   const versions = useQuery({
     queryKey: ['master', resource, 'of', filters],
-    queryFn: async ({ signal }) =>
-      (await querySource<T>(resource).list({ filters, search: '', sort: [{ id: 'versionNo', desc: true }], page: 1, pageSize: 100, view: 'all' }, signal)).rows,
+    queryFn: async ({ signal }) => (await queryAll<T>(resource, filters, signal, 'versionNo')).sort((a, b) => b.versionNo - a.versionNo),
     enabled,
   });
   const list = versions.data;

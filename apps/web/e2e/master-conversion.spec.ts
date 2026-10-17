@@ -206,3 +206,25 @@ test("a refused input shows the server's reason on that input", async ({ page })
   await drawer.getByRole('button', { name: 'Save inputs' }).click();
   await expect(drawer.getByText('Must be a whole number of at least 1.').first()).toBeVisible();
 });
+
+test('a role with conversion data only still reaches Master Data → Conversion Data', async ({ page }) => {
+  await setup(page, { ...SESSION, permissions: ['master.conversion.view'] });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/master/conversion-data');
+  await expect(page.getByRole('link', { name: 'Conversion Data' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'BOMs' })).toHaveCount(0);
+});
+
+test('a link to an old version opens that version even when it is not on the first page', async ({ page }) => {
+  await setup(page);
+  const v2 = { ...NW, id: '00000000-0000-7000-8000-000000000512', versionNo: 2, status: 'VALIDATED', netWeightKg: '0.288000' };
+  const old = { ...NW, status: 'VALIDATED', effectiveTo: '2026-10-17' };
+  // the server pages the versions: the requested one arrives on page 2
+  await mockApi(page, '/query/planning.item_weights?*', (route) => {
+    const second = decodeURIComponent(route.request().url()).includes('page[number]=2');
+    return { status: 200, json: { data: [second ? old : v2], meta: { ...META, total: 2 } } };
+  });
+  await page.goto(`/master/conversion-data?weight=${ITEM}&version=${NW.id}`);
+  await expect(page.getByRole('navigation', { name: 'Versions' }).locator('a[aria-current="page"]')).toContainText('Version 1');
+  await expect(page.getByText('0.2905 kg/pc').first()).toBeVisible();
+});
