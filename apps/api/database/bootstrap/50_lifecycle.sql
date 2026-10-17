@@ -355,6 +355,185 @@ BEGIN
 END
 $fn$;
 
+-- Validates a SUBMITTED net weight (NW) version for the signed actor (doc 29 §1.5, D-080). Conversion data is per item
+-- and tenant-wide: master.conversion.approve in any valid scope. The validated version that would overlap it stays
+-- VALIDATED and ends the day before this one starts. Same error codes as approve_routing_version (EO013: no weight).
+CREATE OR REPLACE FUNCTION lifecycle_api.validate_item_weight(weight_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
+DECLARE
+  ctx_tenant uuid;
+  ctx_actor uuid;
+  ver record;
+  today date;
+  previous record;
+  replaced uuid;
+  before_row jsonb;
+  after_row jsonb;
+BEGIN
+  SELECT c.tenant, c.actor INTO ctx_tenant, ctx_actor FROM ctx_api.context() c;
+  IF ctx_tenant IS NULL OR ctx_actor IS NULL THEN
+    RAISE EXCEPTION 'no trusted actor' USING ERRCODE = 'EO010';
+  END IF;
+  SELECT (pg_catalog.now() AT TIME ZONE t.timezone)::date INTO today
+    FROM public.tenants t WHERE t.id = ctx_tenant AND t.status = 'ACTIVE';
+  IF today IS NULL THEN
+    RAISE EXCEPTION 'tenant not active' USING ERRCODE = 'EO010';
+  END IF;
+
+  SELECT w.* INTO ver FROM public.item_weights w WHERE w.id = weight_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'unknown net weight version' USING ERRCODE = 'P0002';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.role_assignments ra
+      JOIN public.memberships m ON m.tenant_id = ra.tenant_id AND m.id = ra.membership_id AND m.status = 'ACTIVE' AND m.user_id = ctx_actor
+      JOIN public.role_permissions rp ON rp.tenant_id = ra.tenant_id AND rp.role_id = ra.role_id AND rp.permission_code = 'master.conversion.approve'
+     WHERE ra.revoked_at IS NULL AND ra.valid_from <= pg_catalog.now() AND (ra.valid_until IS NULL OR ra.valid_until > pg_catalog.now())
+  ) THEN
+    RAISE EXCEPTION 'not allowed to validate conversion data' USING ERRCODE = 'EO010';
+  END IF;
+
+  IF ver.prepared_by = ctx_actor OR EXISTS (
+    SELECT 1 FROM public.item_weight_contributors wc WHERE wc.item_weight_id = ver.id AND wc.actor = ctx_actor
+  ) THEN
+    RAISE EXCEPTION 'an author of the version cannot validate it' USING ERRCODE = 'EO011';
+  END IF;
+
+  IF ver.status <> 'SUBMITTED' THEN
+    RAISE EXCEPTION 'only a submitted version can be validated' USING ERRCODE = 'EO012';
+  END IF;
+  IF ver.effective_from < today THEN
+    RAISE EXCEPTION 'the version would take effect in the past' USING ERRCODE = 'EO012';
+  END IF;
+  IF ver.net_weight_kg IS NULL THEN
+    RAISE EXCEPTION 'net weight missing' USING ERRCODE = 'EO013';
+  END IF;
+
+  FOR previous IN
+    SELECT w.id, w.effective_from FROM public.item_weights w
+     WHERE w.item_id = ver.item_id AND w.status = 'VALIDATED' AND w.id <> ver.id
+       AND (w.effective_to IS NULL OR w.effective_to >= ver.effective_from)
+     FOR UPDATE
+  LOOP
+    IF previous.effective_from >= ver.effective_from THEN
+      RAISE EXCEPTION 'the new version must start after the version it replaces' USING ERRCODE = 'EO012';
+    END IF;
+    SELECT pg_catalog.to_jsonb(w) INTO before_row FROM public.item_weights w WHERE w.id = previous.id;
+    UPDATE public.item_weights SET effective_to = ver.effective_from - 1, superseded_by_id = ver.id WHERE id = previous.id;
+    SELECT pg_catalog.to_jsonb(w) INTO after_row FROM public.item_weights w WHERE w.id = previous.id;
+    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+    VALUES (ctx_tenant, 'item_weight.ended', 'item_weight', previous.id, NULL,
+            pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
+            pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
+            pg_catalog.jsonb_build_object('replacedBy', ver.id));
+    replaced := previous.id;
+  END LOOP;
+
+  SELECT pg_catalog.to_jsonb(w) INTO before_row FROM public.item_weights w WHERE w.id = ver.id;
+  UPDATE public.item_weights SET status = 'VALIDATED', validated_by = ctx_actor, validated_at = pg_catalog.now() WHERE id = ver.id;
+  SELECT pg_catalog.to_jsonb(w) INTO after_row FROM public.item_weights w WHERE w.id = ver.id;
+  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+  VALUES (ctx_tenant, 'item_weight.validated', 'item_weight', ver.id, NULL,
+          pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
+          pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
+          CASE WHEN replaced IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('replaces', replaced) END);
+
+  RETURN replaced;
+END
+$fn$;
+
+-- Validates a SUBMITTED conversion profile version (doc 02 inputs complete for its formula_code, D-080) — same rules as
+-- validate_item_weight; EO013 also when the profile is inactive. The inputs CHECK of migration 001500 already holds.
+CREATE OR REPLACE FUNCTION lifecycle_api.validate_conversion_profile_version(version_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
+DECLARE
+  ctx_tenant uuid;
+  ctx_actor uuid;
+  ver record;
+  today date;
+  previous record;
+  replaced uuid;
+  before_row jsonb;
+  after_row jsonb;
+BEGIN
+  SELECT c.tenant, c.actor INTO ctx_tenant, ctx_actor FROM ctx_api.context() c;
+  IF ctx_tenant IS NULL OR ctx_actor IS NULL THEN
+    RAISE EXCEPTION 'no trusted actor' USING ERRCODE = 'EO010';
+  END IF;
+  SELECT (pg_catalog.now() AT TIME ZONE t.timezone)::date INTO today
+    FROM public.tenants t WHERE t.id = ctx_tenant AND t.status = 'ACTIVE';
+  IF today IS NULL THEN
+    RAISE EXCEPTION 'tenant not active' USING ERRCODE = 'EO010';
+  END IF;
+
+  SELECT v.* INTO ver FROM public.conversion_profile_versions v WHERE v.id = version_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'unknown conversion profile version' USING ERRCODE = 'P0002';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.role_assignments ra
+      JOIN public.memberships m ON m.tenant_id = ra.tenant_id AND m.id = ra.membership_id AND m.status = 'ACTIVE' AND m.user_id = ctx_actor
+      JOIN public.role_permissions rp ON rp.tenant_id = ra.tenant_id AND rp.role_id = ra.role_id AND rp.permission_code = 'master.conversion.approve'
+     WHERE ra.revoked_at IS NULL AND ra.valid_from <= pg_catalog.now() AND (ra.valid_until IS NULL OR ra.valid_until > pg_catalog.now())
+  ) THEN
+    RAISE EXCEPTION 'not allowed to validate conversion data' USING ERRCODE = 'EO010';
+  END IF;
+
+  IF ver.prepared_by = ctx_actor OR EXISTS (
+    SELECT 1 FROM public.conversion_profile_version_contributors pc WHERE pc.profile_version_id = ver.id AND pc.actor = ctx_actor
+  ) THEN
+    RAISE EXCEPTION 'an author of the version cannot validate it' USING ERRCODE = 'EO011';
+  END IF;
+
+  IF ver.status <> 'SUBMITTED' THEN
+    RAISE EXCEPTION 'only a submitted version can be validated' USING ERRCODE = 'EO012';
+  END IF;
+  IF ver.effective_from < today THEN
+    RAISE EXCEPTION 'the version would take effect in the past' USING ERRCODE = 'EO012';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.conversion_profiles p WHERE p.id = ver.profile_id AND p.status = 'ACTIVE') THEN
+    RAISE EXCEPTION 'the conversion profile is inactive' USING ERRCODE = 'EO013';
+  END IF;
+
+  FOR previous IN
+    SELECT v.id, v.effective_from FROM public.conversion_profile_versions v
+     WHERE v.profile_id = ver.profile_id AND v.status = 'VALIDATED' AND v.id <> ver.id
+       AND (v.effective_to IS NULL OR v.effective_to >= ver.effective_from)
+     FOR UPDATE
+  LOOP
+    IF previous.effective_from >= ver.effective_from THEN
+      RAISE EXCEPTION 'the new version must start after the version it replaces' USING ERRCODE = 'EO012';
+    END IF;
+    SELECT pg_catalog.to_jsonb(v) INTO before_row FROM public.conversion_profile_versions v WHERE v.id = previous.id;
+    UPDATE public.conversion_profile_versions SET effective_to = ver.effective_from - 1, superseded_by_id = ver.id WHERE id = previous.id;
+    SELECT pg_catalog.to_jsonb(v) INTO after_row FROM public.conversion_profile_versions v WHERE v.id = previous.id;
+    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+    VALUES (ctx_tenant, 'conversion_profile_version.ended', 'conversion_profile_version', previous.id, NULL,
+            pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
+            pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
+            pg_catalog.jsonb_build_object('replacedBy', ver.id));
+    replaced := previous.id;
+  END LOOP;
+
+  SELECT pg_catalog.to_jsonb(v) INTO before_row FROM public.conversion_profile_versions v WHERE v.id = ver.id;
+  UPDATE public.conversion_profile_versions SET status = 'VALIDATED', validated_by = ctx_actor, validated_at = pg_catalog.now() WHERE id = ver.id;
+  SELECT pg_catalog.to_jsonb(v) INTO after_row FROM public.conversion_profile_versions v WHERE v.id = ver.id;
+  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+  VALUES (ctx_tenant, 'conversion_profile_version.validated', 'conversion_profile_version', ver.id, NULL,
+          pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
+          pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
+          CASE WHEN replaced IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('replaces', replaced) END);
+
+  RETURN replaced;
+END
+$fn$;
+
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA lifecycle_api FROM PUBLIC;
 
 RESET ROLE;
@@ -367,3 +546,5 @@ GRANT USAGE ON SCHEMA lifecycle_api TO eora_app;
 GRANT EXECUTE ON FUNCTION lifecycle_api.approve_routing_version(uuid) TO eora_app;
 GRANT EXECUTE ON FUNCTION lifecycle_api.approve_bom_version(uuid) TO eora_app;
 GRANT EXECUTE ON FUNCTION lifecycle_api.approve_bom_routing_map(uuid) TO eora_app;
+GRANT EXECUTE ON FUNCTION lifecycle_api.validate_item_weight(uuid) TO eora_app;
+GRANT EXECUTE ON FUNCTION lifecycle_api.validate_conversion_profile_version(uuid) TO eora_app;

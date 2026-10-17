@@ -55,6 +55,8 @@ final class SecurityBaseline
         'lifecycle_api.approve_routing_version(uuid)' => ['owner' => 'eora_lifecycle_definer', 'execute' => ['eora_app']],
         'lifecycle_api.approve_bom_version(uuid)' => ['owner' => 'eora_lifecycle_definer', 'execute' => ['eora_app']],
         'lifecycle_api.approve_bom_routing_map(uuid)' => ['owner' => 'eora_lifecycle_definer', 'execute' => ['eora_app']],
+        'lifecycle_api.validate_item_weight(uuid)' => ['owner' => 'eora_lifecycle_definer', 'execute' => ['eora_app']],
+        'lifecycle_api.validate_conversion_profile_version(uuid)' => ['owner' => 'eora_lifecycle_definer', 'execute' => ['eora_app']],
         // outbox relay surface — doc 25 §6.4 (M1 step 7b), R-30/R-33
         'outbox_api.claim_events(text,integer)' => ['owner' => 'eora_outbox_definer', 'execute' => ['eora_relay']],
         'outbox_api.complete_event(uuid,uuid)' => ['owner' => 'eora_outbox_definer', 'execute' => ['eora_relay']],

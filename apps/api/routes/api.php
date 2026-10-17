@@ -6,6 +6,8 @@ use App\Modules\Core\Http\PartnerController;
 use App\Modules\Core\Http\ResourceController;
 use App\Modules\Planning\Http\BomController;
 use App\Modules\Planning\Http\BomRoutingMapController;
+use App\Modules\Planning\Http\ConversionProfileController;
+use App\Modules\Planning\Http\ItemWeightController;
 use App\Modules\Planning\Http\RoutingController;
 use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
@@ -119,6 +121,28 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('bom-routing-maps/{map}/actions/reject', [BomRoutingMapController::class, 'reject'])->name('bom-routing-maps.reject');
         Route::post('bom-routing-maps/{map}/actions/reopen', [BomRoutingMapController::class, 'reopen'])->name('bom-routing-maps.reopen');
         Route::post('bom-routing-maps/{map}/actions/approve', [BomRoutingMapController::class, 'approve'])->name('bom-routing-maps.approve');
+
+        // Conversion data (doc 29 §1.5, D-080; tenant-wide, master.conversion.*): net weights and conversion profiles
+        Route::post('item-weights', [ItemWeightController::class, 'store'])->name('item-weights.store');
+        Route::get('item-weights/{weight}', [ItemWeightController::class, 'show'])->name('item-weights.show');
+        Route::patch('item-weights/{weight}', [ItemWeightController::class, 'updateWeight'])->name('item-weights.update');
+        Route::post('item-weights/{weight}/actions/submit', [ItemWeightController::class, 'submit'])->name('item-weights.submit');
+        Route::post('item-weights/{weight}/actions/withdraw', [ItemWeightController::class, 'withdraw'])->name('item-weights.withdraw');
+        Route::post('item-weights/{weight}/actions/reject', [ItemWeightController::class, 'reject'])->name('item-weights.reject');
+        Route::post('item-weights/{weight}/actions/reopen', [ItemWeightController::class, 'reopen'])->name('item-weights.reopen');
+        Route::post('item-weights/{weight}/actions/validate', [ItemWeightController::class, 'validate'])->name('item-weights.validate');
+        Route::post('item-weights/{weight}/actions/retire', [ItemWeightController::class, 'retire'])->name('item-weights.retire');
+        Route::get('conversion-formulas', [ConversionProfileController::class, 'formulas'])->name('conversion-formulas.index');
+        Route::patch('conversion-profiles/{profile}', [ConversionProfileController::class, 'updateProfile'])->name('conversion-profiles.update');
+        Route::post('conversion-profile-versions', [ConversionProfileController::class, 'storeVersion'])->name('conversion-profile-versions.store');
+        Route::get('conversion-profile-versions/{version}', [ConversionProfileController::class, 'showVersion'])->name('conversion-profile-versions.show');
+        Route::patch('conversion-profile-versions/{version}', [ConversionProfileController::class, 'updateVersion'])->name('conversion-profile-versions.update');
+        Route::post('conversion-profile-versions/{version}/actions/submit', [ConversionProfileController::class, 'submit'])->name('conversion-profile-versions.submit');
+        Route::post('conversion-profile-versions/{version}/actions/withdraw', [ConversionProfileController::class, 'withdraw'])->name('conversion-profile-versions.withdraw');
+        Route::post('conversion-profile-versions/{version}/actions/reject', [ConversionProfileController::class, 'reject'])->name('conversion-profile-versions.reject');
+        Route::post('conversion-profile-versions/{version}/actions/reopen', [ConversionProfileController::class, 'reopen'])->name('conversion-profile-versions.reopen');
+        Route::post('conversion-profile-versions/{version}/actions/validate', [ConversionProfileController::class, 'validate'])->name('conversion-profile-versions.validate');
+        Route::post('conversion-profile-versions/{version}/actions/retire', [ConversionProfileController::class, 'retire'])->name('conversion-profile-versions.retire');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

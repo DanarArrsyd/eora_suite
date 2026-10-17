@@ -288,6 +288,10 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   `VersionLifecycle`): BOM versions per item (D-078, any scope), lines edited as one list; maps per (BOM version, routing
   version) pair, drafted on locked versions and approved when both are approved (D-079). Approval through
   `lifecycle_api.approve_bom_version` / `approve_bom_routing_map`.
+- Conversion data (step 5a, migration `001500`, `ItemWeightController`, `ConversionProfileController`, shared
+  `ConversionLifecycle`, `Conversion\FormulaCatalog`): net weights per item and conversion profiles per (part, material)
+  pair with versioned formula inputs in fixed units (D-080); validated by a second person through
+  `lifecycle_api.validate_item_weight` / `validate_conversion_profile_version`; stored only, no GYV/PvS/UMV yet (B8).
 
 ## Endpoints (B0)
 | Method | Path | Purpose |

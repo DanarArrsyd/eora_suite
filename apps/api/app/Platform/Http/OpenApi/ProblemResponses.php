@@ -132,6 +132,27 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.planning.bom-routing-maps.reject' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.planning.bom-routing-maps.reopen' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
         'v1.planning.bom-routing-maps.approve' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        // conversion data (doc 29 §1.5, D-080)
+        'v1.planning.item-weights.store' => self::TENANT_WRITE + self::MASTER_403 + [409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.item-weights.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
+        'v1.planning.item-weights.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.item-weights.submit' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.item-weights.withdraw' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.item-weights.reject' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.item-weights.reopen' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.item-weights.validate' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.item-weights.retire' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.conversion-profile-versions.store' => self::TENANT_WRITE + self::MASTER_403 + [409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.conversion-profile-versions.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
+        'v1.planning.conversion-profile-versions.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.conversion-profile-versions.submit' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.conversion-profile-versions.withdraw' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.conversion-profile-versions.reject' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.conversion-profile-versions.reopen' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.conversion-profile-versions.validate' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.conversion-profile-versions.retire' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.conversion-formulas.index' => self::TENANT_READ,
+        'v1.planning.conversion-profiles.update' => self::MASTER_EDIT,
     ];
 
     /** Laravel-shaped error components Scramble registers; replaced by the problem responses above. */
