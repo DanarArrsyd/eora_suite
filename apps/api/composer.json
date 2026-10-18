@@ -9,6 +9,8 @@
         "laravel/framework": "^13.33",
         "laravel/sanctum": "^4.3.3",
         "laravel/tinker": "^3.0",
+        "league/flysystem-aws-s3-v3": "^3.35.3",
+        "openspout/openspout": "^5.12.2",
         "predis/predis": "^3.6"
     },
     "require-dev": {

@@ -292,6 +292,12 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   `ConversionLifecycle`, `Conversion\FormulaCatalog`): net weights per item and conversion profiles per (part, material)
   pair with versioned formula inputs in fixed units (D-080); validated by a second person through
   `lifecycle_api.validate_item_weight` / `validate_conversion_profile_version`; stored only, no GYV/PvS/UMV yet (B8).
+- Excel import (step 6a, migration `001600`, `app/Platform/Import`, ADR-0017, D-081): `ImportController` (templates,
+  upload with atomic reservation, preview rows, error file, submit/commit/reject), `ImportProcessor` (validation and
+  fenced chunk commits, run by `ProcessImport` on the Redis queue `imports` in the `import-worker` service),
+  `ImportLease` (claim, heartbeat, fence, worker-lost), templates in their modules (`Modules/Core/Import`: units, items,
+  material specs). Files live on the `imports` disk — SeaweedFS S3 in compose (D-082), bucket created by the one-shot
+  `seaweedfs-init`; keys `EORA_IMPORTS_KEY`/`EORA_IMPORTS_SECRET` come from `scripts/ensure-dev-secrets.sh`.
 
 ## Endpoints (B0)
 | Method | Path | Purpose |

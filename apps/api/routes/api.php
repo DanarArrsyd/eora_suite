@@ -13,6 +13,7 @@ use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
 use App\Platform\Auth\Http\AuthController;
 use App\Platform\Http\Controllers\HealthController;
+use App\Platform\Import\ImportController;
 use App\Platform\Inbox\Http\InboxController;
 use App\Platform\Query\Http\QueryController;
 use Illuminate\Support\Facades\Route;
@@ -149,5 +150,18 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
     Route::prefix('query')->name('query.')->middleware('tenant')->group(function (): void {
         Route::get('{resource}/schema', [QueryController::class, 'schema'])->where('resource', '[a-z][a-z_]*\.[a-z][a-z_]*')->name('schema');
         Route::get('{resource}', [QueryController::class, 'index'])->where('resource', '[a-z][a-z_]*\.[a-z][a-z_]*')->name('index');
+    });
+
+    // Data exchange → Import (doc 29 §1.6, doc 26 §5, ADR-0017, D-081): upload, preview, error file, submit, commit
+    Route::prefix('exchange')->name('exchange.')->middleware('tenant')->group(function (): void {
+        Route::get('import-templates', [ImportController::class, 'templates'])->name('import-templates.index');
+        Route::get('import-templates/{template}/file', [ImportController::class, 'templateFile'])->name('import-templates.file');
+        Route::post('imports', [ImportController::class, 'store'])->name('imports.store');
+        Route::get('imports/{job}', [ImportController::class, 'show'])->name('imports.show');
+        Route::get('imports/{job}/rows', [ImportController::class, 'rows'])->name('imports.rows');
+        Route::get('imports/{job}/error-file', [ImportController::class, 'errorFile'])->name('imports.error-file');
+        Route::post('imports/{job}/actions/submit', [ImportController::class, 'submit'])->name('imports.submit');
+        Route::post('imports/{job}/actions/commit', [ImportController::class, 'commit'])->name('imports.commit');
+        Route::post('imports/{job}/actions/reject', [ImportController::class, 'reject'])->name('imports.reject');
     });
 });

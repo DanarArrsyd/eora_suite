@@ -168,6 +168,8 @@ jobs:
       EORA_DB_RELAY_PASSWORD: ci-only-throwaway-relay-00000000
       EORA_PEPPER_KEY: d2000000d2000000d2000000d2000000d2000000d2000000d2000000d2000000
       EORA_CTX_KEY_KID1: c1000000c1000000c1000000c1000000c1000000c1000000c1000000c1000000
+      EORA_IMPORTS_KEY: ci-imports-key
+      EORA_IMPORTS_SECRET: ci-only-throwaway-imports-secret
     steps:
       - uses: actions/checkout@v5
       - name: Validate compose file
@@ -226,6 +228,8 @@ jobs:
       EORA_DB_RELAY_PASSWORD: ci-only-throwaway-relay-00000000
       EORA_PEPPER_KEY: d2000000d2000000d2000000d2000000d2000000d2000000d2000000d2000000
       EORA_CTX_KEY_KID1: c1000000c1000000c1000000c1000000c1000000c1000000c1000000c1000000
+      EORA_IMPORTS_KEY: ci-imports-key
+      EORA_IMPORTS_SECRET: ci-only-throwaway-imports-secret
       # rewrites are fixed at build time: the web build proxies /api and /sanctum to the stack's API
       EORA_API_ORIGIN: http://127.0.0.1:8000
     steps:

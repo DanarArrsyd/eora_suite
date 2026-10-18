@@ -153,6 +153,16 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.planning.conversion-profile-versions.retire' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
         'v1.planning.conversion-formulas.index' => self::TENANT_READ,
         'v1.planning.conversion-profiles.update' => self::MASTER_EDIT,
+        // import (doc 29 §1.6, ADR-0017, D-081)
+        'v1.exchange.import-templates.index' => self::TENANT_READ,
+        'v1.exchange.import-templates.file' => self::TENANT_READ + [422 => ['VALIDATION_FAILED']],
+        'v1.exchange.imports.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.exchange.imports.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
+        'v1.exchange.imports.rows' => self::TENANT_READ + [404 => ['NOT_FOUND'], 422 => ['VALIDATION_FAILED']],
+        'v1.exchange.imports.error-file' => self::TENANT_READ + [404 => ['NOT_FOUND']],
+        'v1.exchange.imports.submit' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.exchange.imports.commit' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.exchange.imports.reject' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
     ];
 
     /** Laravel-shaped error components Scramble registers; replaced by the problem responses above. */
