@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Import\ImportLease;
 use App\Platform\Import\ImportProcessor;
+use App\Platform\Import\LeaseBusy;
 use App\Platform\Import\LostLease;
 use App\Platform\Import\ProcessImport;
 use App\Platform\Import\XlsxFile;
@@ -304,4 +305,59 @@ it('imports units and material specifications, and serves the empty template of 
     expect(impJob($this->t, $specs))->committed_rows->toBe(1)->error_rows->toBe(2);
     spa($this)->getJson('/api/v1/query/core.items?filter[id]='.$item['id'])->assertOk()
         ->assertJsonPath('data.0.specThicknessMm', '1.200')->assertJsonPath('data.0.specDensityGCm3', '7.8500');
+})->group('integration', 'import');
+
+it('keeps a redelivered message waiting while another worker holds a live lease', function () {
+    orgUser($this, $this->t, 'CSA');
+    $id = impUpload($this, impFile(IMP_ITEM_HEADER, impItems(1)))->assertCreated()->json('data.id');
+    $context = TenantContext::forTenant($this->t['tenant'], (string) impJob($this->t, $id)->created_by_user);
+    app(TenantTransaction::class)->run($context, fn (EoraPostgresConnection $db) => ImportLease::claim($db, $id, ['RESERVED'], 'VALIDATING', 'w1'));
+
+    // the second delivery must not be acknowledged as done: the queue releases it until the lease expires
+    expect(fn () => impWork($this->t, $id, 'validate', 'w2'))->toThrow(LeaseBusy::class);
+    impExpireLease($this->t, $id);
+    impWork($this->t, $id, 'validate', 'w2');
+    expect(impJob($this->t, $id)->status)->toBe('VALIDATED');
+})->group('integration', 'import');
+
+it('rechecks the commit permissions in every chunk and reports rows refused at commit in a fresh error file', function () {
+    $csa = orgUser($this, $this->t, 'CSA');
+    $id = impUpload($this, impFile(IMP_ITEM_HEADER, [...impItems(2), ['DRW-0', 'Drawing zero', 'FINISHED', 'PCS', '', '', '', '0', 'A']]))->assertCreated()->json('data.id');
+    impWork($this->t, $id, 'validate');
+    expect(impJob($this->t, $id))->error_rows->toBe(0)->error_file_key->toBeNull();
+    spa($this)->postJson("/api/v1/exchange/imports/{$id}/actions/submit")->assertOk();
+    spa($this)->postJson("/api/v1/exchange/imports/{$id}/actions/commit")->assertOk();
+
+    // created on screen after the preview: that row fails at commit and lands in a new error file
+    spa($this)->postJson('/api/v1/core/items', ['code' => 'PART-0002', 'name' => 'On screen', 'itemType' => 'FINISHED',
+        'baseUomId' => AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne("select id from uoms where code = 'PCS'")->id)])->assertCreated();
+    impWork($this->t, $id, 'commit');
+    $job = impJob($this->t, $id);
+    expect($job)->status->toBe('COMMITTED')->committed_rows->toBe(2)->error_rows->toBe(1)->error_file_key->not->toBeNull();
+    $drawing = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne("select drawing_no, drawing_rev from items where code = 'DRW-0'"));
+    expect($drawing->drawing_no)->toBe('0')->and($drawing->drawing_rev)->toBe('A'); // "0" is text, not empty
+
+    // a poster who loses the permission stops the commit at the next chunk
+    $other = impUpload($this, impFile(IMP_ITEM_HEADER, impItems(2, 10)))->assertCreated()->json('data.id');
+    impWork($this->t, $other, 'validate');
+    spa($this)->postJson("/api/v1/exchange/imports/{$other}/actions/submit")->assertOk();
+    spa($this)->postJson("/api/v1/exchange/imports/{$other}/actions/commit")->assertOk();
+    foreach (AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->select(
+        'select ra.id from role_assignments ra join memberships m on m.id = ra.membership_id where m.user_id = ? and ra.revoked_at is null', [$csa['id']],
+    )) as $a) {
+        AccessFixtures::revoke($this->t, (string) $a->id);
+    }
+    impWork($this->t, $other, 'commit');
+    expect(impJob($this->t, $other))->status->toBe('FAILED')->failure_code->toBe('NOT_ALLOWED')->committed_rows->toBe(0);
+})->group('integration', 'import');
+
+it('refuses material-spec values that do not fit their columns instead of failing the chunk', function () {
+    orgUser($this, $this->t, 'CSA');
+    $kg = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne("select id from uoms where code = 'KG'")->id);
+    spa($this)->postJson('/api/v1/core/items', ['code' => 'COIL-A', 'name' => 'Coil A', 'itemType' => 'RAW', 'baseUomId' => $kg])->assertCreated();
+    $id = impUpload($this, impFile(['Item code', 'Grade', 'Thickness mm', 'Width mm', 'Density g/cm3'], [['COIL-A', '0', '10000000', '120', '7.85']], 'specs.xlsx'), 'material_specs')
+        ->assertCreated()->json('data.id');
+    impWork($this->t, $id, 'validate');
+    expect(spa($this)->getJson("/api/v1/exchange/imports/{$id}/rows?status=ERROR")->json('data.0.errors'))
+        ->toBe(['Thickness mm: enter a number above 0, below 10000000 with at most 3 decimals.']);
 })->group('integration', 'import');

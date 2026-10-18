@@ -38,15 +38,24 @@ final class RowRules
         return $value === '' ? $default : in_array(strtoupper($value), self::YES, true);
     }
 
-    /** A positive decimal with at most `$decimals` decimals (empty is allowed; combine with required()). */
-    public static function positiveDecimal(string $value, int $decimals, string $header): ?string
+    /**
+     * A positive decimal that fits the column: at most `$digits` digits before the point and `$decimals` after
+     * (`numeric(p, s)` → digits p − s). Empty is allowed; combine with required().
+     */
+    public static function positiveDecimal(string $value, int $decimals, string $header, int $digits = 12): ?string
     {
         if ($value === '') {
             return null;
         }
 
-        return preg_match('/^\d{1,12}(\.\d{1,'.$decimals.'})?$/', $value) === 1 && (float) $value > 0
-            ? null : "{$header}: enter a number above 0 with at most {$decimals} decimals.";
+        return preg_match('/^\d{1,'.$digits.'}(\.\d{1,'.$decimals.'})?$/', $value) === 1 && (float) $value > 0
+            ? null : "{$header}: enter a number above 0, below 1".str_repeat('0', $digits)." with at most {$decimals} decimals.";
+    }
+
+    /** Optional text: '' becomes null, anything else (including "0") is kept. */
+    public static function text(string $value): ?string
+    {
+        return $value === '' ? null : $value;
     }
 
     /**

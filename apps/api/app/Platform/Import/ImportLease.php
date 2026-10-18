@@ -40,6 +40,23 @@ final readonly class ImportLease
         return $row === null ? null : new self($jobId, (int) $row->claim_generation, $worker);
     }
 
+    /**
+     * After a failed claim: LeaseBusy when the job is still in one of `$from` under another worker's live lease (the
+     * message has to wait); nothing when the job moved on (nothing left to do).
+     *
+     * @param  list<string>  $from
+     */
+    public static function refuseIfBusy(EoraPostgresConnection $db, string $jobId, array $from): void
+    {
+        $job = $db->selectOne(
+            'select status, ceil(extract(epoch from (lease_until - now())))::int as seconds from import_jobs where id = ? and locked_by is not null and lease_until > now()',
+            [$jobId],
+        );
+        if ($job !== null && in_array($job->status, $from, true)) {
+            throw new LeaseBusy(max(1, (int) $job->seconds));
+        }
+    }
+
     /** Throws LostLease unless this generation still owns the job, its lease is live and it is in `$status`. */
     public function fence(EoraPostgresConnection $db, string $status): void
     {

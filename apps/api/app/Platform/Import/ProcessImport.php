@@ -11,7 +11,7 @@ use Illuminate\Queue\InteractsWithQueue;
 
 /**
  * Queue message for the import worker (`import-worker`, queue `imports`, ADR-0017 §4): only ids from the job row, never
- * client input. A redelivered message after a worker crash takes the job over once its lease expired.
+ * client input. A redelivered message after a worker crash waits until the lease expired, then takes the job over.
  */
 final class ProcessImport implements ShouldQueue
 {
@@ -19,10 +19,14 @@ final class ProcessImport implements ShouldQueue
     use InteractsWithQueue;
     use Queueable;
 
-    public int $tries = 5;
-
     /** @var list<int> */
     public array $backoff = [10, 30, 60, 120];
+
+    /** Retries (crashes, leases still held by a lost worker) are bounded by time rather than by count. */
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addHours(2);
+    }
 
     public function __construct(
         public readonly string $tenantId,
@@ -36,8 +40,13 @@ final class ProcessImport implements ShouldQueue
     public function handle(ImportProcessor $processor): void
     {
         $worker = sprintf('%s:%d:%s', gethostname() ?: 'worker', getmypid() ?: 0, bin2hex(random_bytes(4)));
-        $this->phase === 'commit'
-            ? $processor->commit($this->tenantId, $this->jobId, $this->actorId, $worker)
-            : $processor->validate($this->tenantId, $this->jobId, $this->actorId, $worker);
+        try {
+            $this->phase === 'commit'
+                ? $processor->commit($this->tenantId, $this->jobId, $this->actorId, $worker)
+                : $processor->validate($this->tenantId, $this->jobId, $this->actorId, $worker);
+        } catch (LeaseBusy $busy) {
+            // another worker (or a crashed one) still holds the lease: come back once it expired and take over
+            $this->release($busy->seconds + 2);
+        }
     }
 }

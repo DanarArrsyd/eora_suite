@@ -45,9 +45,9 @@ final class MaterialSpecsTemplate implements ImportTemplate
         return [
             new ImportColumn('Item code', true, 'Code of an existing item.'),
             new ImportColumn('Grade', false, 'At most 60 characters, e.g. SPCC.'),
-            new ImportColumn('Thickness mm', false, 'Above 0, at most 3 decimals.'),
-            new ImportColumn('Width mm', false, 'Above 0, at most 3 decimals.'),
-            new ImportColumn('Density g/cm3', false, 'Above 0, at most 4 decimals, e.g. 7.85.'),
+            new ImportColumn('Thickness mm', false, 'Above 0 and below 10,000,000, at most 3 decimals.'),
+            new ImportColumn('Width mm', false, 'Above 0 and below 10,000,000, at most 3 decimals.'),
+            new ImportColumn('Density g/cm3', false, 'Above 0 and below 10,000, at most 4 decimals, e.g. 7.85.'),
         ];
     }
 
@@ -57,9 +57,10 @@ final class MaterialSpecsTemplate implements ImportTemplate
         $errors = RowRules::collect([
             RowRules::required($code, 'Item code'),
             RowRules::maxLength($row['Grade'], 60, 'Grade'),
-            RowRules::positiveDecimal($row['Thickness mm'], 3, 'Thickness mm'),
-            RowRules::positiveDecimal($row['Width mm'], 3, 'Width mm'),
-            RowRules::positiveDecimal($row['Density g/cm3'], 4, 'Density g/cm3'),
+            // numeric(10,3) and numeric(8,4) in material_specs
+            RowRules::positiveDecimal($row['Thickness mm'], 3, 'Thickness mm', 7),
+            RowRules::positiveDecimal($row['Width mm'], 3, 'Width mm', 7),
+            RowRules::positiveDecimal($row['Density g/cm3'], 4, 'Density g/cm3', 4),
             $row['Grade'].$row['Thickness mm'].$row['Width mm'].$row['Density g/cm3'] === '' ? 'Enter at least one property.' : null,
         ]);
         if ($code !== '') {
@@ -79,7 +80,7 @@ final class MaterialSpecsTemplate implements ImportTemplate
         $item = (string) $db->selectOne('select id from items where code = ? for update', [strtoupper($row['Item code'])])->id;
         $id = (string) $db->selectOne(
             'insert into material_specs (tenant_id, item_id, grade, thickness_mm, width_mm, density_g_cm3) values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?) returning id',
-            [$item, $row['Grade'] ?: null, $row['Thickness mm'] ?: null, $row['Width mm'] ?: null, $row['Density g/cm3'] ?: null],
+            [$item, RowRules::text($row['Grade']), RowRules::text($row['Thickness mm']), RowRules::text($row['Width mm']), RowRules::text($row['Density g/cm3'])],
         )->id;
         $this->audit->record($db, 'material_spec.created', 'material_spec', $id, null, (array) $db->selectOne('select * from material_specs where id = ?', [$id]),
             ['itemId' => $item, 'source' => 'import']);

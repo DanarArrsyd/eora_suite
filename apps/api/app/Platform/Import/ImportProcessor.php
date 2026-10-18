@@ -40,6 +40,8 @@ final class ImportProcessor
         $context = TenantContext::forTenant($tenant, $actor);
         $lease = $this->tx->run($context, fn (EoraPostgresConnection $db) => ImportLease::claim($db, $jobId, ['RESERVED', 'VALIDATING'], 'VALIDATING', $worker));
         if ($lease === null) {
+            $this->tx->run($context, fn (EoraPostgresConnection $db) => ImportLease::refuseIfBusy($db, $jobId, ['VALIDATING']));
+
             return;
         }
         $job = $this->tx->run($context, fn (EoraPostgresConnection $db) => $db->selectOne('select * from import_jobs where id = ?', [$jobId]));
@@ -60,6 +62,8 @@ final class ImportProcessor
         $context = TenantContext::forTenant($tenant, $actor);
         $lease = $this->tx->run($context, fn (EoraPostgresConnection $db) => ImportLease::claim($db, $jobId, ['COMMITTING'], 'COMMITTING', $worker));
         if ($lease === null) {
+            $this->tx->run($context, fn (EoraPostgresConnection $db) => ImportLease::refuseIfBusy($db, $jobId, ['COMMITTING']));
+
             return;
         }
         try {
@@ -68,27 +72,16 @@ final class ImportProcessor
             if ($template->mode() !== ImportTemplate::VALID_ROWS) {
                 throw new LogicException('All-or-nothing templates commit in step 6c.');
             }
-            // the committing user must still hold both permissions (D-081)
-            $allowed = $this->tx->run($context, function (EoraPostgresConnection $db) use ($template): bool {
-                try {
-                    $this->authorizer->requireAnywhere($db, 'exchange.import.post');
-                    $this->authorizer->requireAnywhere($db, $template->targetPermission());
-
-                    return true;
-                } catch (DomainProblem) {
-                    return false;
-                }
-            });
-            if (! $allowed) {
-                $this->finish($context, $lease, 'COMMITTING', ['status' => 'FAILED', 'failure_code' => 'NOT_ALLOWED',
-                    'failure_detail' => 'The person committing no longer has the permissions to import this template.'], 'import_job.failed');
-
-                return;
-            }
-            while ($this->commitChunk($context, $lease, $job, $template)) {
-                // next chunk
-            }
-            $this->finish($context, $lease, 'COMMITTING', ['status' => 'COMMITTED', 'committed_at' => now()->toIso8601String()], 'import_job.committed');
+            do {
+                $step = $this->commitChunk($context, $lease, $job, $template);
+            } while ($step === 'more');
+            // rows refused at commit time join the error file
+            $errorKey = $this->errorFile($context, $job, array_map(static fn (ImportColumn $c) => $c->header, $template->columns()));
+            $this->finish($context, $lease, 'COMMITTING', $step === 'denied'
+                ? ['status' => 'FAILED', 'failure_code' => 'NOT_ALLOWED', 'error_file_key' => $errorKey,
+                    'failure_detail' => 'The person committing no longer has the permissions to import this template. Rows committed before are kept.']
+                : ['status' => 'COMMITTED', 'committed_at' => now()->toIso8601String(), 'error_file_key' => $errorKey],
+                $step === 'denied' ? 'import_job.failed' : 'import_job.committed');
         } catch (LostLease) {
             return;
         }
@@ -196,15 +189,24 @@ final class ImportProcessor
         });
     }
 
-    /** Commits the next chunk of VALID rows; false when none is left. */
-    private function commitChunk(TenantContext $context, ImportLease $lease, stdClass $job, ImportTemplate $template): bool
+    /**
+     * Commits the next chunk of VALID rows: 'more', 'done' when none is left, 'denied' when the committing user lost a
+     * permission (checked in every chunk transaction, D-081 — a revocation stops the next chunk).
+     */
+    private function commitChunk(TenantContext $context, ImportLease $lease, stdClass $job, ImportTemplate $template): string
     {
-        return $this->tx->run($context, function (EoraPostgresConnection $db) use ($lease, $job, $template): bool {
+        return $this->tx->run($context, function (EoraPostgresConnection $db) use ($lease, $job, $template): string {
             $lease->fence($db, 'COMMITTING');
+            try {
+                $this->authorizer->requireAnywhere($db, 'exchange.import.post', lock: true);
+                $this->authorizer->requireAnywhere($db, $template->targetPermission(), lock: true);
+            } catch (DomainProblem) {
+                return 'denied';
+            }
             $lease->heartbeat($db);
             $rows = $db->select("select row_no, data from import_rows where job_id = ? and status = 'VALID' order by row_no limit ".self::CHUNK, [$job->id]);
             if ($rows === []) {
-                return false;
+                return 'done';
             }
             $chunk = (int) $db->selectOne('select coalesce(max(chunk_no), 0) + 1 as n from import_job_chunks where job_id = ?', [$job->id])->n;
             foreach ($rows as $r) {
@@ -225,10 +227,12 @@ final class ImportProcessor
                         // savepoint: a row the database refuses (e.g. created on screen meanwhile) fails alone
                         $id = $db->transaction(fn () => $template->commit($db, $data));
                     } catch (QueryException $e) {
-                        if ($e->getCode() !== '23505') {
-                            throw $e;
-                        }
-                        $errors = ['It already exists (created after the file was checked).'];
+                        // a row the database refuses fails alone: duplicate since the check, value out of range, rule
+                        $errors = match ((string) $e->getCode()) {
+                            '23505' => ['It already exists (created after the file was checked).'],
+                            '22003', '22001', '23514' => ['The database refused a value of this row (out of range or not allowed).'],
+                            default => throw $e,
+                        };
                     }
                 }
                 if ($id === null) {
@@ -249,7 +253,7 @@ final class ImportProcessor
                 [$job->id, $chunk, $lease->generation],
             );
 
-            return true;
+            return 'more';
         });
     }
 

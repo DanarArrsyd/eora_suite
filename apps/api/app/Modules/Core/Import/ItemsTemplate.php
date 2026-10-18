@@ -101,7 +101,7 @@ final class ItemsTemplate implements ImportTemplate
              values ((select c.tenant from ctx_api.context() c), ?, ?, ?, (select id from uoms where code = ?), ?, ?, ?, ?, ?) returning id',
             [$code, $row['Name'], strtoupper($row['Item type']), strtoupper($row['Base unit']),
                 RowRules::isYes($row['Lot controlled'], true), RowRules::isYes($row['Inspection required'], false),
-                RowRules::isYes($row['Incoming release required'], false), $row['Drawing no'] ?: null, $row['Drawing rev'] ?: null],
+                RowRules::isYes($row['Incoming release required'], false), RowRules::text($row['Drawing no']), RowRules::text($row['Drawing rev'])],
         )->id;
         $this->audit->record($db, 'item.created', 'item', $id, null, (array) $db->selectOne('select * from items where id = ?', [$id]),
             ['code' => $code, 'itemType' => strtoupper($row['Item type']), 'source' => 'import']);
