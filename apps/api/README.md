@@ -298,6 +298,9 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   `ImportLease` (claim, heartbeat, fence, worker-lost), templates in their modules (`Modules/Core/Import`: units, items,
   material specs). Files live on the `imports` disk — SeaweedFS S3 in compose (D-082), bucket created by the one-shot
   `seaweedfs-init`; keys `EORA_IMPORTS_KEY`/`EORA_IMPORTS_SECRET` come from `scripts/ensure-dev-secrets.sh`.
+  Step 6b adds the other master templates on the shared `Import\MasterTemplate` (plant scope per row, references by code):
+  warehouses, locations, work centers, machines, dies, die parts, unit conversions, customers, customer parts,
+  suppliers (`Modules/Core/Import`) and process types (`Modules/Planning/Import`).
 
 ## Endpoints (B0)
 | Method | Path | Purpose |
