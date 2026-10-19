@@ -1,9 +1,19 @@
 <?php
 
 declare(strict_types=1);
+use App\Modules\Core\Import\CustomerItemsTemplate;
+use App\Modules\Core\Import\CustomersTemplate;
+use App\Modules\Core\Import\DieItemsTemplate;
+use App\Modules\Core\Import\DiesTemplate;
 use App\Modules\Core\Import\ItemsTemplate;
+use App\Modules\Core\Import\LocationsTemplate;
+use App\Modules\Core\Import\MachinesTemplate;
 use App\Modules\Core\Import\MaterialSpecsTemplate;
+use App\Modules\Core\Import\SuppliersTemplate;
+use App\Modules\Core\Import\UomConversionsTemplate;
 use App\Modules\Core\Import\UomsTemplate;
+use App\Modules\Core\Import\WarehousesTemplate;
+use App\Modules\Core\Import\WorkCentersTemplate;
 use App\Modules\Core\Queries\CompaniesQuery;
 use App\Modules\Core\Queries\CustomerItemsQuery;
 use App\Modules\Core\Queries\CustomersQuery;
@@ -18,6 +28,7 @@ use App\Modules\Core\Queries\UomConversionsQuery;
 use App\Modules\Core\Queries\UomsQuery;
 use App\Modules\Core\Queries\WarehousesQuery;
 use App\Modules\Core\Queries\WorkCentersQuery;
+use App\Modules\Planning\Import\ProcessTypesTemplate;
 use App\Modules\Planning\Queries\BomRoutingMapsQuery;
 use App\Modules\Planning\Queries\BomVersionsQuery;
 use App\Modules\Planning\Queries\ConversionProfilesQuery;
@@ -94,6 +105,17 @@ return [
         'uoms' => UomsTemplate::class,
         'items' => ItemsTemplate::class,
         'material_specs' => MaterialSpecsTemplate::class,
+        'uom_conversions' => UomConversionsTemplate::class,
+        'customers' => CustomersTemplate::class,
+        'customer_items' => CustomerItemsTemplate::class,
+        'suppliers' => SuppliersTemplate::class,
+        'warehouses' => WarehousesTemplate::class,
+        'locations' => LocationsTemplate::class,
+        'work_centers' => WorkCentersTemplate::class,
+        'machines' => MachinesTemplate::class,
+        'dies' => DiesTemplate::class,
+        'die_items' => DieItemsTemplate::class,
+        'process_types' => ProcessTypesTemplate::class,
     ],
     'import' => [
         'lease_seconds' => (int) env('EORA_IMPORT_LEASE_SECONDS', 300),
