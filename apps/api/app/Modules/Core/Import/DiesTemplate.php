@@ -32,7 +32,7 @@ final class DiesTemplate extends MasterTemplate
     {
         return [
             new ImportColumn('Plant code', true, 'Code of an existing plant in your roles.'),
-            new ImportColumn('Code', true, '1–20 characters A-Z, 0-9, "_" or "-"; unique in the company.'),
+            new ImportColumn('Code', true, '1–20 characters A-Z, 0-9, "_" or "-"; unique across all plants and companies of the tenant.'),
             new ImportColumn('Name', true, 'At most 200 characters.'),
             new ImportColumn('Die type', true, 'DIE, JIG or FIXTURE.'),
             new ImportColumn('Cavities', false, 'Whole number 1–1000; empty = 1.'),
