@@ -179,12 +179,16 @@ final class ImportController
         return Storage::disk(ImportProcessor::DISK)->download((string) $row->error_file_key, sprintf('eora-%s-errors.xlsx', str_replace('_', '-', (string) $row->template)));
     }
 
-    /** VALIDATED → SUBMITTED for commit: needs at least one valid row. */
+    /** VALIDATED → SUBMITTED for commit: needs at least one valid row (and no error row for an all-or-nothing template). */
     public function submit(string $job): JsonResponse
     {
         [$db, $row] = $this->locked($job, self::SUBMIT, ['VALIDATED']);
         if ((int) $row->valid_rows === 0) {
             throw ValidationException::withMessages(['job' => 'No row is valid. Fix the file and upload it again.']);
+        }
+        // all-or-nothing templates (routings, BOMs, maps) commit only a file without a single error row (D-B2-07)
+        if ((int) $row->error_rows > 0 && $this->templates->get((string) $row->template)->mode() === ImportTemplate::ALL_OR_NOTHING) {
+            throw ValidationException::withMessages(['job' => 'This template imports everything or nothing: fix the rows with errors and upload the file again.']);
         }
         $this->move($db, $row, ['status' => 'SUBMITTED', 'submitted_by' => $this->actor($db), 'submitted_at' => now()->toIso8601String()], 'import_job.submitted');
 

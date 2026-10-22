@@ -69,8 +69,10 @@ final class ImportProcessor
         try {
             $job = $this->tx->run($context, fn (EoraPostgresConnection $db) => $db->selectOne('select * from import_jobs where id = ?', [$jobId]));
             $template = $this->templates->get((string) $job->template);
-            if ($template->mode() !== ImportTemplate::VALID_ROWS) {
-                throw new LogicException('All-or-nothing templates commit in step 6c.');
+            if ($template instanceof GroupedTemplate) {
+                $this->commitWhole($context, $lease, $job, $template);
+
+                return;
             }
             do {
                 $step = $this->commitChunk($context, $lease, $job, $template);
@@ -152,9 +154,135 @@ final class ImportProcessor
             return;
         }
         $this->stageBatch($context, $lease, $job, $template, $committed, $batch, $seen);
+        if ($template instanceof GroupedTemplate) {
+            // checks that need the whole file (e.g. every BOM line mapped once)
+            $this->tx->run($context, function (EoraPostgresConnection $db) use ($lease, $job, $template): void {
+                $lease->fence($db, 'VALIDATING');
+                foreach ($template->finalize($db, $this->validRows($db, $job)) as $rowNo => $problems) {
+                    $this->addErrors($db, $job, $rowNo, $problems);
+                }
+            });
+        }
 
         $errorKey = $this->errorFile($context, $job, $headers);
         $this->finish($context, $lease, 'VALIDATING', ['status' => 'VALIDATED', 'error_file_key' => $errorKey], 'import_job.validated');
+    }
+
+    /**
+     * All-or-nothing (D-B2-07, ADR-0017 §7): one fenced transaction re-checks every row against the current data and
+     * writes them all, or writes nothing. A job whose rows no longer pass — or that the database refuses — fails as a
+     * whole (COMMIT_REFUSED) with the reasons on its rows; uploading the same file again is a retry job. A worker lost
+     * inside the transaction leaves nothing behind, so the takeover simply commits everything once (B2-AT-61, 73).
+     */
+    private function commitWhole(TenantContext $context, ImportLease $lease, stdClass $job, GroupedTemplate $template): void
+    {
+        $headers = array_map(static fn (ImportColumn $c) => $c->header, $template->columns());
+        $reason = null;
+        try {
+            $outcome = $this->tx->run($context, function (EoraPostgresConnection $db) use ($lease, $job, $template): string {
+                $lease->fence($db, 'COMMITTING');
+                // an earlier worker committed everything and died before recording it: the job is done, not refused
+                if ($db->selectOne('select 1 as ok from import_job_chunks where job_id = ?', [$job->id]) !== null) {
+                    return 'done';
+                }
+                try {
+                    $this->authorizer->requireAnywhere($db, 'exchange.import.post', lock: true);
+                    $this->authorizer->requireAnywhere($db, $template->targetPermission(), lock: true);
+                } catch (DomainProblem) {
+                    return 'denied';
+                }
+                $rows = $this->validRows($db, $job);
+                $problems = [];
+                $seen = [];
+                foreach ($rows as $rowNo => $row) {
+                    $found = $template->validate($db, $row, $rowNo, $seen);
+                    if ($found !== []) {
+                        $problems[$rowNo] = $found;
+                    }
+                }
+                foreach ($template->finalize($db, $rows) as $rowNo => $found) {
+                    $problems[$rowNo] = [...($problems[$rowNo] ?? []), ...$found];
+                }
+                if ($problems !== []) {
+                    // nothing is written; only the reasons are kept on their rows
+                    foreach ($problems as $rowNo => $found) {
+                        $this->addErrors($db, $job, $rowNo, $found);
+                    }
+
+                    return 'refused';
+                }
+                foreach ($template->commitAll($db, $rows) as $rowNo => $id) {
+                    $db->insert(
+                        'insert into import_source_rows (tenant_id, root_job_id, row_no, committed_by_job_id, claim_generation, entity_ref)
+                         values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?)',
+                        [$job->root_job_id, $rowNo, $job->id, $lease->generation, $id],
+                    );
+                    $db->update("update import_rows set status = 'COMMITTED', entity_ref = ? where job_id = ? and row_no = ?", [$id, $job->id, $rowNo]);
+                }
+                $db->insert(
+                    'insert into import_job_chunks (tenant_id, job_id, chunk_no, claim_generation) values ((select c.tenant from ctx_api.context() c), ?, 1, ?)',
+                    [$job->id, $lease->generation],
+                );
+
+                return 'done';
+            });
+        } catch (GroupRefused $e) {
+            // a group no longer fits once locked (e.g. another job opened a version of it meanwhile): nothing was written
+            $outcome = 'refused';
+            $reason = $e->getMessage();
+        } catch (QueryException $e) {
+            // a guard of the database refused the content (e.g. a die no longer linked to the item): nothing was written
+            if (! in_array((string) $e->getCode(), ['EO012', 'EO013', '23505', '23503', '23514', '22003', '22001'], true)) {
+                throw $e;
+            }
+            $outcome = 'refused';
+            $reason = preg_match('/ERROR:\s+(.+?)(?:\n|\(Connection|$)/', $e->getPrevious()?->getMessage() ?? $e->getMessage(), $m) === 1 ? ucfirst(trim($m[1])).'.' : 'The database refused the import.';
+        }
+        if ($reason !== null) {
+            // the refusal cannot be tied to one row: it stands on every row that was about to be written
+            $this->tx->run($context, function (EoraPostgresConnection $db) use ($lease, $job, $reason): void {
+                $lease->fence($db, 'COMMITTING');
+                $db->update(
+                    "update import_rows set status = 'ERROR', errors = errors || ?::jsonb where job_id = ? and status = 'VALID'",
+                    [json_encode(["Refused at commit: {$reason}"], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), $job->id],
+                );
+            });
+        }
+        $errorKey = $this->errorFile($context, $job, $headers);
+        $this->finish($context, $lease, 'COMMITTING', match ($outcome) {
+            'done' => ['status' => 'COMMITTED', 'committed_at' => now()->toIso8601String(), 'error_file_key' => $errorKey],
+            'denied' => ['status' => 'FAILED', 'failure_code' => 'NOT_ALLOWED', 'error_file_key' => $errorKey,
+                'failure_detail' => 'The person committing no longer has the permissions to import this template. Nothing was imported.'],
+            default => ['status' => 'FAILED', 'failure_code' => 'COMMIT_REFUSED', 'error_file_key' => $errorKey,
+                'failure_detail' => trim('Nothing was imported: the file no longer passes against the current data. '.($reason ?? 'See the rows with errors.'))
+                    .' Fix it and upload it again.'],
+        }, $outcome === 'done' ? 'import_job.committed' : 'import_job.failed');
+    }
+
+    /** @return array<int, array<string, string>> the job's VALID rows, row number => row, in file order */
+    private function validRows(EoraPostgresConnection $db, stdClass $job): array
+    {
+        $rows = [];
+        foreach ($db->select("select row_no, data from import_rows where job_id = ? and status = 'VALID' order by row_no", [$job->id]) as $r) {
+            /** @var array<string, string> $data */
+            $data = json_decode((string) $r->data, true, flags: JSON_THROW_ON_ERROR);
+            $rows[(int) $r->row_no] = $data;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Adds problems to a staged row and marks it ERROR.
+     *
+     * @param  list<string>  $problems
+     */
+    private function addErrors(EoraPostgresConnection $db, stdClass $job, int $rowNo, array $problems): void
+    {
+        $db->update(
+            "update import_rows set status = 'ERROR', errors = errors || ?::jsonb where job_id = ? and row_no = ?",
+            [json_encode($problems, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), $job->id, $rowNo],
+        );
     }
 
     /**

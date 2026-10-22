@@ -300,7 +300,9 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   `seaweedfs-init`; keys `EORA_IMPORTS_KEY`/`EORA_IMPORTS_SECRET` come from `scripts/ensure-dev-secrets.sh`.
   Step 6b adds the other master templates on the shared `Import\MasterTemplate` (plant scope per row, references by code):
   warehouses, locations, work centers, machines, dies, die parts, unit conversions, customers, customer parts,
-  suppliers (`Modules/Core/Import`) and process types (`Modules/Planning/Import`).
+  suppliers (`Modules/Core/Import`) and process types (`Modules/Planning/Import`). Step 6c adds the all-or-nothing
+  templates routings, BOMs and BOM–routing maps (`Import\GroupedTemplate`, `Modules/Planning/Import`): new DRAFT
+  versions/revisions only (D-083), committed in one fenced transaction or not at all (COMMIT_REFUSED).
 
 ## Endpoints (B0)
 | Method | Path | Purpose |

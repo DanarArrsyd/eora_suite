@@ -847,7 +847,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** VALIDATED → SUBMITTED for commit: needs at least one valid row */
+        /** VALIDATED → SUBMITTED for commit: needs at least one valid row (and no error row for an all-or-nothing template) */
         post: operations["v1.exchange.imports.submit"];
         delete?: never;
         options?: never;

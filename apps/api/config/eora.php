@@ -28,7 +28,10 @@ use App\Modules\Core\Queries\UomConversionsQuery;
 use App\Modules\Core\Queries\UomsQuery;
 use App\Modules\Core\Queries\WarehousesQuery;
 use App\Modules\Core\Queries\WorkCentersQuery;
+use App\Modules\Planning\Import\BomRoutingMapsTemplate;
+use App\Modules\Planning\Import\BomsTemplate;
 use App\Modules\Planning\Import\ProcessTypesTemplate;
+use App\Modules\Planning\Import\RoutingsTemplate;
 use App\Modules\Planning\Queries\BomRoutingMapsQuery;
 use App\Modules\Planning\Queries\BomVersionsQuery;
 use App\Modules\Planning\Queries\ConversionProfilesQuery;
@@ -116,6 +119,9 @@ return [
         'dies' => DiesTemplate::class,
         'die_items' => DieItemsTemplate::class,
         'process_types' => ProcessTypesTemplate::class,
+        'routings' => RoutingsTemplate::class,
+        'boms' => BomsTemplate::class,
+        'bom_routing_maps' => BomRoutingMapsTemplate::class,
     ],
     'import' => [
         'lease_seconds' => (int) env('EORA_IMPORT_LEASE_SECONDS', 300),
