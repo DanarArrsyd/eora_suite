@@ -183,3 +183,26 @@ it('writes nothing when rows no longer pass at commit, and the retry commits eve
     expect($count())->toBe(3) // one routing + two operations
         ->and((int) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select count(*) as n from import_source_rows')->n))->toBe(2);
 })->group('integration', 'import');
+
+it('records a database refusal on the rows, and finishes a job whose commit landed before the worker died', function () {
+    orgUser($this, $this->t, 'CSA');
+    rtSetup($this, $this->t);
+    // two new PRIMARY routings of one item and plant pass row by row, but the database allows one: nothing is written
+    $rows = engOps($this->t);
+    $second = array_map(static fn (array $r) => array_replace($r, [2 => 'R2']), $rows);
+    $job = engCommit($this, $this->t, engUpload($this, $this->t, 'routings', ENG_ROUTING_HEADER, [...$rows, ...$second]));
+    expect($job)->status->toBe('FAILED')->failure_code->toBe('COMMIT_REFUSED')->error_rows->toBe(4)->error_file_key->not->toBeNull();
+    expect(spa($this)->getJson("/api/v1/exchange/imports/{$job->id}/rows?status=ERROR")->json('data.0.errors.0'))->toStartWith('Refused at commit: ');
+    expect((int) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select count(*) as n from routings')->n))->toBe(0);
+
+    // a worker committed and died before recording it: the redelivered message finishes the job instead of refusing it
+    $ok = engUpload($this, $this->t, 'routings', ENG_ROUTING_HEADER, $rows);
+    spa($this)->postJson("/api/v1/exchange/imports/{$ok}/actions/submit")->assertOk();
+    spa($this)->postJson("/api/v1/exchange/imports/{$ok}/actions/commit")->assertOk();
+    AccessFixtures::run($this->t, function (EoraPostgresConnection $db) use ($ok): void {
+        $db->update("update import_rows set status = 'COMMITTED' where job_id = ?", [$ok]);
+        $db->insert('insert into import_job_chunks (tenant_id, job_id, chunk_no, claim_generation) select tenant_id, id, 1, claim_generation from import_jobs where id = ?', [$ok]);
+    });
+    impWork($this->t, $ok, 'commit');
+    expect(impJob($this->t, $ok))->status->toBe('COMMITTED')->committed_rows->toBe(2);
+})->group('integration', 'import');

@@ -181,6 +181,10 @@ final class ImportProcessor
         try {
             $outcome = $this->tx->run($context, function (EoraPostgresConnection $db) use ($lease, $job, $template): string {
                 $lease->fence($db, 'COMMITTING');
+                // an earlier worker committed everything and died before recording it: the job is done, not refused
+                if ($db->selectOne('select 1 as ok from import_job_chunks where job_id = ?', [$job->id]) !== null) {
+                    return 'done';
+                }
                 try {
                     $this->authorizer->requireAnywhere($db, 'exchange.import.post', lock: true);
                     $this->authorizer->requireAnywhere($db, $template->targetPermission(), lock: true);
@@ -222,13 +226,27 @@ final class ImportProcessor
 
                 return 'done';
             });
+        } catch (GroupRefused $e) {
+            // a group no longer fits once locked (e.g. another job opened a version of it meanwhile): nothing was written
+            $outcome = 'refused';
+            $reason = $e->getMessage();
         } catch (QueryException $e) {
             // a guard of the database refused the content (e.g. a die no longer linked to the item): nothing was written
             if (! in_array((string) $e->getCode(), ['EO012', 'EO013', '23505', '23503', '23514', '22003', '22001'], true)) {
                 throw $e;
             }
             $outcome = 'refused';
-            $reason = preg_match('/ERROR:\s+(.+?)(?:\n|\(Connection|$)/', $e->getPrevious()?->getMessage() ?? $e->getMessage(), $m) === 1 ? ucfirst(trim($m[1])).'.' : null;
+            $reason = preg_match('/ERROR:\s+(.+?)(?:\n|\(Connection|$)/', $e->getPrevious()?->getMessage() ?? $e->getMessage(), $m) === 1 ? ucfirst(trim($m[1])).'.' : 'The database refused the import.';
+        }
+        if ($reason !== null) {
+            // the refusal cannot be tied to one row: it stands on every row that was about to be written
+            $this->tx->run($context, function (EoraPostgresConnection $db) use ($lease, $job, $reason): void {
+                $lease->fence($db, 'COMMITTING');
+                $db->update(
+                    "update import_rows set status = 'ERROR', errors = errors || ?::jsonb where job_id = ? and status = 'VALID'",
+                    [json_encode(["Refused at commit: {$reason}"], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), $job->id],
+                );
+            });
         }
         $errorKey = $this->errorFile($context, $job, $headers);
         $this->finish($context, $lease, 'COMMITTING', match ($outcome) {

@@ -6,6 +6,7 @@ namespace App\Modules\Planning\Import;
 
 use App\Modules\Planning\Http\BomController;
 use App\Platform\Database\EoraPostgresConnection;
+use App\Platform\Import\GroupRefused;
 use App\Platform\Import\ImportColumn;
 use App\Platform\Import\RowRules;
 
@@ -110,6 +111,10 @@ final class BomsTemplate extends EngineeringTemplate
         foreach (self::groups($rows, static fn (array $r) => strtoupper($r['Item code'])) as $itemCode => $group) {
             $first = $group[(int) array_key_first($group)] ?? [];
             $item = (string) $db->selectOne('select id from items where code = ? for update', [$itemCode])->id;
+            // checked again under the lock: another job may have opened a version since this one was checked
+            if ($db->selectOne("select 1 as ok from bom_versions where item_id = ? and status in ('DRAFT', 'SUBMITTED', 'REJECTED')", [$item]) !== null) {
+                throw new GroupRefused("The BOM of {$itemCode} got an open version meanwhile. Finish or withdraw it first.");
+            }
             $no = (int) $db->selectOne('select coalesce(max(version_no), 0) + 1 as n from bom_versions where item_id = ?', [$item])->n;
             $version = (string) $db->selectOne(
                 'insert into bom_versions (tenant_id, item_id, version_no, effective_from, change_reason) values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?) returning id',

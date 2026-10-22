@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Planning\Import;
 
 use App\Platform\Database\EoraPostgresConnection;
+use App\Platform\Import\GroupRefused;
 use App\Platform\Import\ImportColumn;
 use App\Platform\Import\RowRules;
 use LogicException;
@@ -106,9 +107,14 @@ final class BomRoutingMapsTemplate extends EngineeringTemplate
         foreach (self::groups($rows, self::key(...)) as $group) {
             $first = $group[(int) array_key_first($group)] ?? [];
             $plant = $this->plant($db, $first['Plant code']) ?? throw new LogicException('The plant vanished after validation.');
-            $ignored = [];
-            $pair = $this->pair($db, $plant, $first, $ignored) ?? throw new LogicException('The map pair changed after validation.');
+            $problems = [];
+            $pair = $this->pair($db, $plant, $first, $problems) ?? throw new GroupRefused(implode(' ', $problems));
             $db->selectOne('select id from bom_versions where id = ? for update', [$pair->bom_version_id]);
+            // checked again under the lock: another job may have opened a revision of this pair since this one was checked
+            if ($db->selectOne("select 1 as ok from bom_routing_maps where bom_version_id = ? and routing_version_id = ? and status in ('DRAFT', 'SUBMITTED', 'REJECTED')",
+                [$pair->bom_version_id, $pair->routing_version_id]) !== null) {
+                throw new GroupRefused('These versions got an open map meanwhile. Finish or withdraw it first.');
+            }
             $revision = (int) $db->selectOne('select coalesce(max(map_revision), 0) + 1 as n from bom_routing_maps where bom_version_id = ? and routing_version_id = ?',
                 [$pair->bom_version_id, $pair->routing_version_id])->n;
             $map = (string) $db->selectOne(

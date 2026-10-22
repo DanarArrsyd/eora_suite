@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Planning\Import;
 
 use App\Platform\Database\EoraPostgresConnection;
+use App\Platform\Import\GroupRefused;
 use App\Platform\Import\ImportColumn;
 use App\Platform\Import\RowRules;
 use LogicException;
@@ -116,6 +117,10 @@ final class RoutingsTemplate extends EngineeringTemplate
             $item = (string) $db->selectOne('select id from items where code = ?', [strtoupper($first['Item code'])])->id;
             $code = strtoupper($first['Routing code']);
             $routing = $db->selectOne('select id from routings where plant_id = ? and item_id = ? and routing_code = ? for update', [$plant->id, $item, $code])?->id;
+            // checked again under the lock: another job may have opened a version since this one was checked
+            if ($routing !== null && $db->selectOne("select 1 as ok from routing_versions where routing_id = ? and status in ('DRAFT', 'SUBMITTED', 'REJECTED')", [$routing]) !== null) {
+                throw new GroupRefused("Routing {$code} got an open version meanwhile. Finish or withdraw it first.");
+            }
             if ($routing === null) {
                 $routing = (string) $db->selectOne(
                     'insert into routings (tenant_id, plant_id, item_id, routing_code, routing_kind) values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?) returning id',
