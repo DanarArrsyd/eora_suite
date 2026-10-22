@@ -14924,7 +14924,7 @@
         "/exchange/imports/{job}/actions/submit": {
             "post": {
                 "operationId": "v1.exchange.imports.submit",
-                "summary": "VALIDATED \u2192 SUBMITTED for commit: needs at least one valid row",
+                "summary": "VALIDATED \u2192 SUBMITTED for commit: needs at least one valid row (and no error row for an all-or-nothing template)",
                 "tags": [
                     "Import"
                 ],
