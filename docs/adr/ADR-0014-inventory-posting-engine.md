@@ -13,10 +13,11 @@ ADR-0002 fixes the ledger semantics. Phase 3.5 needs an implementable engine: on
 5. Document numbering: counter row per (tenant, plant, doc_type, year) locked in the same transaction (O-032); numbers never reused, reversal gets its own number.
 6. New document type `MAT_TRANSFER` (O-031) for same-status location transfers.
 7. Outbox + audit rows written in the same transaction; events carry ids, not quantities for decisions.
+8. Every movement leg carries a `movement_code` from the system catalogue (D-084, doc 04 §Movement codes); the service picks it from the posting matrix, never from client input. A reversal leg repeats the original code with the opposite quantity and `reverses_movement_id`.
 
 ## Consequences
 + Correctness concentrated in one tested service; concurrency behaviour predictable.
 − Hot lots serialize (accepted; W-07).
 
 ## Verification
-Posting-matrix integration tests (doc 10), concurrency tests (doc 20 §8), projection rebuild equality, grant test (UPDATE on movements fails).
+Posting-matrix integration tests (doc 10), concurrency tests (doc 20 §8), projection rebuild equality, grant test (UPDATE on movements fails), every leg's code matches its matrix row and a reversal nets to zero per code.
