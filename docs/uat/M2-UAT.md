@@ -65,3 +65,29 @@ Butuh item jadi BRK-100 dan bahan coil (satuan KG) dengan material spec terisi (
 | 8 | **Edit inputs** → Parts per stroke `1.5` → Save. | Ditolak di field itu: harus bilangan bulat minimal 1. Setiap input punya satuan tetap (mm, g/cm3, pc/stroke). | |
 | 9 | Isi semua input (lebar 120, pitch 320, parts per stroke 1, head + tail 1500, setup 0) → Save → Submit. Login `ppc` → **Validate**. | Version 1 **Validated**; di daftar profile kolom "Version in use" = Version 1. | |
 | 10 | Login `ppc` atau `csa` → BOMs → BOM BRK-100 → **New version** → edit baris coil → **Conversion profile**. | Pilihan: "No conversion profile" dan "Coil profile, version 1 in use". Setelah disimpan kolom Conversion profile = **Linked**. Komponen lain tidak menawarkan profile coil ini. | |
+
+## 5. Import Excel (langkah 6d, D-081, D-083)
+File contoh ada di `docs/uat/samples/` (01 sampai 17, urutan impor). Isinya pabrik stamping contoh di plant P1: dua part jadi (BRK-A100, BRK-B200), satu Semi-Finished Material (PLT-C300), bahan, tooling, routing, BOM dan map. Tanggal "Effective from" di file = 2027-01-04; setelah tanggal itu lewat, buat ulang file dengan tanggal baru:
+```bash
+docker compose run --rm -v "$PWD/docs/uat/samples:/out" --entrypoint php db-migrate artisan eora:demo:import-samples /out
+```
+`ppc` boleh unggah dan submit; commit dilakukan `csa` (izin `exchange.import.post` + izin master tujuan). `csa` juga boleh menjalankan seluruh alur sendiri.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `ppc` → Master Data → **Data Exchange → Import**. | Daftar job impor (kosong atau berisi job lama) dengan filter Status dan Template; tombol **New import**. | |
+| 2 | **New import** → Template **Units of measure**. | Tabel kolom (Code, Name, Unit class, Decimals) dengan wajib/tidak dan petunjuk isi; info "Valid rows are saved"; tombol **Download empty template** mengunduh `eora-uoms-v1.xlsx`. | |
+| 3 | Pilih file selain .xlsx (mis. .csv). | Langsung ditolak di bawah area file: "Use the Excel template (.xlsx)…". | |
+| 4 | Pilih `01-uoms.xlsx` (tombol **Choose file** atau seret ke area file) → **Upload and check**. | Halaman job terbuka; langkah Check berjalan lalu otomatis ke **Review** tanpa reload: 2 baris, 2 valid, 0 error. | |
+| 5 | **Submit for commit**. | Status **Submitted**, "Waiting for someone allowed to commit imports." Tombol **Commit** untuk `ppc` tidak aktif dengan alasannya. | |
+| 6 | Login `csa` → Import → buka job itu → **Commit**. | Langkah Commit lalu **Result**: status **Committed**, 2 baris Committed, tercatat submitted by ppc dan committed by csa. Satuan M dan L ada di Parts → Units & Conversions. | |
+| 7 | Unggah `01-uoms.xlsx` sekali lagi. | Terbuka job yang sama (tidak ada job ganda untuk file yang sama). | |
+| 8 | Sebagai `csa`, impor `02` sampai `13` berurutan (upload → submit → commit). | Setiap job **Committed** tanpa baris error; datanya muncul di Items, Customers, Customer Part Mapping, Suppliers, Plants & Warehouses, Work Centers (mesin, dies, die parts). | |
+| 9 | Impor `14-process-types.xlsx`. | Process type BLANK sudah dibuat di bagian 2: tab **With errors** terbuka dengan "Process type BLANK already exists."; **Error file** mengunduh baris itu beserta pesannya; 4 baris lain valid. Submit + Commit → 4 Committed, tombol **Upload corrected file** tetap ada. | |
+| 10 | Buka `15-routings.xlsx` di Excel, ubah Work center satu baris jadi `XXX`, simpan dengan nama lain, unggah. | Info "Everything or nothing"; baris itu error, **Submit for commit** tidak aktif: "Every row must be valid for this template." Tidak ada yang tersimpan. | |
+| 11 | Unggah `15-routings.xlsx` asli → Submit → Commit. | 7 baris Committed. Di Routings: BRK-A100, BRK-B200, PLT-C300 masing-masing Version 1 **Draft** dengan operasinya; approval tetap oleh orang kedua. | |
+| 12 | Impor `16-boms.xlsx`. | 3 BOM Version 1 **Draft**. | |
+| 13 | Unggah `17-bom-routing-maps.xlsx` sebelum versi routing/BOM di-submit. | Setiap baris error: "Submit the BOM version and the routing version first…". **Reject** dengan alasan "Versi belum submit" → status **Rejected**, alasan tampil. | |
+| 14 | Submit Version 1 ketiga routing dan ketiga BOM di halamannya, lalu unggah `17` lagi → Submit → Commit. | Job baru dengan "Retry of the previous job"; 4 baris Committed; map tiap BOM berstatus **Draft**. | |
+| 15 | Ubah judul kolom `Name` di `05-customers.xlsx` jadi `Nama`, unggah. | Langkah **Check** gagal (tanda silang): "The job stopped" dengan kolom yang hilang dan kolom asing. **Upload corrected file** membuka New import dengan template Customers terpilih. | |
+| 16 | Buka halaman job di HP (atau lebar layar 375 px). | Tombol membungkus rapi, langkah dan angka terbaca, baris tampil sebagai kartu "Row N" dengan pesan error-nya. | |

@@ -6,9 +6,10 @@ import { MasterGroupScreen, type MasterGroup } from './master-screen';
 import { MASTER_SCREENS } from './resources';
 import { BomsScreen } from './bom-screen';
 import { ConversionDataScreen } from './conversion-screen';
+import { ImportScreen } from './import-screen';
 import { RoutingsScreen } from './routing-screen';
 
-/** Master Data module screens (D-074, D-076): organisation, parts, partners, engineering. */
+/** Master Data module screens (D-074, D-076): organisation, parts, partners, engineering, import. */
 const GROUPS: Record<string, MasterGroup> = {
   plants: MASTER_SCREENS.plants!,
   // Work Centers also shows which parts each die makes
@@ -21,6 +22,7 @@ export function MasterDataScreen({ item }: { item: string }) {
   if (item === 'routings') return <RoutingsScreen />;
   if (item === 'boms') return <BomsScreen />;
   if (item === 'conversion-data') return <ConversionDataScreen />;
+  if (item === 'import') return <ImportScreen />;
   const group = GROUPS[item];
   return group ? <MasterGroupScreen group={group} /> : null;
 }
