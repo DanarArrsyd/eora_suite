@@ -109,24 +109,24 @@ decision (doc 13) before it affects scope, schema or UI. Requested by the owner:
 4. **No finance**: goods movements carry quantities, not values; an export interface replaces GL integration.
 5. **Original UI** (ADR-0010): process parity does not mean screen or terminology parity.
 
-## 3. Proposals (all PROPOSED — owner decides)
+## 3. Proposals (all decided by the owner: P-02 on 2026-10-23, the rest on 2026-10-24)
 | ID | Proposal | Why (ERP practice) | Recommendation | Lands in |
 |---|---|---|---|---|
-| P-01 | **Document flow panel** on every transactional document: predecessors/successors (SO line → WO → issues → postings → inspection → FG receipt → delivery), built from source references + genealogy | Users navigate a flow by its documents; auditors trace one order end to end | Adopt (read model + shared UI component) | M4 (thin flow) |
-| P-02 | **Movement-type catalogue**: each inventory document leg carries a stable movement code (e.g. receipt, issue to production, return, transfer, scrap, QC release, delivery, reversal of each), documented in doc 04 with its stock-status effect | Makes the posting matrix explicit, reportable and filterable; reversal = paired code | Adopt — before M3 starts (schema) | M3 |
-| P-03 | **Availability check**: (a) WO release checks component availability (Firm Available) and warns/blocks per tenant policy; (b) SO schedule-line "promise date" from Firm + Projected supply, never Pending QC | Standard ATP at order entry and at production-order release | (a) warn-only in R1, (b) R2 | M4 (a), M5/R2 (b) |
-| P-04 | **Lightweight supplier PO reference / inbound schedule** (supplier, item, qty, expected date, status) feeding MPS "scheduled supply" and RM receipt — no pricing, approval or invoicing | MRP needs firm inbound supply; today scheduled RM supply has no source | Adopt as reference data only (changes doc 00 exclusion wording) | M5 |
-| P-05 | **Change number** grouping BOM/routing/map/conversion versions that must take effect together (one validity date, one approval view) | Engineering change management keeps related versions consistent | Defer to V2; note in doc 26 | V2 |
-| P-06 | **Finance export interface**: periodic export of goods movements (quantities, document ids, movement codes) for an external accounting system | Replaces GL integration while finance stays out of scope | Adopt as an Export Center report | M7+ |
-| P-07 | **Production-version selection** by lot-size range and validity on the BOM–routing map | Picks the right BOM/routing pair automatically for planned orders | Defer until MRP (M5) shows the need | M5 review |
-| P-08 | Confirm **no default backflush** (§2.1) and record it as a rule in doc 15 | Avoids pressure to copy ERP defaults | Confirm | doc only |
+| P-01 | **DECIDED D-085** — **Document flow panel** on every transactional document: predecessors/successors (SO line → WO → issues → postings → inspection → FG receipt → delivery), built from source references + genealogy | Users navigate a flow by its documents; auditors trace one order end to end | Adopt (read model + shared UI component) | M4 (thin flow) |
+| P-02 | **ADOPTED as D-084 (2026-10-23)** — **Movement-type catalogue**: each inventory document leg carries a stable movement code (e.g. receipt, issue to production, return, transfer, scrap, QC release, delivery, reversal of each), documented in doc 04 with its stock-status effect | Makes the posting matrix explicit, reportable and filterable; reversal = paired code | Adopt — before M3 starts (schema) | M3 |
+| P-03 | **DECIDED D-086** — **Availability check**: (a) WO release checks component availability (Firm Available) and warns/blocks per tenant policy; (b) SO schedule-line "promise date" from Firm + Projected supply, never Pending QC | Standard ATP at order entry and at production-order release | (a) warn-only in R1, (b) R2 | M4 (a), M5/R2 (b) |
+| P-04 | **DECIDED D-087** — **Lightweight supplier PO reference / inbound schedule** (supplier, item, qty, expected date, status) feeding MPS "scheduled supply" and RM receipt — no pricing, approval or invoicing | MRP needs firm inbound supply; today scheduled RM supply has no source | Adopt as reference data only (changes doc 00 exclusion wording) | M5 |
+| P-05 | **DEFERRED D-088** — **Change number** grouping BOM/routing/map/conversion versions that must take effect together (one validity date, one approval view) | Engineering change management keeps related versions consistent | Defer to V2; note in doc 26 | V2 |
+| P-06 | **DECIDED D-089** — **Finance export interface**: periodic export of goods movements (quantities, document ids, movement codes) for an external accounting system | Replaces GL integration while finance stays out of scope | Adopt as an Export Center report | M7+ |
+| P-07 | **DEFERRED D-090** — **Production-version selection** by lot-size range and validity on the BOM–routing map | Picks the right BOM/routing pair automatically for planned orders | Defer until MRP (M5) shows the need | M5 review |
+| P-08 | **DECIDED D-091, BR-CON-05** — Confirm **no default backflush** (§2.1) and record it as a rule in doc 15 | Avoids pressure to copy ERP defaults | Confirm | doc only |
 
 ## 4. Effect on the current plan
 - **M2 (in progress, step 6d next):** no change. Import, BOM/routing/map and conversion data already match standard
   master-data practice.
 - **Before M3:** decide **P-02** (movement codes are part of the ledger schema; changing them after M3 means a new
   migration and a data backfill).
-- **M4/M5:** P-01, P-03, P-04, P-07 are the candidates; each becomes a decision row (doc 13) plus BR rows (doc 15).
+- **M4/M5:** P-01 (D-085) and P-03a (D-086) land in M4, P-04 (D-087) in M5, P-07 reviewed in M5 (D-090); each adds its BR rows (doc 15) when its milestone scope is approved.
 - **Out of scope stays out:** billing, pricing, credit, GL, costing, HR, procurement approvals.
 
 ## 5. Next step

@@ -346,6 +346,7 @@ erDiagram
 |---|---|---|---|
 | D-B2-03 | O-003 Option S / M | **decided D-059** (M default, S per item) | — |
 | D-B2-11 | Outside processing (subcontract operations) | not in V1 scope today | V2 or explicit owner request |
+| D-088 | Change number grouping BOM/routing/map/conversion versions (doc 31 P-05) | V1 versions per object stay consistent through validity dates and approval | V2 |
 
 ### 11.4 Recorded direction and new proposal (v3)
 | ID | Item | Status |

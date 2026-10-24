@@ -50,5 +50,36 @@ All postings go through `InventoryPostingService` in one DB transaction: validat
 | 13 | Transaction Reversal (`REVERSAL`) | original POSTED, not already reversed, period rules (closed → correction in open period, BR-PER-02) | mirror of original | mirror of original | original legs negated, `reverses_document_id` | restores previous balances if stock still present | per type (doc 18) | reversal would make a balance negative → 409 `REVERSAL_BLOCKED_BY_DOWNSTREAM` (reverse downstream first) | not reversible again; repost corrected document |
 Invariants per posting: conservation for non-transformation documents (BR-INV-03); one consume leg per input lot per posting (BR-OUT-01); every leg carries plant, location, item, lot, status, ownership, UOM, run/WO refs; projections equal Σ ledger (BR-INV-11).
 
+## Movement codes (D-084)
+Every ledger leg (`inventory_movements.movement_code`, NOT NULL, CHECK against this system catalogue) says what the leg
+is, independent of the document type. A reversal leg repeats the original code with the opposite quantity and
+`reverses_movement_id` (row 13). Tenants cannot add codes; adjustment reason codes stay tenant-configurable.
+| Code | Leg meaning | Matrix row / document type | Typical source → destination |
+|---|---|---|---|
+| `RCPT_SUPPLIER` | goods received from a supplier | 1 `RM_RECEIPT` | `V_SUPPLIER` → RM warehouse (UNRESTRICTED / BLOCKED) |
+| `INCOMING_RELEASE` | blocked receipt released for use (D-062) | 1 follow-up status change | RM / BLOCKED → RM / UNRESTRICTED |
+| `ISSUE_TO_PROD` | material issued to Material at Production (no consumption) | 3 `MAT_ISSUE` | RM → `MAT_AT_PROD(wc)` or `CUSTODY_TRANSIT` |
+| `CUSTODY_ACCEPT` | production accepts issued material (two-step custody) | `CUSTODY_ACCEPT` | `CUSTODY_TRANSIT` → `MAT_AT_PROD(wc)` |
+| `TRANSFER_LOC` | same item/lot/status moved within a plant | 4 `MAT_TRANSFER` | location → location |
+| `TRANSFER_PLANT_OUT` / `TRANSFER_PLANT_IN` | authorized plant transfer, two steps | 4 `MAT_TRANSFER` | plant A → transit; transit → plant B |
+| `CONSUME` | actual measured consumption | 5 consume leg of `PRODUCTION_POSTING` | `MAT_AT_PROD(wc)` → `V_CONSUMED` |
+| `RETURN_FROM_PROD` | measured return to the RM warehouse | 6 `MAT_RETURN` | `MAT_AT_PROD(wc)` → RM |
+| `LOT_SPLIT_OUT` / `LOT_SPLIT_IN` | remnant split: parent out, child in (same location) | 7 `LOT_SPLIT` | parent lot → child lot |
+| `OUTPUT_GOOD` | good output | 8 produce leg | `V_PRODUCED` → `QC_AREA` / PENDING_QC (or UNRESTRICTED) |
+| `OUTPUT_NG_REWORK` | NG reworkable | 8 produce leg | `V_PRODUCED` → `NG_AREA` / REWORK |
+| `OUTPUT_NG_REJECT` | NG rejected | 8 produce leg | `V_PRODUCED` → `NG_AREA` / REJECTED |
+| `OUTPUT_SCRAP` | weighed process scrap | 8 produce leg | `V_PRODUCED` → `SCRAP_YARD` |
+| `OUTPUT_OTHER` | other documented output (e.g. lab sample) | 8 produce leg | `V_PRODUCED` → per document |
+| `QC_RELEASE` / `QC_HOLD` / `QC_REWORK` / `QC_REJECT` | quality disposition of a partial quantity | 9 `QC_DISPOSITION` | `QC_AREA` / PENDING_QC → status per disposition |
+| `REWORK_IN` / `REWORK_OUT` | rework posting (R2) | `REWORK_POSTING` | REWORK → re-inspection |
+| `FG_RECEIPT` | QC-released quantity received into the FG warehouse | 10 `FG_RECEIPT` | `QC_AREA` / QC_RELEASED → FG bin / UNRESTRICTED |
+| `PICK` | picked for a delivery | 11 `PICK` | FG → `STAGING` |
+| `SHIP` | dispatched to the customer | 11 `SHIPMENT` | `STAGING` → `V_CUSTOMER` |
+| `ADJ_PLUS` / `ADJ_MINUS` | approved stock adjustment (reason code required) | 12 `STOCK_ADJUSTMENT` | `V_ADJUSTMENT` ↔ location |
+| `SCRAP_DISPOSAL` | scrap or rejected stock leaves the plant | `SCRAP_DISPOSITION` | `SCRAP_YARD` / REJECTED → `V_ADJUSTMENT` |
+
+The codes are fixed before the M3 ledger migration; matrix rows 2 (allocation) and 13 (reversal) add no code of their
+own. A new code is a decision row (doc 13) plus a migration that extends the CHECK.
+
 ## Open physical design questions
 Item vs material lot granularity; serial tracking; coil/remnant ID lineage; intermediate material item naming; customer-owned/consignment stock; QC physical ownership and storage; yield version effective dates; stock count freeze vs snapshot; retention and data residency. Resolve via ADR before migrations.
