@@ -465,7 +465,7 @@ function TemplateFacts({ template, needs, canCommit }: { template: ImportTemplat
       <InlineAlert tone="info" title={template.mode === 'ALL_OR_NOTHING' ? 'Everything or nothing' : 'Valid rows are saved'}>
         {template.mode === 'ALL_OR_NOTHING'
           ? 'Nothing is saved unless every row is valid. The result lands as Draft versions that still need approval by a second person.'
-          : 'Rows with errors are skipped and listed in an error file; fix them and upload that file again.'}
+          : 'Rows with errors are skipped. The error file lists each row number with its problem, for reading only: fix those rows in your own file and upload it again.'}
         {needs.length ? ` Codes used here must exist first: import ${needs.join(', ')} before this one.` : ''}
         {canCommit
           ? ''

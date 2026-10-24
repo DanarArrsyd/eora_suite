@@ -94,9 +94,9 @@ export function jobSummary(job: ImportJob, template: ImportTemplateInfo | undefi
       return `Checking every row against the ${name} rules.`;
     case 'VALIDATED':
       return job.validRows === 0
-        ? 'No row can be imported. Download the error file, fix the rows and upload the file again.'
+        ? 'No row can be imported. The error file lists each row number with its problem; fix those rows in your own file and upload it again.'
         : template?.mode === 'ALL_OR_NOTHING' && job.errorRows > 0
-          ? 'This template imports everything or nothing. Fix the rows with errors and upload the file again.'
+          ? 'This template imports everything or nothing. Fix the rows with errors in your own file and upload it again.'
           : 'Review the rows, then submit the job for commit.';
     case 'SUBMITTED':
       return 'Waiting for someone allowed to commit imports.';

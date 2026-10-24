@@ -121,6 +121,8 @@ test('a new import shows the template columns and uploads the file as multipart'
   await choose(page, page.getByRole('combobox', { name: 'Template' }), 'Items');
   await expect(page.getByRole('table', { name: 'Columns of the Items template' })).toContainText('Base unit');
   await expect(page.getByText('Valid rows are saved')).toBeVisible();
+  // the error file carries Row and Errors columns, so it is read, not uploaded again
+  await expect(page.getByText('for reading only: fix those rows in your own file')).toBeVisible();
   // the uploader may not create parts: committing is someone else's step
   await expect(page.getByText('committing it needs a role that may change parts and partners')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Download empty template' })).toHaveAttribute('href', '/api/v1/exchange/import-templates/items/file');
@@ -183,7 +185,7 @@ test('a checked job opens on its error rows, offers the error file and is submit
 test('an all-or-nothing file with an error row cannot be submitted', async ({ page }) => {
   await setup(page, UPLOADER, { ...JOB, template: 'routings', fileName: 'routings.xlsx' });
   await page.goto(`/master/import?job=${JOB.id}`);
-  await expect(page.getByText('This template imports everything or nothing. Fix the rows with errors and upload the file again.')).toBeVisible();
+  await expect(page.getByText('This template imports everything or nothing. Fix the rows with errors in your own file and upload it again.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Submit for commit. Every row must be valid for this template.' })).toHaveAttribute('aria-disabled', 'true');
 });
 
