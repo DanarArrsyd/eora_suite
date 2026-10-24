@@ -88,6 +88,7 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 | BR-CON-02 | `UNMEASURED_BY_DIFFERENCE` consumption is PROVISIONAL, opens a case, and blocks FINAL indicators. | Production/Traceability | SVC | D-010 | by-difference test |
 | BR-CON-03 | Consumption cannot exceed available quantity of that lot at that work center. | Inventory | SVC | D-015 | over-consume test |
 | BR-CON-04 | Shared lot across WOs: consumed quantity allocated once per run; theoretical outputs of alternative parts never summed. | Production | SVC | doc 02 | multi-WO coil test |
+| BR-CON-05 | No default backflush: components are never consumed automatically from BOM × output quantity; every consumption is an explicit posting with measured quantity (or PROVISIONAL by-difference, BR-CON-02). | Production | SVC | D-091 | no-backflush test |
 
 ## Output (OUT)
 | ID | Rule | Owner | Enforce | Source | Test |

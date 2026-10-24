@@ -10,7 +10,7 @@ Core; Demand; Planning; Materials; Production; Quality; Inventory; Warehouse; De
 Pilot one plant per tenant, multi-plant-ready data model; multiple tenants isolated. Include partial WO, partial QC, material substitution, returns/remnants, partial shipments, stock count/adjustment, reconciliation, correction workflow. Avoid broad general-purpose workflow builder in V1.
 
 ## Excluded / deferred
-General Ledger, cost accounting/valuation, HR/payroll, full supplier procurement, advanced APS optimizer, MES machine IoT integration, predictive AI, complex process-manufacturing formulation, LIMS. Document interfaces for later phases without building them.
+General Ledger, cost accounting/valuation, HR/payroll, full supplier procurement (only a reference inbound schedule without pricing or approval, D-087), advanced APS optimizer, MES machine IoT integration, predictive AI, complex process-manufacturing formulation, LIMS. Document interfaces for later phases without building them.
 
 ## Core truths
 - Material at Production remains stock until consumption, transfer, scrap or return is posted.
