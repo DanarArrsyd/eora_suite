@@ -21,7 +21,7 @@ describe('import job steps', () => {
     expect(jobSummary(JOB, TEMPLATE)).toContain('everything or nothing');
     expect(jobSummary({ ...JOB, errorRows: 0 }, TEMPLATE)).toContain('submit the job');
     expect(jobSummary({ ...JOB, status: 'COMMITTED' }, TEMPLATE)).toContain('Draft versions');
-    expect(jobSummary({ ...JOB, validRows: 0 }, { ...TEMPLATE, mode: 'VALID_ROWS' })).toContain('No row can be imported');
+    expect(jobSummary({ ...JOB, validRows: 0 }, { ...TEMPLATE, mode: 'VALID_ROWS' })).toContain('fix those rows in your own file');
   });
 });
 
