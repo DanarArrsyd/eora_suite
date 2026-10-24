@@ -474,6 +474,11 @@ export const NAV_MODULES: readonly NavModule[] = [
           { id: 'conversion-data', label: 'Conversion Data', icon: Weight, release: 'R1', permission: 'master.conversion.view', phase: 'later' },
         ],
       },
+      {
+        // M2 step 6 (D-081): Excel import of master data; uploading needs exchange.import.create
+        label: 'Data Exchange',
+        items: [{ id: 'import', label: 'Import', icon: Upload, release: 'R1', permission: 'exchange.import.create', phase: 'later' }],
+      },
     ],
   },
   {

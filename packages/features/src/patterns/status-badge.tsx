@@ -64,6 +64,24 @@ export const STATUS_CATALOGUE = {
     SUSPENDED: { label: 'Suspended', tone: 'warning' },
     REVOKED: { label: 'Revoked', tone: 'neutral' },
   },
+  /** Import job (ADR-0017, D-081): read and checked by the worker, submitted, then committed by someone allowed to. */
+  importJob: {
+    RESERVED: { label: 'Queued', tone: 'info' },
+    VALIDATING: { label: 'Checking', tone: 'info' },
+    VALIDATED: { label: 'Checked', tone: 'info' },
+    SUBMITTED: { label: 'Submitted', tone: 'info' },
+    COMMITTING: { label: 'Committing', tone: 'info' },
+    COMMITTED: { label: 'Committed', tone: 'success' },
+    REJECTED: { label: 'Rejected', tone: 'neutral' },
+    FAILED: { label: 'Failed', tone: 'danger' },
+  },
+  /** One row of an import file (ADR-0017): SKIPPED = committed by an earlier job of the same file. */
+  importRow: {
+    VALID: { label: 'Valid', tone: 'success' },
+    ERROR: { label: 'Error', tone: 'danger' },
+    SKIPPED: { label: 'Already committed', tone: 'neutral' },
+    COMMITTED: { label: 'Committed', tone: 'success' },
+  },
   /** Variance indicator finality (ADR-0005). Never labelled as loss. */
   indicator: {
     NOT_CALCULABLE: { label: 'Not calculable', tone: 'neutral' },

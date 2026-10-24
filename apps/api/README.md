@@ -245,6 +245,10 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
 - `eora:demo:plant <tenant-id> <code> <name>` (same runner, refused in production) adds a plant to the tenant's first
   company as the provisioner in the tenant's signed context (audited `plant.created`, `via: demo-plant`), so the plant
   switch can be tried before master-data maintenance (M2). Used by the stack E2E (below).
+- `eora:demo:import-samples <dir> [--from=YYYY-MM-DD]` (refused in production, reads no tenant data) writes the 17 sample
+  import files of `App\Platform\Demo\ImportSamples` as filled templates, numbered in import order; `--from` is the first
+  effective date (default today). The committed copies live in `docs/uat/samples/` (UAT script `docs/uat/M2-UAT.md` §5);
+  `ImportSamplesTest` imports the whole set into a new tenant and expects every row committed.
 
 ## Stack E2E (M1 exit, doc 28 §3 item 3, doc 25 §15.3)
 - `apps/web/e2e/stack/m1-access.spec.ts`, config `apps/web/playwright.stack.config.ts`, CI job `stack-e2e`. Chrome drives the

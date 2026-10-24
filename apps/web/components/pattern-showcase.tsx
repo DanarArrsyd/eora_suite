@@ -61,6 +61,8 @@ const DOMAIN_LABEL: Record<StatusDomain, string> = {
   schedule: 'Delivery schedule line (D-034)',
   master: 'Master-data record (doc 29)',
   membership: 'Tenant membership (doc 25 §2.6)',
+  importJob: 'Import job (ADR-0017)',
+  importRow: 'Import row (ADR-0017)',
   indicator: 'Variance indicator (ADR-0005)',
 };
 

@@ -72,7 +72,7 @@ type FilterField = { key: string; label: string; locked?: boolean /* workspace s
 - `EoraNotificationCenter`: see navigation doc §5 and doc 07.
 - `EoraApprovalPanel`: maker → reviewer → approver cards, SoD note, step-up indicator; actions open review screens.
 - `EoraExportMenu`: Excel/PDF using the same query scope; async job + bell notification; Print uses print CSS.
-- `EoraImportWizard`: template → upload → validate → preview/errors → approval → idempotent commit (doc 08).
+- `EoraImportWizard`: template → upload → validate → preview/errors → approval → idempotent commit (doc 08). The live master-data import (M2 step 6d, D-081) runs the same steps as pages — New import, then a job page that follows the worker and is submitted and committed by different people — because checking is asynchronous and the commit may wait for someone else; the modal stays for short synchronous imports.
 - `EoraEmptyState` / `EoraLoadingState` / `EoraErrorState`: icon, title, cause, next action; never a bare spinner or "No data".
 - Business: `MaterialFlowStrip` groups stages into bands by UOM (Physical material kg │ Transformation │ Production & quality pcs │ FG & shipment pcs) and never sums across the boundary; grouped quantity columns show disjoint buckets that add up to on-hand (~~`QuantityBreakdownCell`~~ superseded by Amendment 1); `ConversionBadge` shows Calculated/Provisional/Not calculable + missing inputs; `VarianceIndicator` shows value, %, tolerance result, status and a "Show calculation" disclosure.
 
