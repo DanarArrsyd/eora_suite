@@ -28,12 +28,13 @@ final readonly class Field
      * @param  string  $sql  SQL expression over the definition's FROM clause (trusted, written in code)
      * @param  list<string>  $options  allowed values of an enum field
      * @param  'prefix'|'contains'|null  $search  how `q` matches this field: `prefix` = an upper-case code that starts with
-     *                                            `q` (any case typed; served by a `text_pattern_ops` B-tree or a trigram index),
-     *                                            `contains` = text containing `q`, case-insensitive (trigram index)
+     *                                            `q` (any case typed; `^@`, served by a `text_pattern_ops` B-tree), `contains`
+     *                                            = text containing `q`, case-insensitive (ILIKE: a filter over the tenant's
+     *                                            rows — not leakproof, so no index under forced RLS, D-093)
      * @param  string|null  $searchSql  the `q` predicate when the column lives in a joined table, so its own index is used
      *                                  instead of a filter after the join, e.g.
      *                                  `r.item_id = any (array(select x.id from items x where x.code {match}))`;
-     *                                  `{match}` becomes the field's LIKE/ILIKE with the bound pattern
+     *                                  `{match}` becomes the field's `^@` or ILIKE with the bound pattern
      */
     public function __construct(
         public string $key,
