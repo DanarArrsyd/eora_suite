@@ -27,7 +27,14 @@ final readonly class Field
     /**
      * @param  string  $sql  SQL expression over the definition's FROM clause (trusted, written in code)
      * @param  list<string>  $options  allowed values of an enum field
-     * @param  'prefix'|'contains'|null  $search  how `q` matches this field (case-insensitive)
+     * @param  'prefix'|'contains'|null  $search  how `q` matches this field: `prefix` = an upper-case code that starts with
+     *                                            `q` (any case typed; `^@`, served by a `text_pattern_ops` B-tree), `contains`
+     *                                            = text containing `q`, case-insensitive (ILIKE: a filter over the tenant's
+     *                                            rows — not leakproof, so no index under forced RLS, D-093)
+     * @param  string|null  $searchSql  the `q` predicate when the column lives in a joined table, so its own index is used
+     *                                  instead of a filter after the join, e.g.
+     *                                  `r.item_id = any (array(select x.id from items x where x.code {match}))`;
+     *                                  `{match}` becomes the field's `^@` or ILIKE with the bound pattern
      */
     public function __construct(
         public string $key,
@@ -37,12 +44,16 @@ final readonly class Field
         public bool $filterable = false,
         public array $options = [],
         public ?string $search = null,
+        public ?string $searchSql = null,
     ) {
         if (preg_match('/^[a-z][A-Za-z0-9]{0,39}$/', $key) !== 1) {
             throw new InvalidArgumentException("Invalid field key {$key}.");
         }
         if (! in_array($type, [self::STRING, self::ENUM, self::UUID, self::BOOLEAN, self::INSTANT, self::INTEGER], true)) {
             throw new InvalidArgumentException("Unknown field type {$type}.");
+        }
+        if ($searchSql !== null && ($search === null || substr_count($searchSql, '{match}') !== 1)) {
+            throw new InvalidArgumentException('A search predicate needs a search mode and exactly one {match}.');
         }
         if (($type === self::ENUM) !== ($options !== [])) {
             throw new InvalidArgumentException('Enum fields, and only enum fields, list their options.');

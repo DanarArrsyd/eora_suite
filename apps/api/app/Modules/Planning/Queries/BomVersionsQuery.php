@@ -46,8 +46,8 @@ final class BomVersionsQuery extends QueryDefinition
         return [
             new Field('id', 'v.id', Field::UUID, filterable: true),
             new Field('itemId', 'v.item_id', Field::UUID, filterable: true),
-            new Field('itemCode', 'i.code', sortable: true, search: 'prefix'),
-            new Field('itemName', 'i.name', search: 'contains'),
+            new Field('itemCode', 'i.code', sortable: true, search: 'prefix', searchSql: self::itemMatch('v.item_id', 'code')),
+            new Field('itemName', 'i.name', search: 'contains', searchSql: self::itemMatch('v.item_id', 'name')),
             new Field('itemType', 'i.item_type', Field::ENUM, filterable: true, options: ['RAW', 'SEMI_FINISHED', 'FINISHED', 'SCRAP', 'CONSUMABLE']),
             new Field('versionNo', 'v.version_no', Field::INTEGER, sortable: true),
             new Field('status', 'v.status', Field::ENUM, sortable: true, filterable: true, options: self::STATUSES),

@@ -44,6 +44,14 @@ final class RoutingsQuery extends QueryDefinition
                  ) pend on true";
     }
 
+    /** Counting and paging need neither the version in use nor the open version (shown-only laterals). */
+    public function filterFrom(): string
+    {
+        return 'routings r
+                 join plants p on p.tenant_id = r.tenant_id and p.id = r.plant_id
+                 join items i on i.tenant_id = r.tenant_id and i.id = r.item_id';
+    }
+
     public function idColumn(): string
     {
         return 'r.id';
@@ -69,8 +77,8 @@ final class RoutingsQuery extends QueryDefinition
             new Field('plantId', 'r.plant_id', Field::UUID, filterable: true),
             new Field('plantCode', 'p.code', sortable: true),
             new Field('itemId', 'r.item_id', Field::UUID, filterable: true),
-            new Field('itemCode', 'i.code', sortable: true, search: 'prefix'),
-            new Field('itemName', 'i.name', search: 'contains'),
+            new Field('itemCode', 'i.code', sortable: true, search: 'prefix', searchSql: self::itemMatch('r.item_id', 'code')),
+            new Field('itemName', 'i.name', search: 'contains', searchSql: self::itemMatch('r.item_id', 'name')),
             new Field('currentVersionId', 'cur.id', Field::UUID),
             new Field('currentVersionNo', 'cur.version_no', Field::INTEGER),
             new Field('currentEffectiveFrom', 'cur.effective_from::text'),

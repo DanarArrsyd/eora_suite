@@ -42,8 +42,8 @@ final class CustomerItemsQuery extends QueryDefinition
             new Field('code', 'ci.customer_part_no', sortable: true, search: 'contains'),
             new Field('customerDrawingRev', 'ci.customer_drawing_rev'),
             new Field('itemId', 'ci.item_id', Field::UUID, filterable: true),
-            new Field('itemCode', 'i.code', sortable: true, search: 'prefix'),
-            new Field('itemName', 'i.name', search: 'contains'),
+            new Field('itemCode', 'i.code', sortable: true, search: 'prefix', searchSql: self::itemMatch('ci.item_id', 'code')),
+            new Field('itemName', 'i.name', search: 'contains', searchSql: self::itemMatch('ci.item_id', 'name')),
             new Field('effectiveFrom', 'ci.effective_from::text', sortable: true),
             new Field('effectiveTo', 'ci.effective_to::text'),
             // in effect today in the tenant's time zone (D-044)

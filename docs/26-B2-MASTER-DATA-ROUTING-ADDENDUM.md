@@ -170,7 +170,7 @@ B2 never stores any of these quantities.
 - Scale: the illustrative 1,278 parts × several operations is a few thousand rows — well within one chunked job; no hard limit is set.
 
 ## 6. Query, search, pagination (ADR-0008, doc 24)
-QueryDefinitions for items, customer parts, routings (with operation count, current effective version), work centers, machines, dies. Server-side filter/sort/pagination (offset for master data per doc 24 §3.3), `q` search on code/name/customer part number (prefix + trigram — `pg_trgm`, D-B2-09), `tenant_id`-leading indexes, plant scope predicates, export through the same QueryDefinition.
+QueryDefinitions for items, customer parts, routings (with operation count, current effective version), work centers, machines, dies. Server-side filter/sort/pagination (offset for master data per doc 24 §3.3), `q` search on code/name/customer part number (code prefix by `^@` on `text_pattern_ops` B-trees; names "contains" filter the tenant's rows — D-093 amends D-B2-09: trigram indexes cannot serve LIKE/ILIKE under forced RLS), `tenant_id`-leading indexes, plant scope predicates, export through the same QueryDefinition.
 
 ## 7. Tenant isolation and audit
 Every B2 table is tenant-owned (incl. `process_types`); composite FKs make a routing operation unable to reference another tenant's work center, machine, die or item; isolation suite T-ISO extended to B2 resources; `audit_events` for create/update/submit/approve/supersede/retire and every import commit; approved versions immutable at DB level (trigger or no UPDATE grant on approved rows via status check).
@@ -328,7 +328,7 @@ erDiagram
 |---|---|---|---|
 | D-B2-05 | Routing scope | per item + plant (plants differ in machines and work centers) | one routing per plant to maintain |
 | D-B2-08 | Effective-date overlap | DB exclusion constraint (`btree_gist`) + friendly service message | needs extension on every environment |
-| D-B2-09 | Search | `pg_trgm` GIN on code/name/customer part number + B-tree prefix on code | index size / write cost |
+| D-B2-09 | Search | `pg_trgm` GIN on code/name/customer part number + B-tree prefix on code | index size / write cost  **Amended by D-093 (2026-10-26):** under forced RLS only leakproof operators drive an index; code prefix uses `^@` + `text_pattern_ops`, trigram indexes dropped. |
 | D-B2-10 | Cycle-time basis | `cycle_basis` (`PER_PIECE`, `PER_STROKE`, `PER_BATCH`) + `parts_per_cycle` | one more field to import |
 
 ### 11.2 Required owner decision — decided 2026-10-11 (D-058, recommendations approved)
