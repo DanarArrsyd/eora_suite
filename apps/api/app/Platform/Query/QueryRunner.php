@@ -28,6 +28,30 @@ final class QueryRunner
      */
     public function run(EoraPostgresConnection $db, QueryDefinition $definition, array $input): array
     {
+        $query = $this->build($db, $definition, $input);
+        $total = (int) $db->selectOne($query->countSql(), $query->bindings)->n;
+        $rows = $db->select($query->pageSql(), $query->pageBindings());
+        $tenant = $db->selectOne('select t.timezone from tenants t where t.id = (select c.tenant from ctx_api.context() c)');
+
+        return [
+            'data' => array_values(array_map($definition->row(...), $rows)),
+            'meta' => [
+                'total' => $total,
+                'page' => ['number' => $query->pageNumber, 'size' => $query->pageSize],
+                'asOf' => Date::now()->utc()->format('Y-m-d\TH:i:s\Z'),
+                'timezone' => (string) ($tenant->timezone ?? 'Asia/Jakarta'),
+            ],
+        ];
+    }
+
+    /**
+     * The SQL of $input against $definition for the caller (view permission and its scopes applied), without running
+     * it: the list, the EXPLAIN checks and exports read exactly the same rows in the same order.
+     *
+     * @param  array<string, mixed>  $input  the request query (already decoded)
+     */
+    public function build(EoraPostgresConnection $db, QueryDefinition $definition, array $input): BuiltQuery
+    {
         $scopes = $this->authorizer->requireAnywhere($db, $definition->permission());
         $fields = [];
         foreach ($definition->fields() as $field) {
@@ -51,24 +75,18 @@ final class QueryRunner
         $number = max(1, $this->integer(is_array($page) ? ($page['number'] ?? 1) : 1, 'page.number'));
         $size = min($definition->maxPageSize(), max(1, $this->integer(is_array($page) ? ($page['size'] ?? self::DEFAULT_PAGE_SIZE) : self::DEFAULT_PAGE_SIZE, 'page.size')));
 
-        $select = implode(', ', array_map(static fn (Field $f) => "{$f->sql} as \"{$f->key}\"", $fields));
-        $filtered = 'from '.$definition->from().' where '.implode(' and ', $clauses);
-        $total = (int) $db->selectOne("select count(*) as n {$filtered}", $bindings)->n;
-        $rows = $db->select(
-            "select {$select} {$filtered} order by ".$this->orderBy($input['sort'] ?? null, $fields, $definition).' limit ? offset ?',
-            [...$bindings, $size, ($number - 1) * $size],
-        );
-        $tenant = $db->selectOne('select t.timezone from tenants t where t.id = (select c.tenant from ctx_api.context() c)');
+        $where = ' where '.implode(' and ', $clauses);
 
-        return [
-            'data' => array_values(array_map($definition->row(...), $rows)),
-            'meta' => [
-                'total' => $total,
-                'page' => ['number' => $number, 'size' => $size],
-                'asOf' => Date::now()->utc()->format('Y-m-d\TH:i:s\Z'),
-                'timezone' => (string) ($tenant->timezone ?? 'Asia/Jakarta'),
-            ],
-        ];
+        return new BuiltQuery(
+            select: implode(', ', array_map(static fn (Field $f) => "{$f->sql} as \"{$f->key}\"", $fields)),
+            filtered: 'from '.($definition->filterFrom() ?? $definition->from()).$where,
+            from: $definition->filterFrom() === null ? null : $definition->from(),
+            idColumn: $definition->idColumn(),
+            orderBy: $this->orderBy($input['sort'] ?? null, $fields, $definition),
+            bindings: $bindings,
+            pageNumber: $number,
+            pageSize: $size,
+        );
     }
 
     /**
@@ -144,10 +162,17 @@ final class QueryRunner
         }
         $parts = $bindings = [];
         foreach ($fields as $field) {
-            if ($field->search !== null) {
-                $parts[] = "{$field->sql} ilike ? escape '\\'";
-                $bindings[] = ($field->search === 'contains' ? '%' : '').self::like($q).'%';
+            if ($field->search === null) {
+                continue;
             }
+            // Codes are stored upper case (CHECK): a prefix is `^@` (starts_with) on the upper-cased input — leakproof, so
+            // under forced RLS it can still drive a text_pattern_ops B-tree; LIKE/ILIKE are not leakproof and are
+            // evaluated as a filter after the tenant's rows are found.
+            [$match, $pattern] = $field->search === 'prefix'
+                ? ['^@ ?', mb_strtoupper($q)]
+                : ["ilike ? escape '\\'", '%'.self::like($q).'%'];
+            $parts[] = $field->searchSql !== null ? str_replace('{match}', $match, $field->searchSql) : "{$field->sql} {$match}";
+            $bindings[] = $pattern;
         }
 
         return $parts === [] ? ['true', []] : ['('.implode(' or ', $parts).')', $bindings];

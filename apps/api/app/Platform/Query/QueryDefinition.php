@@ -36,6 +36,16 @@ abstract class QueryDefinition
      */
     abstract public function defaultSort(): array;
 
+    /**
+     * FROM clause for counting and choosing the page, when from() also joins columns that are only shown (e.g. a
+     * lateral "version in use"): filters, `q`, sort keys and the scope must only use its aliases. The page's rows are
+     * then picked here and only those rows get the shown-only joins. Null = from().
+     */
+    public function filterFrom(): ?string
+    {
+        return null;
+    }
+
     public function maxPageSize(): int
     {
         return 200;
@@ -101,6 +111,17 @@ abstract class QueryDefinition
     public function row(stdClass $row): array
     {
         return (array) $row;
+    }
+
+    /**
+     * `q` predicate for a code or name of the item a row points to (Field::$searchSql): the item index finds the items,
+     * the row's own index on the item id finds the rows — no scan of the whole list behind the join.
+     *
+     * @param  'code'|'name'  $column
+     */
+    protected static function itemMatch(string $itemIdColumn, string $column): string
+    {
+        return "{$itemIdColumn} = any (array(select x.id from items x where x.{$column} {match}))";
     }
 
     /** @param  list<string>  $ids */
