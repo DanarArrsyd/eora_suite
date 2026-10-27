@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Queries;
 
+use App\Platform\Export\ExportColumn;
+use App\Platform\Export\Labels;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -55,6 +57,23 @@ final class WarehousesQuery extends QueryDefinition
             new Field('locationCount', '(select count(*) from locations l where l.warehouse_id = w.id)', Field::INTEGER),
             new Field('updatedAt', 'w.updated_at', Field::INSTANT, sortable: true),
             new Field('version', 'w.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Warehouses';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Plant', 'plantCode'),
+            new ExportColumn('Code', 'code'),
+            new ExportColumn('Name', 'name'),
+            new ExportColumn('Type', 'warehouseType', labels: Labels::WAREHOUSE_TYPES),
+            new ExportColumn('Locations', 'locationCount', ExportColumn::INTEGER),
         ];
     }
 

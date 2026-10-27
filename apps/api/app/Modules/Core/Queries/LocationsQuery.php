@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Queries;
 
+use App\Platform\Export\ExportColumn;
+use App\Platform\Export\Labels;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -65,6 +67,23 @@ final class LocationsQuery extends QueryDefinition
             new Field('workCenterCode', 'wc.code', sortable: true),
             new Field('updatedAt', 'l.updated_at', Field::INSTANT, sortable: true),
             new Field('version', 'l.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Locations';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Plant', 'plantCode'),
+            new ExportColumn('Code', 'code'),
+            new ExportColumn('Name', 'name'),
+            new ExportColumn('Type', 'locationType', labels: Labels::LOCATION_TYPES),
+            new ExportColumn('Belongs to', static fn (array $r) => $r['warehouseCode'] !== null ? "Warehouse {$r['warehouseCode']}" : ($r['workCenterCode'] !== null ? "Work center {$r['workCenterCode']}" : 'Plant (virtual)')),
         ];
     }
 

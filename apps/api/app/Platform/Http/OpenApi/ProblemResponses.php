@@ -163,6 +163,10 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.exchange.imports.submit' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.exchange.imports.commit' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
         'v1.exchange.imports.reject' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.exchange.exports.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 422 => ['VALIDATION_FAILED', 'FILTER_NOT_ALLOWED']],
+        'v1.exchange.exports.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
+        'v1.exchange.exports.link' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.exchange.exports.file' => self::TENANT_READ + [404 => ['NOT_FOUND']],
     ];
 
     /** Laravel-shaped error components Scramble registers; replaced by the problem responses above. */

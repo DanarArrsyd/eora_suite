@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Queries;
 
+use App\Platform\Export\ExportColumn;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -57,6 +58,25 @@ final class WorkCentersQuery extends QueryDefinition
             new Field('machineCount', '(select count(*) from machines m where m.work_center_id = wc.id)', Field::INTEGER),
             new Field('updatedAt', 'wc.updated_at', Field::INSTANT, sortable: true),
             new Field('version', 'wc.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Work Centers';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Plant', 'plantCode'),
+            new ExportColumn('Code', 'code'),
+            new ExportColumn('Name', 'name'),
+            new ExportColumn('Type', 'workCenterType'),
+            new ExportColumn('Hours per shift', 'availableHoursPerShift', ExportColumn::DECIMAL),
+            new ExportColumn('Machines', 'machineCount', ExportColumn::INTEGER),
+            new ExportColumn('Material at Production', 'matAtProdLocationCode'),
         ];
     }
 

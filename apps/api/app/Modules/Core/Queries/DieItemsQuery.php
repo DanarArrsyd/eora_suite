@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Queries;
 
+use App\Platform\Export\ExportColumn;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -58,6 +59,24 @@ final class DieItemsQuery extends QueryDefinition
             new Field('status', 'di.status', Field::ENUM, sortable: true, filterable: true, options: ['ACTIVE', 'INACTIVE']),
             new Field('updatedAt', 'di.updated_at', Field::INSTANT),
             new Field('version', 'di.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Die parts';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Die', 'code'),
+            new ExportColumn('Die name', 'dieName'),
+            new ExportColumn('Plant', 'plantCode'),
+            new ExportColumn('Item', 'itemCode'),
+            new ExportColumn('Item name', 'itemName'),
+            new ExportColumn('Parts per stroke', 'partsPerStroke', ExportColumn::INTEGER),
         ];
     }
 

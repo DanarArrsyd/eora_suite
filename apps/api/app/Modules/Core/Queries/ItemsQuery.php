@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Queries;
 
+use App\Platform\Export\ExportColumn;
+use App\Platform\Export\Labels;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -58,6 +60,28 @@ final class ItemsQuery extends QueryDefinition
             new Field('specVersion', 'ms.version', Field::INTEGER),
             new Field('updatedAt', 'i.updated_at', Field::INSTANT, sortable: true),
             new Field('version', 'i.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Items';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Code', 'code'),
+            new ExportColumn('Name', 'name'),
+            new ExportColumn('Type', 'itemType', labels: Labels::ITEM_TYPES),
+            new ExportColumn('Base unit', 'baseUomCode'),
+            new ExportColumn('Drawing', 'drawingNo'),
+            new ExportColumn('Drawing rev', 'drawingRev'),
+            new ExportColumn('Lot controlled', 'lotControlled', ExportColumn::BOOLEAN),
+            new ExportColumn('Inspection required', 'inspectionRequired', ExportColumn::BOOLEAN),
+            new ExportColumn('Incoming release required', 'incomingReleaseRequired', ExportColumn::BOOLEAN),
+            new ExportColumn('Status', 'status', labels: Labels::MASTER_STATUS),
         ];
     }
 

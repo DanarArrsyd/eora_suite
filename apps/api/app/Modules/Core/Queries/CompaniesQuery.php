@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Queries;
 
+use App\Platform\Export\ExportColumn;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -43,6 +44,20 @@ final class CompaniesQuery extends QueryDefinition
             new Field('legalName', 'c.legal_name', sortable: true, search: 'contains'),
             new Field('updatedAt', 'c.updated_at', Field::INSTANT, sortable: true),
             new Field('version', 'c.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Company';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Code', 'code'),
+            new ExportColumn('Legal name', 'legalName'),
         ];
     }
 

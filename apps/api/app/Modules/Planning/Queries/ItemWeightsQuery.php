@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Planning\Queries;
 
+use App\Platform\Export\ExportColumn;
+use App\Platform\Export\Labels;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -63,6 +65,26 @@ final class ItemWeightsQuery extends QueryDefinition
             new Field('retiredAt', 'w.retired_at', Field::INSTANT),
             new Field('updatedAt', 'w.updated_at', Field::INSTANT),
             new Field('version', 'w.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Net weights';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Item', 'itemCode'),
+            new ExportColumn('Item name', 'itemName'),
+            new ExportColumn('Version', 'versionNo', ExportColumn::INTEGER),
+            new ExportColumn('Version status', 'status', labels: Labels::VERSION_STATUS),
+            new ExportColumn('Net weight (kg/pc)', 'netWeightKg', ExportColumn::DECIMAL),
+            new ExportColumn('Effective from', 'effectiveFrom', ExportColumn::DATE),
+            new ExportColumn('Effective to', 'effectiveTo', ExportColumn::DATE),
+            new ExportColumn('In use today', 'inUse', ExportColumn::BOOLEAN),
         ];
     }
 

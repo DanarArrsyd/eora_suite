@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Planning\Queries;
 
+use App\Platform\Export\ExportColumn;
+use App\Platform\Export\Labels;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -62,6 +64,27 @@ final class BomVersionsQuery extends QueryDefinition
             new Field('lineCount', '(select count(*) from bom_lines l where l.bom_version_id = v.id)', Field::INTEGER),
             new Field('updatedAt', 'v.updated_at', Field::INSTANT),
             new Field('version', 'v.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'BOMs';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Item', 'itemCode'),
+            new ExportColumn('Item name', 'itemName'),
+            new ExportColumn('Version', 'versionNo', ExportColumn::INTEGER),
+            new ExportColumn('Version status', 'status', labels: Labels::VERSION_STATUS),
+            new ExportColumn('Effective from', 'effectiveFrom', ExportColumn::DATE),
+            new ExportColumn('Effective to', 'effectiveTo', ExportColumn::DATE),
+            new ExportColumn('In use today', 'inUse', ExportColumn::BOOLEAN),
+            new ExportColumn('Lines', 'lineCount', ExportColumn::INTEGER),
+            new ExportColumn('Item type', 'itemType', labels: Labels::ITEM_TYPES),
         ];
     }
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Queries;
 
+use App\Platform\Export\ExportColumn;
+use App\Platform\Export\Labels;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -59,6 +61,26 @@ final class DiesQuery extends QueryDefinition
             new Field('plantCode', 'p.code', sortable: true),
             new Field('updatedAt', 'd.updated_at', Field::INSTANT, sortable: true),
             new Field('version', 'd.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Dies & Tooling';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Plant', 'plantCode'),
+            new ExportColumn('Code', 'code'),
+            new ExportColumn('Name', 'name'),
+            new ExportColumn('Type', 'dieType', labels: Labels::DIE_TYPES),
+            new ExportColumn('Cavities', 'cavities', ExportColumn::INTEGER),
+            new ExportColumn('Strokes used', 'currentStrokes', ExportColumn::INTEGER),
+            new ExportColumn('Stroke life', 'strokeLife', ExportColumn::INTEGER),
+            new ExportColumn('Status', 'status', labels: Labels::MASTER_STATUS),
         ];
     }
 

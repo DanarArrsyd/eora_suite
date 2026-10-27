@@ -75,6 +75,20 @@ return [
             'report' => false,
         ],
 
+        // D-092: exported workbooks, in the same private bucket under tenant/<id>/exports/, deleted after 24 hours
+        'exports' => [
+            'driver' => 's3',
+            'key' => env('EORA_IMPORTS_KEY'),
+            'secret' => env('EORA_IMPORTS_SECRET'),
+            'region' => env('EORA_IMPORTS_REGION', 'us-east-1'),
+            'bucket' => env('EORA_IMPORTS_BUCKET', 'eora-imports'),
+            'endpoint' => env('EORA_IMPORTS_ENDPOINT'),
+            'use_path_style_endpoint' => (bool) env('EORA_IMPORTS_PATH_STYLE', true),
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => false,
+        ],
+
     ],
 
     /*

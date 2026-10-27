@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Queries;
 
+use App\Platform\Export\ExportColumn;
+use App\Platform\Export\Labels;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -43,6 +45,22 @@ final class UomsQuery extends QueryDefinition
             new Field('status', 'u.status', Field::ENUM, sortable: true, filterable: true, options: ['ACTIVE', 'INACTIVE']),
             new Field('updatedAt', 'u.updated_at', Field::INSTANT, sortable: true),
             new Field('version', 'u.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Units';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Code', 'code'),
+            new ExportColumn('Name', 'name'),
+            new ExportColumn('Kind', 'uomClass', labels: Labels::UOM_CLASSES),
+            new ExportColumn('Decimals', 'decimals', ExportColumn::INTEGER),
         ];
     }
 
