@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Platform\Query;
 
+use App\Platform\Access\Scope;
+
 /**
  * The SQL of one list request (QueryRunner::build): trusted SQL text with every value bound. The page, the count and
  * any other reader (EXPLAIN checks, exports) share the same FROM/WHERE and the same stable order. `filtered` is
@@ -12,7 +14,10 @@ namespace App\Platform\Query;
  */
 final readonly class BuiltQuery
 {
-    /** @param  list<mixed>  $bindings  values of `filtered`, in order */
+    /**
+     * @param  list<mixed>  $bindings  values of `filtered`, in order
+     * @param  list<Scope>  $scopes  the caller's scopes of the view permission the rows are limited to
+     */
     public function __construct(
         public string $select,
         public string $filtered,
@@ -23,6 +28,7 @@ final readonly class BuiltQuery
         public array $bindings,
         public int $pageNumber,
         public int $pageSize,
+        public array $scopes = [],
     ) {}
 
     public function countSql(): string

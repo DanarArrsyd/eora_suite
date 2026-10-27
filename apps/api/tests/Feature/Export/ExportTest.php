@@ -219,3 +219,78 @@ it('exports routings with the version in use and the open version of each row', 
     expect($rows[0])->toBe(['Item', 'Item name', 'Routing', 'Routing kind', 'Plant', 'Version in use', 'In use from', 'Standard yield %', 'Operations', 'Open version', 'Open version status', 'Status']);
     expect($rows[1])->toBe(['BRK-100', 'Bracket', 'R1', 'Primary', 'P1', '', '', '', '', 1, 'Draft', 'Active']);
 })->group('integration', 'export');
+
+/** A tenant role holding exactly $permissions (fixture; template roles always pair the master view with export). */
+function expRole(array $t, string $code, array $permissions): void
+{
+    AccessFixtures::run($t, function (EoraPostgresConnection $db) use ($t, $code, $permissions): void {
+        $role = (string) $db->selectOne('insert into roles (tenant_id, code, name) values (?, ?, ?) returning id', [$t['tenant'], $code, $code])->id;
+        foreach ($permissions as $permission) {
+            $db->insert('insert into role_permissions (tenant_id, role_id, permission_code) values (?, ?, ?)', [$t['tenant'], $role, $permission]);
+        }
+    });
+}
+
+it('issues links and files only while the requester still sees the exported data (Codex P1)', function () {
+    [$p1] = $this->t['plants'];
+    $user = member($this, $this->t);
+    $wide = AccessFixtures::grant($this->t, $user['id'], 'INV', ['TENANT']);
+    signIn($this, $user, $this->t);
+    $id = spa($this)->postJson('/api/v1/exchange/exports', ['resource' => 'core.warehouses'])->assertCreated()->json('data.id');
+    expRun($this->t, $id);
+    $url = spa($this)->postJson("/api/v1/exchange/exports/{$id}/link")->assertOk()->json('data.url');
+
+    // the tenant-wide view is narrowed to one plant: the file (written tenant-wide) is no longer handed out
+    AccessFixtures::grant($this->t, $user['id'], 'INV', ['PLANT', $p1]);
+    AccessFixtures::revoke($this->t, $wide);
+    spa($this)->postJson("/api/v1/exchange/exports/{$id}/link")->assertForbidden()->assertJsonPath('detail', 'Your roles no longer cover the data in this export.');
+    spa($this)->get($url)->assertForbidden();
+})->group('integration', 'export');
+
+it('fails a queued export whose requester lost the export permission but kept the view (Codex P2)', function () {
+    expRole($this->t, 'VIEW_ONLY', ['master.org.view']);
+    expRole($this->t, 'EXPORT_ONLY', ['exchange.export.export']);
+    $user = member($this, $this->t);
+    AccessFixtures::grant($this->t, $user['id'], 'VIEW_ONLY');
+    $export = AccessFixtures::grant($this->t, $user['id'], 'EXPORT_ONLY');
+    signIn($this, $user, $this->t);
+    $id = spa($this)->postJson('/api/v1/exchange/exports', ['resource' => 'core.plants'])->assertCreated()->json('data.id');
+    AccessFixtures::revoke($this->t, $export);
+    expect(expRun($this->t, $id))->status->toBe('FAILED')->failure_code->toBe('NOT_ALLOWED');
+})->group('integration', 'export');
+
+it('lets one attempt at a time write a job and takes over only after its lease ran out (Codex P2)', function () {
+    orgUser($this, $this->t, 'CSA');
+    $id = spa($this)->postJson('/api/v1/exchange/exports', ['resource' => 'core.plants'])->assertCreated()->json('data.id');
+    $actor = (string) expJob($this->t, $id)->requested_by_user;
+    // another attempt holds a live lease: this one writes nothing and waits for the lease
+    expAsSystem($this->t, fn (EoraPostgresConnection $db) => $db->update(
+        "update export_jobs set status = 'RUNNING', claim_generation = 1, lease_until = now() + interval '10 minutes' where id = ?", [$id]));
+    expect(app(ExportProcessor::class)->run($this->t['tenant'], $id, $actor))->toBeGreaterThan(590);
+    expect(expJob($this->t, $id))->status->toBe('RUNNING')->claim_generation->toBe(1);
+    // the failure of a superseded attempt changes nothing
+    app(ExportProcessor::class)->fail($this->t['tenant'], $id, $actor, 'EXPORT_FAILED', 'stale', 0);
+    expect(expJob($this->t, $id)->status)->toBe('RUNNING');
+
+    // that attempt died: the lease runs out, the next attempt takes over with a new generation and finishes
+    expAsSystem($this->t, fn (EoraPostgresConnection $db) => $db->update("update export_jobs set lease_until = now() - interval '1 second' where id = ?", [$id]));
+    expect(app(ExportProcessor::class)->run($this->t['tenant'], $id, $actor))->toBeNull();
+    expect(expJob($this->t, $id))->status->toBe('DONE')->claim_generation->toBe(2)->lease_until->toBeNull();
+})->group('integration', 'export');
+
+it('keeps no file of an attempt that did not finish the job (Codex P2)', function () {
+    orgUser($this, $this->t, 'CSA');
+    $id = spa($this)->postJson('/api/v1/exchange/exports', ['resource' => 'core.uoms'])->assertCreated()->json('data.id');
+    $folder = "tenant/{$this->t['tenant']}/exports/{$id}";
+    // an earlier attempt uploaded, then crashed before its commit: the next attempt leaves only its own file
+    Storage::disk('exports')->put("{$folder}/units-crashed.xlsx", 'old');
+    $done = expRun($this->t, $id);
+    expect(Storage::disk('exports')->files($folder))->toBe([(string) $done->file_key]);
+
+    // a failing attempt empties the folder
+    $failing = spa($this)->postJson('/api/v1/exchange/exports', ['resource' => 'core.uoms'])->assertCreated()->json('data.id');
+    Storage::disk('exports')->put("tenant/{$this->t['tenant']}/exports/{$failing}/units-crashed.xlsx", 'old');
+    config(['eora.export.max_rows' => 0]);
+    expect(expRun($this->t, $failing)->status)->toBe('FAILED');
+    expect(Storage::disk('exports')->allFiles("tenant/{$this->t['tenant']}/exports/{$failing}"))->toBe([]);
+})->group('integration', 'export');

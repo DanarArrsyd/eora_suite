@@ -11,7 +11,8 @@ use Illuminate\Queue\InteractsWithQueue;
 
 /**
  * Queue message for an export (queue `exports`, worker `import-worker`, D-092): only ids, never client input — the
- * worker reads the list request from the job row. A redelivered message after a crash writes the file again.
+ * worker reads the list request from the job row. A message redelivered while an attempt is alive waits for its
+ * lease; after a crash it takes the job over and writes the file again.
  */
 final class ProcessExport implements ShouldQueue
 {
@@ -36,7 +37,11 @@ final class ProcessExport implements ShouldQueue
 
     public function handle(ExportProcessor $processor): void
     {
-        $processor->run($this->tenantId, $this->jobId, $this->actorId);
+        $wait = $processor->run($this->tenantId, $this->jobId, $this->actorId);
+        if ($wait !== null) {
+            // another attempt still holds the job: come back once its lease ran out (it will have finished, or died)
+            $this->release($wait + 2);
+        }
     }
 
     /** Out of retries (e.g. the worker kept dying): the job is told as failed instead of staying queued. */

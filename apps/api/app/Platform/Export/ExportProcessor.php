@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Platform\Export;
 
+use App\Platform\Access\Authorizer;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
@@ -20,74 +21,109 @@ use Illuminate\Support\Str;
 use Throwable;
 
 /**
- * The worker side of an export (D-092, doc 08 §Secure export): as the requester, in one tenant transaction, the list's
- * QueryDefinition runs again with the kept request — the view permission and its scopes as of now — the matching ids
- * are fixed in list order at one snapshot (at most 100,000), the rows are read by id in chunks and streamed into the
- * workbook, the file is stored for 24 hours and the requester gets an inbox notification. Nothing is half-written: a
- * failure marks the job FAILED and says so.
+ * The worker side of an export (D-092, doc 08 §Secure export, ADR-0018): as the requester, in one tenant transaction,
+ * the export permission and the list's QueryDefinition are checked again — the view permission and its scopes as of
+ * now — the matching ids are fixed in list order at one snapshot (at most 100,000), the rows are read by id in chunks
+ * and streamed into the workbook, the file is stored for 24 hours with the scopes it was written with, and the
+ * requester gets an inbox notification. An attempt claims the job with a lease and a generation and finishes it only
+ * with that generation, holding the job row while it writes (no second attempt writes alongside). Every attempt writes
+ * into the job's own folder and a failure empties it, so no file outlives its job. Nothing is half-written: a failure
+ * marks the job FAILED and says so.
  */
 final class ExportProcessor
 {
     private const int CHUNK = 1000;
 
+    /** Longer than the longest attempt (ProcessExport::$timeout): a lease still running means an attempt is alive. */
+    private const int LEASE_SECONDS = 1200;
+
     public function __construct(
         private readonly TenantTransaction $tx,
         private readonly QueryRunner $rows,
         private readonly Exports $exports,
+        private readonly Authorizer $authorizer,
         private readonly AuditRecorder $audit,
     ) {}
 
-    public function run(string $tenant, string $jobId, string $actor): void
+    /**
+     * One attempt at a job.
+     *
+     * @return int|null seconds to wait while another attempt holds a live lease; null when nothing (more) is to be done
+     */
+    public function run(string $tenant, string $jobId, string $actor): ?int
     {
         $context = TenantContext::forTenant($tenant, $actor);
-        $job = $this->tx->run($context, function (EoraPostgresConnection $db) use ($jobId) {
-            $row = $db->selectOne('select * from export_jobs where id = ? for update', [$jobId]);
+        $claim = $this->tx->run($context, function (EoraPostgresConnection $db) use ($jobId): ?array {
+            $row = $db->selectOne('select status, extract(epoch from lease_until - now()) as lease_left from export_jobs where id = ? for update', [$jobId]);
             if ($row === null || ! in_array($row->status, ['QUEUED', 'RUNNING'], true)) {
                 return null; // finished already (a redelivered message)
             }
-            $db->update("update export_jobs set status = 'RUNNING', started_at = now() where id = ?", [$jobId]);
+            if ($row->status === 'RUNNING' && $row->lease_left !== null && (float) $row->lease_left > 0) {
+                return ['wait' => (int) ceil((float) $row->lease_left)];
+            }
 
-            return $row;
+            return ['generation' => (int) $db->selectOne(
+                "update export_jobs set status = 'RUNNING', started_at = now(), claim_generation = claim_generation + 1,
+                        lease_until = now() + make_interval(secs => ?) where id = ? returning claim_generation",
+                [self::LEASE_SECONDS, $jobId],
+            )->claim_generation];
         });
-        if ($job === null) {
-            return;
+        if ($claim === null) {
+            return null;
+        }
+        if (isset($claim['wait'])) {
+            return $claim['wait'];
         }
 
+        $generation = (int) $claim['generation'];
         $path = tempnam(sys_get_temp_dir(), 'eora-export-').'.xlsx';
         try {
-            $this->tx->run($context, fn (EoraPostgresConnection $db) => $this->write($db, $job, $path));
+            $this->tx->run($context, fn (EoraPostgresConnection $db) => $this->write($db, $jobId, $generation, $path));
+        } catch (LostClaim) {
+            // a newer attempt took the job over; it writes and finishes it
         } catch (DomainProblem $problem) {
             // the requester no longer holds the export or the list's view permission
             $this->fail($tenant, $jobId, $actor, $problem->status === 403 ? 'NOT_ALLOWED' : 'EXPORT_FAILED', $problem->status === 403
                 ? 'Your roles no longer allow this export.'
-                : 'The export could not be written. Try again; if it fails again, tell your administrator.');
+                : 'The export could not be written. Try again; if it fails again, tell your administrator.', $generation);
         } catch (TooManyRows $tooMany) {
-            $this->fail($tenant, $jobId, $actor, 'TOO_MANY_ROWS', $tooMany->getMessage());
+            $this->fail($tenant, $jobId, $actor, 'TOO_MANY_ROWS', $tooMany->getMessage(), $generation);
         } catch (Throwable $e) {
             report($e);
-            $this->fail($tenant, $jobId, $actor, 'EXPORT_FAILED', 'The export could not be written. Try again; if it fails again, tell your administrator.');
+            $this->fail($tenant, $jobId, $actor, 'EXPORT_FAILED', 'The export could not be written. Try again; if it fails again, tell your administrator.', $generation);
         } finally {
             @unlink($path);
         }
+
+        return null;
     }
 
-    /** Marks a running or queued job FAILED and tells the requester (no-op for a job that already finished). */
-    public function fail(string $tenant, string $jobId, string $actor, string $code, string $detail): void
+    /**
+     * Marks a running or queued job FAILED, empties its folder and tells the requester — only for the attempt that holds
+     * the claim (`$generation`; null: whoever, e.g. the queue giving up); a finished job stays as it is.
+     */
+    public function fail(string $tenant, string $jobId, string $actor, string $code, string $detail, ?int $generation = null): void
     {
-        $this->tx->run(TenantContext::forTenant($tenant, $actor), function (EoraPostgresConnection $db) use ($jobId, $code, $detail): void {
+        $this->tx->run(TenantContext::forTenant($tenant, $actor), function (EoraPostgresConnection $db) use ($tenant, $jobId, $code, $detail, $generation): void {
             $job = $db->selectOne('select * from export_jobs where id = ? for update', [$jobId]);
-            if ($job === null || ! in_array($job->status, ['QUEUED', 'RUNNING'], true)) {
+            if ($job === null || ! in_array($job->status, ['QUEUED', 'RUNNING'], true)
+                || ($generation !== null && (int) $job->claim_generation !== $generation)) {
                 return;
             }
-            $db->update("update export_jobs set status = 'FAILED', failure_code = ?, failure_detail = ?, finished_at = now() where id = ?", [$code, $detail, $jobId]);
+            $db->update("update export_jobs set status = 'FAILED', failure_code = ?, failure_detail = ?, finished_at = now(), lease_until = null where id = ?", [$code, $detail, $jobId]);
+            Storage::disk(Exports::DISK)->deleteDirectory(Exports::folder($tenant, $jobId));
             $event = $this->audit->record($db, 'export_job.failed', 'export_job', $jobId, null, null, ['code' => $code]);
             $title = (string) (json_decode((string) $job->query, true)['title'] ?? 'List');
             $this->notify($db, $event, $job, 'exchange.export_failed', 'WARNING', 'Export failed', "{$title}: {$detail}");
         });
     }
 
-    private function write(EoraPostgresConnection $db, \stdClass $job, string $path): void
+    private function write(EoraPostgresConnection $db, string $jobId, int $generation, string $path): void
     {
+        // the claimed job, held until this attempt commits: another attempt waits, then finds the job finished
+        $job = $db->selectOne("select * from export_jobs where id = ? and claim_generation = ? and status = 'RUNNING' for update", [$jobId, $generation])
+            ?? throw new LostClaim;
+        $this->authorizer->requireAnywhere($db, Exports::PERMISSION);
         /** @var array{title: string, filter: array<string, mixed>, q: string, sort: string|null} $request */
         $request = json_decode((string) $job->query, true, flags: JSON_THROW_ON_ERROR);
         $definition = $this->exports->definition((string) $job->resource);
@@ -114,18 +150,21 @@ final class ExportProcessor
             ['', sprintf('Generated by EORA Suite | Exported on %s %s', $now->format('d/m/Y H:i:s'), $now->format('T'))],
         ], $timezone);
 
+        // the job's folder holds this attempt's file only (an earlier attempt may have crashed after its upload)
+        $folder = Exports::folder((string) $tenant->id, $jobId);
+        $disk = Storage::disk(Exports::DISK);
+        $disk->deleteDirectory($folder);
         $name = sprintf('%s-%s.xlsx', Str::slug($title) ?: 'export', $now->format('Ymd-Hi'));
-        $key = sprintf('tenant/%s/exports/%s/%s', (string) $tenant->id, (string) $job->id, $name);
         $stream = fopen($path, 'rb') ?: throw new \RuntimeException('The export file could not be read.');
-        Storage::disk(Exports::DISK)->writeStream($key, $stream);
+        $disk->writeStream("{$folder}/{$name}", $stream);
         fclose($stream);
 
         $db->update(
-            "update export_jobs set status = 'DONE', row_count = ?, file_key = ?, file_name = ?, file_size = ?, finished_at = now(),
-                    expires_at = now() + make_interval(hours => ?) where id = ?",
-            [$count, $key, $name, (int) filesize($path), Exports::fileHours(), $job->id],
+            "update export_jobs set status = 'DONE', row_count = ?, scopes = ?::jsonb, file_key = ?, file_name = ?, file_size = ?, finished_at = now(),
+                    lease_until = null, expires_at = now() + make_interval(hours => ?) where id = ?",
+            [$count, json_encode(Exports::scopes($query->scopes), JSON_THROW_ON_ERROR), "{$folder}/{$name}", $name, (int) filesize($path), Exports::fileHours(), $jobId],
         );
-        $event = $this->audit->record($db, 'export_job.completed', 'export_job', (string) $job->id, null, null, ['resource' => $job->resource, 'rows' => $count]);
+        $event = $this->audit->record($db, 'export_job.completed', 'export_job', $jobId, null, null, ['resource' => $job->resource, 'rows' => $count]);
         $this->notify($db, $event, $job, 'exchange.export_ready', 'INFO', 'Export ready', sprintf(
             '%s: %s rows. Download it from Exports within %d hours.', $title, number_format($count), Exports::fileHours(),
         ));

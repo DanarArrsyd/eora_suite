@@ -6,6 +6,7 @@ namespace App\Platform\Export;
 
 use App\Platform\Access\Authorizer;
 use App\Platform\Audit\AuditRecorder;
+use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
 use App\Platform\Http\MasterWrites;
 use App\Platform\Query\QueryRunner;
@@ -25,8 +26,6 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 final class ExportController
 {
     use MasterWrites;
-
-    private const string PERMISSION = 'exchange.export.export';
 
     public function __construct(
         private readonly Authorizer $authorizer,
@@ -48,7 +47,7 @@ final class ExportController
             'sort' => ['nullable', 'string', 'max:200'],
         ]);
         $db = $this->db();
-        $this->authorizer->requireAnywhere($db, self::PERMISSION);
+        $this->authorizer->requireAnywhere($db, Exports::PERMISSION);
         $definition = $this->exports->definition((string) $request->input('resource'));
         $input = Exports::input($request->input('filter'), $request->input('q'), $request->input('sort'));
         $query = $this->rows->build($db, $definition, $input);
@@ -74,7 +73,7 @@ final class ExportController
     public function show(string $job): JsonResponse
     {
         $db = $this->db();
-        $this->authorizer->requireAnywhere($db, self::PERMISSION);
+        $this->authorizer->requireAnywhere($db, Exports::PERMISSION);
 
         return $this->respond($db, new ExportJobsQuery, $this->existing($db, 'export_jobs', $job));
     }
@@ -86,8 +85,9 @@ final class ExportController
     public function link(string $job): JsonResponse
     {
         $db = $this->db();
-        $this->authorizer->requireAnywhere($db, self::PERMISSION);
+        $this->authorizer->requireAnywhere($db, Exports::PERMISSION);
         $id = $this->existing($db, 'export_jobs', $job);
+        $this->stillAllowed($db, $id);
         $row = $db->selectOne('select status, expires_at <= now() as expired from export_jobs where id = ?', [$id]);
         if ($row->status !== 'DONE' || $row->expired) {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Not possible in this state', $row->status === 'DONE' || $row->status === 'EXPIRED'
@@ -101,14 +101,31 @@ final class ExportController
         return response()->json(['data' => ['url' => $url, 'expiresAt' => $until->utc()->format('Y-m-d\TH:i:s\Z')]]);
     }
 
+    /**
+     * The file holds what the requester could see when it was written: a link or a download needs the list's view
+     * permission now, with scopes that still cover the scopes the file was written with (403 otherwise).
+     */
+    private function stillAllowed(EoraPostgresConnection $db, string $id): void
+    {
+        $job = $db->selectOne('select resource, scopes from export_jobs where id = ?', [$id]);
+        $current = $this->authorizer->requireAnywhere($db, $this->exports->definition((string) $job->resource)->permission());
+        /** @var list<array{type: string, companyId: string|null, plantId: string|null}> $written */
+        $written = $job->scopes === null ? [] : json_decode((string) $job->scopes, true, flags: JSON_THROW_ON_ERROR);
+        if (! Exports::covered($written, $current)) {
+            throw new DomainProblem(403, 'FORBIDDEN', 'Forbidden', 'Your roles no longer cover the data in this export.');
+        }
+    }
+
     /** The exported workbook, through a signed link from `link` (403 when the link is altered or older than 15 minutes). */
     public function file(string $job): StreamedResponse
     {
         $db = $this->db();
-        $this->authorizer->requireAnywhere($db, self::PERMISSION);
+        $this->authorizer->requireAnywhere($db, Exports::PERMISSION);
+        $id = $this->existing($db, 'export_jobs', $job);
+        $this->stillAllowed($db, $id);
         $row = $db->selectOne(
             "select file_key, file_name from export_jobs where id = ? and status = 'DONE' and expires_at > now()",
-            [$this->existing($db, 'export_jobs', $job)],
+            [$id],
         ) ?? throw new DomainProblem(404, 'NOT_FOUND', 'Not found', 'This export file no longer exists.');
 
         return Storage::disk(Exports::DISK)->download((string) $row->file_key, (string) $row->file_name);

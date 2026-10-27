@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Platform\Export;
 
+use App\Platform\Access\Scope;
 use App\Platform\Query\QueryDefinition;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -15,6 +16,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 final class Exports
 {
     public const string DISK = 'exports';
+
+    public const string PERMISSION = 'exchange.export.export';
 
     public static function maxRows(): int
     {
@@ -34,6 +37,41 @@ final class Exports
     public static function tooMany(int $count): string
     {
         return sprintf('This list has %s rows; an export holds at most %s. Narrow the filter or the search.', number_format($count), number_format(self::maxRows()));
+    }
+
+    /** Storage folder of one job: every attempt writes here, cleanup removes the whole folder (no orphaned file). */
+    public static function folder(string $tenant, string $job): string
+    {
+        return sprintf('tenant/%s/exports/%s', $tenant, $job);
+    }
+
+    /**
+     * Scopes as kept with a job.
+     *
+     * @param  list<Scope>  $scopes
+     * @return list<array{type: string, companyId: string|null, plantId: string|null}>
+     */
+    public static function scopes(array $scopes): array
+    {
+        return array_map(static fn (Scope $s) => ['type' => $s->type, 'companyId' => $s->companyId, 'plantId' => $s->plantId], $scopes);
+    }
+
+    /**
+     * Whether $current still covers every scope a file was written with (a narrowed or lost scope refuses the file).
+     *
+     * @param  list<array{type: string, companyId: string|null, plantId: string|null}>  $written
+     * @param  list<Scope>  $current
+     */
+    public static function covered(array $written, array $current): bool
+    {
+        foreach ($written as $w) {
+            $scope = Scope::of($w['type'], $w['companyId'], $w['plantId'], $w['companyId']);
+            if (! array_filter($current, static fn (Scope $c) => $c->covers($scope))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /** A list that can be exported: 404 for an unknown resource, 422 for one without export columns. */

@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\DB;
  * - `export_jobs`: one export of one query resource with the list request it was made from (`query`: filter, q, sort).
  *   QUEUED → RUNNING → DONE, or FAILED (too many rows, no longer allowed, worker error); DONE → EXPIRED when its file
  *   is deleted 24 hours after it was written. The file holds what the requester may see, so a job is visible to its
- *   requester only (and to the system actor that expires files), never to the rest of the tenant.
+ *   requester only (and to the system actor that expires files), never to the rest of the tenant. A link is issued only
+ *   while the requester's current view scopes still cover `scopes`. A worker attempt claims the job with a lease and a
+ *   generation and finishes it only with that generation (fencing).
  * - `inbox_notifications.deep_link`: the M1 check could never pass (regex repetition above 255); restated.
  */
 return new class extends Migration
@@ -28,6 +30,11 @@ return new class extends Migration
               failure_detail text CHECK (length(failure_detail) <= 1000),
               requested_by_user uuid NOT NULL,
               row_count integer CHECK (row_count >= 0),
+              -- the requester's view-permission scopes the file was written with: a link needs them still covered
+              scopes jsonb,
+              -- worker claim (fencing): an attempt finishes the job only with the generation it claimed
+              claim_generation integer NOT NULL DEFAULT 0,
+              lease_until timestamptz,
               file_key text,
               file_name text CHECK (length(file_name) BETWEEN 1 AND 200),
               file_size bigint CHECK (file_size > 0),
@@ -59,6 +66,9 @@ return new class extends Migration
               IF OLD.status = 'DONE' AND NEW.status NOT IN ('DONE', 'EXPIRED') THEN
                 RAISE EXCEPTION 'a written export only expires' USING ERRCODE = '23514';
               END IF;
+              IF NEW.claim_generation < OLD.claim_generation THEN
+                RAISE EXCEPTION 'claim generation never goes back' USING ERRCODE = '23514';
+              END IF;
               RETURN NEW;
             END
             $fn$;
@@ -76,7 +86,8 @@ return new class extends Migration
                      AND (requested_by_user = (SELECT c.actor FROM ctx_api.context() c)
                           OR (SELECT c.actor FROM ctx_api.context() c) = '00000000-0000-0000-0000-000000000000'::uuid));
             GRANT SELECT, INSERT ON export_jobs TO eora_app;
-            GRANT UPDATE (status, failure_code, failure_detail, row_count, file_key, file_name, file_size, started_at, finished_at, expires_at)
+            GRANT UPDATE (status, failure_code, failure_detail, row_count, scopes, claim_generation, lease_until, file_key, file_name, file_size,
+                          started_at, finished_at, expires_at)
               ON export_jobs TO eora_app;
 
             -- the M1 deep-link check used a repetition count above Postgres' regex limit (255), so every notification with a

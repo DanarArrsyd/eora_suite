@@ -23,9 +23,9 @@ final class ExportExpiry
     public function expire(string $tenant): int
     {
         return $this->transaction->run(TenantContext::system($tenant), function (EoraPostgresConnection $db): int {
-            $jobs = $db->select("select id, file_key from export_jobs where status = 'DONE' and expires_at <= now() for update skip locked");
+            $jobs = $db->select("select tenant_id, id from export_jobs where status = 'DONE' and expires_at <= now() for update skip locked");
             foreach ($jobs as $job) {
-                Storage::disk(Exports::DISK)->delete((string) $job->file_key);
+                Storage::disk(Exports::DISK)->deleteDirectory(Exports::folder((string) $job->tenant_id, (string) $job->id));
                 $db->update("update export_jobs set status = 'EXPIRED', file_key = null where id = ?", [$job->id]);
                 $this->audit->record($db, 'export_job.expired', 'export_job', (string) $job->id);
             }

@@ -87,6 +87,7 @@ final class QueryRunner
             bindings: $bindings,
             pageNumber: $number,
             pageSize: $size,
+            scopes: $scopes,
         );
     }
 
