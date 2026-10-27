@@ -25,10 +25,12 @@ use Throwable;
  * the export permission and the list's QueryDefinition are checked again — the view permission and its scopes as of
  * now — the matching ids are fixed in list order at one snapshot (at most 100,000), the rows are read by id in chunks
  * and streamed into the workbook, the file is stored for 24 hours with the scopes it was written with, and the
- * requester gets an inbox notification. An attempt claims the job with a lease and a generation and finishes it only
- * with that generation, holding the job row while it writes (no second attempt writes alongside). Every attempt writes
- * into the job's own folder and a failure empties it, so no file outlives its job. Nothing is half-written: a failure
- * marks the job FAILED and says so.
+ * requester gets an inbox notification. Only short transactions: the claim, the plan (permissions, ids), one read per
+ * chunk while the workbook streams, then the finish — the upload runs outside any transaction, so neither the signed
+ * context's lifetime nor the idle-transaction timeout bounds an export. An attempt claims the job with a lease and a
+ * generation and finishes it only with that generation; it writes into `g<generation>/` of the job's folder, a lost
+ * claim deletes its own file and a finish keeps the winner's file only, a failure empties the folder — no file outlives
+ * its job. Nothing is half-written: a failure marks the job FAILED and says so.
  */
 final class ExportProcessor
 {
@@ -77,10 +79,27 @@ final class ExportProcessor
 
         $generation = (int) $claim['generation'];
         $path = tempnam(sys_get_temp_dir(), 'eora-export-').'.xlsx';
+        $key = null;
         try {
-            $this->tx->run($context, fn (EoraPostgresConnection $db) => $this->write($db, $jobId, $generation, $path));
+            // short transactions only (the signed context lasts minutes, idle transactions seconds): plan, then one
+            // read per chunk while the workbook streams, the upload outside any transaction, then the fenced finish
+            $plan = $this->tx->run($context, fn (EoraPostgresConnection $db) => $this->plan($db, $jobId, $generation));
+            $count = ExportWorkbook::write($path, $plan['title'], $plan['definition']->exportColumns(), $this->rowsInOrder($context, $plan['definition'], $plan['query'], $plan['ids']), $plan['about'], $plan['timezone']);
+            $key = sprintf('%s/g%d/%s', Exports::folder($tenant, $jobId), $generation, $plan['name']);
+            $stream = fopen($path, 'rb') ?: throw new \RuntimeException('The export file could not be read.');
+            Storage::disk(Exports::DISK)->writeStream($key, $stream);
+            fclose($stream);
+            $this->tx->run($context, fn (EoraPostgresConnection $db) => $this->finish($db, $jobId, $generation, $plan, $key, $count, (int) filesize($path)));
+            // the job's folder keeps this attempt's file only (an earlier attempt may have died after its upload)
+            $disk = Storage::disk(Exports::DISK);
+            foreach ($disk->allFiles(Exports::folder($tenant, $jobId)) as $file) {
+                if ($file !== $key) {
+                    $disk->delete($file);
+                }
+            }
         } catch (LostClaim) {
-            // a newer attempt took the job over; it writes and finishes it
+            // a newer attempt took the job over; it writes and finishes it — this attempt's file goes
+            Storage::disk(Exports::DISK)->deleteDirectory(sprintf('%s/g%d', Exports::folder($tenant, $jobId), $generation));
         } catch (DomainProblem $problem) {
             // the requester no longer holds the export or the list's view permission
             $this->fail($tenant, $jobId, $actor, $problem->status === 403 ? 'NOT_ALLOWED' : 'EXPORT_FAILED', $problem->status === 403
@@ -108,6 +127,10 @@ final class ExportProcessor
             $job = $db->selectOne('select * from export_jobs where id = ? for update', [$jobId]);
             if ($job === null || ! in_array($job->status, ['QUEUED', 'RUNNING'], true)
                 || ($generation !== null && (int) $job->claim_generation !== $generation)) {
+                if ($generation !== null) {
+                    Storage::disk(Exports::DISK)->deleteDirectory(sprintf('%s/g%d', Exports::folder($tenant, $jobId), $generation));
+                }
+
                 return;
             }
             $db->update("update export_jobs set status = 'FAILED', failure_code = ?, failure_detail = ?, finished_at = now(), lease_until = null where id = ?", [$code, $detail, $jobId]);
@@ -118,10 +141,14 @@ final class ExportProcessor
         });
     }
 
-    private function write(EoraPostgresConnection $db, string $jobId, int $generation, string $path): void
+    /**
+     * The claimed job's export: permissions checked again, the matching ids fixed in list order at one snapshot.
+     *
+     * @return array{job: \stdClass, definition: QueryDefinition, query: BuiltQuery, ids: list<string>, title: string, name: string, timezone: DateTimeZone, about: list<array{0: string, 1: string}>}
+     */
+    private function plan(EoraPostgresConnection $db, string $jobId, int $generation): array
     {
-        // the claimed job, held until this attempt commits: another attempt waits, then finds the job finished
-        $job = $db->selectOne("select * from export_jobs where id = ? and claim_generation = ? and status = 'RUNNING' for update", [$jobId, $generation])
+        $job = $db->selectOne("select * from export_jobs where id = ? and claim_generation = ? and status = 'RUNNING'", [$jobId, $generation])
             ?? throw new LostClaim;
         $this->authorizer->requireAnywhere($db, Exports::PERMISSION);
         /** @var array{title: string, filter: array<string, mixed>, q: string, sort: string|null} $request */
@@ -133,54 +160,66 @@ final class ExportProcessor
             throw new TooManyRows(Exports::tooMany(count($ids)));
         }
 
-        $tenant = $db->selectOne('select t.id, t.timezone from tenants t where t.id = (select c.tenant from ctx_api.context() c)');
+        $tenant = $db->selectOne('select t.timezone from tenants t where t.id = (select c.tenant from ctx_api.context() c)');
         $timezone = new DateTimeZone((string) ($tenant->timezone ?? 'Asia/Jakarta'));
         $now = Date::now()->setTimezone($timezone);
         $requester = (string) ($db->selectOne('select display_name from users where id = ?', [$job->requested_by_user])->display_name ?? '');
         $title = $definition->title();
-        $count = ExportWorkbook::write($path, $title, $definition->exportColumns(), $this->rowsInOrder($db, $definition, $query, $ids), [
-            ['List', $title],
-            ['Rows', number_format(count($ids))],
-            ['Search', $request['q'] !== '' ? $request['q'] : '—'],
-            ['Filters', self::filters($request['filter'])],
-            ['Sort', self::sort($request['sort'])],
-            ['Data as of', $now->format('d/m/Y H:i:s').' '.$now->format('T').' ('.$timezone->getName().')'],
-            ['Requested by', $requester],
-            ['', ''],
-            ['', sprintf('Generated by EORA Suite | Exported on %s %s', $now->format('d/m/Y H:i:s'), $now->format('T'))],
-        ], $timezone);
 
-        // the job's folder holds this attempt's file only (an earlier attempt may have crashed after its upload)
-        $folder = Exports::folder((string) $tenant->id, $jobId);
-        $disk = Storage::disk(Exports::DISK);
-        $disk->deleteDirectory($folder);
-        $name = sprintf('%s-%s.xlsx', Str::slug($title) ?: 'export', $now->format('Ymd-Hi'));
-        $stream = fopen($path, 'rb') ?: throw new \RuntimeException('The export file could not be read.');
-        $disk->writeStream("{$folder}/{$name}", $stream);
-        fclose($stream);
+        return [
+            'job' => $job,
+            'definition' => $definition,
+            'query' => $query,
+            'ids' => $ids,
+            'title' => $title,
+            'name' => sprintf('%s-%s.xlsx', Str::slug($title) ?: 'export', $now->format('Ymd-Hi')),
+            'timezone' => $timezone,
+            'about' => [
+                ['List', $title],
+                ['Rows', number_format(count($ids))],
+                ['Search', $request['q'] !== '' ? $request['q'] : '—'],
+                ['Filters', self::filters($request['filter'])],
+                ['Sort', self::sort($request['sort'])],
+                ['Data as of', $now->format('d/m/Y H:i:s').' '.$now->format('T').' ('.$timezone->getName().')'],
+                ['Requested by', $requester],
+                ['', ''],
+                ['', sprintf('Generated by EORA Suite | Exported on %s %s', $now->format('d/m/Y H:i:s'), $now->format('T'))],
+            ],
+        ];
+    }
 
+    /**
+     * Finishes the job — only while this attempt still holds the claim (fencing: a newer generation wins).
+     *
+     * @param  array{job: \stdClass, query: BuiltQuery, title: string, name: string}  $plan
+     */
+    private function finish(EoraPostgresConnection $db, string $jobId, int $generation, array $plan, string $key, int $count, int $size): void
+    {
+        $db->selectOne("select id from export_jobs where id = ? and claim_generation = ? and status = 'RUNNING' for update", [$jobId, $generation])
+            ?? throw new LostClaim;
         $db->update(
             "update export_jobs set status = 'DONE', row_count = ?, scopes = ?::jsonb, file_key = ?, file_name = ?, file_size = ?, finished_at = now(),
                     lease_until = null, expires_at = now() + make_interval(hours => ?) where id = ?",
-            [$count, json_encode(Exports::scopes($query->scopes), JSON_THROW_ON_ERROR), "{$folder}/{$name}", $name, (int) filesize($path), Exports::fileHours(), $jobId],
+            [$count, json_encode(Exports::scopes($plan['query']->scopes), JSON_THROW_ON_ERROR), $key, $plan['name'], $size, Exports::fileHours(), $jobId],
         );
-        $event = $this->audit->record($db, 'export_job.completed', 'export_job', $jobId, null, null, ['resource' => $job->resource, 'rows' => $count]);
-        $this->notify($db, $event, $job, 'exchange.export_ready', 'INFO', 'Export ready', sprintf(
-            '%s: %s rows. Download it from Exports within %d hours.', $title, number_format($count), Exports::fileHours(),
+        $event = $this->audit->record($db, 'export_job.completed', 'export_job', $jobId, null, null, ['resource' => $plan['job']->resource, 'rows' => $count]);
+        $this->notify($db, $event, $plan['job'], 'exchange.export_ready', 'INFO', 'Export ready', sprintf(
+            '%s: %s rows. Download it from Exports within %d hours.', $plan['title'], number_format($count), Exports::fileHours(),
         ));
     }
 
     /**
-     * The rows of $ids in list order, read in chunks by id with the full FROM.
+     * The rows of $ids in list order, read by id with the full FROM — one short transaction per chunk.
      *
      * @param  list<string>  $ids
      * @return Generator<array<string, mixed>>
      */
-    private function rowsInOrder(EoraPostgresConnection $db, QueryDefinition $definition, BuiltQuery $query, array $ids): Generator
+    private function rowsInOrder(TenantContext $context, QueryDefinition $definition, BuiltQuery $query, array $ids): Generator
     {
         foreach (array_chunk($ids, self::CHUNK) as $chunk) {
+            $rows = $this->tx->run($context, fn (EoraPostgresConnection $db) => $db->select($query->rowsByIdSql(), ['{'.implode(',', $chunk).'}']));
             $byId = [];
-            foreach ($db->select($query->rowsByIdSql(), ['{'.implode(',', $chunk).'}']) as $row) {
+            foreach ($rows as $row) {
                 $id = (string) $row->row_id;
                 unset($row->row_id);
                 $byId[$id] = $definition->row($row);

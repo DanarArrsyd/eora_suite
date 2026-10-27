@@ -285,7 +285,7 @@ it('keeps no file of an attempt that did not finish the job (Codex P2)', functio
     // an earlier attempt uploaded, then crashed before its commit: the next attempt leaves only its own file
     Storage::disk('exports')->put("{$folder}/units-crashed.xlsx", 'old');
     $done = expRun($this->t, $id);
-    expect(Storage::disk('exports')->files($folder))->toBe([(string) $done->file_key]);
+    expect(Storage::disk('exports')->allFiles($folder))->toBe([(string) $done->file_key])->and((string) $done->file_key)->toStartWith("{$folder}/g1/");
 
     // a failing attempt empties the folder
     $failing = spa($this)->postJson('/api/v1/exchange/exports', ['resource' => 'core.uoms'])->assertCreated()->json('data.id');
@@ -293,4 +293,17 @@ it('keeps no file of an attempt that did not finish the job (Codex P2)', functio
     config(['eora.export.max_rows' => 0]);
     expect(expRun($this->t, $failing)->status)->toBe('FAILED');
     expect(Storage::disk('exports')->allFiles("tenant/{$this->t['tenant']}/exports/{$failing}"))->toBe([]);
+})->group('integration', 'export');
+
+it('streams a list of several chunks in list order, each chunk read in its own short transaction (Codex P2)', function () {
+    orgUser($this, $this->t, 'CSA');
+    AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->statement("
+        insert into items (tenant_id, code, name, item_type, base_uom_id, created_at, created_by, updated_at, updated_by, version)
+        select c.tenant, 'P'||lpad(g::text, 5, '0'), 'Part '||g, 'FINISHED', (select id from uoms where code = 'PCS'), now(), c.actor, now(), c.actor, 1
+          from ctx_api.context() c, generate_series(1, 2500) g"));
+    $id = spa($this)->postJson('/api/v1/exchange/exports', ['resource' => 'core.items', 'sort' => '-code'])->assertCreated()->json('data.id');
+    $done = expRun($this->t, $id);
+    $rows = expSheets((string) $done->file_key)['Items'];
+    expect($done->row_count)->toBe(2500)->and($rows)->toHaveCount(2501)
+        ->and($rows[1][0])->toBe('P02500')->and($rows[1000][0])->toBe('P01501')->and($rows[1001][0])->toBe('P01500')->and($rows[2500][0])->toBe('P00001');
 })->group('integration', 'export');
