@@ -22,11 +22,13 @@ rows, every list column with the screen's headings.
    lease is released until it runs out, a dead attempt is taken over), a **plan** (`exchange.export.export` and the list's
    view permission again — a lost grant fails the job `NOT_ALLOWED`; the matching ids fixed in list order by one
    statement — one snapshot; a list past the limit fails `TOO_MANY_ROWS`), **one read per chunk** of 1,000 rows by id with
-   the full FROM while the workbook streams (OpenSpout, ADR-0017), the **upload outside any transaction** to the `exports`
+   the full FROM and the request's scope, filters and search applied again (a row that moved out of the requester's
+   scope since the ids were fixed is not read) while the workbook streams (OpenSpout, ADR-0017), the **upload outside any transaction** to the `exports`
    disk (same private bucket, `tenant/<id>/exports/<job>/g<generation>/`), then the **finish** — only while the attempt
    still holds its generation (fencing) — DONE with its expiry and the view scopes the file was written with, and an inbox
    notification (deep link `/system/exports?job=<id>`). A lost claim deletes its own file; a finish keeps the winner's
-   file only; a failure empties the job's folder.
+   file only (a storage error in that clean-up is reported, never turned into a failure — the finished file is never
+   touched); a failure empties the job's folder.
 4. **Workbook.** Data sheet named after the list: bold headings, frozen heading row, auto-filter, typed cells (numbers,
    dates, date-times in the tenant's time zone, Yes/No, screen labels for enums); a screen cell showing several facts
    becomes one column per fact; text that would start a formula gets an apostrophe. About sheet: list, rows, search,
@@ -50,4 +52,5 @@ rows, every list column with the screen's headings.
 formula escaping, About sheet, inbox notification and audit, signed link (tampered and 16-minute-old links refused,
 another member gets 404), 24-hour expiry, row limit up front and at run time, plant scope, view or export permission
 lost before the run, view narrowed after the export, live lease and takeover, stale failure ignored, no orphaned file,
-several chunks in list order, routings with their shown-only laterals. Live: real worker and SeaweedFS, file downloaded through the link.
+several chunks in list order, a row moved out of scope between ids and chunk not read, the finished file kept by a late
+failure of its own generation, routings with their shown-only laterals. Live: real worker and SeaweedFS, file downloaded through the link.

@@ -75,11 +75,12 @@ final class QueryRunner
         $number = max(1, $this->integer(is_array($page) ? ($page['number'] ?? 1) : 1, 'page.number'));
         $size = min($definition->maxPageSize(), max(1, $this->integer(is_array($page) ? ($page['size'] ?? self::DEFAULT_PAGE_SIZE) : self::DEFAULT_PAGE_SIZE, 'page.size')));
 
-        $where = ' where '.implode(' and ', $clauses);
+        $where = implode(' and ', $clauses);
 
         return new BuiltQuery(
             select: implode(', ', array_map(static fn (Field $f) => "{$f->sql} as \"{$f->key}\"", $fields)),
-            filtered: 'from '.($definition->filterFrom() ?? $definition->from()).$where,
+            filtered: 'from '.($definition->filterFrom() ?? $definition->from()).' where '.$where,
+            where: $where,
             from: $definition->from(),
             paged: $definition->filterFrom() !== null,
             idColumn: $definition->idColumn(),

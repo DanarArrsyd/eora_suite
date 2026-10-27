@@ -21,6 +21,7 @@ final readonly class BuiltQuery
     public function __construct(
         public string $select,
         public string $filtered,
+        public string $where,
         public string $from,
         public bool $paged,
         public string $idColumn,
@@ -57,10 +58,23 @@ final readonly class BuiltQuery
         return "select {$this->idColumn} as id {$this->filtered} order by {$this->orderBy}";
     }
 
-    /** The rows of a set of ids (one bound uuid[]), in any order: the caller puts them back in list order. */
+    /**
+     * The rows of a set of ids that still match the request — scope, filters and search applied again, so a row that
+     * moved out of the caller's scope since the ids were fixed is not read. Bindings: rowsByIdBindings(). Any order:
+     * the caller puts them back in list order.
+     */
     public function rowsByIdSql(): string
     {
-        return "select {$this->idColumn} as row_id, {$this->select} from {$this->from} where {$this->idColumn} = any(?::uuid[])";
+        return "select {$this->idColumn} as row_id, {$this->select} from {$this->from} where {$this->where} and {$this->idColumn} = any(?::uuid[])";
+    }
+
+    /**
+     * @param  list<string>  $ids
+     * @return list<mixed>
+     */
+    public function rowsByIdBindings(array $ids): array
+    {
+        return [...$this->bindings, '{'.implode(',', $ids).'}'];
     }
 
     /** @return list<mixed> */

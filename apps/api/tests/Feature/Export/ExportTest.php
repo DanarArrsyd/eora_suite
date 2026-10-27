@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Core\Queries\DiesQuery;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Export\ExportColumn;
 use App\Platform\Export\ExportExpiry;
@@ -9,6 +10,7 @@ use App\Platform\Export\ExportProcessor;
 use App\Platform\Export\ProcessExport;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
+use App\Platform\Query\QueryRunner;
 use App\Platform\Tenancy\TenantContext;
 use App\Platform\Tenancy\TenantTransaction;
 use Illuminate\Support\Facades\Artisan;
@@ -306,4 +308,29 @@ it('streams a list of several chunks in list order, each chunk read in its own s
     $rows = expSheets((string) $done->file_key)['Items'];
     expect($done->row_count)->toBe(2500)->and($rows)->toHaveCount(2501)
         ->and($rows[1][0])->toBe('P02500')->and($rows[1000][0])->toBe('P01501')->and($rows[1001][0])->toBe('P01500')->and($rows[2500][0])->toBe('P00001');
+})->group('integration', 'export');
+
+it('reads each chunk with the requester\'s scope again: a row that moved out of it is not exported (Codex P1)', function () {
+    [$p1, $p2] = $this->t['plants'];
+    orgUser($this, $this->t, 'CSA');
+    $die = spa($this)->postJson('/api/v1/core/dies', ['plantId' => $p1, 'code' => 'D-1', 'name' => 'Die', 'dieType' => 'DIE'])->assertCreated()->json('data');
+    $planner = member($this, $this->t);
+    AccessFixtures::grant($this->t, $planner['id'], 'INV', ['PLANT', $p1]);
+    $as = fn (Closure $work) => app(TenantTransaction::class)->run(TenantContext::forTenant($this->t['tenant'], $planner['id']), $work, 'pgsql_provisioner');
+    $query = $as(fn (EoraPostgresConnection $db) => app(QueryRunner::class)->build($db, app(DiesQuery::class), ['filter' => [], 'q' => '', 'sort' => null]));
+    $ids = $as(fn (EoraPostgresConnection $db) => array_column($db->select($query->idsSql(), $query->bindings), 'id'));
+    expect($ids)->toBe([$die['id']]);
+
+    // the die moves to plant 2 between the id snapshot and the chunk read
+    AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->update('update dies set plant_id = ? where id = ?', [$p2, $die['id']]));
+    expect($as(fn (EoraPostgresConnection $db) => $db->select($query->rowsByIdSql(), $query->rowsByIdBindings($ids))))->toBe([]);
+})->group('integration', 'export');
+
+it('never deletes the file of the attempt that finished the job (Codex P2)', function () {
+    orgUser($this, $this->t, 'CSA');
+    $id = spa($this)->postJson('/api/v1/exchange/exports', ['resource' => 'core.plants'])->assertCreated()->json('data.id');
+    $done = expRun($this->t, $id);
+    app(ExportProcessor::class)->fail($this->t['tenant'], $id, (string) $done->requested_by_user, 'EXPORT_FAILED', 'late', (int) $done->claim_generation);
+    expect(expJob($this->t, $id)->status)->toBe('DONE');
+    Storage::disk('exports')->assertExists((string) $done->file_key);
 })->group('integration', 'export');

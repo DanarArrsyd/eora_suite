@@ -90,13 +90,7 @@ final class ExportProcessor
             Storage::disk(Exports::DISK)->writeStream($key, $stream);
             fclose($stream);
             $this->tx->run($context, fn (EoraPostgresConnection $db) => $this->finish($db, $jobId, $generation, $plan, $key, $count, (int) filesize($path)));
-            // the job's folder keeps this attempt's file only (an earlier attempt may have died after its upload)
-            $disk = Storage::disk(Exports::DISK);
-            foreach ($disk->allFiles(Exports::folder($tenant, $jobId)) as $file) {
-                if ($file !== $key) {
-                    $disk->delete($file);
-                }
-            }
+            $this->keepOnly($tenant, $jobId, $key);
         } catch (LostClaim) {
             // a newer attempt took the job over; it writes and finishes it — this attempt's file goes
             Storage::disk(Exports::DISK)->deleteDirectory(sprintf('%s/g%d', Exports::folder($tenant, $jobId), $generation));
@@ -118,6 +112,25 @@ final class ExportProcessor
     }
 
     /**
+     * After a finish: the job's folder keeps the finished file only (an earlier attempt may have died after its upload).
+     * The job is DONE already, so a storage error here is reported and never turns into a failure of the job — the
+     * finished file is never touched; a leftover is removed with the folder when the file expires.
+     */
+    private function keepOnly(string $tenant, string $jobId, string $key): void
+    {
+        try {
+            $disk = Storage::disk(Exports::DISK);
+            foreach ($disk->allFiles(Exports::folder($tenant, $jobId)) as $file) {
+                if ($file !== $key) {
+                    $disk->delete($file);
+                }
+            }
+        } catch (Throwable $e) {
+            report($e);
+        }
+    }
+
+    /**
      * Marks a running or queued job FAILED, empties its folder and tells the requester — only for the attempt that holds
      * the claim (`$generation`; null: whoever, e.g. the queue giving up); a finished job stays as it is.
      */
@@ -127,7 +140,8 @@ final class ExportProcessor
             $job = $db->selectOne('select * from export_jobs where id = ? for update', [$jobId]);
             if ($job === null || ! in_array($job->status, ['QUEUED', 'RUNNING'], true)
                 || ($generation !== null && (int) $job->claim_generation !== $generation)) {
-                if ($generation !== null) {
+                // a superseded attempt's own file goes; the generation that finished the job keeps its file
+                if ($job !== null && $generation !== null && (int) $job->claim_generation !== $generation) {
                     Storage::disk(Exports::DISK)->deleteDirectory(sprintf('%s/g%d', Exports::folder($tenant, $jobId), $generation));
                 }
 
@@ -217,7 +231,8 @@ final class ExportProcessor
     private function rowsInOrder(TenantContext $context, QueryDefinition $definition, BuiltQuery $query, array $ids): Generator
     {
         foreach (array_chunk($ids, self::CHUNK) as $chunk) {
-            $rows = $this->tx->run($context, fn (EoraPostgresConnection $db) => $db->select($query->rowsByIdSql(), ['{'.implode(',', $chunk).'}']));
+            // scope, filters and search applied again: a row that left the requester's scope since the plan is not read
+            $rows = $this->tx->run($context, fn (EoraPostgresConnection $db) => $db->select($query->rowsByIdSql(), $query->rowsByIdBindings($chunk)));
             $byId = [];
             foreach ($rows as $row) {
                 $id = (string) $row->row_id;
