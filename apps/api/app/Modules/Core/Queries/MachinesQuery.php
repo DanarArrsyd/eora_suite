@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Queries;
 
+use App\Platform\Export\ExportColumn;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -55,6 +56,23 @@ final class MachinesQuery extends QueryDefinition
             new Field('plantCode', 'p.code', sortable: true),
             new Field('updatedAt', 'm.updated_at', Field::INSTANT, sortable: true),
             new Field('version', 'm.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Machines';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Plant', 'plantCode'),
+            new ExportColumn('Code', 'code'),
+            new ExportColumn('Name', 'name'),
+            new ExportColumn('Work center', 'workCenterCode'),
+            new ExportColumn('Stroke counter', 'strokeCounter', ExportColumn::BOOLEAN),
         ];
     }
 

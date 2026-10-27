@@ -13,6 +13,7 @@ use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
 use App\Platform\Auth\Http\AuthController;
 use App\Platform\Http\Controllers\HealthController;
+use App\Platform\Export\ExportController;
 use App\Platform\Import\ImportController;
 use App\Platform\Inbox\Http\InboxController;
 use App\Platform\Query\Http\QueryController;
@@ -163,5 +164,10 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('imports/{job}/actions/submit', [ImportController::class, 'submit'])->name('imports.submit');
         Route::post('imports/{job}/actions/commit', [ImportController::class, 'commit'])->name('imports.commit');
         Route::post('imports/{job}/actions/reject', [ImportController::class, 'reject'])->name('imports.reject');
+        // Data exchange → Export (doc 08, doc 24 §3, D-092): queued job, signed 15-minute link, file kept 24 hours
+        Route::post('exports', [ExportController::class, 'store'])->name('exports.store');
+        Route::get('exports/{job}', [ExportController::class, 'show'])->name('exports.show');
+        Route::post('exports/{job}/link', [ExportController::class, 'link'])->name('exports.link');
+        Route::get('exports/{job}/file', [ExportController::class, 'file'])->middleware('signed:relative')->name('exports.file');
     });
 });

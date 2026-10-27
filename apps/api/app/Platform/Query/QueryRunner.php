@@ -80,7 +80,8 @@ final class QueryRunner
         return new BuiltQuery(
             select: implode(', ', array_map(static fn (Field $f) => "{$f->sql} as \"{$f->key}\"", $fields)),
             filtered: 'from '.($definition->filterFrom() ?? $definition->from()).$where,
-            from: $definition->filterFrom() === null ? null : $definition->from(),
+            from: $definition->from(),
+            paged: $definition->filterFrom() !== null,
             idColumn: $definition->idColumn(),
             orderBy: $this->orderBy($input['sort'] ?? null, $fields, $definition),
             bindings: $bindings,

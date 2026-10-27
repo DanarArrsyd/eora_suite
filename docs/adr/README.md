@@ -21,5 +21,6 @@ Format: Nygard (Context / Decision / Consequences) plus Verification. Status val
 | [0015](ADR-0015-supply-classification-and-netting.md) | Supply classification and MPS netting | Accepted | D-043, D-046 |
 | [0016](ADR-0016-read-models-freshness-caching.md) | Read models, KPI freshness and caching | Accepted | D-045 |
 | [0017](ADR-0017-excel-import-pipeline.md) | Excel import pipeline: OpenSpout, S3-compatible file store, queued worker with fencing | Accepted | D-072 (M2-D2, M2-D3), D-081, D-082 |
+| [0018](ADR-0018-list-export-pipeline.md) | List export pipeline: queued job, same QueryDefinition, signed short-lived link | Accepted | D-092 |
 
 Only ADR-0011 authorizes implementation, and only phased frontend work (D-033). ADR-0012..0016 are the approved backend baseline (D-045); backend code proceeds only slice by slice with explicit owner approval. Backend, schema, migrations and business-rule changes still require explicit owner approval.

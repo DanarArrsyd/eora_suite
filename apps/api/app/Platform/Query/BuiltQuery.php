@@ -7,7 +7,8 @@ namespace App\Platform\Query;
 /**
  * The SQL of one list request (QueryRunner::build): trusted SQL text with every value bound. The page, the count and
  * any other reader (EXPLAIN checks, exports) share the same FROM/WHERE and the same stable order. `filtered` is
- * `from … where …` over the filter FROM; `from` is the full FROM when it differs (shown-only joins), else null.
+ * `from … where …` over the filter FROM; `from` is the full FROM, `paged` says the filter FROM differs (shown-only
+ * joins), so pages pick their ids first.
  */
 final readonly class BuiltQuery
 {
@@ -15,7 +16,8 @@ final readonly class BuiltQuery
     public function __construct(
         public string $select,
         public string $filtered,
-        public ?string $from,
+        public string $from,
+        public bool $paged,
         public string $idColumn,
         public string $orderBy,
         public array $bindings,
@@ -34,13 +36,25 @@ final readonly class BuiltQuery
      */
     public function pageSql(): string
     {
-        if ($this->from === null) {
+        if (! $this->paged) {
             return "select {$this->select} {$this->filtered} order by {$this->orderBy} limit ? offset ?";
         }
 
         // materialized: the planner sees the page's few ids and joins the shown-only columns for those rows only
         return "with page as materialized (select {$this->idColumn} as page_id {$this->filtered} order by {$this->orderBy} limit ? offset ?) "
             ."select {$this->select} from {$this->from} join page on page.page_id = {$this->idColumn} order by {$this->orderBy}";
+    }
+
+    /** Every matching id in list order (bindings: `bindings`) — the rows of an export, fixed at one snapshot. */
+    public function idsSql(): string
+    {
+        return "select {$this->idColumn} as id {$this->filtered} order by {$this->orderBy}";
+    }
+
+    /** The rows of a set of ids (one bound uuid[]), in any order: the caller puts them back in list order. */
+    public function rowsByIdSql(): string
+    {
+        return "select {$this->idColumn} as row_id, {$this->select} from {$this->from} where {$this->idColumn} = any(?::uuid[])";
     }
 
     /** @return list<mixed> */

@@ -97,7 +97,8 @@ final class XlsxFile
         };
     }
 
-    private static function safe(string $value): string
+    /** A text cell that would start a formula, prefixed with an apostrophe (doc 08: formula injection). */
+    public static function safe(string $value): string
     {
         return $value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true) ? "'".$value : $value;
     }

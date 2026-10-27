@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Queries;
 
+use App\Platform\Export\ExportColumn;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -52,6 +53,23 @@ final class PlantsQuery extends QueryDefinition
             new Field('companyName', 'c.legal_name'),
             new Field('updatedAt', 'p.updated_at', Field::INSTANT, sortable: true),
             new Field('version', 'p.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Plants';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Code', 'code'),
+            new ExportColumn('Name', 'name'),
+            new ExportColumn('Company', 'companyCode'),
+            new ExportColumn('Company name', 'companyName'),
+            new ExportColumn('Time zone', 'timezone'),
         ];
     }
 

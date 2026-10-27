@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Planning\Queries;
 
+use App\Platform\Export\ExportColumn;
+use App\Platform\Export\Labels;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -89,6 +91,30 @@ final class RoutingsQuery extends QueryDefinition
             new Field('pendingStatus', 'pend.status'),
             new Field('updatedAt', 'r.updated_at', Field::INSTANT),
             new Field('version', 'r.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Routings';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Item', 'itemCode'),
+            new ExportColumn('Item name', 'itemName'),
+            new ExportColumn('Routing', 'code'),
+            new ExportColumn('Routing kind', 'routingKind', labels: Labels::ROUTING_KINDS),
+            new ExportColumn('Plant', 'plantCode'),
+            new ExportColumn('Version in use', 'currentVersionNo', ExportColumn::INTEGER),
+            new ExportColumn('In use from', 'currentEffectiveFrom', ExportColumn::DATE),
+            new ExportColumn('Standard yield %', static fn (array $r) => $r['currentStandardYield'] === null ? null : round((float) $r['currentStandardYield'] * 100, 3), ExportColumn::DECIMAL),
+            new ExportColumn('Operations', 'currentOperationCount', ExportColumn::INTEGER),
+            new ExportColumn('Open version', 'pendingVersionNo', ExportColumn::INTEGER),
+            new ExportColumn('Open version status', 'pendingStatus', labels: Labels::VERSION_STATUS),
+            new ExportColumn('Status', 'status', labels: Labels::MASTER_STATUS),
         ];
     }
 

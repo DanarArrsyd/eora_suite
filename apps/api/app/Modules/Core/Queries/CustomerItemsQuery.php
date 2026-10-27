@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Queries;
 
+use App\Platform\Export\ExportColumn;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -51,6 +52,25 @@ final class CustomerItemsQuery extends QueryDefinition
             new Field('status', 'ci.status', Field::ENUM, sortable: true, filterable: true, options: ['ACTIVE', 'INACTIVE']),
             new Field('updatedAt', 'ci.updated_at', Field::INSTANT),
             new Field('version', 'ci.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Customer Part Mapping';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Customer part', 'code'),
+            new ExportColumn('Customer drawing rev', 'customerDrawingRev'),
+            new ExportColumn('Customer', 'customerCode'),
+            new ExportColumn('Item', 'itemCode'),
+            new ExportColumn('Item name', 'itemName'),
+            new ExportColumn('In effect from', 'effectiveFrom', ExportColumn::DATE),
+            new ExportColumn('In effect to', 'effectiveTo', ExportColumn::DATE),
         ];
     }
 

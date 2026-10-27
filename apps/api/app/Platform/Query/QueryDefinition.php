@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Platform\Query;
 
 use App\Platform\Access\Scope;
+use App\Platform\Export\ExportColumn;
 use stdClass;
 
 /**
@@ -44,6 +45,23 @@ abstract class QueryDefinition
     public function filterFrom(): ?string
     {
         return null;
+    }
+
+    /** Name of the list as the screen titles it, for exported files and notifications. */
+    public function title(): string
+    {
+        return $this->resource();
+    }
+
+    /**
+     * Columns of an export (D-092): every column of the list with the screen's heading, compound cells split into one
+     * typed column per fact. Empty = the list cannot be exported.
+     *
+     * @return list<ExportColumn>
+     */
+    public function exportColumns(): array
+    {
+        return [];
     }
 
     public function maxPageSize(): int

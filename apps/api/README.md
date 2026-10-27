@@ -245,6 +245,9 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
 - `eora:demo:plant <tenant-id> <code> <name>` (same runner, refused in production) adds a plant to the tenant's first
   company as the provisioner in the tenant's signed context (audited `plant.created`, `via: demo-plant`), so the plant
   switch can be tried before master-data maintenance (M2). Used by the stack E2E (below).
+- `eora:exports:expire` (hourly in the `scheduler` service, which holds only the provisioner credential): deletes exported
+  files older than 24 hours and marks their jobs EXPIRED, per provisioned tenant as the system actor (D-092, ADR-0018).
+  Exports are written by `ProcessExport` on the Redis queue `exports`, served by the `import-worker` service.
 - `eora:demo:import-samples <dir> [--from=YYYY-MM-DD]` (refused in production, reads no tenant data) writes the 17 sample
   import files of `App\Platform\Demo\ImportSamples` as filled templates, numbered in import order; `--from` is the first
   effective date (default today). The committed copies live in `docs/uat/samples/` (UAT script `docs/uat/M2-UAT.md` §5);

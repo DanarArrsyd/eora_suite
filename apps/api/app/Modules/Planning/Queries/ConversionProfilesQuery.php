@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Planning\Queries;
 
+use App\Platform\Export\ExportColumn;
+use App\Platform\Export\Labels;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -58,6 +60,26 @@ final class ConversionProfilesQuery extends QueryDefinition
             new Field('versionCount', '(select count(*) from conversion_profile_versions v where v.profile_id = p.id)', Field::INTEGER),
             new Field('updatedAt', 'p.updated_at', Field::INSTANT),
             new Field('version', 'p.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Conversion profiles';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Part', 'itemCode'),
+            new ExportColumn('Part name', 'itemName'),
+            new ExportColumn('Material', 'inputItemCode'),
+            new ExportColumn('Material name', 'inputItemName'),
+            new ExportColumn('Form', 'inputForm', labels: Labels::INPUT_FORMS),
+            new ExportColumn('Version in use', 'versionInUseNo', ExportColumn::INTEGER),
+            new ExportColumn('Versions', 'versionCount', ExportColumn::INTEGER),
+            new ExportColumn('Status', 'status', labels: Labels::MASTER_STATUS),
         ];
     }
 

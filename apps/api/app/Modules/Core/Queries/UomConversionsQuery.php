@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Queries;
 
+use App\Platform\Export\ExportColumn;
 use App\Platform\Query\Field;
 use App\Platform\Query\QueryDefinition;
 
@@ -50,6 +51,26 @@ final class UomConversionsQuery extends QueryDefinition
             new Field('current', '(c.effective_from <= (now() at time zone t.timezone)::date and (c.effective_to is null or c.effective_to >= (now() at time zone t.timezone)::date))', Field::BOOLEAN, filterable: true),
             new Field('updatedAt', 'c.updated_at', Field::INSTANT),
             new Field('version', 'c.version', Field::INTEGER),
+        ];
+    }
+
+    public function title(): string
+    {
+        return 'Unit Conversions';
+    }
+
+    /** D-092: every column of the list, with the screen's headings; compound cells split into typed columns. */
+    public function exportColumns(): array
+    {
+        return [
+            new ExportColumn('Item', 'code'),
+            new ExportColumn('Item name', 'itemName'),
+            new ExportColumn('From unit', 'fromUomCode'),
+            new ExportColumn('Factor', 'factor', ExportColumn::DECIMAL),
+            new ExportColumn('To unit', 'toUomCode'),
+            new ExportColumn('In effect from', 'effectiveFrom', ExportColumn::DATE),
+            new ExportColumn('In effect to', 'effectiveTo', ExportColumn::DATE),
+            new ExportColumn('Today', static fn (array $r) => $r['current'] === true ? 'In effect' : null),
         ];
     }
 

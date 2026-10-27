@@ -40,6 +40,7 @@ use App\Modules\Planning\Queries\ItemWeightsQuery;
 use App\Modules\Planning\Queries\ProcessTypesQuery;
 use App\Modules\Planning\Queries\RoutingsQuery;
 use App\Modules\Planning\Queries\RoutingVersionsQuery;
+use App\Platform\Export\ExportJobsQuery;
 use App\Platform\Import\ImportJobsQuery;
 
 return [
@@ -101,6 +102,7 @@ return [
         'planning.conversion_profiles' => ConversionProfilesQuery::class,
         'planning.conversion_profile_versions' => ConversionProfileVersionsQuery::class,
         'exchange.import_jobs' => ImportJobsQuery::class,
+        'exchange.export_jobs' => ExportJobsQuery::class,
     ],
 
     // Excel import (doc 29 §1.6, ADR-0017, D-081): template code => class (current version each), worker lease
@@ -125,6 +127,12 @@ return [
     ],
     'import' => [
         'lease_seconds' => (int) env('EORA_IMPORT_LEASE_SECONDS', 300),
+    ],
+    // D-092: queued exports — row limit, signed link lifetime, file lifetime
+    'export' => [
+        'max_rows' => (int) env('EORA_EXPORT_MAX_ROWS', 100_000),
+        'link_minutes' => 15,
+        'file_hours' => 24,
     ],
 
     'member_invite_per_hour' => env('EORA_MEMBER_INVITE_PER_HOUR') === null ? null : (int) env('EORA_MEMBER_INVITE_PER_HOUR'),
