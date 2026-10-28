@@ -249,11 +249,22 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
   files older than 24 hours and marks their jobs EXPIRED, per provisioned tenant as the system actor (D-092, ADR-0018).
   Exports are written by `ProcessExport` on the Redis queue `exports`, served by the `import-worker` service.
 - `eora:demo:import-samples <dir> [--from=YYYY-MM-DD]` (refused in production, reads no tenant data) writes the 17 sample
-  import files of `App\Platform\Demo\ImportSamples` as filled templates, numbered in import order; `--from` is the first
-  effective date (default today). The committed copies live in `docs/uat/samples/` (UAT script `docs/uat/M2-UAT.md` §5);
-  `ImportSamplesTest` imports the whole set into a new tenant and expects every row committed.
+  import files of `App\Platform\Demo\ImportSamples` as filled templates, numbered in import order, plus
+  `99-items-with-errors.xlsx` (rows that fail on purpose); `--from` is the first effective date (default today). The
+  committed copies live in `docs/uat/samples/` (UAT script `docs/uat/M2-UAT.md` §5, §7); `ImportSamplesTest` imports the
+  whole set into a new tenant and expects every row committed, and the error file to report each row's error.
+- `eora:demo:master [--code=demo-stamping] [--from=YYYY-MM-DD] [--wait=300]` (same runner, refused in production; D-094)
+  loads files 01–16 into a seeded demo tenant through the real import pipeline: uploaded and submitted by `ppc@` where the
+  planner may create that master data (`csa@` for warehouses, locations, work centers, machines and dies), committed by
+  `csa@`, validated and committed by the `import-worker`. Masters are Active; routings and BOMs stay **Draft** (the
+  two-person approval is left to UAT); maps (17) need submitted versions and are not loaded. Refused when item `BRK-A100`
+  exists already. `--from` defaults to today at plant P1.
 
-## Stack E2E (M1 exit, doc 28 §3 item 3, doc 25 §15.3)
+## Stack E2E (M1 exit, doc 28 §3 item 3, doc 25 §15.3; M2 exit, doc 29 §4 item 7)
+- `apps/web/e2e/stack/m2-master.spec.ts`: `eora:demo:seed` + `eora:demo:master` (16 imports through the worker) → `csa`
+  creates an item → `ppc` creates its routing R1, adds an operation, sets the standard yield and submits (no Approve
+  offered) → `csa` approves → `csa` imports `docs/uat/samples/99-items-with-errors.xlsx`: 5 error rows with their
+  messages, the valid row commits.
 - `apps/web/e2e/stack/m1-access.spec.ts`, config `apps/web/playwright.stack.config.ts`, CI job `stack-e2e`. Chrome drives the
   production web build on `http://localhost:3100` against the Compose stack, same origin (Next.js rewrites, ADR-0006):
   provision two tenants for one administrator (`--deliver=email`) + plant P2 → both invitations from Mailpit accepted →

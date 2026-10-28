@@ -106,3 +106,26 @@ Setelah menarik `main`, jalankan `docker compose up -d --build --wait` (layanan 
 | 7 | Sebagai `csa`, export daftar **Routings** dan **Unit Conversions**. | Kolom "Version in use", "Standard yield %", tanggal dan faktor berupa angka/tanggal di Excel (bisa dijumlah/difilter), bukan teks. | |
 | 8 | Cari daftar dengan lebih dari 100.000 baris (atau minta admin menurunkan batas lewat `EORA_EXPORT_MAX_ROWS`), lalu Export. | Ditolak dengan pesan "This list has … rows; an export holds at most …. Narrow the filter or the search." | |
 | 9 | Keesokan harinya (lebih dari 24 jam) buka Exports. | Export lama berstatus **Deleted**, tombol Download nonaktif dengan alasan "Deleted after 24 hours. Export the list again." | |
+
+## 7. Penutup M2: data demo lengkap, file error, login satu workspace (langkah 8, D-094)
+Setelah menarik `main`, jalankan `docker compose up -d --build --wait`. Bagian ini memakai tenant demo **kedua** supaya tidak bentrok dengan data yang Anda impor sendiri di bagian 5 (ganti `<password demo>` dengan password demo Anda; jangan tulis password di catatan):
+```bash
+docker compose run --rm --entrypoint php db-migrate artisan eora:demo:seed --code=demo-stamping-2 --password='<password demo>'
+docker compose run --rm --entrypoint php db-migrate artisan eora:demo:master --code=demo-stamping-2
+```
+Akun: `csa@demo-stamping-2.test` dan `ppc@demo-stamping-2.test`. `eora:demo:master` butuh layanan `import-worker` berjalan (bagian dari `docker compose up`).
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Jalankan kedua perintah di atas. | Perintah kedua mencetak 16 baris "… rows committed" lalu "Demo master data loaded into demo-stamping-2: 16 files, 61 rows." Menjalankannya lagi ditolak: "loaded already". | |
+| 2 | Login `ppc@demo-stamping-2.test`. | Langsung masuk ke workspace Demo Stamping (satu workspace, tanpa pemilih) dan **tidak** terlempar kembali ke halaman Sign in. | |
+| 3 | Master Data → **Import**. | 16 job **Committed**: submitted by ppc untuk satuan, item, spec, konversi satuan, customer, customer part, supplier, process type, routing, BOM; submitted by csa untuk gudang, lokasi, work center, mesin, dies, die parts; semua committed by csa. | |
+| 4 | Master Data → **Routings** → BRK-A100 R1. | Version 1 **Draft** dengan 3 operasi (BLANK, FORM, NUTWELD) dan standard yield 98.5 %. Tidak ada versi yang Approved tanpa orang kedua. | |
+| 5 | Sebagai `ppc`: **Submit for approval**. Login `csa` → routing yang sama → **Approve**. | Version 1 **Approved**, "In use", approved by csa. | |
+| 6 | Sebagai `csa`: Import → **New import** → Template **Items** → file `docs/uat/samples/99-items-with-errors.xlsx` → **Upload and check**. | 6 baris: 1 valid, 5 error dengan pesan per baris: "Unit BOX does not exist…", "Item NUT-M10 is also on row 3 of this file.", "Item type: use one of …", "Drawing rev needs a drawing no.", "Item BRK-A100 already exists." **Error file** berisi kelima baris itu. | |
+| 7 | **Submit for commit** → **Commit**. | 1 baris Committed; item **NUT-M10** muncul di Items; baris error tidak tersimpan. | |
+
+## 8. Pernyataan owner (exit M2, doc 29 §4 butir 9)
+| Pernyataan | Hasil |
+|---|---|
+| Saya sudah menjalankan bagian 1–7 di lokal; catatan "Tidak OK" sudah dibahas atau diterima. M2 boleh ditutup. | |

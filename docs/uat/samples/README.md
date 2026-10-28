@@ -10,3 +10,8 @@ docker compose run --rm -v "$PWD/docs/uat/samples:/out" --entrypoint php db-migr
 
 The rows live in `apps/api/app/Platform/Demo/ImportSamples.php`; `ImportSamplesTest` imports the whole set into a new
 tenant and expects every row committed. Maps (17) need the routing and BOM versions from 15 and 16 submitted first.
+
+`99-items-with-errors.xlsx` fails on purpose (UAT §7, stack E2E): an unknown unit, a code used twice in the file, an
+unknown item type, a drawing revision without a drawing number and an item the set already created — and one valid row
+(NUT-M10). `eora:demo:master` loads 01–16 into a seeded demo tenant through the import pipeline (routings and BOMs stay
+Draft).

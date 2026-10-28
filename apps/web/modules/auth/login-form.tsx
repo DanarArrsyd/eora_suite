@@ -20,19 +20,31 @@ export function LoginForm() {
   const me = useMe();
   const { login, selectTenant } = useSessionActions();
   const signedIn = Boolean(me.data);
+  // a sign-in in progress navigates by itself once the workspace is chosen: leaving earlier would read the session
+  // with the cookie the workspace choice is about to rotate, and that request would sign the user out again
+  const submitting = React.useRef(false);
 
   // Already signed in (e.g. back button): continue where the user was going.
   React.useEffect(() => {
-    if (signedIn) router.replace(next);
+    if (signedIn && !submitting.current) router.replace(next);
   }, [signedIn, next, router]);
 
   const onSubmit = async (values: z.output<typeof schema>): Promise<SubmitResult> => {
+    submitting.current = true;
+    let signedInNow = false;
     try {
       let session = await login.mutateAsync(values);
+      signedInNow = true;
       if (!session.activeTenantId && session.tenants.length === 1) session = await selectTenant.mutateAsync(session.tenants[0]!.id);
       router.replace(session.activeTenantId ? next : `/select-tenant?next=${encodeURIComponent(next)}`);
       return { ok: true, message: 'Signed in' };
     } catch (e) {
+      // signed in, but the workspace did not open: the workspace picker says why and offers it again
+      if (signedInNow) {
+        router.replace(`/select-tenant?next=${encodeURIComponent(next)}`);
+        return { ok: false, message: failureMessage(e, 'The workspace could not be opened.') };
+      }
+      submitting.current = false;
       if (e instanceof ApiError && e.status === 401) {
         return { ok: false, message: 'The e-mail or password is not correct, or the account is temporarily locked. Try again or reset your password.' };
       }

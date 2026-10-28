@@ -38,16 +38,21 @@ test('sign-in: a single workspace is opened directly and the user lands on the r
   let session: typeof SESSION | null = null;
   await mockApi(page, '/auth/me', () => (session ? { status: 200, json: session } : problem(401, 'UNAUTHENTICATED', 'Authentication required')));
   await mockApi(page, '/auth/login', { status: 200, json: { ...SESSION, activeTenantId: null, plants: [], activePlantId: null } });
-  await mockApi(page, '/auth/tenant', (route) => {
+  // the workspace choice rotates the session: the form must not leave (and read the session) before it is answered
+  const urlsWhileChoosing: string[] = [];
+  await page.route('**/api/v1/auth/tenant', async (route) => {
     expect(route.request().headers()['x-xsrf-token']).toBe('e2e-token'); // Sanctum CSRF header on every mutation
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    urlsWhileChoosing.push(page.url());
     session = SESSION;
-    return { status: 200, json: SESSION };
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SESSION) });
   });
   await page.goto('/login?next=%2Fppic%2Fcontrol-tower');
   await page.getByLabel('E-mail').fill(SESSION.user.email);
   await page.getByLabel(/^Password/).fill('correct horse battery staple');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/ppic\/control-tower$/);
+  expect(urlsWhileChoosing).toEqual([expect.stringMatching(/\/login\?next=/)]);
   await expect(page.getByRole('button', { name: /Account menu, Review User, Demo Stamping/ })).toBeVisible();
 });
 
