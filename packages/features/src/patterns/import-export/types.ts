@@ -1,9 +1,13 @@
 export type ExportFormat = 'xlsx' | 'pdf';
 
+/** The table's request as the list sends it: the export replays it on the server (D-092). */
+export type ExportQuery = { filters: Record<string, string | string[] | undefined>; search: string; sort: { id: string; desc: boolean }[] };
+
 /** Export runs the same server QueryDefinition and permission scope as the table (ADR-0008, doc 14 #13). */
 export interface ExportSource {
   readonly isMock: boolean;
-  queue(format: ExportFormat, scope: { resource: string; filtersApplied: number }): Promise<{ jobId: string }>;
+  /** Rejects with an Error whose message is safe to show (e.g. the list is above the row limit). */
+  queue(format: ExportFormat, scope: { resource: string; filtersApplied: number; query?: ExportQuery }): Promise<{ jobId: string }>;
 }
 
 export type ImportRowError = { row: number; column: string; message: string };

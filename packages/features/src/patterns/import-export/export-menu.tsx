@@ -4,28 +4,38 @@ import * as React from 'react';
 import { ChevronDown, Download, FileSpreadsheet, FileText, Printer } from 'lucide-react';
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@eora/ui';
 import { useFeedback } from '../feedback';
-import type { ExportFormat, ExportSource } from './types';
+import type { ExportFormat, ExportQuery, ExportSource } from './types';
 
 type Props = {
   resource: string;
   source: ExportSource;
   filtersApplied: number;
+  /** The table's current filters, search and sort, replayed by the export. */
+  query?: ExportQuery;
+  /** Formats the server can produce (default Excel and PDF; live lists export Excel only until PDF templates exist). */
+  formats?: readonly ExportFormat[];
   /** Missing export permission: menu stays visible with the reason. */ disabledReason?: string;
 };
 
 /** EoraExportMenu — Excel / PDF from the same query scope as the table; large exports run as jobs and notify via the bell. */
-export function ExportMenu({ resource, source, filtersApplied, disabledReason }: Props) {
+export function ExportMenu({ resource, source, filtersApplied, query, formats = ['xlsx', 'pdf'], disabledReason }: Props) {
   const notify = useFeedback();
   const run = async (format: ExportFormat) => {
     try {
-      const { jobId } = await source.queue(format, { resource, filtersApplied });
+      const { jobId } = await source.queue(format, { resource, filtersApplied, query });
       notify({
         tone: 'success',
         title: `${format === 'xlsx' ? 'Excel' : 'PDF'} export queued`,
-        description: `Job ${jobId} uses the current filters${source.isMock ? ' (mock — no file is produced)' : ''}. You will be notified when it is ready.`,
+        description: source.isMock
+          ? `Job ${jobId} uses the current filters (mock — no file is produced). You will be notified when it is ready.`
+          : 'It uses the current filters, search and sort. You will be notified when the file is ready; it is also listed under Exports.',
       });
-    } catch {
-      notify({ tone: 'danger', title: 'Export could not be queued', description: 'Nothing was exported. Try again or contact support.' });
+    } catch (e) {
+      notify({
+        tone: 'danger',
+        title: 'Export could not be queued',
+        description: e instanceof Error && e.message ? e.message : 'Nothing was exported. Try again or contact support.',
+      });
     }
   };
   return (
@@ -38,7 +48,7 @@ export function ExportMenu({ resource, source, filtersApplied, disabledReason }:
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-72">
-        {(['xlsx', 'pdf'] as const).map((f) => (
+        {formats.map((f) => (
           <DropdownMenuItem
             key={f}
             aria-disabled={disabledReason ? true : undefined}

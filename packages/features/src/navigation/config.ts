@@ -477,7 +477,11 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         // M2 step 6 (D-081): Excel import of master data; uploading needs exchange.import.create
         label: 'Data Exchange',
-        items: [{ id: 'import', label: 'Import', icon: Upload, release: 'R1', permission: 'exchange.import.create', phase: 'later' }],
+        items: [
+          { id: 'import', label: 'Import', icon: Upload, release: 'R1', permission: 'exchange.import.create', phase: 'later' },
+          // D-092: the caller's own list exports, downloadable for 24 hours
+          { id: 'exports', label: 'Exports', icon: Download, release: 'R1', permission: 'exchange.export.export', phase: 'later' },
+        ],
       },
     ],
   },

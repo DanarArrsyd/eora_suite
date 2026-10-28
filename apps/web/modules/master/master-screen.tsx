@@ -11,6 +11,7 @@ import {
   DataTable,
   DensityToggle,
   EnterprisePage,
+  ExportMenu,
   FilterBar,
   FilterToggle,
   ListSearch,
@@ -25,12 +26,14 @@ import { Button, EmptyState, InlineAlert, LoadingState, PermissionDeniedState, T
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { MasterEditor } from './editor';
-import { querySource } from './source';
+import { exportSource, querySource } from './source';
 import type { MasterResource, MasterRow } from './types';
 
 /** doc 18 master-data table: lists need `master.org.view`, changes `master.org.create` (the server decides scope). */
 export const ORG_PERMISSION = { view: 'master.org.view', create: 'master.org.create', label: 'organisation master data' } as const;
 const EMPTY: never[] = [];
+/** PDF exports wait for the print templates (O-010); lists export Excel (D-092). */
+const EXCEL_ONLY = ['xlsx'] as const;
 
 /**
  * Master Data list screen (doc 29 §1, page template §1): one composition of the shared patterns for every resource —
@@ -135,6 +138,14 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <ExportMenu
+                resource={config.resource}
+                source={exportSource}
+                filtersApplied={filtersApplied}
+                query={{ filters: query.filters, search: query.search, sort: query.sort }}
+                formats={EXCEL_ONLY}
+                disabledReason={permissions.includes('exchange.export.export') ? undefined : 'Your roles do not allow exports.'}
+              />
               <DensityToggle value={density} onChange={setDensity} />
               <ColumnSettings columns={config.columns} value={visibility} onChange={setVisibility} />
             </div>
