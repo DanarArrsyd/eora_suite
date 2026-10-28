@@ -1,7 +1,8 @@
 'use client';
 
-import { api, call } from '@eora/features/auth';
+import { api, ApiError, call, failureMessage } from '@eora/features/auth';
 import type { ListQuery, ListResult, ListSource, Option } from '@eora/features/data';
+import type { ExportSource } from '@eora/features/patterns';
 
 /*
  * Live list source for the query resources (ADR-0008, doc 24 §3, §5.2): ListQuery → GET /api/v1/query/{resource}.
@@ -69,3 +70,25 @@ export async function queryOptions(
 ): Promise<Option[]> {
   return (await queryAll(resource, filters, signal)).map((r) => ({ value: String(r.id), label: label(r) }));
 }
+
+/**
+ * Live export (D-092, ADR-0018): queues an export of `resource` with the list's filters, search and sort exactly as the
+ * list sends them; the server replays the same QueryDefinition. A refusal rejects with the server's message (e.g. the
+ * list is above 100,000 rows).
+ */
+export const exportSource: ExportSource = {
+  isMock: false,
+  async queue(_format, { resource, query }) {
+    const filter = Object.fromEntries(Object.entries(query?.filters ?? {}).filter(([, v]) => (Array.isArray(v) ? v.some(Boolean) : !!v)));
+    const sort = (query?.sort ?? []).map((s) => (s.desc ? '-' : '') + s.id).join(',');
+    try {
+      const result = (await call(() =>
+        api.POST('/exchange/exports', { body: { resource, filter, q: query?.search.trim() || undefined, sort: sort || undefined } as never }),
+      )) as { data: { id: string } };
+      return { jobId: result.data.id };
+    } catch (e) {
+      const refused = e instanceof ApiError ? Object.values(e.fieldErrors)[0] : undefined;
+      throw new Error(refused ?? failureMessage(e, 'The export could not be queued.'));
+    }
+  },
+};

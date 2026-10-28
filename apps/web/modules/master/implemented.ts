@@ -12,5 +12,6 @@ export const MASTER_IMPLEMENTED = [
   'boms',
   'conversion-data',
   'import',
+  'exports',
 ] as const;
 export const DEMAND_MASTER_IMPLEMENTED = ['customers', 'customer-parts'] as const;

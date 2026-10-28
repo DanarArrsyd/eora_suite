@@ -75,6 +75,14 @@ export const STATUS_CATALOGUE = {
     REJECTED: { label: 'Rejected', tone: 'neutral' },
     FAILED: { label: 'Failed', tone: 'danger' },
   },
+  /** List export (ADR-0018, D-092): queued, written by the worker, downloadable for 24 hours. */
+  exportJob: {
+    QUEUED: { label: 'Queued', tone: 'info' },
+    RUNNING: { label: 'Writing', tone: 'info' },
+    DONE: { label: 'Ready', tone: 'success' },
+    EXPIRED: { label: 'Deleted', tone: 'neutral' },
+    FAILED: { label: 'Failed', tone: 'danger' },
+  },
   /** One row of an import file (ADR-0017): SKIPPED = committed by an earlier job of the same file. */
   importRow: {
     VALID: { label: 'Valid', tone: 'success' },

@@ -110,7 +110,7 @@ Typography (Inter only, scale respected) · palette (tokens only, one accent) ·
 | `EoraDrawer` | `DrawerContent` | focus returns to the invoking element even when opened from state |
 | Feedback | `FeedbackProvider` / `useFeedback`, `InlineAlert` | toasts for background results only; persistent outcomes use InlineAlert / inbox |
 | States | `LoadingState`, `EmptyState`, `ErrorState`, `PermissionDeniedState`, `Skeleton`, stale banner | error shows reference id, never a stack trace |
-| `EoraExportMenu` / `EoraImportWizard` | `ExportMenu`, `ImportWizard` (`ExportSource`, `ImportSource`) | export = same query scope as the table, queued job; import = template → upload → validate → review errors → approval → idempotent commit |
+| `EoraExportMenu` / `EoraImportWizard` | `ExportMenu`, `ImportWizard` (`ExportSource`, `ImportSource`) | export = same query scope as the table, queued job (live on Master Data lists: the list's filters, search and sort are sent, `formats` limits the menu to Excel until O-010, the file is fetched from Master Data → Exports, D-092); import = template → upload → validate → review errors → approval → idempotent commit |
 | `EoraNotificationCenter` | `NotificationCenter` (`NotificationSource`) | bell panel + `/system/notifications`; Needs action / Unread / All; deep links only when the role can open the module |
 Engineering rule learned in Phase 2: anything rendered **above** a page's Suspense boundary (providers, shell) must not change context value during hydration — see ADR-0011 Amendment 1.
 

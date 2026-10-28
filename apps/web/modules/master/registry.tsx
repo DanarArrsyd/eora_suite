@@ -6,6 +6,7 @@ import { MasterGroupScreen, type MasterGroup } from './master-screen';
 import { MASTER_SCREENS } from './resources';
 import { BomsScreen } from './bom-screen';
 import { ConversionDataScreen } from './conversion-screen';
+import { ExportsScreen } from './exports-screen';
 import { ImportScreen } from './import-screen';
 import { RoutingsScreen } from './routing-screen';
 
@@ -23,6 +24,7 @@ export function MasterDataScreen({ item }: { item: string }) {
   if (item === 'boms') return <BomsScreen />;
   if (item === 'conversion-data') return <ConversionDataScreen />;
   if (item === 'import') return <ImportScreen />;
+  if (item === 'exports') return <ExportsScreen />;
   const group = GROUPS[item];
   return group ? <MasterGroupScreen group={group} /> : null;
 }

@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
     return [
       { source: '/admin/plants', destination: '/master/plants', permanent: false },
       { source: '/admin/work-centers', destination: '/master/work-centers', permanent: false },
+      // export notifications link to /system/exports?job=… (ADR-0018); the page lives in Master Data → Data Exchange
+      { source: '/system/exports', destination: '/master/exports', permanent: false },
     ];
   },
   async rewrites() {

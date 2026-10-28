@@ -63,6 +63,7 @@ const DOMAIN_LABEL: Record<StatusDomain, string> = {
   membership: 'Tenant membership (doc 25 §2.6)',
   importJob: 'Import job (ADR-0017)',
   importRow: 'Import row (ADR-0017)',
+  exportJob: 'Export job (ADR-0018)',
   indicator: 'Variance indicator (ADR-0005)',
 };
 
