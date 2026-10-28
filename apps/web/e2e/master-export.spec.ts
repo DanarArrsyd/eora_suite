@@ -135,10 +135,19 @@ test('the Exports page lists the requester’s exports; Download fetches a signe
   await expect(table.getByRole('button', { name: /Download Items/ }).nth(1)).toHaveAttribute('aria-disabled', 'true');
 });
 
-test('a notification link (/system/exports?job=…) opens the Exports page on that export', async ({ page }) => {
-  await setup(page);
+test('a notification link (/system/exports?job=…) opens the Exports page on that export, wherever it is in the list', async ({ page }) => {
+  // the linked export is not on the first page of the list (Codex review on #47): it is read on its own
+  await setup(page, EXPORTER, [FAILED]);
+  await mockApi(page, `/exchange/exports/${JOB.id}`, { status: 200, json: { data: JOB } });
   await page.goto(`/system/exports?job=${JOB.id}`);
   await expect(page).toHaveURL(new RegExp(`/master/exports\\?job=${JOB.id}`));
   await expect(page.getByText(/^Items: Ready until/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Download', exact: true })).toBeVisible();
+});
+
+test('a link to an export of another member says it is not available', async ({ page }) => {
+  await setup(page);
+  await mockApi(page, '/exchange/exports/00000000-0000-7000-8000-000000000999', problem(404, 'NOT_FOUND', 'Not found'));
+  await page.goto('/master/exports?job=00000000-0000-7000-8000-000000000999');
+  await expect(page.getByText('This export is not available to you.').first()).toBeVisible();
 });

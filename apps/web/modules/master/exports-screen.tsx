@@ -98,6 +98,16 @@ export function ExportsScreen() {
     refetchInterval: (q) => (q.state.data?.rows.some((r) => WORKING.includes(r.status)) ? 2000 : false),
   });
 
+  // the export a notification links to, read on its own: it may sit on another page of the list or another sort
+  const target = useQuery({
+    queryKey: ['exports', 'job', focus],
+    queryFn: async ({ signal }) =>
+      ((await call(() => api.GET('/exchange/exports/{job}', { params: { path: { job: focus! } }, signal }))) as { data: ExportJob }).data,
+    enabled: canExport && !!focus,
+    retry: false,
+    refetchInterval: (q) => (q.state.data && WORKING.includes(q.state.data.status) ? 2000 : false),
+  });
+
   const download = React.useCallback(async (job: ExportJob) => {
     setBusy(job.id);
     setFailure(null);
@@ -133,7 +143,7 @@ export function ExportsScreen() {
 
   const meta = rows.data?.meta;
   const status = rows.isError ? 'error' : rows.isPending ? 'loading' : 'ready';
-  const focused = focus ? rows.data?.rows.find((r) => r.id === focus) : undefined;
+  const focused = focus ? target.data : undefined;
 
   return (
     <EnterprisePage
@@ -155,6 +165,9 @@ export function ExportsScreen() {
             ) : undefined
           }
         />
+      ) : null}
+      {focus && target.isError ? (
+        <InlineAlert tone="info" title="This export is not available to you. Exports are listed for the person who made them." className="mb-4" />
       ) : null}
       <ListWorkspace
         label="Exports"
