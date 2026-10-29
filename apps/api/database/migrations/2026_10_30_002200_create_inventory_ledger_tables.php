@@ -386,6 +386,24 @@ return new class extends Migration
                 IF NEW.reverses_movement_id IS NOT NULL AND d.doc_type <> 'REVERSAL' THEN
                   RAISE EXCEPTION 'only a reversal reverses a leg' USING ERRCODE = '23514';
                 END IF;
+                -- a leg at a physical location moves its balance in the same posting (BR-INV-11, the other direction of
+                -- check_ledger on stock_balances): the balance of the key exists and equals the sum of its legs
+                IF NOT EXISTS (SELECT 1 FROM public.locations l WHERE l.id = NEW.location_id AND l.location_type LIKE 'V\_%')
+                   AND (SELECT sb.qty FROM public.stock_balances sb
+                         WHERE sb.tenant_id = NEW.tenant_id AND sb.plant_id = NEW.plant_id AND sb.location_id = NEW.location_id AND sb.item_id = NEW.item_id
+                           AND sb.lot_id IS NOT DISTINCT FROM NEW.lot_id AND sb.stock_status = NEW.stock_status AND sb.ownership = NEW.ownership AND sb.uom_id = NEW.uom_id)
+                       IS DISTINCT FROM (SELECT sum(m.qty_signed) FROM public.inventory_movements m
+                         WHERE m.tenant_id = NEW.tenant_id AND m.plant_id = NEW.plant_id AND m.location_id = NEW.location_id AND m.item_id = NEW.item_id
+                           AND m.lot_id IS NOT DISTINCT FROM NEW.lot_id AND m.stock_status = NEW.stock_status AND m.ownership = NEW.ownership AND m.uom_id = NEW.uom_id) THEN
+                  RAISE EXCEPTION 'a leg moves its balance in the same posting' USING ERRCODE = '23514';
+                END IF;
+                RETURN NULL;
+              END IF;
+              IF TG_TABLE_NAME = 'genealogy_edges' THEN
+                SELECT doc.status, doc.posted_at INTO d FROM public.inventory_documents doc WHERE doc.tenant_id = NEW.tenant_id AND doc.id = NEW.document_id;
+                IF d.status NOT IN ('POSTED', 'REVERSED') OR d.posted_at IS DISTINCT FROM pg_catalog.now() THEN
+                  RAISE EXCEPTION 'genealogy is written only with the posting of its document' USING ERRCODE = '23514';
+                END IF;
                 RETURN NULL;
               END IF;
               SELECT doc.status, doc.doc_type, doc.reverses_document_id INTO d FROM public.inventory_documents doc WHERE doc.tenant_id = NEW.tenant_id AND doc.id = NEW.id;
@@ -566,6 +584,8 @@ return new class extends Migration
             );
             CREATE INDEX genealogy_edges_from_idx ON genealogy_edges (tenant_id, from_lot_id);
             CREATE INDEX genealogy_edges_to_idx ON genealogy_edges (tenant_id, to_lot_id);
+            CREATE CONSTRAINT TRIGGER check_posting AFTER INSERT ON genealogy_edges DEFERRABLE INITIALLY DEFERRED
+              FOR EACH ROW EXECUTE FUNCTION eora_check_inventory_posting();
 
             -- ADR-0014 §4: a command replayed with its key returns the stored response; another payload under the key → 409
             CREATE TABLE idempotency_records (

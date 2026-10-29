@@ -170,6 +170,9 @@ it('reverses a posted document only through a posted reversal by a second person
                 [$o->tenant_id, $second, $o->leg_no, $o->movement_code, $o->id, $o->plant_id, $o->location_id, $o->item_id, $o->lot_id, $o->stock_status, $o->uom_id, -$o->qty_signed],
             );
         }
+        if ($complete) {
+            $db->update('update stock_balances set qty = qty - 10 where item_id = ? and location_id = ?', [$f['item'], $f['rm']]);
+        }
         $db->update("update inventory_documents set status = 'REVERSED' where id = ?", [$f['doc']]);
     });
     expect($post(false))->toThrow(PDOException::class, 'a reversal negates every leg of its document once');
@@ -240,6 +243,36 @@ it('starts adjustments as requests and never takes legs outside their posting (D
             [$this->t['tenant'], $doc, $leg->id, $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs']],
         );
     }))->toThrow(PDOException::class, 'only a reversal reverses a leg');
+
+    // a posting moves the balances of its physical legs, and genealogy is written only with a posting
+    $post = fn (bool $withBalance) => fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f, $withBalance) {
+        $doc = (string) $db->selectOne(
+            "insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, posted_at, posted_by, idempotency_key)
+             values (?, ?, 'RM_RECEIPT', ?, 'POSTED', current_date, current_date, current_date, now(), ?, ?) returning id",
+            [$this->t['tenant'], $f['plant'], 'RCV-P1-2026-'.random_int(1000, 9999), $this->t['actor'], 'fixture-receipt-'.Str::random(6)],
+        )->id;
+        foreach ([[1, $f['supplier'], -5], [2, $f['rm'], 5]] as [$no, $location, $qty]) {
+            $db->insert(
+                "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
+                 values (?, ?, ?, 'RCPT_SUPPLIER', ?, ?, ?, ?, 'UNRESTRICTED', ?, ?)",
+                [$this->t['tenant'], $doc, $no, $f['plant'], $location, $f['item'], $f['lot'], $f['pcs'], $qty],
+            );
+        }
+        if ($withBalance) {
+            $db->update('update stock_balances set qty = qty + 5 where item_id = ? and location_id = ?', [$f['item'], $f['rm']]);
+        }
+    });
+    expect($post(false))->toThrow(PDOException::class, 'a leg moves its balance in the same posting');
+    $post(true)();
+    expect(fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f) {
+        $draft = (string) $db->selectOne(
+            "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, idempotency_key) values (?, ?, 'LOT_SPLIT', 'DRAFT', current_date, 'fixture-split-draft') returning id",
+            [$this->t['tenant'], $f['plant']],
+        )->id;
+        $child = (string) $db->selectOne("insert into lots (tenant_id, item_id, lot_no, origin, parent_lot_id) values (?, ?, 'L2610-0005', 'SPLIT', ?) returning id", [$this->t['tenant'], $f['item'], $f['lot']])->id;
+        $db->insert('insert into genealogy_edges (tenant_id, from_lot_id, to_lot_id, document_id, qty_from, uom_from, qty_to, uom_to) values (?, ?, ?, ?, 1, ?, 1, ?)',
+            [$this->t['tenant'], $f['lot'], $child, $draft, $f['pcs'], $f['pcs']]);
+    }))->toThrow(PDOException::class, 'genealogy is written only with the posting of its document');
 })->group('integration', 'inventory');
 
 it('closes and reopens a period only on a request decided by a second person (M3-D8, BR-PER-03)', function () {
