@@ -27,7 +27,9 @@ it('writes the sample files in import order and every row of every file commits'
     $dir = sys_get_temp_dir().'/eora-samples-'.bin2hex(random_bytes(4));
     expect(Artisan::call('eora:demo:import-samples', ['dir' => $dir, '--from' => rtDay($this->t)]))->toBe(0);
     $files = glob("{$dir}/*.xlsx") ?: [];
-    expect(array_map('basename', $files))->toHaveCount(17)->and(basename($files[0]))->toBe('01-uoms.xlsx')->and(basename($files[16]))->toBe('17-bom-routing-maps.xlsx');
+    expect(array_map('basename', $files))->toHaveCount(18)->and(basename($files[0]))->toBe('01-uoms.xlsx')->and(basename($files[16]))->toBe('17-bom-routing-maps.xlsx')
+        ->and(basename($files[17]))->toBe('99-items-with-errors.xlsx');
+    $broken = array_pop($files);
 
     foreach ($files as $path) {
         $template = str_replace('-', '_', (string) preg_replace('/^\d+-|\.xlsx$/', '', basename($path)));
@@ -55,6 +57,18 @@ it('writes the sample files in import order and every row of every file commits'
                 (select count(*) from bom_routing_maps where status = 'DRAFT') as maps, (select count(*) from customers) as customers",
     ));
     expect($counts)->items->toBe(8)->ops->toBe(7)->lines->toBe(4)->maps->toBe(3)->customers->toBe(4);
+
+    // the file with deliberate errors (UAT): one valid row, every other row says what is wrong
+    $id = impUpload($this, new UploadedFile($broken, basename($broken), null, null, true))->assertCreated()->json('data.id');
+    impWork($this->t, $id, 'validate');
+    expect(impJob($this->t, $id))->valid_rows->toBe(1)->error_rows->toBe(5);
+    expect(array_merge(...array_column(spa($this)->getJson("/api/v1/exchange/imports/{$id}/rows?status=ERROR")->json('data'), 'errors')))->toEqualCanonicalizing([
+        'Unit BOX does not exist. Import or create it first.',
+        'Item NUT-M10 is also on row 3 of this file.',
+        'Item type: use one of RAW, SEMI_FINISHED, FINISHED, SCRAP, CONSUMABLE.',
+        'Drawing rev needs a drawing no.',
+        'Item BRK-A100 already exists.',
+    ]);
 })->group('integration', 'import');
 
 it('refuses a sample folder date that is not a date', function () {

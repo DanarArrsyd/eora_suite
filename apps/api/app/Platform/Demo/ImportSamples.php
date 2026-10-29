@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace App\Platform\Demo;
 
+use App\Platform\Import\ImportColumn;
+use App\Platform\Import\ImportTemplates;
+use App\Platform\Import\XlsxFile;
+use InvalidArgumentException;
+
 /**
  * Sample import files for UAT (doc 29 §1.6, D-081): one small stamping plant in plant P1 — two finished parts, one
  * Semi-Finished Material part, their materials, tooling, routings, BOMs and maps — in the order the templates depend on
- * each other. Rows are written by template header; the dates are the first day the versions may start.
+ * each other. Rows are written by template header; the dates are the first day the versions may start. One more file,
+ * `99-items-with-errors.xlsx`, holds rows that fail on purpose, to show the error rows and the error file.
  */
 final class ImportSamples
 {
@@ -132,5 +138,61 @@ final class ImportSamples
                 $map('PLT-C300', '10', '10'),
             ]],
         ];
+    }
+
+    /** A first effective date as the sample commands take it: YYYY-MM-DD, a real day. */
+    public static function isDate(string $from): bool
+    {
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $from);
+
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) === 1 && $date !== false && $date->format('Y-m-d') === $from;
+    }
+
+    /**
+     * Item rows that fail on purpose (doc 29 §2 "one file with deliberate errors"): an unknown unit, a code used twice in
+     * the file, an unknown item type, a drawing revision without a drawing number, an item the sample set already
+     * created — and one valid row.
+     *
+     * @return array{0: string, 1: list<array<string, string>>}
+     */
+    public static function withErrors(): array
+    {
+        return ['items', [
+            ['Code' => 'BRK-Z900', 'Name' => 'Bracket with an unknown unit', 'Item type' => 'FINISHED', 'Base unit' => 'BOX'],
+            ['Code' => 'NUT-M10', 'Name' => 'Weld nut M10', 'Item type' => 'RAW', 'Base unit' => 'PCS'],
+            ['Code' => 'NUT-M10', 'Name' => 'Weld nut M10 again', 'Item type' => 'RAW', 'Base unit' => 'PCS'],
+            ['Code' => 'PLT-X1', 'Name' => 'Plate of an unknown type', 'Item type' => 'WIP', 'Base unit' => 'PCS'],
+            ['Code' => 'BRK-Z901', 'Name' => 'Bracket with a revision only', 'Item type' => 'FINISHED', 'Base unit' => 'PCS', 'Drawing rev' => 'A'],
+            ['Code' => 'BRK-A100', 'Name' => 'Bracket front A100 again', 'Item type' => 'FINISHED', 'Base unit' => 'PCS'],
+        ]];
+    }
+
+    /**
+     * Writes the sample set into $dir as filled templates of the current versions, numbered in import order, plus the
+     * file with deliberate errors. A sample row naming a header the template does not have is refused, so the samples
+     * cannot drift from the templates unnoticed.
+     *
+     * @return list<array{template: string, path: string, rows: int}> in import order; the error file last
+     */
+    public static function write(ImportTemplates $templates, string $dir, string $from): array
+    {
+        $files = [];
+        $sets = ImportSamples::files($from);
+        $sets[] = self::withErrors();
+        foreach ($sets as $i => [$code, $rows]) {
+            $headers = array_map(static fn (ImportColumn $c) => $c->header, $templates->get($code)->columns());
+            foreach ($rows as $row) {
+                $unknown = array_diff(array_keys($row), $headers);
+                if ($unknown !== []) {
+                    throw new InvalidArgumentException(sprintf('Sample %s names headers the template does not have: %s.', $code, implode(', ', $unknown)));
+                }
+            }
+            $name = $i === count($sets) - 1 ? '99-items-with-errors' : sprintf('%02d-%s', $i + 1, str_replace('_', '-', $code));
+            $path = "{$dir}/{$name}.xlsx";
+            XlsxFile::write($path, $headers, array_map(static fn (array $row) => array_map(static fn (string $h) => $row[$h] ?? '', $headers), $rows));
+            $files[] = ['template' => $code, 'path' => $path, 'rows' => count($rows)];
+        }
+
+        return $files;
     }
 }
