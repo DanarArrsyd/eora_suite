@@ -134,6 +134,8 @@ it('never holds a negative or a virtual balance, nor a movement of zero or with 
          values (?, ?, 3, 'RCPT_SUPPLIER', ?, ?, ?, ?, 'UNRESTRICTED', (select id from uoms where code = 'KG'), 1)",
         [$this->t['tenant'], $f['doc'], $f['plant'], $f['rm'], $f['item'], $f['lot']],
     )))->toThrow(QueryException::class, "stock is kept in the item's base unit");
+    // whole pieces only for PCS (BR-INV-10)
+    expect($leg(3, 'RCPT_SUPPLIER', 0.5))->toThrow(QueryException::class, 'a quantity has at most the decimals of its unit');
     // M3-D9: OWN only
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
         "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, ownership, uom_id, qty_signed)

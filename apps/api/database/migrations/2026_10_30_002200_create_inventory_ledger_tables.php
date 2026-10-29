@@ -511,6 +511,11 @@ return new class extends Migration
               END IF;
               -- nested: plpgsql resolves every field of an expression, and balances have no conversion column
               IF TG_TABLE_NAME = 'inventory_movements' THEN
+                -- BR-INV-10: a quantity respects the decimals of the base unit (PCS: whole pieces); balances follow, as they
+                -- equal the sum of their legs
+                IF NEW.qty_signed <> pg_catalog.round(NEW.qty_signed, (SELECT u.decimals FROM public.uoms u WHERE u.tenant_id = NEW.tenant_id AND u.id = NEW.uom_id)) THEN
+                  RAISE EXCEPTION 'a quantity has at most the decimals of its unit' USING ERRCODE = '23514';
+                END IF;
                 IF NEW.uom_conversion_id IS NOT NULL AND NOT EXISTS (
                   SELECT 1 FROM public.uom_conversions c
                    WHERE c.tenant_id = NEW.tenant_id AND c.id = NEW.uom_conversion_id AND c.item_id = NEW.item_id
