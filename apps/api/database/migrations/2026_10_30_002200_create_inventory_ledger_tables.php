@@ -418,6 +418,17 @@ return new class extends Migration
               IF NOT EXISTS (SELECT 1 FROM public.inventory_movements m WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id) THEN
                 RAISE EXCEPTION 'a posted inventory document has legs' USING ERRCODE = '23514';
               END IF;
+              -- conservation (ADR-0002 §4, BR-INV-03): Σ legs = 0 per item, lot and unit, virtual locations included; a lot
+              -- split conserves per item and unit (the lot changes, DD-04); production postings and scrap disposition
+              -- transform (checked by the variance indicators, ADR-0005); a reversal is checked as the exact negation above
+              IF d.doc_type NOT IN ('PRODUCTION_POSTING', 'SCRAP_DISPOSITION', 'REVERSAL') AND EXISTS (
+                SELECT 1 FROM public.inventory_movements m
+                 WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id
+                 GROUP BY m.item_id, CASE WHEN d.doc_type = 'LOT_SPLIT' THEN NULL ELSE m.lot_id END, m.uom_id
+                HAVING sum(m.qty_signed) <> 0
+              ) THEN
+                RAISE EXCEPTION 'a posting conserves quantity per item, lot and unit' USING ERRCODE = '23514';
+              END IF;
               IF d.doc_type = 'REVERSAL' AND (
                    EXISTS (
                      SELECT 1 FROM public.inventory_movements o
