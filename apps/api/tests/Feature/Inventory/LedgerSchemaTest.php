@@ -99,6 +99,9 @@ it('never holds a negative or a virtual balance, nor a movement of zero or with 
     )->id);
     $balance($oil, null)();
     expect($balance($oil, null))->toThrow(QueryException::class, 'duplicate key');
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into lots (tenant_id, item_id, lot_no, origin) values (?, ?, 'L2610-0009', 'RECEIPT')", [$this->t['tenant'], $oil],
+    )))->toThrow(QueryException::class, 'only a lot-controlled item has lots');
     // the flag of an item with stock history stays as it is
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->update('update items set lot_controlled = false where id = ?', [$f['item']])))
         ->toThrow(QueryException::class, 'lot control is fixed');
@@ -229,6 +232,9 @@ it('closes and reopens a period only on a request decided by a second person (M3
     // the requester cannot hand the request to someone else and close it themselves
     expect($as($me, 'close_requested_by = ?', [$second]))->toThrow(QueryException::class, 'a period changes only by its lifecycle');
     expect($as($me, "status = 'CLOSED', closed_by = ?, closed_at = now()", [$me]))->toThrow(QueryException::class, 'closed by a second person');
+    // the closer cannot plant a reopen request in someone else's name while closing
+    expect($as($second, "status = 'CLOSED', closed_by = ?, closed_at = now(), reopen_requested_by = ?, reopen_requested_at = now(), reopen_reason = 'Planted'", [$second, $me]))
+        ->toThrow(QueryException::class, 'a reopen request is made on a closed period only');
     $as($second, "status = 'CLOSED', closed_by = ?, closed_at = now()", [$second])();
 
     // reopen: requested, then decided by someone else

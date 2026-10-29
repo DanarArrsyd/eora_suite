@@ -118,7 +118,13 @@ return new class extends Migration
               IF (NEW.tenant_id, NEW.plant_id, NEW.period) IS DISTINCT FROM (OLD.tenant_id, OLD.plant_id, OLD.period) THEN
                 RAISE EXCEPTION 'a period is fixed' USING ERRCODE = '23514';
               END IF;
-              -- every update is one of the transitions below; each pins the history it does not write
+              -- every update is one of the transitions below; each pins the history it does not write. A reopen request is
+              -- written only by the CLOSED → CLOSED request and cleared only by the CLOSED → OPEN decision.
+              IF NOT (OLD.status = 'CLOSED' AND NEW.status IN ('CLOSED', 'OPEN'))
+                 AND (NEW.reopen_requested_by, NEW.reopen_requested_at, NEW.reopen_reason)
+                     IS DISTINCT FROM (OLD.reopen_requested_by, OLD.reopen_requested_at, OLD.reopen_reason) THEN
+                RAISE EXCEPTION 'a reopen request is made on a closed period only' USING ERRCODE = '23514';
+              END IF;
               IF OLD.status = 'OPEN' AND NEW.status = 'CLOSING' THEN
                 IF NEW.close_requested_by IS DISTINCT FROM a OR NEW.close_requested_at IS NULL
                    OR (NEW.reopened_by, NEW.reopened_at) IS DISTINCT FROM (OLD.reopened_by, OLD.reopened_at) THEN
@@ -418,7 +424,14 @@ return new class extends Migration
                 END IF;
                 RETURN NEW;
               END IF;
-              IF (SELECT i.lot_controlled FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id) IS DISTINCT FROM (NEW.lot_id IS NOT NULL) THEN
+              -- FOR SHARE: a concurrent change of the flag (FOR NO KEY UPDATE) waits for this write, or this write sees it
+              IF TG_TABLE_NAME = 'lots' THEN
+                IF NOT (SELECT i.lot_controlled FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id FOR SHARE) THEN
+                  RAISE EXCEPTION 'only a lot-controlled item has lots' USING ERRCODE = '23514';
+                END IF;
+                RETURN NEW;
+              END IF;
+              IF (SELECT i.lot_controlled FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id FOR SHARE) IS DISTINCT FROM (NEW.lot_id IS NOT NULL) THEN
                 RAISE EXCEPTION 'a lot-controlled item moves by lot, an item without lot control without one' USING ERRCODE = '23514';
               END IF;
               RETURN NEW;
@@ -426,6 +439,7 @@ return new class extends Migration
             $fn$;
             REVOKE ALL ON FUNCTION eora_guard_lot_control() FROM PUBLIC;
             CREATE TRIGGER guard_lot_control BEFORE INSERT ON inventory_movements FOR EACH ROW EXECUTE FUNCTION eora_guard_lot_control();
+            CREATE TRIGGER guard_lot_control BEFORE INSERT ON lots FOR EACH ROW EXECUTE FUNCTION eora_guard_lot_control();
             CREATE TRIGGER guard_lot_control BEFORE UPDATE OF lot_controlled ON items FOR EACH ROW EXECUTE FUNCTION eora_guard_lot_control();
 
             -- the projection; lot NULL = item without lot control (M3-D4)
