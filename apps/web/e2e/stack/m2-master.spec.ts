@@ -50,7 +50,8 @@ test('M2 master data end to end on the real stack', async ({ browser }) => {
   test.setTimeout(420_000);
   await test.step('seed a demo tenant and load the sample master data through the import worker', async () => {
     expect(artisan('eora:demo:seed', `--code=${TENANT}`, `--password=${PASSWORD}`)).toContain('active users');
-    expect(artisan('eora:demo:master', `--code=${TENANT}`)).toContain('Demo master data loaded');
+    // a stuck import step is reported by the command itself, well before the runner's own time limit
+    expect(artisan('eora:demo:master', `--code=${TENANT}`, '--wait=120')).toContain('Demo master data loaded');
   });
 
   const admin = await signedIn(browser, 'csa');
