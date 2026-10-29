@@ -122,6 +122,12 @@ it('never holds a negative or a virtual balance, nor a movement of zero or with 
     expect($leg(3, 'RCPT_SUPPLIER', 0))->toThrow(QueryException::class, 'check');
     expect($leg(3, 'WIP_MOVE', 1))->toThrow(QueryException::class, 'check');
     expect($leg(1, 'RCPT_SUPPLIER', 1))->toThrow(QueryException::class, 'duplicate key'); // leg numbers are unique per document
+    // an alternate unit always names the conversion version used (M3-D5)
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed, entered_qty, entered_uom_id)
+         values (?, ?, 3, 'RCPT_SUPPLIER', ?, ?, ?, ?, 'UNRESTRICTED', ?, 1, 1, (select id from uoms where code = 'KG'))",
+        [$this->t['tenant'], $f['doc'], $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs']],
+    )))->toThrow(QueryException::class, 'check');
     // M3-D9: OWN only
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
         "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, ownership, uom_id, qty_signed)
@@ -213,6 +219,17 @@ it('starts adjustments as requests and never takes legs outside their posting (D
     ));
     expect($correction('{}'))->toThrow(QueryException::class, 'check');
     $correction('{"evidence": "photo-2026-10-29.jpg"}')();
+
+    // REVERSED is reached only from POSTED
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, idempotency_key) values (?, ?, 'MAT_TRANSFER', 'REVERSED', current_date, 'fixture-born-reversed')",
+        [$this->t['tenant'], $f['plant']],
+    )))->toThrow(QueryException::class, 'only a posted document becomes reversed');
+    expect(fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f) {
+        $draft = (string) $db->selectOne("insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, idempotency_key) values (?, ?, 'MAT_TRANSFER', 'DRAFT', current_date, 'fixture-draft-reversed') returning id",
+            [$this->t['tenant'], $f['plant']])->id;
+        $db->update("update inventory_documents set status = 'REVERSED' where id = ?", [$draft]);
+    }))->toThrow(QueryException::class, 'only a posted document becomes reversed');
 
     // a posted document needs its number, dates and legs; legs never join it later
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(

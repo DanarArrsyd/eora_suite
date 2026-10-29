@@ -261,6 +261,10 @@ return new class extends Migration
               IF a IS NULL THEN
                 RAISE EXCEPTION 'no signed actor context' USING ERRCODE = '42501';
               END IF;
+              -- REVERSED is reached only from POSTED, through the guarded transition below
+              IF NEW.status = 'REVERSED' AND (TG_OP = 'INSERT' OR OLD.status NOT IN ('POSTED', 'REVERSED')) THEN
+                RAISE EXCEPTION 'only a posted document becomes reversed' USING ERRCODE = '23514';
+              END IF;
               IF TG_OP = 'INSERT' THEN
                 IF NEW.requested_by IS DISTINCT FROM NULL AND NEW.requested_by IS DISTINCT FROM a THEN
                   RAISE EXCEPTION 'a request is made by the signed actor' USING ERRCODE = '42501';
@@ -362,8 +366,9 @@ return new class extends Migration
               FOREIGN KEY (tenant_id, entered_uom_id) REFERENCES uoms (tenant_id, id),
               FOREIGN KEY (tenant_id, uom_conversion_id) REFERENCES uom_conversions (tenant_id, id),
               FOREIGN KEY (tenant_id, reverses_movement_id) REFERENCES inventory_movements (tenant_id, id),
-              CHECK ((entered_qty IS NULL) = (entered_uom_id IS NULL)),
-              CHECK (uom_conversion_id IS NULL OR entered_qty IS NOT NULL)
+              -- M3-D5, BR-INV-10: a quantity entered in another unit keeps that unit and the conversion version used
+              CHECK ((entered_qty IS NULL) = (entered_uom_id IS NULL) AND (entered_qty IS NULL) = (uom_conversion_id IS NULL)),
+              CHECK (entered_uom_id IS DISTINCT FROM uom_id)
             );
             CREATE INDEX inventory_movements_lot_idx ON inventory_movements (tenant_id, lot_id, id) WHERE lot_id IS NOT NULL;
             CREATE INDEX inventory_movements_document_idx ON inventory_movements (tenant_id, document_id);
