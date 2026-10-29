@@ -44,7 +44,7 @@
 | M3-D10 | Incoming Release di navigasi | Ubah R2 → **R1** (D-062 sudah memutuskan release manual minimal). | Navigasi masih menandai R2 / keputusan O-013 sebelum D-062. |
 
 ## 4. Acceptance (exit M3)
-1. Tes posting-matrix untuk baris yang diposting di M3 (M3-D2): setiap leg memakai kode yang benar, konservasi per dokumen (BR-INV-03), saldo tidak pernah negatif (BR-INV-04), status hanya berubah lewat movement (BR-INV-07).
+1. Tes posting-matrix untuk baris yang diposting di M3 (M3-D2; exit B3 di doc 11 diselaraskan, baris 3, 5, 6, 8–11 menjadi exit M4): setiap leg memakai kode yang benar, konservasi per dokumen (BR-INV-03), saldo tidak pernah negatif (BR-INV-04), status hanya berubah lewat movement (BR-INV-07).
 2. Konkurensi: dua posting paralel ke saldo yang sama tidak pernah membuat saldo negatif atau ganda; deadlock/serialisasi di-retry terbatas (doc 20 §8); replay idempotency mengembalikan hasil yang sama; payload beda → 409.
 3. Append-only: UPDATE/DELETE movement ditolak oleh grant (sebagai role runtime, bukan superuser); koreksi hanya lewat reversal; reversal dari reversal ditolak.
 4. Dua orang: adjustment dan reversal tidak bisa di-approve oleh peminta (juga lewat SQL langsung).
