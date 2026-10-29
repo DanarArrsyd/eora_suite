@@ -1,6 +1,6 @@
 # 32 — M3 Scope: Ledger (B3) — lembar persetujuan
 
-**Status:** **USULAN — belum disetujui.** Tidak ada kode, migration ledger atau posting sebelum owner menyetujui scope ini dan keputusan §3 (D-054, CLAUDE.md).
+**Status:** **DISETUJUI 2026-10-29 (D-096)** — owner: "Setuju semua" (scope §1–§5 dan keputusan M3-D1..D10 sesuai usulan). Implementasi di branch `feat/m3-…`, PR berurutan mengikuti §1.
 **Basis:** ADR-0002 (semantik ledger), ADR-0014 (posting engine), doc 04 §Inventory ledger posting specification (matrix 13 baris) dan §Movement codes (D-084), doc 17 §H Inventory, doc 15 BR-INV-01..11, BR-PER-01..04, BR-ISS-06, D-043 (Firm Available), D-044 (kalender, production date), D-048 (`MAT_TRANSFER`), D-049 (penomoran), D-060 (setiap reversal/adjustment butuh approver kedua), D-062 (incoming release minimal), D-086 (cek ketersediaan M4). M2 selesai (D-095).
 **Tujuan M3:** Anda bisa **menerima bahan baku dan memindahkan stok, lalu melihat saldo yang selalu benar** per plant, lokasi, item, lot dan status — dengan riwayat movement yang tidak bisa diubah, koreksi lewat reversal yang di-approve orang kedua, dan periode yang bisa ditutup. Belum ada WO, issue ke produksi, produksi, QC atau pengiriman (M4).
 
@@ -29,7 +29,7 @@
 - Stock count / stock opname (R2 di navigasi; lihat M3-D7), consignment/milik customer (O-005, M7), serial number (V2), partisi bulanan ledger (doc 20, saat volume membutuhkan).
 - Cek ketersediaan untuk planning (D-086, M4) dan netting MPS (M5).
 
-## 3. Keputusan yang dibutuhkan sebelum mulai (usulan, belum diputuskan)
+## 3. Keputusan (disetujui sesuai usulan, D-096)
 | ID | Keputusan | Usulan | Kenapa |
 |---|---|---|---|
 | M3-D1 | Permission yang belum ada di katalog (doc 18 belum punya penerimaan, transfer, saldo, incoming release) | Resource baru: `materials.receipt` (MAT = VCSP, INV/CSA/PPC/AUD = V), `materials.incoming_release` (QCI/QCS = VP, MAT/INV/AUD = V), `materials.transfer` (MAT/FGW = VCSP, INV = VCSP, AUD = V), `inventory.stock` (semua template = V, + X export). Yang sudah ada tetap: `inventory.adjustment`, `inventory.reversal`, `inventory.period_close`, `inventory.period_reopen`, `production.lot_split`. | Tanpa resource, layar penerimaan/transfer/saldo tidak bisa diberi izin; isi template adalah keputusan bisnis (D-060a: doc 18 jadi default). |
@@ -58,4 +58,4 @@
 - Branch per langkah (`feat/m3-…`), PR berurutan mengikuti §1; CI hijau + review Codex bersih sebelum merge; tanpa auto-merge.
 - Berhenti bila ada temuan keamanan atau keputusan bisnis baru; tidak mengisi keputusan bisnis sendiri.
 
-**Pilihan owner:** ☐ Setuju scope M3 · ☐ Keputusan M3-D1..D10 sesuai usulan · ☐ Ubah (tulis yang diubah)
+**Pilihan owner:** ☑ Setuju scope M3 · ☑ Keputusan M3-D1..D10 sesuai usulan (2026-10-29)

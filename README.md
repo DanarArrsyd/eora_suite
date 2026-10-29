@@ -14,7 +14,7 @@
 9. `apps/api/README.md` — Laravel API (B0 foundation): versions, Docker Compose, quality commands, OpenAPI → `packages/api-client`.
 10. `docs/25-B1-TENANCY-SECURITY-PLAN.md` (B1, decisions approved D-055/D-057) and `docs/26-B2-MASTER-DATA-ROUTING-ADDENDUM.md` (B2, decisions approved D-058) — implementation per milestone approval (D-054).
 11. `docs/27-M0-DECISION-SHEET.md` — M0 decision sheet (answered 2026-10-11).
-12. `docs/28-M1-SCOPE.md`, `docs/29-M2-SCOPE.md`, `docs/32-M3-SCOPE.md` — milestone scope sheets (M1 approved D-066 and accepted D-071; M2 approved D-072 and closed D-095; M3 proposed, not approved).
+12. `docs/28-M1-SCOPE.md`, `docs/29-M2-SCOPE.md`, `docs/32-M3-SCOPE.md` — milestone scope sheets (M1 approved D-066 and accepted D-071; M2 approved D-072 and closed D-095; M3 approved D-096).
 13. `docs/30-CHANGE-PLAYBOOK.md` — how every later feature, rule, screen or permission change is made (D-077).
 14. `prompts/CLAUDE-CODE-START.md` — copy/paste kickoff prompt.
 
