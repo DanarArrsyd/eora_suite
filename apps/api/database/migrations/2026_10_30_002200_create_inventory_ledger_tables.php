@@ -516,12 +516,19 @@ return new class extends Migration
                 IF NEW.qty_signed <> pg_catalog.round(NEW.qty_signed, (SELECT u.decimals FROM public.uoms u WHERE u.tenant_id = NEW.tenant_id AND u.id = NEW.uom_id)) THEN
                   RAISE EXCEPTION 'a quantity has at most the decimals of its unit' USING ERRCODE = '23514';
                 END IF;
+                -- the conversion is this item's, between the entered and the base unit, in force on the document's day, and
+                -- turns the entered quantity into the leg's quantity (rounded to the base unit's decimals)
                 IF NEW.uom_conversion_id IS NOT NULL AND NOT EXISTS (
                   SELECT 1 FROM public.uom_conversions c
+                    JOIN public.inventory_documents doc ON doc.tenant_id = NEW.tenant_id AND doc.id = NEW.document_id
+                    JOIN public.uoms base ON base.tenant_id = NEW.tenant_id AND base.id = NEW.uom_id
                    WHERE c.tenant_id = NEW.tenant_id AND c.id = NEW.uom_conversion_id AND c.item_id = NEW.item_id
                      AND ((c.from_uom_id = NEW.entered_uom_id AND c.to_uom_id = NEW.uom_id) OR (c.from_uom_id = NEW.uom_id AND c.to_uom_id = NEW.entered_uom_id))
+                     AND c.effective_from <= doc.effective_date AND (c.effective_to IS NULL OR c.effective_to >= doc.effective_date)
+                     AND pg_catalog.abs(NEW.qty_signed) = pg_catalog.round(
+                           CASE WHEN c.from_uom_id = NEW.entered_uom_id THEN NEW.entered_qty * c.factor ELSE NEW.entered_qty / c.factor END, base.decimals)
                 ) THEN
-                  RAISE EXCEPTION 'the conversion links the entered unit and the base unit of this item' USING ERRCODE = '23514';
+                  RAISE EXCEPTION 'the entered quantity converts into the leg through a conversion of this item in force that day' USING ERRCODE = '23514';
                 END IF;
               END IF;
               RETURN NEW;

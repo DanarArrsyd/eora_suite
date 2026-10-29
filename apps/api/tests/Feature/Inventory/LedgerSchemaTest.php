@@ -136,6 +136,33 @@ it('never holds a negative or a virtual balance, nor a movement of zero or with 
     )))->toThrow(QueryException::class, "stock is kept in the item's base unit");
     // whole pieces only for PCS (BR-INV-10)
     expect($leg(3, 'RCPT_SUPPLIER', 0.5))->toThrow(QueryException::class, 'a quantity has at most the decimals of its unit');
+    // an entered unit converts through this item's conversion in force that day: 10 KG = 5 PCS at 0.5 PCS/KG
+    $conversion = ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
+        "insert into uom_conversions (tenant_id, item_id, from_uom_id, to_uom_id, factor, effective_from) values (?, ?, (select id from uoms where code = 'KG'), ?, 0.5, current_date) returning id",
+        [$this->t['tenant'], $f['item'], $f['pcs']],
+    )->id);
+    $receipt = fn (float $qty, string $day) => fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f, $conversion, $qty, $day) {
+        $doc = (string) $db->selectOne(
+            "insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, posted_at, posted_by, idempotency_key)
+             values (?, ?, 'RM_RECEIPT', ?, 'POSTED', ?::date, ?::date, ?::date, now(), ?, ?) returning id",
+            [$this->t['tenant'], $f['plant'], 'RCV-P1-2026-'.random_int(1000, 9999), $day, $day, $day, $this->t['actor'], 'fixture-kg-'.Str::random(6)],
+        )->id;
+        $db->insert(
+            "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
+             values (?, ?, 1, 'RCPT_SUPPLIER', ?, ?, ?, ?, 'UNRESTRICTED', ?, ?)",
+            [$this->t['tenant'], $doc, $f['plant'], $f['supplier'], $f['item'], $f['lot'], $f['pcs'], -$qty],
+        );
+        $db->insert(
+            "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed, entered_qty, entered_uom_id, uom_conversion_id)
+             values (?, ?, 2, 'RCPT_SUPPLIER', ?, ?, ?, ?, 'UNRESTRICTED', ?, ?, 10, (select id from uoms where code = 'KG'), ?)",
+            [$this->t['tenant'], $doc, $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs'], $qty, $conversion],
+        );
+        $db->update('update stock_balances set qty = qty + ? where item_id = ? and location_id = ?', [$qty, $f['item'], $f['rm']]);
+    });
+    $today = rtDay($this->t);
+    expect($receipt(6, $today))->toThrow(QueryException::class, 'the entered quantity converts into the leg');
+    expect($receipt(5, rtDay($this->t, -1)))->toThrow(QueryException::class, 'the entered quantity converts into the leg'); // not in force yet
+    $receipt(5, $today)();
     // M3-D9: OWN only
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
         "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, ownership, uom_id, qty_signed)
