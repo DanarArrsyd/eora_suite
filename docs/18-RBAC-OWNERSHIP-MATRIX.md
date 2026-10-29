@@ -37,6 +37,10 @@ Legend: **V** view · **C** create/edit draft · **S** submit · **P** post/exec
 | quality.disposition.release | V | V | — | — | — | P (≤ threshold) | P A | V | — | V | V |
 | warehouse.fg_receipt | V | V | — | — | — | V | V | VCSP | V | V | V |
 | delivery.allocate/pick/ship | V | V | — | — | — | — | — | VP (pick) | VCSP | V | V |
+| materials.receipt *(M3-D1, D-096)* | V | V | VCSP | — | — | — | — | — | — | V | V |
+| materials.incoming_release *(M3-D1, D-062)* | — | — | V | — | — | VP | VP | — | — | V | V |
+| materials.transfer *(M3-D1, D-048)* | — | — | VCSP | — | — | — | — | VCSP | — | VCSP | V |
+| inventory.stock *(M3-D1; export via exchange.export)* | V | V | V | V | V | V | V | V | V | V | V |
 | inventory.stock_count | V | V | VC (count) | VC (count WC) | — | — | — | VC (count) | — | VCSPA | V |
 | inventory.adjustment | R A | — | R | R | — | — | — | R | — | VCS R | V |
 | inventory.reversal | R A | R | R | R | — | R | R | R | R | R A | V |

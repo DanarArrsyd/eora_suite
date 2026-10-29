@@ -24,6 +24,8 @@
 - Seeder demo: penerimaan coil/sheet contoh ke tenant demo lewat service posting asli (sama seperti `eora:demo:master` di M2).
 - Skrip UAT M3 (`docs/uat/M3-UAT.md`) dan stack e2e: terima → transfer → split → adjustment (dua orang) → reversal (dua orang) → saldo dan ledger cocok.
 
+**Progres:** langkah 1 (fondasi ledger: tabel lot, dokumen, movement, saldo, alokasi, genealogy, periode, counter nomor dokumen dan lot, idempotency; grant append-only; permission M3-D1; navigasi Incoming Release dan Period Close R1) — PR `feat/m3-step1-ledger-foundation`.
+
 ## 2. Di luar scope M3
 - WO, alokasi ke WO, issue ke produksi, custody, return, konsumsi, output produksi, QC disposition, FG receipt, pick/shipment (M4; matrix baris 2, 3, 5, 6, 8–11 diposting oleh dokumennya di M4, lihat M3-D2).
 - Stock count / stock opname (R2 di navigasi; lihat M3-D7), consignment/milik customer (O-005, M7), serial number (V2), partisi bulanan ledger (doc 20, saat volume membutuhkan).
