@@ -97,8 +97,16 @@ it('never holds a negative or a virtual balance, nor a movement of zero or with 
     $oil = ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
         "insert into items (tenant_id, code, name, item_type, base_uom_id, lot_controlled) values (?, 'OIL-1', 'Oil', 'CONSUMABLE', ?, false) returning id", [$this->t['tenant'], $f['pcs']],
     )->id);
-    $balance($oil, null)();
-    expect($balance($oil, null))->toThrow(QueryException::class, 'duplicate key');
+    // one balance per key (also lot NULL), and a balance always equals the sum of its legs (checked at commit, BR-INV-11)
+    expect(fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f, $oil) {
+        foreach ([1, 2] as $_) {
+            $db->insert("insert into stock_balances (tenant_id, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty) values (?, ?, ?, ?, null, 'UNRESTRICTED', ?, 0)",
+                [$this->t['tenant'], $f['plant'], $f['rm'], $oil, $f['pcs']]);
+        }
+    }))->toThrow(QueryException::class, 'duplicate key');
+    expect($balance($oil, null))->toThrow(PDOException::class, 'a balance equals the sum of its ledger legs');
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->update('update stock_balances set qty = 11 where item_id = ?', [$f['item']])))
+        ->toThrow(PDOException::class, 'a balance equals the sum of its ledger legs');
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
         "insert into lots (tenant_id, item_id, lot_no, origin) values (?, ?, 'L2610-0009', 'RECEIPT')", [$this->t['tenant'], $oil],
     )))->toThrow(QueryException::class, 'only a lot-controlled item has lots');
@@ -114,6 +122,12 @@ it('never holds a negative or a virtual balance, nor a movement of zero or with 
     expect($leg(3, 'RCPT_SUPPLIER', 0))->toThrow(QueryException::class, 'check');
     expect($leg(3, 'WIP_MOVE', 1))->toThrow(QueryException::class, 'check');
     expect($leg(1, 'RCPT_SUPPLIER', 1))->toThrow(QueryException::class, 'duplicate key'); // leg numbers are unique per document
+    // M3-D9: OWN only
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, ownership, uom_id, qty_signed)
+         values (?, ?, 3, 'RCPT_SUPPLIER', ?, ?, ?, ?, 'UNRESTRICTED', 'CONSIGNMENT', ?, 1)",
+        [$this->t['tenant'], $f['doc'], $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs']],
+    )))->toThrow(QueryException::class, 'check');
 })->group('integration', 'inventory');
 
 it('reverses a posted document only through a posted reversal by a second person that negates every leg once (ADR-0002 §5, D-060)', function () {
@@ -183,6 +197,19 @@ it('starts adjustments as requests and never takes legs outside their posting (D
         "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, requested_by, idempotency_key) values (?, ?, 'STOCK_ADJUSTMENT', 'SUBMITTED', current_date, ?, 'fixture-adj-noreason')",
         [$this->t['tenant'], $f['plant'], $this->t['actor']],
     )))->toThrow(QueryException::class, 'check');
+
+    // an official number belongs to a posting; a closed-period correction carries its reason and evidence
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, idempotency_key) values (?, ?, 'MAT_TRANSFER', 'TRF-P1-2026-0009', 'DRAFT', current_date, 'fixture-draft-number')",
+        [$this->t['tenant'], $f['plant']],
+    )))->toThrow(QueryException::class, 'check');
+    $correction = fn (string $request) => fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, requested_by, correction_of_document_id, original_effective_date, reason_code, note, request, idempotency_key)
+         values (?, ?, 'MAT_TRANSFER', 'SUBMITTED', current_date, ?, ?, current_date, 'MISPOSTED', 'Wrong rack', ?::jsonb, ?)",
+        [$this->t['tenant'], $f['plant'], $this->t['actor'], $f['doc'], $request, 'fixture-correction-'.Str::random(6)],
+    ));
+    expect($correction('{}'))->toThrow(QueryException::class, 'check');
+    $correction('{"evidence": "photo-2026-10-29.jpg"}')();
 
     // a posted document needs its number, dates and legs; legs never join it later
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(

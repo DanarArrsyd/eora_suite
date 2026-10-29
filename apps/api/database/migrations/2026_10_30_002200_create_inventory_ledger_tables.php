@@ -225,6 +225,9 @@ return new class extends Migration
               FOREIGN KEY (tenant_id, plant_id) REFERENCES plants (tenant_id, id),
               FOREIGN KEY (tenant_id, plant_id, reverses_document_id) REFERENCES inventory_documents (tenant_id, plant_id, id),
               FOREIGN KEY (tenant_id, plant_id, correction_of_document_id) REFERENCES inventory_documents (tenant_id, plant_id, id),
+              FOREIGN KEY (tenant_id, shift_id) REFERENCES shifts (tenant_id, id),
+              -- the official number belongs to the posting (D-049): an unposted document never holds one
+              CHECK (doc_no IS NULL OR status IN ('POSTED', 'REVERSED')),
               CHECK ((status IN ('POSTED', 'REVERSED')) = (doc_no IS NOT NULL AND posted_at IS NOT NULL AND posted_by IS NOT NULL
                                                            AND production_date IS NOT NULL AND calendar_date IS NOT NULL)),
               CHECK ((doc_type = 'REVERSAL') = (reverses_document_id IS NOT NULL)),
@@ -233,7 +236,10 @@ return new class extends Migration
               CHECK ((source_type IS NULL) = (source_id IS NULL)),
               -- an adjustment names its reason code, a reversal its reason, before it is submitted
               CHECK (doc_type <> 'STOCK_ADJUSTMENT' OR status = 'DRAFT' OR reason_code IS NOT NULL),
-              CHECK (doc_type <> 'REVERSAL' OR status = 'DRAFT' OR note IS NOT NULL)
+              CHECK (doc_type <> 'REVERSAL' OR status = 'DRAFT' OR note IS NOT NULL),
+              -- BR-PER-02: a closed-period correction carries its reason code, reason and evidence (in the request) once submitted
+              CHECK (correction_of_document_id IS NULL OR status = 'DRAFT'
+                     OR (reason_code IS NOT NULL AND note IS NOT NULL AND request ? 'evidence'))
             );
             -- a document is reversed at most once (a rejected reversal request does not count)
             CREATE UNIQUE INDEX inventory_documents_reversal_uq ON inventory_documents (tenant_id, reverses_document_id)
@@ -329,7 +335,8 @@ return new class extends Migration
               item_id uuid NOT NULL,
               lot_id uuid,
               stock_status text NOT NULL CHECK (stock_status IN ('UNRESTRICTED', 'PENDING_QC', 'QC_RELEASED', 'HOLD', 'REWORK', 'REJECTED', 'BLOCKED')),
-              ownership text NOT NULL DEFAULT 'OWN' CHECK (ownership IN ('OWN', 'CUSTOMER_OWNED', 'CONSIGNMENT')),
+              -- M3-D9: OWN only until consignment and customer-owned stock are decided (O-005, M7); widened by a migration then
+              ownership text NOT NULL DEFAULT 'OWN' CHECK (ownership = 'OWN'),
               uom_id uuid NOT NULL,
               qty_signed numeric(20, 6) NOT NULL CHECK (qty_signed <> 0),
               -- the quantity as entered when another unit was used (M3-D5); the conversion version that turned it into qty_signed
@@ -353,13 +360,15 @@ return new class extends Migration
               FOREIGN KEY (tenant_id, item_id, lot_id) REFERENCES lots (tenant_id, item_id, id),
               FOREIGN KEY (tenant_id, uom_id) REFERENCES uoms (tenant_id, id),
               FOREIGN KEY (tenant_id, entered_uom_id) REFERENCES uoms (tenant_id, id),
+              FOREIGN KEY (tenant_id, uom_conversion_id) REFERENCES uom_conversions (tenant_id, id),
               FOREIGN KEY (tenant_id, reverses_movement_id) REFERENCES inventory_movements (tenant_id, id),
               CHECK ((entered_qty IS NULL) = (entered_uom_id IS NULL)),
               CHECK (uom_conversion_id IS NULL OR entered_qty IS NOT NULL)
             );
             CREATE INDEX inventory_movements_lot_idx ON inventory_movements (tenant_id, lot_id, id) WHERE lot_id IS NOT NULL;
             CREATE INDEX inventory_movements_document_idx ON inventory_movements (tenant_id, document_id);
-            CREATE INDEX inventory_movements_place_idx ON inventory_movements (tenant_id, plant_id, location_id, item_id);
+            -- one balance key per entry, quantity included: the balance-equals-ledger check and the movement list by place read the index only
+            CREATE INDEX inventory_movements_balance_idx ON inventory_movements (tenant_id, plant_id, location_id, item_id, lot_id, stock_status, uom_id) INCLUDE (qty_signed);
             CREATE UNIQUE INDEX inventory_movements_reversed_uq ON inventory_movements (tenant_id, reverses_movement_id) WHERE reverses_movement_id IS NOT NULL;
 
             -- Checked at commit, when the whole posting is written (ADR-0014): a posted document has legs; legs are written
@@ -451,7 +460,8 @@ return new class extends Migration
               item_id uuid NOT NULL,
               lot_id uuid,
               stock_status text NOT NULL CHECK (stock_status IN ('UNRESTRICTED', 'PENDING_QC', 'QC_RELEASED', 'HOLD', 'REWORK', 'REJECTED', 'BLOCKED')),
-              ownership text NOT NULL DEFAULT 'OWN' CHECK (ownership IN ('OWN', 'CUSTOMER_OWNED', 'CONSIGNMENT')),
+              -- M3-D9: OWN only until consignment and customer-owned stock are decided (O-005, M7); widened by a migration then
+              ownership text NOT NULL DEFAULT 'OWN' CHECK (ownership = 'OWN'),
               uom_id uuid NOT NULL,
               qty numeric(20, 6) NOT NULL CHECK (qty >= 0),
               created_at timestamptz NOT NULL,
@@ -485,6 +495,27 @@ return new class extends Migration
             REVOKE ALL ON FUNCTION eora_guard_physical_balance() FROM PUBLIC;
             CREATE TRIGGER guard_physical BEFORE INSERT OR UPDATE ON stock_balances FOR EACH ROW EXECUTE FUNCTION eora_guard_physical_balance();
             CREATE TRIGGER guard_lot_control BEFORE INSERT ON stock_balances FOR EACH ROW EXECUTE FUNCTION eora_guard_lot_control();
+
+            -- BR-INV-11, checked at commit: a balance written in a transaction equals the sum of its legs, so the projection
+            -- never drifts from the append-only ledger whatever path wrote it
+            CREATE OR REPLACE FUNCTION eora_check_balance_ledger() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            DECLARE
+              b record;
+            BEGIN
+              SELECT sb.* INTO b FROM public.stock_balances sb WHERE sb.tenant_id = NEW.tenant_id AND sb.id = NEW.id;
+              IF b.qty IS DISTINCT FROM (
+                SELECT COALESCE(sum(m.qty_signed), 0) FROM public.inventory_movements m
+                 WHERE m.tenant_id = b.tenant_id AND m.plant_id = b.plant_id AND m.location_id = b.location_id AND m.item_id = b.item_id
+                   AND m.lot_id IS NOT DISTINCT FROM b.lot_id AND m.stock_status = b.stock_status AND m.ownership = b.ownership AND m.uom_id = b.uom_id
+              ) THEN
+                RAISE EXCEPTION 'a balance equals the sum of its ledger legs' USING ERRCODE = '23514';
+              END IF;
+              RETURN NULL;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_check_balance_ledger() FROM PUBLIC;
+            CREATE CONSTRAINT TRIGGER check_ledger AFTER INSERT OR UPDATE ON stock_balances DEFERRABLE INITIALLY DEFERRED
+              FOR EACH ROW EXECUTE FUNCTION eora_check_balance_ledger();
 
             -- matrix row 2 (BR-INV-08): reduces available, never on-hand; Σ active ≤ on-hand is checked by the service under
             -- the balance lock. Used from M4 (WO, schedule lines).
@@ -580,7 +611,7 @@ return new class extends Migration
     public function down(): void
     {
         DB::unprepared(<<<'SQL'
-            DROP TRIGGER guard_lot_control ON items;
+            DROP TRIGGER IF EXISTS guard_lot_control ON items;
             DROP TABLE idempotency_records;
             DROP TABLE genealogy_edges;
             DROP TABLE stock_allocations;
@@ -591,11 +622,12 @@ return new class extends Migration
             DROP TABLE inventory_periods;
             DROP TABLE lot_counters;
             DROP TABLE lots;
-            DROP FUNCTION eora_guard_physical_balance();
-            DROP FUNCTION eora_guard_lot_control();
-            DROP FUNCTION eora_guard_inventory_period();
-            DROP FUNCTION eora_check_inventory_posting();
-            DROP FUNCTION eora_guard_inventory_document();
+            DROP FUNCTION IF EXISTS eora_guard_physical_balance();
+            DROP FUNCTION IF EXISTS eora_check_balance_ledger();
+            DROP FUNCTION IF EXISTS eora_guard_lot_control();
+            DROP FUNCTION IF EXISTS eora_guard_inventory_period();
+            DROP FUNCTION IF EXISTS eora_check_inventory_posting();
+            DROP FUNCTION IF EXISTS eora_guard_inventory_document();
             SQL);
     }
 };
