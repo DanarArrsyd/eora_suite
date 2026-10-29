@@ -6,13 +6,15 @@ use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Tenancy\TenantContext;
 use App\Platform\Tenancy\TenantTransaction;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Str;
 use Tests\Support\AccessFixtures;
 use Tests\Support\TenantFixtures;
 
 /*
  * M3 step 1 (doc 32 §1.1, D-096; ADR-0002, ADR-0014): what the database guarantees about the ledger by itself, as the
- * runtime role (never a superuser): append-only movements, no negative or virtual balance, posted documents fixed,
- * a document reversed once, tenant isolation, and the M3-D1 permissions in the role templates.
+ * runtime role (never a superuser; checks deferred to the commit surface as a PDOException): append-only movements, no negative or virtual balance, posted documents fixed,
+ * adjustments and reversals decided by a second person, a reversal that negates every leg once, legs only with their
+ * posting, tenant isolation, and the M3-D1 permissions in the role templates.
  */
 
 beforeEach(function () {
@@ -23,7 +25,13 @@ beforeEach(function () {
 /** Runs $work as the runtime role (eora_app) in the tenant's signed context. */
 function ledgerAsApp(array $t, Closure $work): mixed
 {
-    return app(TenantTransaction::class)->run(TenantContext::forTenant($t['tenant'], $t['actor']), $work);
+    return ledgerAsTenantActor($t, $t['actor'], $work);
+}
+
+/** As ledgerAsApp, signed for another actor of the tenant (a second person). */
+function ledgerAsTenantActor(array $t, string $actor, Closure $work): mixed
+{
+    return app(TenantTransaction::class)->run(TenantContext::forTenant($t['tenant'], $actor), $work);
 }
 
 /**
@@ -98,32 +106,84 @@ it('never holds a negative or a virtual balance, nor a movement of zero or with 
     expect($leg(1, 'RCPT_SUPPLIER', 1))->toThrow(QueryException::class, 'duplicate key'); // leg numbers are unique per document
 })->group('integration', 'inventory');
 
-it('fixes a posted document except POSTED → REVERSED, and reverses a document once (ADR-0002 §5)', function () {
+it('reverses a posted document only through a posted reversal by a second person that negates every leg once (ADR-0002 §5, D-060)', function () {
     $f = ledgerFixture($this->t);
+    $checker = Str::uuid()->toString();
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->update("update inventory_documents set note = 'edit' where id = ?", [$f['doc']])))
         ->toThrow(QueryException::class, 'a posted inventory document never changes');
+    // marking it reversed without a posted reversal is refused
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->update("update inventory_documents set status = 'REVERSED' where id = ?", [$f['doc']])))
+        ->toThrow(QueryException::class, 'a document is reversed by a posted reversal');
 
-    $reversal = fn (string $key, string $status) => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
+    $request = fn (string $key) => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
         "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, reverses_document_id, requested_by, idempotency_key)
-         values (?, ?, 'REVERSAL', ?, current_date, ?, ?, ?) returning id",
-        [$this->t['tenant'], $f['plant'], $status, $f['doc'], $this->t['actor'], $key],
+         values (?, ?, 'REVERSAL', 'SUBMITTED', current_date, ?, ?, ?) returning id",
+        [$this->t['tenant'], $f['plant'], $f['doc'], $this->t['actor'], $key],
     )->id);
-    $first = $reversal('fixture-reversal-1', 'SUBMITTED');
-    expect(fn () => $reversal('fixture-reversal-2', 'SUBMITTED'))->toThrow(QueryException::class, 'duplicate key');
-    // a rejected request does not count
-    ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->update(
-        "update inventory_documents set status = 'REJECTED', reject_reason = 'Wrong lot', decided_by = ?, decided_at = now() where id = ?", [$this->t['actor'], $first],
+    $first = $request('fixture-reversal-1');
+    expect(fn () => $request('fixture-reversal-2'))->toThrow(QueryException::class, 'duplicate key'); // one reversal per document
+    // the requester never decides; a second person may reject, and a rejected request does not count
+    $decide = fn (string $actor, string $id, string $set, array $bindings = []) => fn () => ledgerAsTenantActor($this->t, $actor, fn (EoraPostgresConnection $db) => $db->update(
+        "update inventory_documents set {$set} where id = ?", [...$bindings, $id],
     ));
-    $reversal('fixture-reversal-3', 'SUBMITTED');
+    expect($decide($this->t['actor'], $first, "status = 'REJECTED', reject_reason = 'Own call', decided_by = ?, decided_at = now()", [$this->t['actor']]))
+        ->toThrow(QueryException::class, 'a request is decided by a second person');
+    $decide($checker, $first, "status = 'REJECTED', reject_reason = 'Wrong lot', decided_by = ?, decided_at = now()", [$checker])();
+    $second = $request('fixture-reversal-3');
 
-    ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->update("update inventory_documents set status = 'REVERSED' where id = ?", [$f['doc']]));
+    // the reversal posts: a second person, every leg negated once, then the original is marked reversed
+    $post = fn (bool $complete) => fn () => ledgerAsTenantActor($this->t, $checker, function (EoraPostgresConnection $db) use ($f, $second, $checker, $complete) {
+        $db->update(
+            "update inventory_documents set status = 'POSTED', doc_no = 'REV-P1-2026-0001', production_date = current_date, calendar_date = current_date,
+                    posted_at = now(), posted_by = ?, decided_by = ?, decided_at = now() where id = ?",
+            [$checker, $checker, $second],
+        );
+        $legs = $db->select('select * from inventory_movements where document_id = ? order by leg_no', [$f['doc']]);
+        foreach ($complete ? $legs : array_slice($legs, 0, 1) as $o) {
+            $db->insert(
+                'insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, reverses_movement_id, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
+                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [$o->tenant_id, $second, $o->leg_no, $o->movement_code, $o->id, $o->plant_id, $o->location_id, $o->item_id, $o->lot_id, $o->stock_status, $o->uom_id, -$o->qty_signed],
+            );
+        }
+        $db->update("update inventory_documents set status = 'REVERSED' where id = ?", [$f['doc']]);
+    });
+    expect($post(false))->toThrow(PDOException::class, 'a reversal negates every leg of its document once');
+    $post(true)();
+    expect(ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select status from inventory_documents where id = ?', [$f['doc']])))->status->toBe('REVERSED');
+    // a reversed document stays as it is, and a reversal is not reversed again
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->update("update inventory_documents set status = 'POSTED' where id = ?", [$f['doc']])))
         ->toThrow(QueryException::class, 'a reversed inventory document never changes');
-    // a posted document needs its number and dates
+    expect(fn () => $request('fixture-reversal-4'))->toThrow(QueryException::class, 'only a posted document that is not a reversal can be reversed');
+})->group('integration', 'inventory');
+
+it('starts adjustments as requests and never takes legs outside their posting (D-060, ADR-0014)', function () {
+    $f = ledgerFixture($this->t);
+    // an adjustment cannot be inserted as posted, nor requested in someone else's name
+    $insert = fn (string $status, string $requester) => fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, requested_by, reason_code, idempotency_key)
+         values (?, ?, 'STOCK_ADJUSTMENT', ?, current_date, ?, 'DAMAGE', ?)",
+        [$this->t['tenant'], $f['plant'], $status, $requester, 'fixture-adj-'.Str::random(8)],
+    ));
+    expect($insert('POSTED', $this->t['actor']))->toThrow(QueryException::class, 'starts as a request');
+    expect($insert('SUBMITTED', Str::uuid()->toString()))->toThrow(QueryException::class, 'a request is made by the signed actor');
+    $insert('SUBMITTED', $this->t['actor'])();
+
+    // a posted document needs its number, dates and legs; legs never join it later
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
         "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, idempotency_key) values (?, ?, 'RM_RECEIPT', 'POSTED', current_date, 'fixture-receipt-2')",
         [$this->t['tenant'], $f['plant']],
     )))->toThrow(QueryException::class, 'check');
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, posted_at, posted_by, idempotency_key)
+         values (?, ?, 'MAT_TRANSFER', 'TRF-P1-2026-0001', 'POSTED', current_date, current_date, current_date, now(), ?, 'fixture-transfer-1')",
+        [$this->t['tenant'], $f['plant'], $this->t['actor']],
+    )))->toThrow(PDOException::class, 'a posted inventory document has legs');
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
+         values (?, ?, 3, 'RCPT_SUPPLIER', ?, ?, ?, ?, 'UNRESTRICTED', ?, 1)",
+        [$this->t['tenant'], $f['doc'], $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs']],
+    )))->toThrow(PDOException::class, 'legs are written only with the posting of their document');
 })->group('integration', 'inventory');
 
 it('keeps a split lot on its parent\'s item and the ledger inside the tenant', function () {

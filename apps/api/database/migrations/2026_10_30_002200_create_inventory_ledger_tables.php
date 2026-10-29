@@ -10,9 +10,10 @@ use Illuminate\Support\Facades\DB;
  *
  * - `lots`: one lot of one item; internal `lot_no` (M3-D3) unique per item, supplier lot/heat and mill-cert properties
  *   optional; a split lot (child) belongs to the parent's item. Items without lot control have no lots (M3-D4).
- * - `inventory_documents`: one business document per plant. DRAFT/SUBMITTED documents carry the request (adjustment,
- *   reversal: approved by a second person, D-060); POSTED documents have their official number (D-049), dates (D-044)
- *   and never change again, except POSTED → REVERSED when a reversal posts. A document is reversed at most once.
+ * - `inventory_documents`: one business document per plant. Adjustments, reversals and closed-period corrections start
+ *   as a request of the signed actor and are decided by another person (D-060), enforced by trigger; POSTED documents
+ *   have their official number (D-049), dates (D-044) and legs, and never change again except POSTED → REVERSED once
+ *   their reversal is posted. A document is reversed at most once; a reversal negates every leg once (checked at commit).
  * - `inventory_movements`: the legs — append-only (no UPDATE/DELETE for any login role), signed quantity ≠ 0, movement
  *   code from the system catalogue (D-084), the entered quantity and unit when posted in another unit (M3-D5).
  * - `stock_balances`: the projection, one row per balance key (lot NULL for items without lot control, ownership OWN
@@ -166,27 +167,74 @@ return new class extends Migration
             CREATE INDEX inventory_documents_list_idx ON inventory_documents (tenant_id, plant_id, effective_date DESC, id);
             CREATE INDEX inventory_documents_pending_idx ON inventory_documents (tenant_id, status) WHERE status IN ('DRAFT', 'SUBMITTED');
 
+            -- Lifecycle guard (D-060, ADR-0002 §5): adjustments, reversals and closed-period corrections start as a request of
+            -- the signed actor and are decided (posted or rejected) by another person, also against direct SQL; a posted
+            -- document never changes except POSTED → REVERSED, and only once its reversal is posted; a reversal is never
+            -- reversed again.
             CREATE OR REPLACE FUNCTION eora_guard_inventory_document() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            DECLARE
+              a uuid := (SELECT c.actor FROM ctx_api.context() c);
+              approved boolean := NEW.doc_type IN ('STOCK_ADJUSTMENT', 'REVERSAL') OR NEW.correction_of_document_id IS NOT NULL;
+              frozen text[] := ARRAY['status', 'updated_at', 'updated_by', 'version'];
             BEGIN
-              IF (NEW.tenant_id, NEW.plant_id, NEW.doc_type, NEW.idempotency_key, NEW.reverses_document_id, NEW.correction_of_document_id)
-                 IS DISTINCT FROM (OLD.tenant_id, OLD.plant_id, OLD.doc_type, OLD.idempotency_key, OLD.reverses_document_id, OLD.correction_of_document_id) THEN
+              IF TG_OP = 'INSERT' THEN
+                IF NEW.requested_by IS DISTINCT FROM NULL AND NEW.requested_by IS DISTINCT FROM a THEN
+                  RAISE EXCEPTION 'a request is made by the signed actor' USING ERRCODE = '42501';
+                END IF;
+                IF approved AND (NEW.status NOT IN ('DRAFT', 'SUBMITTED') OR NEW.requested_by IS NULL OR NEW.decided_by IS NOT NULL) THEN
+                  RAISE EXCEPTION 'an adjustment, reversal or closed-period correction starts as a request' USING ERRCODE = '42501';
+                END IF;
+                IF NEW.reverses_document_id IS NOT NULL AND NOT EXISTS (
+                  SELECT 1 FROM public.inventory_documents o
+                   WHERE o.tenant_id = NEW.tenant_id AND o.id = NEW.reverses_document_id AND o.status = 'POSTED' AND o.doc_type <> 'REVERSAL'
+                ) THEN
+                  RAISE EXCEPTION 'only a posted document that is not a reversal can be reversed' USING ERRCODE = '23514';
+                END IF;
+                RETURN NEW;
+              END IF;
+
+              IF (NEW.tenant_id, NEW.plant_id, NEW.doc_type, NEW.idempotency_key, NEW.reverses_document_id, NEW.correction_of_document_id, NEW.requested_by)
+                 IS DISTINCT FROM (OLD.tenant_id, OLD.plant_id, OLD.doc_type, OLD.idempotency_key, OLD.reverses_document_id, OLD.correction_of_document_id, OLD.requested_by) THEN
                 RAISE EXCEPTION 'inventory document identity is fixed' USING ERRCODE = '23514';
               END IF;
+
               IF OLD.status IN ('POSTED', 'REVERSED', 'REJECTED') THEN
-                -- a posted document changes only once more: POSTED → REVERSED, nothing else
-                IF NOT (OLD.status = 'POSTED' AND NEW.status = 'REVERSED'
-                        AND (NEW.doc_no, NEW.effective_date, NEW.production_date, NEW.calendar_date, NEW.shift_id, NEW.shift_date,
-                             NEW.posted_at, NEW.posted_by, NEW.request, NEW.reason_code, NEW.note)
-                            IS NOT DISTINCT FROM (OLD.doc_no, OLD.effective_date, OLD.production_date, OLD.calendar_date, OLD.shift_id, OLD.shift_date,
-                                                  OLD.posted_at, OLD.posted_by, OLD.request, OLD.reason_code, OLD.note)) THEN
-                  RAISE EXCEPTION 'a % inventory document never changes', lower(OLD.status) USING ERRCODE = '23514';
+                IF NOT (OLD.status = 'POSTED' AND NEW.status = 'REVERSED' AND (pg_catalog.to_jsonb(NEW) - frozen) = (pg_catalog.to_jsonb(OLD) - frozen)) THEN
+                  RAISE EXCEPTION 'a % inventory document never changes', pg_catalog.lower(OLD.status) USING ERRCODE = '23514';
+                END IF;
+                IF NOT EXISTS (
+                  SELECT 1 FROM public.inventory_documents r WHERE r.tenant_id = NEW.tenant_id AND r.reverses_document_id = NEW.id AND r.status = 'POSTED'
+                ) THEN
+                  RAISE EXCEPTION 'a document is reversed by a posted reversal' USING ERRCODE = '23514';
+                END IF;
+                RETURN NEW;
+              END IF;
+
+              IF approved THEN
+                IF NEW.status IN ('POSTED', 'REJECTED') THEN
+                  -- the decision: a submitted request, unchanged, decided by someone who did not request it
+                  IF OLD.status <> 'SUBMITTED' THEN
+                    RAISE EXCEPTION 'only a submitted request is decided' USING ERRCODE = '23514';
+                  END IF;
+                  IF NEW.decided_by IS DISTINCT FROM a OR a = OLD.requested_by THEN
+                    RAISE EXCEPTION 'a request is decided by a second person' USING ERRCODE = '42501';
+                  END IF;
+                  IF (NEW.request, NEW.reason_code, NEW.note, NEW.effective_date, NEW.original_effective_date)
+                     IS DISTINCT FROM (OLD.request, OLD.reason_code, OLD.note, OLD.effective_date, OLD.original_effective_date) THEN
+                    RAISE EXCEPTION 'a request is decided as it was submitted' USING ERRCODE = '23514';
+                  END IF;
+                ELSIF a IS DISTINCT FROM OLD.requested_by OR NEW.decided_by IS NOT NULL THEN
+                  RAISE EXCEPTION 'only the requester edits, submits or withdraws a request' USING ERRCODE = '42501';
+                ELSIF OLD.status = 'SUBMITTED' AND NEW.status = 'SUBMITTED'
+                      AND (NEW.request, NEW.reason_code, NEW.note, NEW.effective_date) IS DISTINCT FROM (OLD.request, OLD.reason_code, OLD.note, OLD.effective_date) THEN
+                  RAISE EXCEPTION 'a submitted request is withdrawn before it is changed' USING ERRCODE = '23514';
                 END IF;
               END IF;
               RETURN NEW;
             END
             $fn$;
             REVOKE ALL ON FUNCTION eora_guard_inventory_document() FROM PUBLIC;
-            CREATE TRIGGER guard_posted BEFORE UPDATE ON inventory_documents FOR EACH ROW EXECUTE FUNCTION eora_guard_inventory_document();
+            CREATE TRIGGER guard_lifecycle BEFORE INSERT OR UPDATE ON inventory_documents FOR EACH ROW EXECUTE FUNCTION eora_guard_inventory_document();
 
             CREATE TABLE inventory_movements (
               tenant_id uuid NOT NULL REFERENCES tenants (id),
@@ -235,6 +283,53 @@ return new class extends Migration
             CREATE INDEX inventory_movements_document_idx ON inventory_movements (tenant_id, document_id);
             CREATE INDEX inventory_movements_place_idx ON inventory_movements (tenant_id, plant_id, location_id, item_id);
             CREATE UNIQUE INDEX inventory_movements_reversed_uq ON inventory_movements (tenant_id, reverses_movement_id) WHERE reverses_movement_id IS NOT NULL;
+
+            -- Checked at commit, when the whole posting is written (ADR-0014): a posted document has legs; legs are written
+            -- only in the transaction that posts their document (the posting service sets posted_at = now()); a reversal
+            -- negates every leg of its document exactly once, same key and code (doc 04 row 13).
+            CREATE OR REPLACE FUNCTION eora_check_inventory_posting() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            DECLARE
+              d record;
+            BEGIN
+              IF TG_TABLE_NAME = 'inventory_movements' THEN
+                SELECT doc.status, doc.posted_at INTO d FROM public.inventory_documents doc WHERE doc.tenant_id = NEW.tenant_id AND doc.id = NEW.document_id;
+                IF d.status NOT IN ('POSTED', 'REVERSED') OR d.posted_at IS DISTINCT FROM pg_catalog.now() THEN
+                  RAISE EXCEPTION 'legs are written only with the posting of their document' USING ERRCODE = '23514';
+                END IF;
+                RETURN NULL;
+              END IF;
+              SELECT doc.status, doc.doc_type, doc.reverses_document_id INTO d FROM public.inventory_documents doc WHERE doc.tenant_id = NEW.tenant_id AND doc.id = NEW.id;
+              IF d.status NOT IN ('POSTED', 'REVERSED') THEN
+                RETURN NULL;
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM public.inventory_movements m WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id) THEN
+                RAISE EXCEPTION 'a posted inventory document has legs' USING ERRCODE = '23514';
+              END IF;
+              IF d.doc_type = 'REVERSAL' AND (
+                   EXISTS (
+                     SELECT 1 FROM public.inventory_movements o
+                      WHERE o.tenant_id = NEW.tenant_id AND o.document_id = d.reverses_document_id
+                        AND NOT EXISTS (
+                          SELECT 1 FROM public.inventory_movements m
+                           WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id AND m.reverses_movement_id = o.id
+                             AND m.qty_signed = -o.qty_signed AND m.movement_code = o.movement_code
+                             AND (m.plant_id, m.location_id, m.item_id, m.lot_id, m.stock_status, m.ownership, m.uom_id)
+                                 IS NOT DISTINCT FROM (o.plant_id, o.location_id, o.item_id, o.lot_id, o.stock_status, o.ownership, o.uom_id)))
+                   OR EXISTS (
+                     SELECT 1 FROM public.inventory_movements m
+                      WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id
+                        AND NOT EXISTS (SELECT 1 FROM public.inventory_movements o
+                                         WHERE o.tenant_id = NEW.tenant_id AND o.id = m.reverses_movement_id AND o.document_id = d.reverses_document_id))) THEN
+                RAISE EXCEPTION 'a reversal negates every leg of its document once' USING ERRCODE = '23514';
+              END IF;
+              RETURN NULL;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_check_inventory_posting() FROM PUBLIC;
+            CREATE CONSTRAINT TRIGGER check_posting AFTER INSERT OR UPDATE ON inventory_documents DEFERRABLE INITIALLY DEFERRED
+              FOR EACH ROW EXECUTE FUNCTION eora_check_inventory_posting();
+            CREATE CONSTRAINT TRIGGER check_posting AFTER INSERT ON inventory_movements DEFERRABLE INITIALLY DEFERRED
+              FOR EACH ROW EXECUTE FUNCTION eora_check_inventory_posting();
 
             -- the projection; lot NULL = item without lot control (M3-D4)
             CREATE TABLE stock_balances (
@@ -383,6 +478,7 @@ return new class extends Migration
             DROP TABLE lot_counters;
             DROP TABLE lots;
             DROP FUNCTION eora_guard_physical_balance();
+            DROP FUNCTION eora_check_inventory_posting();
             DROP FUNCTION eora_guard_inventory_document();
             SQL);
     }
