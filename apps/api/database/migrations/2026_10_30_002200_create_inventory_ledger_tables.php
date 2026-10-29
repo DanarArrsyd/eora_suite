@@ -447,6 +447,11 @@ return new class extends Migration
               IF NOT EXISTS (SELECT 1 FROM public.inventory_movements m WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id) THEN
                 RAISE EXCEPTION 'a posted inventory document has legs' USING ERRCODE = '23514';
               END IF;
+              -- transformation documents post only with their run and variance checks (ADR-0003, ADR-0005), which arrive
+              -- with production in M4; until then they are refused rather than left unchecked
+              IF d.doc_type IN ('PRODUCTION_POSTING', 'SCRAP_DISPOSITION', 'REWORK_POSTING') THEN
+                RAISE EXCEPTION 'a % posts with its production checks (M4)', d.doc_type USING ERRCODE = '23514';
+              END IF;
               -- conservation (ADR-0002 §4, BR-INV-03): Σ legs = 0 per item, lot and unit, virtual locations included; a lot
               -- split conserves per item and unit (the lot changes, DD-04); production postings and scrap disposition
               -- transform (checked by the variance indicators, ADR-0005); a reversal is checked as the exact negation above
@@ -517,7 +522,8 @@ return new class extends Migration
               IF TG_TABLE_NAME = 'items' THEN
                 IF NEW.lot_controlled IS DISTINCT FROM OLD.lot_controlled
                    AND (EXISTS (SELECT 1 FROM public.lots l WHERE l.tenant_id = NEW.tenant_id AND l.item_id = NEW.id)
-                        OR EXISTS (SELECT 1 FROM public.inventory_movements m WHERE m.tenant_id = NEW.tenant_id AND m.item_id = NEW.id)) THEN
+                        OR EXISTS (SELECT 1 FROM public.inventory_movements m WHERE m.tenant_id = NEW.tenant_id AND m.item_id = NEW.id)
+                        OR EXISTS (SELECT 1 FROM public.stock_balances b WHERE b.tenant_id = NEW.tenant_id AND b.item_id = NEW.id)) THEN
                   RAISE EXCEPTION 'lot control is fixed once the item has stock history' USING ERRCODE = '23514';
                 END IF;
                 RETURN NEW;

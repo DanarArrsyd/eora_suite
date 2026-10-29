@@ -287,19 +287,21 @@ it('starts adjustments as requests and never takes legs outside their posting (D
          values (?, ?, 3, 'RCPT_SUPPLIER', ?, ?, ?, ?, 'UNRESTRICTED', ?, 1)",
         [$this->t['tenant'], $f['doc'], $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs']],
     )))->toThrow(PDOException::class, 'legs are written only with the posting of their document');
-    // only a reversal links a leg to the leg it reverses (a transformation document, so conservation does not answer first)
+    // only a reversal links a leg to the leg it reverses (a conserving transfer at one place, so the reversal-link check answers)
     expect(fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f) {
         $doc = (string) $db->selectOne(
             "insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, posted_at, posted_by, idempotency_key)
-             values (?, ?, 'PRODUCTION_POSTING', 'PRD-P1-2026-0002', 'POSTED', current_date, current_date, current_date, now(), ?, 'fixture-production-2') returning id",
+             values (?, ?, 'MAT_TRANSFER', 'TRF-P1-2026-0002', 'POSTED', current_date, current_date, current_date, now(), ?, 'fixture-transfer-2') returning id",
             [$this->t['tenant'], $f['plant'], $this->t['actor']],
         )->id;
         $leg = $db->selectOne('select id from inventory_movements where document_id = ? and leg_no = 2', [$f['doc']]);
-        $db->insert(
-            "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, reverses_movement_id, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
-             values (?, ?, 1, 'CONSUME', ?, ?, ?, ?, ?, 'UNRESTRICTED', ?, -1)",
-            [$this->t['tenant'], $doc, $leg->id, $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs']],
-        );
+        foreach ([[1, $leg->id, -1], [2, null, 1]] as [$no, $reverses, $qty]) {
+            $db->insert(
+                "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, reverses_movement_id, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
+                 values (?, ?, ?, 'TRANSFER_LOC', ?, ?, ?, ?, ?, 'UNRESTRICTED', ?, ?)",
+                [$this->t['tenant'], $doc, $no, $reverses, $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs'], $qty],
+            );
+        }
     }))->toThrow(PDOException::class, 'only a reversal reverses a leg');
 
     // a posting moves the balances of its physical legs, and genealogy is written only with a posting
@@ -342,6 +344,20 @@ it('starts adjustments as requests and never takes legs outside their posting (D
          values (?, ?, 'RM_RECEIPT', 'RCV-P1-2026-0889', 'POSTED', current_date, current_date, current_date, now(), ?, 'fixture-other-poster')",
         [$this->t['tenant'], $f['plant'], Str::uuid()->toString()],
     )))->toThrow(QueryException::class, 'a document is posted by the signed actor');
+    // transformation documents wait for their production checks (M4)
+    expect(fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f) {
+        $doc = (string) $db->selectOne(
+            "insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, posted_at, posted_by, idempotency_key)
+             values (?, ?, 'PRODUCTION_POSTING', 'PRD-P1-2026-0001', 'POSTED', current_date, current_date, current_date, now(), ?, 'fixture-production-1') returning id",
+            [$this->t['tenant'], $f['plant'], $this->t['actor']],
+        )->id;
+        $db->insert(
+            "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
+             values (?, ?, 1, 'OUTPUT_GOOD', ?, ?, ?, ?, 'UNRESTRICTED', ?, 3)",
+            [$this->t['tenant'], $doc, $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs']],
+        );
+        $db->update('update stock_balances set qty = qty + 3 where item_id = ? and location_id = ?', [$f['item'], $f['rm']]);
+    }))->toThrow(PDOException::class, 'a PRODUCTION_POSTING posts with its production checks (M4)');
     // a receipt without its supplier leg would create stock from nothing (BR-INV-03)
     expect(fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f) {
         $doc = (string) $db->selectOne(
