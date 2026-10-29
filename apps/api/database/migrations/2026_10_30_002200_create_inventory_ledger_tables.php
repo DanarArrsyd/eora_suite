@@ -279,6 +279,10 @@ return new class extends Migration
                 ) THEN
                   RAISE EXCEPTION 'only a posted document that is not a reversal can be reversed' USING ERRCODE = '23514';
                 END IF;
+                -- the poster is the signed actor of the posting statement
+                IF NEW.status = 'POSTED' AND NEW.posted_by IS DISTINCT FROM a THEN
+                  RAISE EXCEPTION 'a document is posted by the signed actor' USING ERRCODE = '42501';
+                END IF;
                 RETURN NEW;
               END IF;
 
@@ -318,6 +322,9 @@ return new class extends Migration
                       AND (NEW.request, NEW.reason_code, NEW.note, NEW.effective_date) IS DISTINCT FROM (OLD.request, OLD.reason_code, OLD.note, OLD.effective_date) THEN
                   RAISE EXCEPTION 'a submitted request is withdrawn before it is changed' USING ERRCODE = '23514';
                 END IF;
+              END IF;
+              IF NEW.status = 'POSTED' AND OLD.status <> 'POSTED' AND NEW.posted_by IS DISTINCT FROM a THEN
+                RAISE EXCEPTION 'a document is posted by the signed actor' USING ERRCODE = '42501';
               END IF;
               RETURN NEW;
             END
@@ -392,6 +399,27 @@ return new class extends Migration
                 IF NEW.reverses_movement_id IS NOT NULL AND d.doc_type <> 'REVERSAL' THEN
                   RAISE EXCEPTION 'only a reversal reverses a leg' USING ERRCODE = '23514';
                 END IF;
+                -- D-084 / doc 04 §Movement codes: each document type posts its own codes (a reversal repeats the codes of
+                -- the document it reverses, checked as the exact negation)
+                IF d.doc_type <> 'REVERSAL' AND NOT (NEW.movement_code = ANY (CASE d.doc_type
+                     WHEN 'RM_RECEIPT' THEN ARRAY['RCPT_SUPPLIER']
+                     WHEN 'INCOMING_RELEASE' THEN ARRAY['INCOMING_RELEASE']
+                     WHEN 'MAT_ISSUE' THEN ARRAY['ISSUE_TO_PROD']
+                     WHEN 'CUSTODY_ACCEPT' THEN ARRAY['CUSTODY_ACCEPT']
+                     WHEN 'MAT_TRANSFER' THEN ARRAY['TRANSFER_LOC', 'TRANSFER_PLANT_OUT', 'TRANSFER_PLANT_IN']
+                     WHEN 'MAT_RETURN' THEN ARRAY['RETURN_FROM_PROD']
+                     WHEN 'LOT_SPLIT' THEN ARRAY['LOT_SPLIT_OUT', 'LOT_SPLIT_IN']
+                     WHEN 'PRODUCTION_POSTING' THEN ARRAY['CONSUME', 'OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT', 'OUTPUT_SCRAP', 'OUTPUT_OTHER']
+                     WHEN 'QC_DISPOSITION' THEN ARRAY['QC_RELEASE', 'QC_HOLD', 'QC_REWORK', 'QC_REJECT']
+                     WHEN 'FG_RECEIPT' THEN ARRAY['FG_RECEIPT']
+                     WHEN 'PICK' THEN ARRAY['PICK']
+                     WHEN 'SHIPMENT' THEN ARRAY['SHIP']
+                     WHEN 'SCRAP_DISPOSITION' THEN ARRAY['SCRAP_DISPOSAL']
+                     WHEN 'REWORK_POSTING' THEN ARRAY['REWORK_IN', 'REWORK_OUT']
+                     WHEN 'STOCK_ADJUSTMENT' THEN ARRAY['ADJ_PLUS', 'ADJ_MINUS']
+                     ELSE ARRAY[]::text[] END)) THEN
+                  RAISE EXCEPTION 'a % document does not post %', d.doc_type, NEW.movement_code USING ERRCODE = '23514';
+                END IF;
                 -- a leg at a physical location moves its balance in the same posting (BR-INV-11, the other direction of
                 -- check_ledger on stock_balances): the balance of the key exists and equals the sum of its legs
                 IF NOT EXISTS (SELECT 1 FROM public.locations l WHERE l.id = NEW.location_id AND l.location_type LIKE 'V\_%')
@@ -449,9 +477,10 @@ return new class extends Migration
                 SELECT 1 FROM public.inventory_movements m JOIN public.lots l ON l.tenant_id = m.tenant_id AND l.id = m.lot_id
                  WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id AND m.movement_code = 'LOT_SPLIT_IN'
                    AND NOT EXISTS (SELECT 1 FROM public.genealogy_edges g
-                                    WHERE g.tenant_id = NEW.tenant_id AND g.document_id = NEW.id AND g.from_lot_id = l.parent_lot_id AND g.to_lot_id = l.id)
+                                    WHERE g.tenant_id = NEW.tenant_id AND g.document_id = NEW.id AND g.from_lot_id = l.parent_lot_id AND g.to_lot_id = l.id
+                                      AND g.qty_from = m.qty_signed AND g.qty_to = m.qty_signed AND g.uom_from = m.uom_id AND g.uom_to = m.uom_id)
               ) THEN
-                RAISE EXCEPTION 'a lot split records the genealogy of each child' USING ERRCODE = '23514';
+                RAISE EXCEPTION 'a lot split records the genealogy of each child, with its quantity' USING ERRCODE = '23514';
               END IF;
               IF d.doc_type = 'REVERSAL' AND (
                    EXISTS (

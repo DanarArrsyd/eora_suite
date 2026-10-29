@@ -274,8 +274,8 @@ it('starts adjustments as requests and never takes legs outside their posting (D
 
     // a posted document needs its number, dates and legs; legs never join it later
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
-        "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, idempotency_key) values (?, ?, 'RM_RECEIPT', 'POSTED', current_date, 'fixture-receipt-2')",
-        [$this->t['tenant'], $f['plant']],
+        "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, posted_by, idempotency_key) values (?, ?, 'RM_RECEIPT', 'POSTED', current_date, ?, 'fixture-receipt-2')",
+        [$this->t['tenant'], $f['plant'], $this->t['actor']],
     )))->toThrow(QueryException::class, 'check');
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
         "insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, posted_at, posted_by, idempotency_key)
@@ -321,6 +321,27 @@ it('starts adjustments as requests and never takes legs outside their posting (D
         }
     });
     expect($post(false))->toThrow(PDOException::class, 'a leg moves its balance in the same posting');
+    // a receipt posts receipt codes only (D-084), and is posted in the signed actor's name
+    expect(fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f) {
+        $doc = (string) $db->selectOne(
+            "insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, posted_at, posted_by, idempotency_key)
+             values (?, ?, 'RM_RECEIPT', 'RCV-P1-2026-0888', 'POSTED', current_date, current_date, current_date, now(), ?, 'fixture-adj-codes') returning id",
+            [$this->t['tenant'], $f['plant'], $this->t['actor']],
+        )->id;
+        foreach ([[1, 'ADJ_MINUS', $f['supplier'], -2], [2, 'ADJ_PLUS', $f['rm'], 2]] as [$no, $code, $location, $qty]) {
+            $db->insert(
+                "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
+                 values (?, ?, ?, ?, ?, ?, ?, ?, 'UNRESTRICTED', ?, ?)",
+                [$this->t['tenant'], $doc, $no, $code, $f['plant'], $location, $f['item'], $f['lot'], $f['pcs'], $qty],
+            );
+        }
+        $db->update('update stock_balances set qty = qty + 2 where item_id = ? and location_id = ?', [$f['item'], $f['rm']]);
+    }))->toThrow(PDOException::class, 'a RM_RECEIPT document does not post ADJ_MINUS');
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, posted_at, posted_by, idempotency_key)
+         values (?, ?, 'RM_RECEIPT', 'RCV-P1-2026-0889', 'POSTED', current_date, current_date, current_date, now(), ?, 'fixture-other-poster')",
+        [$this->t['tenant'], $f['plant'], Str::uuid()->toString()],
+    )))->toThrow(QueryException::class, 'a document is posted by the signed actor');
     // a receipt without its supplier leg would create stock from nothing (BR-INV-03)
     expect(fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f) {
         $doc = (string) $db->selectOne(
@@ -427,7 +448,7 @@ it('keeps a split lot on its parent\'s item and the ledger inside the tenant', f
                 [$this->t['tenant'], $f['lot'], $child, $doc, $f['pcs'], $f['pcs']]);
         }
     });
-    expect($split(false))->toThrow(PDOException::class, 'a lot split records the genealogy of each child');
+    expect($split(false))->toThrow(PDOException::class, 'a lot split records the genealogy of each child, with its quantity');
     $split(true)();
 
     ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
