@@ -527,9 +527,13 @@ final class RoutingController
         $machines = $children('select om.operation_id, om.machine_id, m.code as machine_code, om.is_preferred, om.cycle_seconds_override::text as cycle_seconds_override
                                  from routing_operation_machines om join machines m on m.id = om.machine_id
                                  join routing_operations o on o.id = om.operation_id where o.routing_version_id = ? order by m.code');
-        $tools = $children('select ot.operation_id, ot.die_id, d.code as die_code, ot.quantity, ot.cavities_used
+        // a die moved to another plant or unlinked from the item since stays on an approved version, flagged (B2-AT-39)
+        $tools = $children("select ot.operation_id, ot.die_id, d.code as die_code, ot.quantity, ot.cavities_used,
+                                   d.plant_id = r.plant_id and exists (select 1 from die_items di where di.die_id = d.id and di.item_id = r.item_id and di.status = 'ACTIVE') as available
                               from routing_operation_tools ot join dies d on d.id = ot.die_id
-                              join routing_operations o on o.id = ot.operation_id where o.routing_version_id = ? order by d.code');
+                              join routing_operations o on o.id = ot.operation_id
+                              join routing_versions v on v.id = o.routing_version_id join routings r on r.id = v.routing_id
+                             where o.routing_version_id = ? order by d.code");
         $inspections = $children('select oi.operation_id, oi.characteristic, oi.sampling_note
                                     from routing_operation_inspections oi join routing_operations o on o.id = oi.operation_id
                                    where o.routing_version_id = ? order by oi.created_at, oi.id');
@@ -546,6 +550,7 @@ final class RoutingController
             ])->values()->all(),
             'tools' => ($tools[$o->id] ?? collect())->map(static fn ($t) => [
                 'dieId' => $t->die_id, 'dieCode' => $t->die_code, 'quantity' => $t->quantity, 'cavitiesUsed' => $t->cavities_used,
+                'availableInPlant' => (bool) $t->available,
             ])->values()->all(),
             'inspections' => ($inspections[$o->id] ?? collect())->map(static fn ($i) => [
                 'characteristic' => $i->characteristic, 'samplingNote' => $i->sampling_note,

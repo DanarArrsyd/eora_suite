@@ -48,7 +48,7 @@ const OP = {
   requiresTooling: true,
   isFinalOperation: true,
   machines: [{ machineId: '00000000-0000-7000-8000-000000000201', machineCode: 'M-200', isPreferred: true, cycleSecondsOverride: null }],
-  tools: [{ dieId: '00000000-0000-7000-8000-000000000211', dieCode: 'D-100', quantity: 1, cavitiesUsed: 2 }],
+  tools: [{ dieId: '00000000-0000-7000-8000-000000000211', dieCode: 'D-100', quantity: 1, cavitiesUsed: 2, availableInPlant: true }],
   inspections: [],
 };
 const V1 = {

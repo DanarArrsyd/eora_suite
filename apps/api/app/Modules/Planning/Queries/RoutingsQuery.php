@@ -81,6 +81,12 @@ final class RoutingsQuery extends QueryDefinition
             new Field('itemId', 'r.item_id', Field::UUID, filterable: true),
             new Field('itemCode', 'i.code', sortable: true, search: 'prefix', searchSql: self::itemMatch('r.item_id', 'code')),
             new Field('itemName', 'i.name', search: 'contains', searchSql: self::itemMatch('r.item_id', 'name')),
+            // B2-AT-12: `q` also finds a routing by the process of an operation (e.g. "blank" → Blanking), and the list
+            // filters by a work center the routing runs on — both over versions that are not superseded
+            new Field('operationProcess', 'pt.name', search: 'contains', listed: false,
+                searchSql: self::operationMatch('join process_types pt on pt.id = o.process_type_id where pt.name {match}')),
+            new Field('workCenterId', 'o.work_center_id', Field::UUID, filterable: true, listed: false,
+                filterSql: self::operationMatch('where o.work_center_id {in}')),
             new Field('currentVersionId', 'cur.id', Field::UUID),
             new Field('currentVersionNo', 'cur.version_no', Field::INTEGER),
             new Field('currentEffectiveFrom', 'cur.effective_from::text'),
@@ -121,5 +127,12 @@ final class RoutingsQuery extends QueryDefinition
     public function defaultSort(): array
     {
         return [['itemCode', false], ['code', false]];
+    }
+
+    /** Routings with an operation in a version that is not superseded, narrowed by `$where` over `o` (and its joins). */
+    private static function operationMatch(string $where): string
+    {
+        return "r.id = any (array(select v.routing_id from routing_versions v join routing_operations o on o.routing_version_id = v.id
+                 {$where} and v.status <> 'SUPERSEDED'))";
     }
 }

@@ -90,11 +90,14 @@ it('pages, filters, sorts and searches big master lists through their indexes un
     expect($byName['page'])->toContain('items_name_idx')->and($byName['data'][0]['name'])->toBe('Bolt part 1004');
 
     // routings and BOMs by item code: the item code prefix (^@ on text_pattern_ops) finds the items, the rows come
-    // through an index of their own — and counting needs no version laterals
+    // through an index of their own — and counting needs no version laterals (the versions are read once, by the
+    // search through an operation's process, never once per routing)
     $routings = lpPlans($this, 'planning.routings?q=p00012');
     // (which routings index the planner prefers depends on the statistics; a scan of every routing is never acceptable)
     expect($routings['count'])->toContain('items_code_prefix_idx')->toMatch('/(Index|Index Only|Bitmap Index) Scan (using|on) routings_/')
-        ->not->toContain('Seq Scan on routings')->not->toContain('routing_versions');
+        ->not->toContain('Seq Scan on routings')->not->toMatch('/on routing_versions \w+ \(actual rows=[\d.]+ loops=([2-9]|\d{2,})/');
+    // an operation's process (B2-AT-12): matching process types lead to their operations through their own index
+    expect(lpPlans($this, 'planning.routings?q=blank')['count'])->toContain('routing_operations_process_idx')->not->toContain('Seq Scan on routing_operations');
     expect(array_column($routings['data'], 'itemCode'))->toBe(['P000121', 'P000122', 'P000124', 'P000125', 'P000127', 'P000128']);
     $boms = lpPlans($this, 'planning.bom_versions?q=P00012');
     expect($boms['count'])->toContain('items_code_prefix_idx')->toMatch('/(Index|Index Only|Bitmap Index) Scan (using|on) bom_versions_/')

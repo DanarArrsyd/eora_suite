@@ -7,6 +7,7 @@ namespace App\Platform\Tenancy;
 use App\Platform\Database\EoraPostgresConnection;
 use Closure;
 use Illuminate\Database\DatabaseManager;
+use Illuminate\Support\Facades\Context;
 use LogicException;
 
 /**
@@ -40,7 +41,7 @@ final class TenantTransaction
 
         return $db->transaction(function () use ($db, $context, $work): mixed {
             $binding = $db->transactionBinding() ?? throw new LogicException('Missing transaction binding.');
-            $db->installSignedContext($this->signer->sign($context, $binding['pid'], $binding['xact_us']));
+            $db->installSignedContext($this->signer->sign($context, $binding['pid'], $binding['xact_us']), (string) (Context::get('correlation_id') ?? ''));
 
             return $work($db);
         }, 1);

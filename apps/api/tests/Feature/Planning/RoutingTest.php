@@ -43,7 +43,7 @@ it('drafts a routing with operations, machines, tools and inspections (B2-AT-02,
     spa($this)->putJson('/api/v1/planning/routing-versions/'.$v['id'].'/operations', ['operations' => []], ['If-Match' => '"1"'])->assertStatus(412);
 })->group('integration', 'master');
 
-it('refuses invalid operation lists: duplicate sequence, foreign machine, unlinked die (B2-AT-04, 05, 06)', function () {
+it('refuses invalid operation lists: duplicate sequence, foreign machine, unlinked die (B2-AT-04, 05, 06, 40)', function () {
     orgUser($this, $this->t, 'CSA');
     $s = rtSetup($this, $this->t);
     [, $v] = rtDraft($this, $this->t, $s);

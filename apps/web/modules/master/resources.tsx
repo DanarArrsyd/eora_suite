@@ -113,7 +113,7 @@ const TIME_ZONES: Option[] = (typeof Intl.supportedValuesOf === 'function' ? Int
 const DIE_STATUS = [...STATUS_OPTIONS, { value: 'MAINTENANCE', label: 'In maintenance' }];
 const label = (options: Option[], value: string | null | undefined) => options.find((o) => o.value === value)?.label ?? value ?? '—';
 
-const PLANT_FILTER: FilterField = {
+export const PLANT_FILTER: FilterField = {
   key: 'plantId',
   type: 'entity',
   entity: 'plant',

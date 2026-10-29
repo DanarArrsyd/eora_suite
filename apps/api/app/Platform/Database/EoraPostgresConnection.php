@@ -49,12 +49,14 @@ class EoraPostgresConnection extends PostgresConnection
 
     /**
      * Installs the signed token for this transaction. Executed directly on PDO with a bound parameter so the token
-     * never reaches Laravel's query events, query log or exception messages.
+     * never reaches Laravel's query events, query log or exception messages. The request's correlation id travels in
+     * the same statement (`app.correlation_id`), so audit rows written by database functions carry it too (B2-AT-14);
+     * it is a label only, never trusted for access.
      */
-    public function installSignedContext(string $token): void
+    public function installSignedContext(string $token, string $correlationId = ''): void
     {
-        $statement = $this->getPdo()->prepare("SELECT set_config('app.ctx', ?, true)");
-        $statement->execute([$token]);
+        $statement = $this->getPdo()->prepare("SELECT set_config('app.ctx', ?, true), set_config('app.correlation_id', ?, true)");
+        $statement->execute([$token, preg_match('/^[A-Za-z0-9_-]{8,64}$/', $correlationId) === 1 ? $correlationId : '']);
         $statement->closeCursor();
     }
 }
