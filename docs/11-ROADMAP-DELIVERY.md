@@ -28,7 +28,7 @@ Each slice ends with tests (doc 10), migration + rollback plan, docs update and 
 | B0 Foundation **(COMPLETED, D-053: merged `c19be09`, post-merge CI green)** | Laravel 13 in `apps/api`, versions pinned (D-052), Docker Compose (PostgreSQL 18, Redis 8.6, API), health/readiness, problem+json, correlation ids, JSON logs, CI jobs (Pint, Larastan, Pest incl. arch + integration, OpenAPI/typed-client drift, Docker health), Scramble → `packages/api-client` | D-045, D-047 | green CI on GitHub; PgBouncer and the tenant isolation harness move to B1 (they need tenant context) |
 | B1 Tenancy & access **(doc 25; implementation authorized as milestone M1, D-066 — in progress)** | tenants/companies/plants/memberships/roles/scopes, Sanctum session + CSRF, TenantTransaction + RLS, audit, rate limits, business calendars (ADR-0012) | B0 | T-ISO-01..05 green |
 | B2 Master data **(scope review — doc 26 adds routing header/versions/operations, process catalogue, machines/tooling, BOM–routing map; NOT authorized)** | items, UOM, specs, BOM (+ gross qty per, O-026), routings, conversion profiles, SY/NW versions, customers, suppliers, work centers, locations | B1 | import templates for master data |
-| B3 Inventory posting engine | documents, legs, balances, allocations, genealogy, periods, numbering, idempotency, reversal (ADR-0014) — posting matrix rows 1–13 | B2 | posting-matrix + concurrency suites green |
+| B3 Inventory posting engine | documents, legs, balances, allocations, genealogy, periods, numbering, idempotency, reversal (ADR-0014) — engine for every matrix row 1–13 | B2 | posting-matrix + concurrency suites green for the rows posted in M3 (1, 4, 7, 12, 13 + incoming release; row 2 table + rules, D-096); rows 3, 5, 6, 8–11 green with their documents in M4 (B6/B7) |
 | B4 Demand | Customer PO, SO header/lines, schedule lines, reallocation + exceptions (D-038), blanket (D-039), forecast + consumption (D-040) | B2 | doc 14 #28–#50 green |
 | B5 Planning | WO + snapshots; basic MPS + MRP per D-046 (time-phased netting, safety stock status, lot-for-lot with lead time, BOM-based MRP, manual WO, capacity warnings) | B3, B4; O-015 for WO close | doc 23 #51–#68 green incl. #65 F-1 680 pcs regression |
 | B6 Materials & Production | issue/transfer/return/split, production posting with measurement, outputs, scrap | B3, B5 | doc 14 #1–#5, #19–#24 green |
@@ -44,8 +44,8 @@ The slices above are delivered in this milestone order; R1 scope (D-035) is unch
 |---|---|---|
 | M0 Decisions | — (doc 27, D-054..D-065) | — |
 | M1 Access | B1 | login, users, roles, tenant/plant context |
-| M2 Core master data (scope sheet doc 29, proposed) | B2 | items, UOM, BOM, routing, customers, suppliers, work centers, locations |
-| M3 Ledger | B3 | receipts and movements with correct balances and reversal |
+| M2 Core master data (doc 29; **completed D-095**) | B2 | items, UOM, BOM, routing, customers, suppliers, work centers, locations |
+| M3 Ledger (doc 32, approved D-096) | B3 | receipts and movements with correct balances and reversal |
 | M4 Thin end-to-end flow | B4, B6, B7 (thin), manual WO (G-MPS-6) | PO/SO → WO → issue → production → QC → FG → shipment |
 | M5 Usable | B5 basic MPS/MRP, B8 basic reconciliation, B9 partial (Control Tower on real data), demo data | full R1 vertical slice (doc 21 DoD) on demo data |
 | M6 Online staging | production image (libpq ≥ 17 via PGDG, D-056), hosting (O-008), backup, monitoring | browser/phone access |

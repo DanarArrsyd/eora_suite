@@ -1,6 +1,6 @@
 # 29 — M2 Scope: Core master data (B2) — lembar persetujuan
 
-**Status:** **DISETUJUI 2026-10-14 (D-072)** — owner: "setuju scope M2 sesuai usulan" (termasuk M2-D1..D6 sesuai usulan). Implementasi di branch `feat/m2-…`, PR berurutan mengikuti §1.
+**Status:** **SELESAI 2026-10-29 (D-095)** — exit per §6. Disetujui 2026-10-14 (D-072) — owner: "setuju scope M2 sesuai usulan" (termasuk M2-D1..D6 sesuai usulan). Implementasi di branch `feat/m2-…`, PR berurutan mengikuti §1.
 **Basis:** doc 26 v14 (B2, keputusan §11 disetujui D-058), D-059 (O-003: opsi M default, S per item), D-060 (maker ≠ checker, tanpa threshold), D-044 (kalender), D-046 (G-MPS-5/7), doc 17 §2, doc 18 §2, doc 08, ADR-0001/0007/0008/0013, `docs/uiux/`. M1 selesai (D-071).
 **Tujuan M2:** Anda bisa **mengisi dan memelihara master data manufaktur** — plant, gudang/lokasi, work center, mesin, dies, item, UOM, customer, customer part, supplier, routing multi-operasi dan BOM — lewat layar, dan master bervolume besar juga lewat **import Excel** (daftar template di §1 langkah 6), dengan versi + approval dua orang untuk routing/BOM/map dan audit untuk semuanya. Belum ada stok, transaksi atau planning.
 
@@ -80,6 +80,6 @@ Status per butir §4. **Hijau** = ada bukti otomatis di CI; **OPEN** = belum ter
 | 8 | Dokumen | Hijau | docs 13 (D-072..D-094), 17, 18, 24, 26, ADR-0017/0018, README API. |
 | 9 | Demo/UAT owner | Diterima owner tanpa menjalankan skrip | 2026-10-29 owner: "OK aja sih gw, males ngeceknya gw, wkwkwk, lanjut aja" — skrip `docs/uat/M2-UAT.md` bagian 1–7 **tidak dijalankan**; data bagian 7 (`demo-stamping-2`) sudah disiapkan. Bukti otomatis yang ada: stack e2e `m2-master.spec.ts` (item → routing → submit → approve orang kedua → import file error). |
 
-**Status exit M2:** butir 1–8 hijau setelah PR langkah 8b; butir 9 diterima owner tanpa menjalankan skrip UAT (dicatat apa adanya). Penutupan M2 (keputusan di doc 13) menunggu merge PR 8b.
+**Status exit M2:** butir 1–8 hijau (PR #48, #50); butir 9 diterima owner tanpa menjalankan skrip UAT (dicatat apa adanya). **M2 ditutup 2026-10-29 (D-095).**
 
 **Pilihan owner:** ☑ Setuju scope M2 · ☑ Keputusan M2-D1..D6 sesuai usulan (2026-10-14)
