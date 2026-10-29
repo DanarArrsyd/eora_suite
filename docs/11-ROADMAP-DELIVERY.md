@@ -44,8 +44,8 @@ The slices above are delivered in this milestone order; R1 scope (D-035) is unch
 |---|---|---|
 | M0 Decisions | — (doc 27, D-054..D-065) | — |
 | M1 Access | B1 | login, users, roles, tenant/plant context |
-| M2 Core master data (scope sheet doc 29, proposed) | B2 | items, UOM, BOM, routing, customers, suppliers, work centers, locations |
-| M3 Ledger | B3 | receipts and movements with correct balances and reversal |
+| M2 Core master data (doc 29; **completed D-095**) | B2 | items, UOM, BOM, routing, customers, suppliers, work centers, locations |
+| M3 Ledger (scope sheet doc 32, proposed) | B3 | receipts and movements with correct balances and reversal |
 | M4 Thin end-to-end flow | B4, B6, B7 (thin), manual WO (G-MPS-6) | PO/SO → WO → issue → production → QC → FG → shipment |
 | M5 Usable | B5 basic MPS/MRP, B8 basic reconciliation, B9 partial (Control Tower on real data), demo data | full R1 vertical slice (doc 21 DoD) on demo data |
 | M6 Online staging | production image (libpq ≥ 17 via PGDG, D-056), hosting (O-008), backup, monitoring | browser/phone access |
