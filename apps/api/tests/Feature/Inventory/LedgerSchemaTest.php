@@ -128,6 +128,12 @@ it('never holds a negative or a virtual balance, nor a movement of zero or with 
          values (?, ?, 3, 'RCPT_SUPPLIER', ?, ?, ?, ?, 'UNRESTRICTED', ?, 1, 1, (select id from uoms where code = 'KG'))",
         [$this->t['tenant'], $f['doc'], $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs']],
     )))->toThrow(QueryException::class, 'check');
+    // stock is kept in the item's base unit (PCS here)
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
+         values (?, ?, 3, 'RCPT_SUPPLIER', ?, ?, ?, ?, 'UNRESTRICTED', (select id from uoms where code = 'KG'), 1)",
+        [$this->t['tenant'], $f['doc'], $f['plant'], $f['rm'], $f['item'], $f['lot']],
+    )))->toThrow(QueryException::class, "stock is kept in the item's base unit");
     // M3-D9: OWN only
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
         "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, ownership, uom_id, qty_signed)
@@ -150,6 +156,12 @@ it('reverses a posted document only through a posted reversal by a second person
          values (?, ?, 'REVERSAL', 'SUBMITTED', current_date, ?, ?, 'Wrong supplier', ?) returning id",
         [$this->t['tenant'], $f['plant'], $f['doc'], $this->t['actor'], $key],
     )->id);
+    // a reversal names a reason, not a blank one
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, reverses_document_id, requested_by, note, idempotency_key)
+         values (?, ?, 'REVERSAL', 'SUBMITTED', current_date, ?, ?, '   ', 'fixture-reversal-blank')",
+        [$this->t['tenant'], $f['plant'], $f['doc'], $this->t['actor']],
+    )))->toThrow(QueryException::class, 'check');
     $first = $request('fixture-reversal-1');
     expect(fn () => $request('fixture-reversal-2'))->toThrow(QueryException::class, 'duplicate key'); // one reversal per document
     // the requester never decides; a second person may reject, and a rejected request does not count
@@ -343,6 +355,26 @@ it('closes and reopens a period only on a request decided by a second person (M3
 
 it('keeps a split lot on its parent\'s item and the ledger inside the tenant', function () {
     $f = ledgerFixture($this->t);
+    // a lot split moves from the parent into its own children, at one place: an unrelated lot is refused at commit
+    expect(fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f) {
+        $other = (string) $db->selectOne("insert into lots (tenant_id, item_id, lot_no, origin) values (?, ?, 'L2610-0100', 'RECEIPT') returning id", [$this->t['tenant'], $f['item']])->id;
+        $doc = (string) $db->selectOne(
+            "insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, posted_at, posted_by, idempotency_key)
+             values (?, ?, 'LOT_SPLIT', 'SPL-P1-2026-0001', 'POSTED', current_date, current_date, current_date, now(), ?, 'fixture-split-1') returning id",
+            [$this->t['tenant'], $f['plant'], $this->t['actor']],
+        )->id;
+        foreach ([[1, 'LOT_SPLIT_OUT', $f['lot'], -4], [2, 'LOT_SPLIT_IN', $other, 4]] as [$no, $code, $lot, $qty]) {
+            $db->insert(
+                "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
+                 values (?, ?, ?, ?, ?, ?, ?, ?, 'UNRESTRICTED', ?, ?)",
+                [$this->t['tenant'], $doc, $no, $code, $f['plant'], $f['rm'], $f['item'], $lot, $f['pcs'], $qty],
+            );
+        }
+        $db->update('update stock_balances set qty = qty - 4 where lot_id = ?', [$f['lot']]);
+        $db->insert("insert into stock_balances (tenant_id, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty) values (?, ?, ?, ?, ?, 'UNRESTRICTED', ?, 4)",
+            [$this->t['tenant'], $f['plant'], $f['rm'], $f['item'], $other, $f['pcs']]);
+    }))->toThrow(PDOException::class, 'a lot split moves from a parent into its own children at one place');
+
     ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
         "insert into lots (tenant_id, item_id, lot_no, origin, parent_lot_id) values (?, ?, 'L2610-0002', 'SPLIT', ?)", [$this->t['tenant'], $f['item'], $f['lot']],
     ));

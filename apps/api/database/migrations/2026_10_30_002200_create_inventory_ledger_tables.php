@@ -236,10 +236,11 @@ return new class extends Migration
               CHECK ((source_type IS NULL) = (source_id IS NULL)),
               -- an adjustment names its reason code, a reversal its reason, before it is submitted
               CHECK (doc_type <> 'STOCK_ADJUSTMENT' OR status = 'DRAFT' OR reason_code IS NOT NULL),
-              CHECK (doc_type <> 'REVERSAL' OR status = 'DRAFT' OR note IS NOT NULL),
+              CHECK (doc_type <> 'REVERSAL' OR status = 'DRAFT' OR coalesce(length(btrim(note)), 0) >= 3),
               -- BR-PER-02: a closed-period correction carries its reason code, reason and evidence (in the request) once submitted
               CHECK (correction_of_document_id IS NULL OR status = 'DRAFT'
-                     OR (reason_code IS NOT NULL AND note IS NOT NULL AND request ? 'evidence'))
+                     OR (reason_code IS NOT NULL AND coalesce(length(btrim(note)), 0) >= 3
+                         AND coalesce(length(btrim(request ->> 'evidence')), 0) >= 1))
             );
             -- a document is reversed at most once (a rejected reversal request does not count)
             CREATE UNIQUE INDEX inventory_documents_reversal_uq ON inventory_documents (tenant_id, reverses_document_id)
@@ -429,6 +430,20 @@ return new class extends Migration
               ) THEN
                 RAISE EXCEPTION 'a posting conserves quantity per item, lot and unit' USING ERRCODE = '23514';
               END IF;
+              -- a lot split (doc 04 row 7): out of the parent, into its own children, at one place and status
+              IF d.doc_type = 'LOT_SPLIT' AND (
+                   (SELECT count(DISTINCT (m.location_id, m.stock_status)) FROM public.inventory_movements m WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id) <> 1
+                   OR EXISTS (
+                     SELECT 1 FROM public.inventory_movements m
+                      WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id
+                        AND NOT ((m.movement_code = 'LOT_SPLIT_OUT' AND m.qty_signed < 0) OR (m.movement_code = 'LOT_SPLIT_IN' AND m.qty_signed > 0)))
+                   OR EXISTS (
+                     SELECT 1 FROM public.inventory_movements m JOIN public.lots l ON l.tenant_id = m.tenant_id AND l.id = m.lot_id
+                      WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id AND m.movement_code = 'LOT_SPLIT_IN'
+                        AND NOT EXISTS (SELECT 1 FROM public.inventory_movements p
+                                         WHERE p.tenant_id = NEW.tenant_id AND p.document_id = NEW.id AND p.movement_code = 'LOT_SPLIT_OUT' AND p.lot_id = l.parent_lot_id))) THEN
+                RAISE EXCEPTION 'a lot split moves from a parent into its own children at one place' USING ERRCODE = '23514';
+              END IF;
               IF d.doc_type = 'REVERSAL' AND (
                    EXISTS (
                      SELECT 1 FROM public.inventory_movements o
@@ -458,6 +473,8 @@ return new class extends Migration
             -- M3-D4: a lot-controlled item moves and is held by lot, an item without lot control never; its flag stays as it
             -- is once the item has a lot or a leg
             CREATE OR REPLACE FUNCTION eora_guard_lot_control() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            DECLARE
+              it record;
             BEGIN
               IF TG_TABLE_NAME = 'items' THEN
                 IF NEW.lot_controlled IS DISTINCT FROM OLD.lot_controlled
@@ -474,8 +491,24 @@ return new class extends Migration
                 END IF;
                 RETURN NEW;
               END IF;
-              IF (SELECT i.lot_controlled FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id FOR SHARE) IS DISTINCT FROM (NEW.lot_id IS NOT NULL) THEN
+              SELECT i.lot_controlled, i.base_uom_id INTO it FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id FOR SHARE;
+              IF it.lot_controlled IS DISTINCT FROM (NEW.lot_id IS NOT NULL) THEN
                 RAISE EXCEPTION 'a lot-controlled item moves by lot, an item without lot control without one' USING ERRCODE = '23514';
+              END IF;
+              -- M3-D5, BR-INV-10: the ledger and the balances are in the item's base unit; another unit is only the entered
+              -- quantity, through a conversion of this item between that unit and the base unit
+              IF NEW.uom_id IS DISTINCT FROM it.base_uom_id THEN
+                RAISE EXCEPTION 'stock is kept in the item''s base unit' USING ERRCODE = '23514';
+              END IF;
+              -- nested: plpgsql resolves every field of an expression, and balances have no conversion column
+              IF TG_TABLE_NAME = 'inventory_movements' THEN
+                IF NEW.uom_conversion_id IS NOT NULL AND NOT EXISTS (
+                  SELECT 1 FROM public.uom_conversions c
+                   WHERE c.tenant_id = NEW.tenant_id AND c.id = NEW.uom_conversion_id AND c.item_id = NEW.item_id
+                     AND ((c.from_uom_id = NEW.entered_uom_id AND c.to_uom_id = NEW.uom_id) OR (c.from_uom_id = NEW.uom_id AND c.to_uom_id = NEW.entered_uom_id))
+                ) THEN
+                  RAISE EXCEPTION 'the conversion links the entered unit and the base unit of this item' USING ERRCODE = '23514';
+                END IF;
               END IF;
               RETURN NEW;
             END
