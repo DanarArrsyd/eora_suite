@@ -125,7 +125,8 @@ test('M2 master data end to end on the real stack', async ({ browser }) => {
     await expect(rows).toContainText('Item BRK-A100 already exists.');
     await admin.getByRole('button', { name: 'Submit for commit' }).click();
     await admin.getByRole('button', { name: 'Commit', exact: true }).click();
-    await expect(admin.getByText(/Committed/).first()).toBeVisible({ timeout: 60_000 });
+    // the job summary always lists a Committed count: wait for the worker to have committed the valid row
+    await expect(admin.getByRole('tab', { name: 'Committed, 1' })).toBeVisible({ timeout: 60_000 });
 
     await admin.goto('/master/items');
     await admin.getByRole('searchbox').first().fill('NUT-M10');
