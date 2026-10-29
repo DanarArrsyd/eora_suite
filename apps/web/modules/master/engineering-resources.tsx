@@ -1,7 +1,8 @@
 import { api, call } from '@eora/features/auth';
 import type { Option } from '@eora/features/data';
 import { DomainStatusBadge, type FilterField } from '@eora/features/patterns';
-import { STATUS_OPTIONS } from './resources';
+import { PLANT_FILTER, STATUS_OPTIONS } from './resources';
+import { queryOptions } from './source';
 import type { FormValues, MasterResource, MasterRow } from './types';
 
 /*
@@ -130,10 +131,22 @@ export const ROUTINGS: MasterResource<RoutingRow> = {
   description: 'The sequence of operations that makes an item in a plant. Each change is a new version, approved by a second person.',
   itemLabel: 'routings',
   singular: 'routing',
-  searchPlaceholder: 'Search routing, item code or name…',
+  searchPlaceholder: 'Search routing, item or process…',
   rowLabel: (r) => `${r.code} ${r.itemCode}`,
   defaultSort: [{ id: 'itemCode', desc: false }],
-  filters: [{ key: 'routingKind', type: 'select', source: 'static', label: 'Kind', options: ROUTING_KINDS }, STATUS_FILTER],
+  filters: [
+    PLANT_FILTER,
+    {
+      // routings with an operation on this work center (B2-AT-12)
+      key: 'workCenterId',
+      type: 'select',
+      source: 'api',
+      label: 'Work center',
+      loadOptions: (_deps, signal) => queryOptions('core.work_centers', (r) => `${String(r.plantCode)} / ${String(r.code)} · ${String(r.name)}`, {}, signal),
+    },
+    { key: 'routingKind', type: 'select', source: 'static', label: 'Kind', options: ROUTING_KINDS },
+    STATUS_FILTER,
+  ],
   columns: [
     { id: 'itemCode', header: 'Item', lead: true, sortable: true, cell: (r) => r.itemCode, sub: (r) => r.itemName },
     { id: 'code', header: 'Routing', sortable: true, cell: (r) => r.code, sub: (r) => label(ROUTING_KINDS, r.routingKind) },

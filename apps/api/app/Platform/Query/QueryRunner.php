@@ -78,7 +78,7 @@ final class QueryRunner
         $where = implode(' and ', $clauses);
 
         return new BuiltQuery(
-            select: implode(', ', array_map(static fn (Field $f) => "{$f->sql} as \"{$f->key}\"", $fields)),
+            select: self::select($fields),
             filtered: 'from '.($definition->filterFrom() ?? $definition->from()).' where '.$where,
             where: $where,
             from: $definition->from(),
@@ -100,7 +100,7 @@ final class QueryRunner
      */
     public function find(EoraPostgresConnection $db, QueryDefinition $definition, string $id): ?array
     {
-        $select = implode(', ', array_map(static fn (Field $f) => "{$f->sql} as \"{$f->key}\"", $definition->fields()));
+        $select = self::select($definition->fields());
         $row = $db->selectOne("select {$select} from {$definition->from()} where {$definition->idColumn()} = ?::uuid", [$id]);
 
         return $row === null ? null : $definition->row($row);
@@ -150,8 +150,17 @@ final class QueryRunner
             }
         }
         $cast = $field->type === Field::UUID ? '::uuid' : '';
+        $in = 'in ('.implode(', ', array_fill(0, count($values), "?{$cast}")).')';
 
-        return ["{$field->sql} in (".implode(', ', array_fill(0, count($values), "?{$cast}")).')', $values];
+        return [$field->filterSql !== null ? str_replace('{in}', $in, $field->filterSql) : "{$field->sql} {$in}", $values];
+    }
+
+    /** @param  array<array-key, Field>  $fields */
+    private static function select(array $fields): string
+    {
+        $listed = array_filter($fields, static fn (Field $f) => $f->listed);
+
+        return implode(', ', array_map(static fn (Field $f) => "{$f->sql} as \"{$f->key}\"", $listed));
     }
 
     /**

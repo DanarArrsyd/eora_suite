@@ -124,6 +124,8 @@ Akun: `csa@demo-stamping-2.test` dan `ppc@demo-stamping-2.test`. `eora:demo:mast
 | 5 | Sebagai `ppc`: **Submit for approval**. Login `csa` → routing yang sama → **Approve**. | Version 1 **Approved**, "In use", approved by csa. | |
 | 6 | Sebagai `csa`: Import → **New import** → Template **Items** → file `docs/uat/samples/99-items-with-errors.xlsx` → **Upload and check**. | 6 baris: 1 valid, 5 error dengan pesan per baris: "Unit BOX does not exist…", "Item NUT-M10 is also on row 3 of this file.", "Item type: use one of …", "Drawing rev needs a drawing no.", "Item BRK-A100 already exists." **Error file** berisi kelima baris itu. | |
 | 7 | **Submit for commit** → **Commit**. | 1 baris Committed; item **NUT-M10** muncul di Items; baris error tidak tersimpan. | |
+| 8 | Master Data → **Routings** → ketik `blank` di pencarian; lalu filter **Work center** = WLD-NUT. (langkah 8b, B2-AT-12) | `blank` menemukan routing yang punya operasi Blanking (BRK-A100, PLT-C300); filter WLD-NUT menyisakan BRK-A100. | |
+| 9 | Sebagai `csa`: Work Centers → Dies & tooling → die `D-A100-BL` → pindahkan ke plant lain (bila ada plant kedua), lalu buka routing BRK-A100 versi Approved. (B2-AT-39) | Di kolom Dies & tooling: "D-A100-BL (tooling not available in plant)"; versi tetap terbaca dan tidak berubah. | |
 
 ## 8. Pernyataan owner (exit M2, doc 29 §4 butir 9)
 | Pernyataan | Hasil |

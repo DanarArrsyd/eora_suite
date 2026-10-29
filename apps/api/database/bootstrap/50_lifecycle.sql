@@ -125,22 +125,24 @@ BEGIN
        SET status = 'SUPERSEDED', effective_to = ver.effective_from - 1, superseded_by_version_id = ver.id, superseded_at = pg_catalog.now()
      WHERE id = previous.id;
     SELECT pg_catalog.to_jsonb(rv) INTO after_row FROM public.routing_versions rv WHERE rv.id = previous.id;
-    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail, correlation_id)
     VALUES (ctx_tenant, 'routing_version.superseded', 'routing_version', previous.id, rt.plant_id,
             pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
             pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
-            pg_catalog.jsonb_build_object('supersededBy', ver.id));
+            pg_catalog.jsonb_build_object('supersededBy', ver.id),
+            (SELECT c FROM pg_catalog.current_setting('app.correlation_id', true) c WHERE c ~ '^[A-Za-z0-9_-]{8,64}$'));
     superseded := previous.id;
   END LOOP;
 
   SELECT pg_catalog.to_jsonb(rv) INTO before_row FROM public.routing_versions rv WHERE rv.id = ver.id;
   UPDATE public.routing_versions SET status = 'APPROVED', approved_by = ctx_actor, approved_at = pg_catalog.now() WHERE id = ver.id;
   SELECT pg_catalog.to_jsonb(rv) INTO after_row FROM public.routing_versions rv WHERE rv.id = ver.id;
-  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail, correlation_id)
   VALUES (ctx_tenant, 'routing_version.approved', 'routing_version', ver.id, rt.plant_id,
           pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
           pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
-          CASE WHEN superseded IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('supersedes', superseded) END);
+          CASE WHEN superseded IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('supersedes', superseded) END,
+            (SELECT c FROM pg_catalog.current_setting('app.correlation_id', true) c WHERE c ~ '^[A-Za-z0-9_-]{8,64}$'));
 
   RETURN superseded;
 END
@@ -240,22 +242,24 @@ BEGIN
        SET status = 'SUPERSEDED', effective_to = ver.effective_from - 1, superseded_by_version_id = ver.id, superseded_at = pg_catalog.now()
      WHERE id = previous.id;
     SELECT pg_catalog.to_jsonb(bv) INTO after_row FROM public.bom_versions bv WHERE bv.id = previous.id;
-    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail, correlation_id)
     VALUES (ctx_tenant, 'bom_version.superseded', 'bom_version', previous.id, NULL,
             pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
             pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
-            pg_catalog.jsonb_build_object('supersededBy', ver.id));
+            pg_catalog.jsonb_build_object('supersededBy', ver.id),
+            (SELECT c FROM pg_catalog.current_setting('app.correlation_id', true) c WHERE c ~ '^[A-Za-z0-9_-]{8,64}$'));
     superseded := previous.id;
   END LOOP;
 
   SELECT pg_catalog.to_jsonb(bv) INTO before_row FROM public.bom_versions bv WHERE bv.id = ver.id;
   UPDATE public.bom_versions SET status = 'APPROVED', approved_by = ctx_actor, approved_at = pg_catalog.now() WHERE id = ver.id;
   SELECT pg_catalog.to_jsonb(bv) INTO after_row FROM public.bom_versions bv WHERE bv.id = ver.id;
-  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail, correlation_id)
   VALUES (ctx_tenant, 'bom_version.approved', 'bom_version', ver.id, NULL,
           pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
           pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
-          CASE WHEN superseded IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('supersedes', superseded) END);
+          CASE WHEN superseded IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('supersedes', superseded) END,
+            (SELECT c FROM pg_catalog.current_setting('app.correlation_id', true) c WHERE c ~ '^[A-Za-z0-9_-]{8,64}$'));
 
   RETURN superseded;
 END
@@ -334,22 +338,24 @@ BEGIN
     SELECT pg_catalog.to_jsonb(m) INTO before_row FROM public.bom_routing_maps m WHERE m.id = previous.id;
     UPDATE public.bom_routing_maps SET status = 'SUPERSEDED', superseded_by_map_id = mp.id, superseded_at = pg_catalog.now() WHERE id = previous.id;
     SELECT pg_catalog.to_jsonb(m) INTO after_row FROM public.bom_routing_maps m WHERE m.id = previous.id;
-    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail, correlation_id)
     VALUES (ctx_tenant, 'bom_routing_map.superseded', 'bom_routing_map', previous.id, mp.plant_id,
             pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
             pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
-            pg_catalog.jsonb_build_object('supersededBy', mp.id));
+            pg_catalog.jsonb_build_object('supersededBy', mp.id),
+            (SELECT c FROM pg_catalog.current_setting('app.correlation_id', true) c WHERE c ~ '^[A-Za-z0-9_-]{8,64}$'));
     superseded := previous.id;
   END LOOP;
 
   SELECT pg_catalog.to_jsonb(m) INTO before_row FROM public.bom_routing_maps m WHERE m.id = mp.id;
   UPDATE public.bom_routing_maps SET status = 'APPROVED', approved_by = ctx_actor, approved_at = pg_catalog.now() WHERE id = mp.id;
   SELECT pg_catalog.to_jsonb(m) INTO after_row FROM public.bom_routing_maps m WHERE m.id = mp.id;
-  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail, correlation_id)
   VALUES (ctx_tenant, 'bom_routing_map.approved', 'bom_routing_map', mp.id, mp.plant_id,
           pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
           pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
-          CASE WHEN superseded IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('supersedes', superseded) END);
+          CASE WHEN superseded IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('supersedes', superseded) END,
+            (SELECT c FROM pg_catalog.current_setting('app.correlation_id', true) c WHERE c ~ '^[A-Za-z0-9_-]{8,64}$'));
 
   RETURN superseded;
 END
@@ -424,22 +430,24 @@ BEGIN
     SELECT pg_catalog.to_jsonb(w) INTO before_row FROM public.item_weights w WHERE w.id = previous.id;
     UPDATE public.item_weights SET effective_to = ver.effective_from - 1, superseded_by_id = ver.id WHERE id = previous.id;
     SELECT pg_catalog.to_jsonb(w) INTO after_row FROM public.item_weights w WHERE w.id = previous.id;
-    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail, correlation_id)
     VALUES (ctx_tenant, 'item_weight.ended', 'item_weight', previous.id, NULL,
             pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
             pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
-            pg_catalog.jsonb_build_object('replacedBy', ver.id));
+            pg_catalog.jsonb_build_object('replacedBy', ver.id),
+            (SELECT c FROM pg_catalog.current_setting('app.correlation_id', true) c WHERE c ~ '^[A-Za-z0-9_-]{8,64}$'));
     replaced := previous.id;
   END LOOP;
 
   SELECT pg_catalog.to_jsonb(w) INTO before_row FROM public.item_weights w WHERE w.id = ver.id;
   UPDATE public.item_weights SET status = 'VALIDATED', validated_by = ctx_actor, validated_at = pg_catalog.now() WHERE id = ver.id;
   SELECT pg_catalog.to_jsonb(w) INTO after_row FROM public.item_weights w WHERE w.id = ver.id;
-  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail, correlation_id)
   VALUES (ctx_tenant, 'item_weight.validated', 'item_weight', ver.id, NULL,
           pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
           pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
-          CASE WHEN replaced IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('replaces', replaced) END);
+          CASE WHEN replaced IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('replaces', replaced) END,
+            (SELECT c FROM pg_catalog.current_setting('app.correlation_id', true) c WHERE c ~ '^[A-Za-z0-9_-]{8,64}$'));
 
   RETURN replaced;
 END
@@ -513,22 +521,24 @@ BEGIN
     SELECT pg_catalog.to_jsonb(v) INTO before_row FROM public.conversion_profile_versions v WHERE v.id = previous.id;
     UPDATE public.conversion_profile_versions SET effective_to = ver.effective_from - 1, superseded_by_id = ver.id WHERE id = previous.id;
     SELECT pg_catalog.to_jsonb(v) INTO after_row FROM public.conversion_profile_versions v WHERE v.id = previous.id;
-    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+    INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail, correlation_id)
     VALUES (ctx_tenant, 'conversion_profile_version.ended', 'conversion_profile_version', previous.id, NULL,
             pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
             pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
-            pg_catalog.jsonb_build_object('replacedBy', ver.id));
+            pg_catalog.jsonb_build_object('replacedBy', ver.id),
+            (SELECT c FROM pg_catalog.current_setting('app.correlation_id', true) c WHERE c ~ '^[A-Za-z0-9_-]{8,64}$'));
     replaced := previous.id;
   END LOOP;
 
   SELECT pg_catalog.to_jsonb(v) INTO before_row FROM public.conversion_profile_versions v WHERE v.id = ver.id;
   UPDATE public.conversion_profile_versions SET status = 'VALIDATED', validated_by = ctx_actor, validated_at = pg_catalog.now() WHERE id = ver.id;
   SELECT pg_catalog.to_jsonb(v) INTO after_row FROM public.conversion_profile_versions v WHERE v.id = ver.id;
-  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail)
+  INSERT INTO public.audit_events (tenant_id, action, entity_type, entity_id, plant_id, before_hash, after_hash, detail, correlation_id)
   VALUES (ctx_tenant, 'conversion_profile_version.validated', 'conversion_profile_version', ver.id, NULL,
           pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(before_row::text, 'UTF8')), 'hex'),
           pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(after_row::text, 'UTF8')), 'hex'),
-          CASE WHEN replaced IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('replaces', replaced) END);
+          CASE WHEN replaced IS NULL THEN '{}'::jsonb ELSE pg_catalog.jsonb_build_object('replaces', replaced) END,
+            (SELECT c FROM pg_catalog.current_setting('app.correlation_id', true) c WHERE c ~ '^[A-Za-z0-9_-]{8,64}$'));
 
   RETURN replaced;
 END

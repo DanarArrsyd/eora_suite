@@ -96,7 +96,7 @@ type Operation = {
   requiresTooling: boolean;
   isFinalOperation: boolean;
   machines: { machineId: string; machineCode: string; isPreferred: boolean; cycleSecondsOverride: string | null }[];
-  tools: { dieId: string; dieCode: string; quantity: number; cavitiesUsed: number | null }[];
+  tools: { dieId: string; dieCode: string; quantity: number; cavitiesUsed: number | null; availableInPlant: boolean }[];
   inspections: { characteristic: string; samplingNote: string | null }[];
 };
 type VersionDetail = VersionRow & { operations: Operation[] };
@@ -515,7 +515,19 @@ function VersionBody({
     {
       id: 'tools',
       header: 'Dies & tooling',
-      cell: (o) => (o.tools.length ? o.tools.map((t) => t.dieCode).join(', ') : o.requiresTooling ? 'Needed, none chosen' : '—'),
+      // a die moved to another plant or unlinked from the item stays on the version, flagged (B2-AT-39)
+      cell: (o) =>
+        o.tools.length
+          ? o.tools.map((t, i) => (
+              <span key={t.dieId}>
+                {i > 0 ? ', ' : null}
+                {t.dieCode}
+                {t.availableInPlant ? null : <span className="font-medium text-stat-warn-fg"> (tooling not available in plant)</span>}
+              </span>
+            ))
+          : o.requiresTooling
+            ? 'Needed, none chosen'
+            : '—',
     },
     {
       id: 'inspection',
