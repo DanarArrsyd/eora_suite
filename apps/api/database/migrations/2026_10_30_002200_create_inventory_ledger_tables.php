@@ -177,6 +177,10 @@ return new class extends Migration
               approved boolean := NEW.doc_type IN ('STOCK_ADJUSTMENT', 'REVERSAL') OR NEW.correction_of_document_id IS NOT NULL;
               frozen text[] := ARRAY['status', 'updated_at', 'updated_by', 'version'];
             BEGIN
+              -- fail closed on its own, not only through the audit stamp
+              IF a IS NULL THEN
+                RAISE EXCEPTION 'no signed actor context' USING ERRCODE = '42501';
+              END IF;
               IF TG_OP = 'INSERT' THEN
                 IF NEW.requested_by IS DISTINCT FROM NULL AND NEW.requested_by IS DISTINCT FROM a THEN
                   RAISE EXCEPTION 'a request is made by the signed actor' USING ERRCODE = '42501';
@@ -216,7 +220,7 @@ return new class extends Migration
                   IF OLD.status <> 'SUBMITTED' THEN
                     RAISE EXCEPTION 'only a submitted request is decided' USING ERRCODE = '23514';
                   END IF;
-                  IF NEW.decided_by IS DISTINCT FROM a OR a = OLD.requested_by THEN
+                  IF NEW.decided_by IS NULL OR NEW.decided_by <> a OR a = OLD.requested_by THEN
                     RAISE EXCEPTION 'a request is decided by a second person' USING ERRCODE = '42501';
                   END IF;
                   IF (NEW.request, NEW.reason_code, NEW.note, NEW.effective_date, NEW.original_effective_date)
