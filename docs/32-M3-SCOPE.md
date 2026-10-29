@@ -8,7 +8,7 @@
 **Backend (`apps/api`), PR berurutan (setiap langkah: migration + rollback, tes RLS sebagai role non-superuser, OpenAPI, docs)**
 1. **Fondasi ledger:** `lots`, `inventory_documents`, `inventory_movements` (append-only, `movement_code` CHECK katalog D-084), `stock_balances` (`CHECK qty >= 0`, hanya lokasi fisik), `stock_allocations` (tabel + aturan, dipakai M4), `genealogy_edges`, `inventory_periods`, counter nomor dokumen (D-049), `idempotency_records`. Grant: runtime role tanpa UPDATE/DELETE pada movement; hanya service yang menulis (BR-INV-01).
 2. **`InventoryPostingService`:** satu transaksi — validasi → kalender (production date, shift, BR-PER-04) → periode OPEN (BR-PER-01) → lock saldo urut kunci (`FOR UPDATE`, `lock_timeout` 3 s) → cek saldo ≥ 0 dan alokasi → dokumen + leg + genealogy → proyeksi saldo → outbox + audit → commit. Idempotency key wajib (replay = hasil sama; payload beda → 409). Retry terbatas pada `40001`/`40P01`. Kode movement dipilih service dari matrix, bukan dari klien.
-3. **Penerimaan bahan (`RM_RECEIPT`, baris 1):** dari `V_SUPPLIER` ke gudang RM; lot dibuat saat terima; item "incoming release required" masuk `BLOCKED`, lainnya `UNRESTRICTED`. **Incoming release** (`INCOMING_RELEASE`, D-062): `BLOCKED → UNRESTRICTED` manual.
+3. **Penerimaan bahan (`RM_RECEIPT`, baris 1):** dari `V_SUPPLIER` ke gudang RM; lot dibuat saat terima **hanya untuk item lot-controlled** (item tanpa kontrol lot memakai saldo tanpa lot, M3-D4); item "incoming release required" masuk `BLOCKED`, lainnya `UNRESTRICTED`. **Incoming release** (`INCOMING_RELEASE`, D-062): `BLOCKED → UNRESTRICTED` manual.
 4. **Transfer (`MAT_TRANSFER`, baris 4):** antar lokasi/gudang dalam satu plant (satu langkah). Transfer antar plant dua langkah — lihat M3-D6.
 5. **Split lot / remnant (`LOT_SPLIT`, baris 7):** lot anak di lokasi yang sama + genealogy edge.
 6. **Adjustment (`STOCK_ADJUSTMENT`, baris 12):** diminta dengan reason code, di-approve orang kedua (D-060, SoD-02); tidak pernah dari variance yang tidak terjelaskan (D-024).
@@ -48,7 +48,7 @@
 2. Konkurensi: dua posting paralel ke saldo yang sama tidak pernah membuat saldo negatif atau ganda; deadlock/serialisasi di-retry terbatas (doc 20 §8); replay idempotency mengembalikan hasil yang sama; payload beda → 409.
 3. Append-only: UPDATE/DELETE movement ditolak oleh grant (sebagai role runtime, bukan superuser); koreksi hanya lewat reversal; reversal dari reversal ditolak.
 4. Dua orang: adjustment dan reversal tidak bisa di-approve oleh peminta (juga lewat SQL langsung).
-5. Periode: posting ke periode tertutup → 409 `PERIOD_CLOSED`; production date mengikuti cut-off kalender plant (BR-PER-04).
+5. Periode: posting ke periode tertutup → 409 `PERIOD_CLOSED`; production date mengikuti cut-off kalender plant (BR-PER-04); **koreksi periode tertutup** diposting di periode terbuka dengan `correction_of_document_id`, tanggal asli, alasan, bukti dan approver kedua (BR-PER-02); **reopen periode** hanya lewat permintaan CSA + approver independen, tercatat sebagai kejadian luar biasa (BR-PER-03). Ketiganya juga ada di skrip UAT M3.
 6. Rebuild proyeksi saldo dari ledger menghasilkan angka yang sama (BR-INV-11); daftar saldo dan ledger ribuan baris memakai index (EXPLAIN, D-093).
 7. Isolasi tenant dan scope plant untuk semua tabel baru (RLS, composite FK); OpenAPI + typed client tanpa drift; migrate round-trip.
 8. Gate frontend doc 22 §4 hijau + stack e2e M3 (terima → transfer → split → adjustment dua orang → reversal dua orang → saldo cocok).
