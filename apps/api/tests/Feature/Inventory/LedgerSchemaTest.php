@@ -374,6 +374,32 @@ it('keeps a split lot on its parent\'s item and the ledger inside the tenant', f
         $db->insert("insert into stock_balances (tenant_id, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty) values (?, ?, ?, ?, ?, 'UNRESTRICTED', ?, 4)",
             [$this->t['tenant'], $f['plant'], $f['rm'], $f['item'], $other, $f['pcs']]);
     }))->toThrow(PDOException::class, 'a lot split moves from a parent into its own children at one place');
+    // a proper split of the parent into its child also records the parent → child genealogy
+    $split = fn (bool $edge) => fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f, $edge) {
+        $child = (string) $db->selectOne("insert into lots (tenant_id, item_id, lot_no, origin, parent_lot_id) values (?, ?, ?, 'SPLIT', ?) returning id",
+            [$this->t['tenant'], $f['item'], 'L2610-'.random_int(2000, 2999), $f['lot']])->id;
+        $doc = (string) $db->selectOne(
+            "insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, posted_at, posted_by, idempotency_key)
+             values (?, ?, 'LOT_SPLIT', ?, 'POSTED', current_date, current_date, current_date, now(), ?, ?) returning id",
+            [$this->t['tenant'], $f['plant'], 'SPL-P1-2026-'.random_int(1000, 9999), $this->t['actor'], 'fixture-split-'.Str::random(6)],
+        )->id;
+        foreach ([[1, 'LOT_SPLIT_OUT', $f['lot'], -4], [2, 'LOT_SPLIT_IN', $child, 4]] as [$no, $code, $lot, $qty]) {
+            $db->insert(
+                "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
+                 values (?, ?, ?, ?, ?, ?, ?, ?, 'UNRESTRICTED', ?, ?)",
+                [$this->t['tenant'], $doc, $no, $code, $f['plant'], $f['rm'], $f['item'], $lot, $f['pcs'], $qty],
+            );
+        }
+        $db->update('update stock_balances set qty = qty - 4 where lot_id = ?', [$f['lot']]);
+        $db->insert("insert into stock_balances (tenant_id, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty) values (?, ?, ?, ?, ?, 'UNRESTRICTED', ?, 4)",
+            [$this->t['tenant'], $f['plant'], $f['rm'], $f['item'], $child, $f['pcs']]);
+        if ($edge) {
+            $db->insert('insert into genealogy_edges (tenant_id, from_lot_id, to_lot_id, document_id, qty_from, uom_from, qty_to, uom_to) values (?, ?, ?, ?, 4, ?, 4, ?)',
+                [$this->t['tenant'], $f['lot'], $child, $doc, $f['pcs'], $f['pcs']]);
+        }
+    });
+    expect($split(false))->toThrow(PDOException::class, 'a lot split records the genealogy of each child');
+    $split(true)();
 
     ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
         "insert into lots (tenant_id, item_id, lot_no, origin, parent_lot_id) values (?, ?, 'L2610-0002', 'SPLIT', ?)", [$this->t['tenant'], $f['item'], $f['lot']],

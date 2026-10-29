@@ -444,6 +444,15 @@ return new class extends Migration
                                          WHERE p.tenant_id = NEW.tenant_id AND p.document_id = NEW.id AND p.movement_code = 'LOT_SPLIT_OUT' AND p.lot_id = l.parent_lot_id))) THEN
                 RAISE EXCEPTION 'a lot split moves from a parent into its own children at one place' USING ERRCODE = '23514';
               END IF;
+              -- and records the parent → child genealogy of every child it creates (traceability, doc 17 §Genealogy)
+              IF d.doc_type = 'LOT_SPLIT' AND EXISTS (
+                SELECT 1 FROM public.inventory_movements m JOIN public.lots l ON l.tenant_id = m.tenant_id AND l.id = m.lot_id
+                 WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id AND m.movement_code = 'LOT_SPLIT_IN'
+                   AND NOT EXISTS (SELECT 1 FROM public.genealogy_edges g
+                                    WHERE g.tenant_id = NEW.tenant_id AND g.document_id = NEW.id AND g.from_lot_id = l.parent_lot_id AND g.to_lot_id = l.id)
+              ) THEN
+                RAISE EXCEPTION 'a lot split records the genealogy of each child' USING ERRCODE = '23514';
+              END IF;
               IF d.doc_type = 'REVERSAL' AND (
                    EXISTS (
                      SELECT 1 FROM public.inventory_movements o
