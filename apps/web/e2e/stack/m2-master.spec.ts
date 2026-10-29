@@ -108,6 +108,9 @@ test('M2 master data end to end on the real stack', async ({ browser }) => {
   await test.step('the administrator approves it: a second person', async () => {
     await admin.goto('/master/routings');
     await admin.getByRole('searchbox').first().fill(ITEM);
+    // the search is debounced into the URL: open the routing only after it settled, or the late search update replaces
+    // the routing page with the list again
+    await expect(admin).toHaveURL(new RegExp(`q=${ITEM}`));
     await admin.getByRole('button', { name: new RegExp(`Open R1 ${ITEM}`) }).click();
     await expect(admin.getByRole('heading', { level: 1, name: `${ITEM} routing R1` })).toBeVisible();
     await admin.getByRole('button', { name: 'Approve' }).click();

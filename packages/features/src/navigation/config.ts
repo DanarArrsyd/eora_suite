@@ -223,7 +223,7 @@ export const NAV_MODULES: readonly NavModule[] = [
         label: 'Receiving',
         items: [
           { id: 'rm-receipts', label: 'RM Receipts', icon: PackagePlus, release: 'R1', phase: 'later' },
-          { id: 'incoming-release', label: 'Incoming Release', icon: ShieldCheck, release: 'R2', decision: 'O-013', phase: 'later' },
+          { id: 'incoming-release', label: 'Incoming Release', icon: ShieldCheck, release: 'R1', phase: 'later' },
         ],
       },
       {
@@ -326,7 +326,7 @@ export const NAV_MODULES: readonly NavModule[] = [
           { id: 'stock-count', label: 'Stock Count', icon: ClipboardList, release: 'R2', phase: 'later' },
           { id: 'adjustments', label: 'Adjustments', icon: SlidersHorizontal, release: 'R1', badge: 'approvals', phase: 'later' },
           { id: 'reversals', label: 'Reversals', icon: RotateCcw, release: 'R1', phase: 'later' },
-          { id: 'period-close', label: 'Period Close', icon: Lock, release: 'R2', phase: 'later' },
+          { id: 'period-close', label: 'Period Close', icon: Lock, release: 'R1', phase: 'later' },
         ],
       },
     ],
