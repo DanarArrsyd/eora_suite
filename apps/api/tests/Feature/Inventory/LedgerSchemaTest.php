@@ -88,18 +88,25 @@ it('never holds a negative or a virtual balance, nor a movement of zero or with 
         "insert into stock_balances (tenant_id, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty) values (?, ?, ?, ?, ?, 'UNRESTRICTED', ?, 1)",
         [$this->t['tenant'], $f['plant'], $f['supplier'], $f['item'], $f['lot'], $f['pcs']],
     )))->toThrow(QueryException::class, 'virtual location holds no balance');
-    // one balance per key, also for items without lot control (lot NULL)
-    $noLot = fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
-        "insert into stock_balances (tenant_id, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty) values (?, ?, ?, ?, null, 'UNRESTRICTED', ?, 1)",
-        [$this->t['tenant'], $f['plant'], $f['rm'], $f['item'], $f['pcs']],
+    // lot control (M3-D4): a lot-controlled item is held by lot; an item without lot control has one balance per key, lot NULL
+    $balance = fn (string $item, ?string $lot) => fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into stock_balances (tenant_id, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty) values (?, ?, ?, ?, ?, 'UNRESTRICTED', ?, 1)",
+        [$this->t['tenant'], $f['plant'], $f['rm'], $item, $lot, $f['pcs']],
     ));
-    $noLot();
-    expect($noLot)->toThrow(QueryException::class, 'duplicate key');
+    expect($balance($f['item'], null))->toThrow(QueryException::class, 'a lot-controlled item moves by lot');
+    $oil = ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
+        "insert into items (tenant_id, code, name, item_type, base_uom_id, lot_controlled) values (?, 'OIL-1', 'Oil', 'CONSUMABLE', ?, false) returning id", [$this->t['tenant'], $f['pcs']],
+    )->id);
+    $balance($oil, null)();
+    expect($balance($oil, null))->toThrow(QueryException::class, 'duplicate key');
+    // the flag of an item with stock history stays as it is
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->update('update items set lot_controlled = false where id = ?', [$f['item']])))
+        ->toThrow(QueryException::class, 'lot control is fixed');
 
     $leg = fn (int $no, string $code, float $qty) => fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
-        "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, stock_status, uom_id, qty_signed)
-         values (?, ?, ?, ?, ?, ?, ?, 'UNRESTRICTED', ?, ?)",
-        [$this->t['tenant'], $f['doc'], $no, $code, $f['plant'], $f['rm'], $f['item'], $f['pcs'], $qty],
+        "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
+         values (?, ?, ?, ?, ?, ?, ?, ?, 'UNRESTRICTED', ?, ?)",
+        [$this->t['tenant'], $f['doc'], $no, $code, $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs'], $qty],
     ));
     expect($leg(3, 'RCPT_SUPPLIER', 0))->toThrow(QueryException::class, 'check');
     expect($leg(3, 'WIP_MOVE', 1))->toThrow(QueryException::class, 'check');
@@ -116,8 +123,8 @@ it('reverses a posted document only through a posted reversal by a second person
         ->toThrow(QueryException::class, 'a document is reversed by a posted reversal');
 
     $request = fn (string $key) => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
-        "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, reverses_document_id, requested_by, idempotency_key)
-         values (?, ?, 'REVERSAL', 'SUBMITTED', current_date, ?, ?, ?) returning id",
+        "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, reverses_document_id, requested_by, note, idempotency_key)
+         values (?, ?, 'REVERSAL', 'SUBMITTED', current_date, ?, ?, 'Wrong supplier', ?) returning id",
         [$this->t['tenant'], $f['plant'], $f['doc'], $this->t['actor'], $key],
     )->id);
     $first = $request('fixture-reversal-1');
@@ -168,6 +175,11 @@ it('starts adjustments as requests and never takes legs outside their posting (D
     expect($insert('POSTED', $this->t['actor']))->toThrow(QueryException::class, 'starts as a request');
     expect($insert('SUBMITTED', Str::uuid()->toString()))->toThrow(QueryException::class, 'a request is made by the signed actor');
     $insert('SUBMITTED', $this->t['actor'])();
+    // a submitted adjustment names its reason code
+    expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, requested_by, idempotency_key) values (?, ?, 'STOCK_ADJUSTMENT', 'SUBMITTED', current_date, ?, 'fixture-adj-noreason')",
+        [$this->t['tenant'], $f['plant'], $this->t['actor']],
+    )))->toThrow(QueryException::class, 'check');
 
     // a posted document needs its number, dates and legs; legs never join it later
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
@@ -184,6 +196,52 @@ it('starts adjustments as requests and never takes legs outside their posting (D
          values (?, ?, 3, 'RCPT_SUPPLIER', ?, ?, ?, ?, 'UNRESTRICTED', ?, 1)",
         [$this->t['tenant'], $f['doc'], $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs']],
     )))->toThrow(PDOException::class, 'legs are written only with the posting of their document');
+    // only a reversal links a leg to the leg it reverses
+    expect(fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f) {
+        $doc = (string) $db->selectOne(
+            "insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, posted_at, posted_by, idempotency_key)
+             values (?, ?, 'MAT_TRANSFER', 'TRF-P1-2026-0002', 'POSTED', current_date, current_date, current_date, now(), ?, 'fixture-transfer-2') returning id",
+            [$this->t['tenant'], $f['plant'], $this->t['actor']],
+        )->id;
+        $leg = $db->selectOne('select id from inventory_movements where document_id = ? and leg_no = 2', [$f['doc']]);
+        $db->insert(
+            "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, reverses_movement_id, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
+             values (?, ?, 1, 'TRANSFER_LOC', ?, ?, ?, ?, ?, 'UNRESTRICTED', ?, -1)",
+            [$this->t['tenant'], $doc, $leg->id, $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs']],
+        );
+    }))->toThrow(PDOException::class, 'only a reversal reverses a leg');
+})->group('integration', 'inventory');
+
+it('closes and reopens a period only on a request decided by a second person (M3-D8, BR-PER-03)', function () {
+    $second = Str::uuid()->toString();
+    $period = ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
+        "insert into inventory_periods (tenant_id, plant_id, period) values (?, ?, date_trunc('month', current_date)::date) returning id", [$this->t['tenant'], $this->t['plants'][0]],
+    )->id);
+    $as = fn (string $actor, string $set, array $bindings = []) => fn () => ledgerAsTenantActor($this->t, $actor, fn (EoraPostgresConnection $db) => $db->update(
+        "update inventory_periods set {$set} where id = ?", [...$bindings, $period],
+    ));
+    $me = $this->t['actor'];
+    // closing straight away, or in one person's name, is refused
+    expect($as($me, "status = 'CLOSED', close_requested_by = ?, close_requested_at = now(), closed_by = ?, closed_at = now()", [$me, $me]))
+        ->toThrow(QueryException::class, 'a period goes OPEN');
+    expect($as($me, "status = 'CLOSING', close_requested_by = ?, close_requested_at = now()", [$second]))->toThrow(QueryException::class, 'requested by the signed actor');
+    $as($me, "status = 'CLOSING', close_requested_by = ?, close_requested_at = now()", [$me])();
+    // the requester cannot hand the request to someone else and close it themselves
+    expect($as($me, 'close_requested_by = ?', [$second]))->toThrow(QueryException::class, 'a period changes only by its lifecycle');
+    expect($as($me, "status = 'CLOSED', closed_by = ?, closed_at = now()", [$me]))->toThrow(QueryException::class, 'closed by a second person');
+    $as($second, "status = 'CLOSED', closed_by = ?, closed_at = now()", [$second])();
+
+    // reopen: requested, then decided by someone else
+    expect($as($me, "status = 'OPEN', closed_by = null, closed_at = null, close_requested_by = null, close_requested_at = null, reopened_by = ?, reopened_at = now()", [$me]))
+        ->toThrow(QueryException::class, 'reopens on a request decided by a second person');
+    $as($me, "reopen_requested_by = ?, reopen_requested_at = now(), reopen_reason = 'Missed receipt'", [$me])();
+    expect($as($me, "status = 'OPEN', closed_by = null, closed_at = null, close_requested_by = null, close_requested_at = null,
+                     reopen_requested_by = null, reopen_requested_at = null, reopen_reason = null, reopened_by = ?, reopened_at = now()", [$me]))
+        ->toThrow(QueryException::class, 'reopens on a request decided by a second person');
+    $as($second, "status = 'OPEN', closed_by = null, closed_at = null, close_requested_by = null, close_requested_at = null,
+                   reopen_requested_by = null, reopen_requested_at = null, reopen_reason = null, reopened_by = ?, reopened_at = now()", [$second])();
+    expect(ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select status, reopened_by from inventory_periods where id = ?', [$period])))
+        ->status->toBe('OPEN')->reopened_by->toBe($second);
 })->group('integration', 'inventory');
 
 it('keeps a split lot on its parent\'s item and the ledger inside the tenant', function () {

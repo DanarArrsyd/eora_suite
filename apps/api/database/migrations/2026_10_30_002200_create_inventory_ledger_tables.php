@@ -79,7 +79,12 @@ return new class extends Migration
               close_requested_at timestamptz,
               closed_by uuid,
               closed_at timestamptz,
+              -- BR-PER-03: a closed period reopens only on a request decided by a second person (the last reopen is kept)
+              reopen_requested_by uuid,
+              reopen_requested_at timestamptz,
               reopen_reason text CHECK (length(reopen_reason) BETWEEN 3 AND 500),
+              reopened_by uuid,
+              reopened_at timestamptz,
               created_at timestamptz NOT NULL,
               created_by uuid NOT NULL,
               updated_at timestamptz NOT NULL,
@@ -89,9 +94,69 @@ return new class extends Migration
               UNIQUE (tenant_id, id),
               UNIQUE (tenant_id, plant_id, period),
               FOREIGN KEY (tenant_id, plant_id) REFERENCES plants (tenant_id, id),
-              CHECK ((status = 'CLOSED') = (closed_at IS NOT NULL)),
-              CHECK (status = 'OPEN' OR close_requested_at IS NOT NULL)
+              CHECK ((status = 'CLOSED') = (closed_at IS NOT NULL AND closed_by IS NOT NULL)),
+              CHECK ((status = 'OPEN') = (close_requested_at IS NULL AND close_requested_by IS NULL)),
+              CHECK ((reopen_requested_at IS NULL) = (reopen_requested_by IS NULL) AND (reopen_requested_at IS NULL) = (reopen_reason IS NULL)),
+              CHECK (reopen_requested_at IS NULL OR status = 'CLOSED')
             );
+
+            -- M3-D8, BR-PER-03, D-060: a period is opened, closed on a request decided by a second person, and reopened the
+            -- same way; every actor is the signed actor of the statement that records it
+            CREATE OR REPLACE FUNCTION eora_guard_inventory_period() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            DECLARE
+              a uuid := (SELECT c.actor FROM ctx_api.context() c);
+            BEGIN
+              IF a IS NULL THEN
+                RAISE EXCEPTION 'no signed actor context' USING ERRCODE = '42501';
+              END IF;
+              IF TG_OP = 'INSERT' THEN
+                IF NEW.status <> 'OPEN' OR NEW.closed_by IS NOT NULL OR NEW.reopened_by IS NOT NULL OR NEW.reopen_requested_by IS NOT NULL THEN
+                  RAISE EXCEPTION 'a period starts open' USING ERRCODE = '23514';
+                END IF;
+                RETURN NEW;
+              END IF;
+              IF (NEW.tenant_id, NEW.plant_id, NEW.period) IS DISTINCT FROM (OLD.tenant_id, OLD.plant_id, OLD.period) THEN
+                RAISE EXCEPTION 'a period is fixed' USING ERRCODE = '23514';
+              END IF;
+              -- every update is one of the transitions below; each pins the history it does not write
+              IF OLD.status = 'OPEN' AND NEW.status = 'CLOSING' THEN
+                IF NEW.close_requested_by IS DISTINCT FROM a OR NEW.close_requested_at IS NULL
+                   OR (NEW.reopened_by, NEW.reopened_at) IS DISTINCT FROM (OLD.reopened_by, OLD.reopened_at) THEN
+                  RAISE EXCEPTION 'a close is requested by the signed actor' USING ERRCODE = '42501';
+                END IF;
+              ELSIF OLD.status = 'CLOSING' AND NEW.status = 'CLOSED' THEN
+                IF NEW.closed_by IS DISTINCT FROM a OR a = OLD.close_requested_by OR NEW.closed_at IS NULL
+                   OR (NEW.close_requested_by, NEW.close_requested_at, NEW.reopened_by, NEW.reopened_at)
+                      IS DISTINCT FROM (OLD.close_requested_by, OLD.close_requested_at, OLD.reopened_by, OLD.reopened_at) THEN
+                  RAISE EXCEPTION 'a period is closed by a second person' USING ERRCODE = '42501';
+                END IF;
+              ELSIF OLD.status = 'CLOSING' AND NEW.status = 'OPEN' THEN
+                -- close request withdrawn or turned down: the request goes, the history stays
+                IF (NEW.reopened_by, NEW.reopened_at) IS DISTINCT FROM (OLD.reopened_by, OLD.reopened_at) THEN
+                  RAISE EXCEPTION 'an open period keeps its history' USING ERRCODE = '23514';
+                END IF;
+              ELSIF OLD.status = 'CLOSED' AND NEW.status = 'CLOSED' THEN
+                -- the reopen request: by the signed actor, once; nothing else of a closed period changes
+                IF NOT (OLD.reopen_requested_by IS NULL AND NEW.reopen_requested_by = a AND NEW.reopen_requested_at IS NOT NULL
+                        AND (NEW.closed_by, NEW.closed_at, NEW.close_requested_by, NEW.close_requested_at, NEW.reopened_by, NEW.reopened_at)
+                            IS NOT DISTINCT FROM (OLD.closed_by, OLD.closed_at, OLD.close_requested_by, OLD.close_requested_at, OLD.reopened_by, OLD.reopened_at)) THEN
+                  RAISE EXCEPTION 'a closed period changes only by a reopen request' USING ERRCODE = '23514';
+                END IF;
+              ELSIF OLD.status = 'CLOSED' AND NEW.status = 'OPEN' THEN
+                IF OLD.reopen_requested_by IS NULL OR NEW.reopened_by IS DISTINCT FROM a OR a = OLD.reopen_requested_by OR NEW.reopened_at IS NULL THEN
+                  RAISE EXCEPTION 'a closed period reopens on a request decided by a second person' USING ERRCODE = '42501';
+                END IF;
+              ELSIF NEW.status IS DISTINCT FROM OLD.status THEN
+                RAISE EXCEPTION 'a period goes OPEN → CLOSING → CLOSED' USING ERRCODE = '23514';
+              ELSE
+                -- same status (OPEN or CLOSING): nothing of the lifecycle changes in place
+                RAISE EXCEPTION 'a period changes only by its lifecycle' USING ERRCODE = '23514';
+              END IF;
+              RETURN NEW;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_guard_inventory_period() FROM PUBLIC;
+            CREATE TRIGGER guard_lifecycle BEFORE INSERT OR UPDATE ON inventory_periods FOR EACH ROW EXECUTE FUNCTION eora_guard_inventory_period();
 
             -- official document numbers per tenant + plant + type + year (D-049: unique, never reused, no gapless promise)
             CREATE TABLE document_counters (
@@ -159,7 +224,10 @@ return new class extends Migration
               CHECK ((doc_type = 'REVERSAL') = (reverses_document_id IS NOT NULL)),
               CHECK ((correction_of_document_id IS NULL) = (original_effective_date IS NULL)),
               CHECK (status <> 'REJECTED' OR (reject_reason IS NOT NULL AND decided_by IS NOT NULL)),
-              CHECK ((source_type IS NULL) = (source_id IS NULL))
+              CHECK ((source_type IS NULL) = (source_id IS NULL)),
+              -- an adjustment names its reason code, a reversal its reason, before it is submitted
+              CHECK (doc_type <> 'STOCK_ADJUSTMENT' OR status = 'DRAFT' OR reason_code IS NOT NULL),
+              CHECK (doc_type <> 'REVERSAL' OR status = 'DRAFT' OR note IS NOT NULL)
             );
             -- a document is reversed at most once (a rejected reversal request does not count)
             CREATE UNIQUE INDEX inventory_documents_reversal_uq ON inventory_documents (tenant_id, reverses_document_id)
@@ -296,9 +364,12 @@ return new class extends Migration
               d record;
             BEGIN
               IF TG_TABLE_NAME = 'inventory_movements' THEN
-                SELECT doc.status, doc.posted_at INTO d FROM public.inventory_documents doc WHERE doc.tenant_id = NEW.tenant_id AND doc.id = NEW.document_id;
+                SELECT doc.status, doc.posted_at, doc.doc_type INTO d FROM public.inventory_documents doc WHERE doc.tenant_id = NEW.tenant_id AND doc.id = NEW.document_id;
                 IF d.status NOT IN ('POSTED', 'REVERSED') OR d.posted_at IS DISTINCT FROM pg_catalog.now() THEN
                   RAISE EXCEPTION 'legs are written only with the posting of their document' USING ERRCODE = '23514';
+                END IF;
+                IF NEW.reverses_movement_id IS NOT NULL AND d.doc_type <> 'REVERSAL' THEN
+                  RAISE EXCEPTION 'only a reversal reverses a leg' USING ERRCODE = '23514';
                 END IF;
                 RETURN NULL;
               END IF;
@@ -334,6 +405,28 @@ return new class extends Migration
               FOR EACH ROW EXECUTE FUNCTION eora_check_inventory_posting();
             CREATE CONSTRAINT TRIGGER check_posting AFTER INSERT ON inventory_movements DEFERRABLE INITIALLY DEFERRED
               FOR EACH ROW EXECUTE FUNCTION eora_check_inventory_posting();
+
+            -- M3-D4: a lot-controlled item moves and is held by lot, an item without lot control never; its flag stays as it
+            -- is once the item has a lot or a leg
+            CREATE OR REPLACE FUNCTION eora_guard_lot_control() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            BEGIN
+              IF TG_TABLE_NAME = 'items' THEN
+                IF NEW.lot_controlled IS DISTINCT FROM OLD.lot_controlled
+                   AND (EXISTS (SELECT 1 FROM public.lots l WHERE l.tenant_id = NEW.tenant_id AND l.item_id = NEW.id)
+                        OR EXISTS (SELECT 1 FROM public.inventory_movements m WHERE m.tenant_id = NEW.tenant_id AND m.item_id = NEW.id)) THEN
+                  RAISE EXCEPTION 'lot control is fixed once the item has stock history' USING ERRCODE = '23514';
+                END IF;
+                RETURN NEW;
+              END IF;
+              IF (SELECT i.lot_controlled FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id) IS DISTINCT FROM (NEW.lot_id IS NOT NULL) THEN
+                RAISE EXCEPTION 'a lot-controlled item moves by lot, an item without lot control without one' USING ERRCODE = '23514';
+              END IF;
+              RETURN NEW;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_guard_lot_control() FROM PUBLIC;
+            CREATE TRIGGER guard_lot_control BEFORE INSERT ON inventory_movements FOR EACH ROW EXECUTE FUNCTION eora_guard_lot_control();
+            CREATE TRIGGER guard_lot_control BEFORE UPDATE OF lot_controlled ON items FOR EACH ROW EXECUTE FUNCTION eora_guard_lot_control();
 
             -- the projection; lot NULL = item without lot control (M3-D4)
             CREATE TABLE stock_balances (
@@ -377,6 +470,7 @@ return new class extends Migration
             $fn$;
             REVOKE ALL ON FUNCTION eora_guard_physical_balance() FROM PUBLIC;
             CREATE TRIGGER guard_physical BEFORE INSERT OR UPDATE ON stock_balances FOR EACH ROW EXECUTE FUNCTION eora_guard_physical_balance();
+            CREATE TRIGGER guard_lot_control BEFORE INSERT ON stock_balances FOR EACH ROW EXECUTE FUNCTION eora_guard_lot_control();
 
             -- matrix row 2 (BR-INV-08): reduces available, never on-hand; Σ active ≤ on-hand is checked by the service under
             -- the balance lock. Used from M4 (WO, schedule lines).
@@ -459,7 +553,8 @@ return new class extends Migration
             -- only the columns their lifecycle needs
             GRANT UPDATE (supplier_lot_no, properties) ON lots TO eora_app;
             GRANT UPDATE (last_no) ON lot_counters, document_counters TO eora_app;
-            GRANT UPDATE (status, close_requested_by, close_requested_at, closed_by, closed_at, reopen_reason) ON inventory_periods TO eora_app;
+            GRANT UPDATE (status, close_requested_by, close_requested_at, closed_by, closed_at, reopen_requested_by, reopen_requested_at, reopen_reason,
+                          reopened_by, reopened_at) ON inventory_periods TO eora_app;
             GRANT UPDATE (doc_no, status, effective_date, production_date, calendar_date, shift_id, shift_date, posted_at, posted_by,
                           requested_by, submitted_at, decided_by, decided_at, reject_reason, reason_code, note, request,
                           original_effective_date, source_type, source_id) ON inventory_documents TO eora_app;
@@ -471,6 +566,7 @@ return new class extends Migration
     public function down(): void
     {
         DB::unprepared(<<<'SQL'
+            DROP TRIGGER guard_lot_control ON items;
             DROP TABLE idempotency_records;
             DROP TABLE genealogy_edges;
             DROP TABLE stock_allocations;
@@ -482,6 +578,8 @@ return new class extends Migration
             DROP TABLE lot_counters;
             DROP TABLE lots;
             DROP FUNCTION eora_guard_physical_balance();
+            DROP FUNCTION eora_guard_lot_control();
+            DROP FUNCTION eora_guard_inventory_period();
             DROP FUNCTION eora_check_inventory_posting();
             DROP FUNCTION eora_guard_inventory_document();
             SQL);
