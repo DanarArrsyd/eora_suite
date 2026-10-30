@@ -23,9 +23,11 @@ final class TenantTransaction
      * @template T
      *
      * @param  Closure(EoraPostgresConnection): T  $work
+     * @param  int  $attempts  >1 reruns the whole transaction (new signed context each time) after a deadlock or a
+     *                         serialization failure — only for work that is safe to repeat (idempotent, ADR-0014 §3)
      * @return T
      */
-    public function run(TenantContext $context, Closure $work, ?string $connection = null): mixed
+    public function run(TenantContext $context, Closure $work, ?string $connection = null, int $attempts = 1): mixed
     {
         $db = $this->db->connection($connection);
 
@@ -44,6 +46,6 @@ final class TenantTransaction
             $db->installSignedContext($this->signer->sign($context, $binding['pid'], $binding['xact_us']), (string) (Context::get('correlation_id') ?? ''));
 
             return $work($db);
-        }, 1);
+        }, max(1, $attempts));
     }
 }
