@@ -59,7 +59,19 @@ final class ReceiptController
         $key = $this->key($request);
         $db = $this->db();
         $plant = $this->plant($db, $data['plantId'], 'materials.receipt.post');
-        $item = $db->selectOne('select id, status, item_type, lot_controlled, incoming_release_required from items where id = ?', [strtolower($data['itemId'])])
+        $itemId = strtolower($data['itemId']);
+        $supplierId = strtolower($data['supplierId']);
+        $locationId = strtolower($data['locationId']);
+        $supplierLot = self::optionalText($data['supplierLotNo'] ?? null);
+        $note = self::optionalText($data['note'] ?? null);
+        $hash = hash('sha256', json_encode(['RM_RECEIPT', $plant, $itemId, $locationId, $supplierId, $data['qty'], $supplierLot, $note, $data['effectiveDate'] ?? null], JSON_THROW_ON_ERROR));
+
+        // a retried request answers with what it posted, whatever master data changed since; a concurrent one waits
+        $previous = $this->postings->claim($db, $key, $hash);
+        if ($previous !== null) {
+            return $this->answer($db, $previous);
+        }
+        $item = $db->selectOne('select id, status, item_type, lot_controlled, incoming_release_required from items where id = ?', [$itemId])
             ?? throw ValidationException::withMessages(['itemId' => 'Unknown item.']);
         if ($item->status !== 'ACTIVE') {
             throw ValidationException::withMessages(['itemId' => 'Only active items are received.']);
@@ -67,17 +79,9 @@ final class ReceiptController
         if (! in_array($item->item_type, self::RECEIVED_TYPES, true)) {
             throw ValidationException::withMessages(['itemId' => 'A supplier receipt takes raw material or consumables.']);
         }
-        $supplier = $db->selectOne("select id from suppliers where id = ? and status = 'ACTIVE'", [strtolower($data['supplierId'])])
+        $supplier = $db->selectOne("select id from suppliers where id = ? and status = 'ACTIVE'", [$supplierId])
             ?? throw ValidationException::withMessages(['supplierId' => 'Unknown or inactive supplier.']);
-        $location = $this->rmLocation($db, $plant, $data['locationId'], 'locationId');
-        $supplierLot = self::optionalText($data['supplierLotNo'] ?? null);
-        $note = self::optionalText($data['note'] ?? null);
-        $hash = hash('sha256', json_encode(['RM_RECEIPT', $plant, (string) $item->id, $location, (string) $supplier->id, $data['qty'], $supplierLot, $note, $data['effectiveDate'] ?? null], JSON_THROW_ON_ERROR));
-
-        $previous = $this->postings->previous($db, $key, $hash);
-        if ($previous !== null) {
-            return $this->answer($db, $previous);
-        }
+        $location = $this->rmLocation($db, $plant, $locationId, 'locationId');
         $lot = null;
         if ((bool) $item->lot_controlled) {
             $day = $data['effectiveDate'] ?? $this->calendar->resolve($db, $plant, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
@@ -116,13 +120,22 @@ final class ReceiptController
         $item = strtolower($data['itemId']);
         $lot = isset($data['lotId']) ? strtolower($data['lotId']) : null;
         $legs = [];
-        foreach ($data['lines'] as $i => $line) {
-            $location = $this->rmLocation($db, $plant, $line['locationId'], "lines.{$i}.locationId");
+        foreach ($data['lines'] as $line) {
+            $location = strtolower($line['locationId']);
             $legs[] = new PostingLeg('INCOMING_RELEASE', $location, $item, $lot, 'BLOCKED', '-'.$line['qty']);
             $legs[] = new PostingLeg('INCOMING_RELEASE', $location, $item, $lot, 'UNRESTRICTED', $line['qty']);
         }
+        $command = new PostingCommand('INCOMING_RELEASE', $plant, $key, $legs, note: self::optionalText($data['note'] ?? null));
+        // a retried request answers with what it posted, whatever master data changed since
+        $previous = $this->postings->claim($db, $key, $command->hash());
+        if ($previous !== null) {
+            return $this->answer($db, $previous);
+        }
+        foreach ($data['lines'] as $i => $line) {
+            $this->rmLocation($db, $plant, $line['locationId'], "lines.{$i}.locationId");
+        }
 
-        return $this->answer($db, $this->postings->post($db, new PostingCommand('INCOMING_RELEASE', $plant, $key, $legs, note: self::optionalText($data['note'] ?? null))));
+        return $this->answer($db, $this->postings->post($db, $command));
     }
 
     private function db(): EoraPostgresConnection

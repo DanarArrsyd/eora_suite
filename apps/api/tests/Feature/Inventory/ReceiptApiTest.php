@@ -176,3 +176,38 @@ it('lists stock at a work center (Material at Production) with its work center, 
         ->and($rows['MAP-PRS-01'])->workCenterCode->toBe('PRS-01')->warehouseCode->toBeNull()->qty->toBe('4')
         ->and($rows['RM-01'])->warehouseCode->toBe('RM')->workCenterCode->toBeNull()->qty->toBe('6');
 })->group('integration', 'inventory');
+
+it('replays a posted receipt or release under its key even after its supplier or rack was deactivated (ADR-0014)', function () {
+    $f = $this->f;
+    orgUser($this, $this->t, 'MAT');
+    $first = rcReceive($this, $f)->assertCreated()->json('data');
+    rcRun($this->t, fn (EoraPostgresConnection $db) => [
+        $db->update("update suppliers set status = 'INACTIVE' where id = ?", [$f['supplier']]),
+        $db->update("update locations set status = 'INACTIVE' where id = ?", [$f['rm1']]),
+    ]);
+    rcReceive($this, $f)->assertOk()->assertJsonPath('data.docNo', $first['docNo'])->assertJsonPath('data.replayed', true);
+    // a new receipt is refused
+    rcReceive($this, $f, [], 'receipt-key-0009')->assertStatus(422)->assertJsonValidationErrors(['supplierId']);
+
+    rcRun($this->t, fn (EoraPostgresConnection $db) => $db->update("update locations set status = 'ACTIVE' where id = ?", [$f['rm1']]));
+    rtSwitch($this, $this->t, 'QCI');
+    $release = fn () => spa($this)->postJson('/api/v1/inventory/incoming-releases',
+        ['plantId' => $f['plant'], 'itemId' => $f['coil'], 'lotId' => $first['lotId'], 'lines' => [['locationId' => $f['rm1'], 'qty' => '2']]], ['Idempotency-Key' => 'release-key-0009']);
+    $released = $release()->assertCreated()->json('data.docNo');
+    rcRun($this->t, fn (EoraPostgresConnection $db) => $db->update("update locations set status = 'INACTIVE' where id = ?", [$f['rm1']]));
+    $release()->assertOk()->assertJsonPath('data.docNo', $released)->assertJsonPath('data.replayed', true);
+})->group('integration', 'inventory');
+
+it('makes a request under a key still being written wait, and never creates a lot for it (ADR-0014)', function () {
+    $f = $this->f;
+    orgUser($this, $this->t, 'MAT');
+    config(['database.connections.pgsql_second' => config('database.connections.pgsql')]);
+    // another request holds the key in its open transaction
+    app(TenantTransaction::class)->run(TenantContext::forTenant($this->t['tenant'], $this->t['actor']), function (EoraPostgresConnection $db) use ($f) {
+        expect(app(InventoryPostingService::class)->claim($db, 'receipt-key-0001', str_repeat('0', 64)))->toBeNull();
+        rcReceive($this, $f)->assertStatus(409)->assertJsonPath('code', 'IDEMPOTENCY_IN_PROGRESS');
+    }, 'pgsql_second');
+    expect(rcRun($this->t, fn (EoraPostgresConnection $db) => (int) $db->selectOne('select count(*) as n from lots')->n))->toBe(0);
+    // once it ended without posting, the request goes through
+    rcReceive($this, $f)->assertCreated();
+})->group('integration', 'inventory');

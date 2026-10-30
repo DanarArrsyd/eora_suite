@@ -208,8 +208,30 @@ final class InventoryPostingService
     }
 
     /**
+     * Holds $key until the caller's transaction ends, then answers as previous(): a second request under the same key
+     * waits for the first and replays its result instead of writing anything itself. Commands that create records before
+     * posting (a receipt's lot) claim the key first, before checking master data that may have changed since.
+     */
+    public function claim(EoraPostgresConnection $db, string $key, string $hash): ?PostingResult
+    {
+        if ($db->transactionLevel() === 0) {
+            throw new LogicException('Postings run inside the tenant transaction.');
+        }
+        $db->statement("set local lock_timeout = '3s'");
+        try {
+            $db->selectOne("select pg_advisory_xact_lock(hashtextextended((select c.tenant from ctx_api.context() c)::text || ':' || ?, 0))", [$key]);
+        } catch (QueryException $e) {
+            throw $e->getCode() === '55P03'
+                ? new DomainProblem(409, 'IDEMPOTENCY_IN_PROGRESS', 'Posting in progress', 'A posting with this key is being written. Send the request again to get its result.')
+                : $e;
+        }
+
+        return $this->previous($db, $key, $hash);
+    }
+
+    /**
      * The result already posted under $key for the request hashed as $hash, null when the key is new; 409 when the key
-     * was used for another request. Commands that create records before posting (a receipt's lot) ask this first.
+     * was used for another request.
      */
     public function previous(EoraPostgresConnection $db, string $key, string $hash): ?PostingResult
     {
