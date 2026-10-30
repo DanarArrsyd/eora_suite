@@ -40,6 +40,17 @@ final class InventoryPostingService
     /** Requests decided by a second person (D-060): never posted directly. */
     private const array REQUESTED = ['STOCK_ADJUSTMENT', 'REVERSAL'];
 
+    /**
+     * Documents posted directly in M3 (doc 32 M3-D2) with the codes of their legs; the others come with their documents in
+     * M4 (issue, custody, return, production, QC, FG receipt, pick, shipment, scrap, rework).
+     */
+    private const array DIRECT = [
+        'RM_RECEIPT' => ['RCPT_SUPPLIER'],
+        'INCOMING_RELEASE' => ['INCOMING_RELEASE'],
+        'MAT_TRANSFER' => ['TRANSFER_LOC'],
+        'LOT_SPLIT' => ['LOT_SPLIT_OUT', 'LOT_SPLIT_IN'],
+    ];
+
     private const array PREFIX = [
         'RM_RECEIPT' => 'RCV', 'INCOMING_RELEASE' => 'REL', 'MAT_ISSUE' => 'ISS', 'CUSTODY_ACCEPT' => 'CUS', 'MAT_TRANSFER' => 'TRF',
         'MAT_RETURN' => 'RET', 'LOT_SPLIT' => 'SPL', 'PRODUCTION_POSTING' => 'PRD', 'QC_DISPOSITION' => 'QCD', 'FG_RECEIPT' => 'FGR',
@@ -63,6 +74,11 @@ final class InventoryPostingService
         if (in_array($command->docType, self::REQUESTED, true)) {
             throw new DomainProblem(409, 'APPROVAL_REQUIRED', 'Approval required', 'Adjustments and reversals are requested and posted by a second person.');
         }
+
+        if (! isset(self::DIRECT[$command->docType])) {
+            throw new DomainProblem(422, 'DOCUMENT_TYPE_NOT_AVAILABLE', 'Not available yet', "{$command->docType} is posted with its own document from M4.");
+        }
+        $this->checkLegs($db, $command);
 
         // a split takes one parent lot per document, so the parent's quantity out equals its children's in (conservation)
         if ($command->docType === 'LOT_SPLIT') {
@@ -90,6 +106,51 @@ final class InventoryPostingService
         }
 
         return $result;
+    }
+
+    /**
+     * What each leg means (doc 04 rows 1, 4, 7 and the incoming release, D-062): its code belongs to the document, its
+     * sign and place fit the code, and only the incoming release changes status (BLOCKED → UNRESTRICTED in place).
+     */
+    private function checkLegs(EoraPostgresConnection $db, PostingCommand $command): void
+    {
+        $types = [];
+        $ids = array_values(array_unique(array_map(static fn (PostingLeg $l) => $l->locationId, $command->legs)));
+        foreach ($db->select('select id, location_type from locations where id = any(?::uuid[])', ['{'.implode(',', $ids).'}']) as $row) {
+            $types[(string) $row->id] = (string) $row->location_type;
+        }
+        $refuse = static fn (string $why) => throw new DomainProblem(422, 'INVALID_LEGS', 'Invalid legs', $why);
+        $statuses = [];
+        foreach ($command->legs as $leg) {
+            $type = $types[$leg->locationId] ?? throw new DomainProblem(422, 'UNKNOWN_LOCATION', 'Unknown location', 'A leg names a location that does not exist.');
+            $out = str_starts_with($leg->qty, '-');
+            if (! in_array($leg->movementCode, self::DIRECT[$command->docType], true)) {
+                $refuse("A {$command->docType} does not post {$leg->movementCode}.");
+            }
+            if ($leg->reversesMovementId !== null) {
+                $refuse('Only a reversal reverses a leg.');
+            }
+            match ($command->docType) {
+                'RM_RECEIPT' => ($out ? $type === 'V_SUPPLIER' : ($type === 'RM_WAREHOUSE' && in_array($leg->stockStatus, ['UNRESTRICTED', 'BLOCKED'], true)))
+                    || $refuse('A receipt moves from the supplier into a raw-material location, UNRESTRICTED or BLOCKED.'),
+                'INCOMING_RELEASE' => ($leg->stockStatus === ($out ? 'BLOCKED' : 'UNRESTRICTED') && ! str_starts_with($type, 'V_'))
+                    || $refuse('An incoming release turns BLOCKED stock into UNRESTRICTED stock in place.'),
+                default => ! str_starts_with($type, 'V_') || $refuse('A transfer or split moves between physical locations.'),
+            };
+            if ($command->docType !== 'INCOMING_RELEASE') {
+                $statuses[$leg->stockStatus] = true;
+            }
+            if ($command->docType === 'INCOMING_RELEASE') {
+                $statuses[$leg->locationId] = true;
+            }
+        }
+        // a receipt, transfer or split keeps the status of what it moves; a release stays at one place
+        if (count($statuses) !== 1) {
+            $refuse($command->docType === 'INCOMING_RELEASE' ? 'An incoming release stays at one location.' : 'Stock keeps its status when it moves; a status changes only by its own document.');
+        }
+        if ($command->genealogy !== [] && $command->docType !== 'LOT_SPLIT') {
+            $refuse('Only a lot split records genealogy in M3.');
+        }
     }
 
     private function replay(EoraPostgresConnection $db, PostingCommand $command): ?PostingResult

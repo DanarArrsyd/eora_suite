@@ -17,15 +17,15 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 /**
  * Business-route unit of work (doc 25 §6.2): the whole request runs inside one TenantTransaction with the signed
  * context of the session's user and active tenant. Inside it, the user's credential version and ACTIVE membership
- * are re-checked under RLS (R-39). GET runs read-only. 2xx/3xx commit; any 4xx/5xx response rolls back. A write that
- * hits a deadlock or a serialization failure runs again, up to three times (ADR-0014 §3): business writes are
- * idempotent (keys, If-Match) and nothing leaves the transaction before it commits.
+ * are re-checked under RLS (R-39). GET runs read-only. 2xx/3xx commit; any 4xx/5xx response rolls back. A route that
+ * opts in with `tenant:retry` runs again, up to three times, after a deadlock or a serialization failure (ADR-0014
+ * §3) — only routes whose work is idempotent and has no effect outside the transaction (ledger postings).
  */
 final class TenantRequest
 {
     public function __construct(private readonly AuthSession $auth, private readonly TenantTransaction $transaction) {}
 
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, string ...$options): Response
     {
         $user = $this->auth->requireUser(); // includes the absolute lifetime (D-B1-05)
         $tenant = $this->auth->tenantId() ?? throw new AccessDeniedHttpException('No active tenant.');
@@ -49,7 +49,7 @@ final class TenantRequest
                 }
 
                 return $response;
-            }, attempts: $request->isMethodSafe() ? 1 : 3);
+            }, attempts: in_array('retry', $options, true) && ! $request->isMethodSafe() ? 3 : 1);
         } catch (RollbackWithResponse $rollback) {
             return $rollback->response;
         } catch (SessionExpiredException $e) {

@@ -213,3 +213,41 @@ it('reruns a transaction after a deadlock when asked to (ADR-0014 §3)', functio
     }, attempts: 3);
     expect($result)->toBe('done')->and($tries)->toBe(2);
 })->group('integration', 'inventory');
+
+it('checks what each leg means: codes per document, sign and place, and status only through its own document (doc 04, D-062)', function () {
+    $f = $this->f;
+    pstPost($this->t, pstReceipt($f, '10', 'receipt-legs'));
+    $refused = fn (PostingCommand $c) => fn () => pstPost($this->t, $c);
+    // a transfer that would turn UNRESTRICTED into HOLD
+    expect($refused(new PostingCommand('MAT_TRANSFER', $f['plant'], 'transfer-status', [
+        new PostingLeg('TRANSFER_LOC', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '-1'),
+        new PostingLeg('TRANSFER_LOC', $f['rm2'], $f['item'], $f['lot'], 'HOLD', '1'),
+    ])))->toThrow(DomainProblem::class, 'Invalid legs');
+    // a receipt with an adjustment code, or genealogy it has no reason for
+    expect($refused(new PostingCommand('RM_RECEIPT', $f['plant'], 'receipt-code', [
+        new PostingLeg('ADJ_MINUS', $f['supplier'], $f['item'], $f['lot'], 'UNRESTRICTED', '-1'),
+        new PostingLeg('ADJ_PLUS', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '1'),
+    ])))->toThrow(DomainProblem::class, 'Invalid legs');
+    expect($refused(new PostingCommand('RM_RECEIPT', $f['plant'], 'receipt-genealogy', pstReceipt($f, '1', 'x-unused-key')->legs,
+        [new GenealogyLink($f['lot'], $f['lot'], '1', $f['pcs'], '1', $f['pcs'])])))->toThrow(DomainProblem::class, 'Invalid legs');
+    // documents of M4 are not posted yet
+    expect($refused(new PostingCommand('PRODUCTION_POSTING', $f['plant'], 'production-early', [
+        new PostingLeg('OUTPUT_GOOD', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '1'),
+    ])))->toThrow(DomainProblem::class, 'Not available yet');
+
+    // the incoming release (D-062): a BLOCKED receipt becomes UNRESTRICTED in place
+    pstPost($this->t, new PostingCommand('RM_RECEIPT', $f['plant'], 'receipt-blocked', [
+        new PostingLeg('RCPT_SUPPLIER', $f['supplier'], $f['item'], $f['lot'], 'BLOCKED', '-3'),
+        new PostingLeg('RCPT_SUPPLIER', $f['rm2'], $f['item'], $f['lot'], 'BLOCKED', '3'),
+    ]));
+    expect($refused(new PostingCommand('INCOMING_RELEASE', $f['plant'], 'release-moving', [
+        new PostingLeg('INCOMING_RELEASE', $f['rm2'], $f['item'], $f['lot'], 'BLOCKED', '-3'),
+        new PostingLeg('INCOMING_RELEASE', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '3'),
+    ])))->toThrow(DomainProblem::class, 'Invalid legs');
+    $release = pstPost($this->t, new PostingCommand('INCOMING_RELEASE', $f['plant'], 'release-0001', [
+        new PostingLeg('INCOMING_RELEASE', $f['rm2'], $f['item'], $f['lot'], 'BLOCKED', '-3'),
+        new PostingLeg('INCOMING_RELEASE', $f['rm2'], $f['item'], $f['lot'], 'UNRESTRICTED', '3'),
+    ]));
+    expect($release->docNo)->toStartWith('REL-P1-');
+    expect(pstBalances($this->t, $f))->toBe([$f['rm1'] => '10', $f['rm2'] => '3']);
+})->group('integration', 'inventory');
