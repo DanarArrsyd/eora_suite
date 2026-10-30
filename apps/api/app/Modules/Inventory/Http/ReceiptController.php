@@ -84,9 +84,10 @@ final class ReceiptController
         $supplier = $db->selectOne("select id from suppliers where id = ? and status = 'ACTIVE'", [$supplierId])
             ?? throw ValidationException::withMessages(['supplierId' => 'Unknown or inactive supplier.']);
         $location = $this->rmLocation($db, $plant, $locationId, 'locationId');
+        // the day the receipt belongs to, resolved once: its lot number and its posting use the same day
+        $day = $data['effectiveDate'] ?? $this->calendar->resolve($db, $plant, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
         $lot = null;
         if ((bool) $item->lot_controlled) {
-            $day = $data['effectiveDate'] ?? $this->calendar->resolve($db, $plant, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
             $lot = (string) $db->selectOne(
                 "insert into lots (tenant_id, item_id, lot_no, supplier_lot_no, origin) values ((select c.tenant from ctx_api.context() c), ?, ?, ?, 'RECEIPT') returning id",
                 [$item->id, $this->lots->next($db, (string) $item->id, $day), $supplierLot],
@@ -99,7 +100,7 @@ final class ReceiptController
         return $this->answer($db, $this->postings->post($db, new PostingCommand('RM_RECEIPT', $plant, $key, [
             new PostingLeg('RCPT_SUPPLIER', $from, (string) $item->id, $lot, $status, '-'.$data['qty']),
             new PostingLeg('RCPT_SUPPLIER', $location, (string) $item->id, $lot, $status, $data['qty']),
-        ], effectiveDate: $data['effectiveDate'] ?? null, note: $note, sourceType: 'supplier', sourceId: (string) $supplier->id, requestHash: $hash)));
+        ], effectiveDate: $day, note: $note, sourceType: 'supplier', sourceId: (string) $supplier->id, requestHash: $hash)));
     }
 
     /**
