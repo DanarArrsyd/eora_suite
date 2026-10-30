@@ -155,6 +155,7 @@ final class InventoryPostingService
         $children = [];
         foreach ($command->legs as $leg) {
             if ($leg->movementCode === 'LOT_SPLIT_IN') {
+                isset($children[(string) $leg->lotId]) && $refuse('A split moves into each child lot with one leg.');
                 $children[(string) $leg->lotId] = $leg->qty;
             }
         }

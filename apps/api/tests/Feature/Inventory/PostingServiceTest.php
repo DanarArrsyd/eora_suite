@@ -184,6 +184,12 @@ it('splits a lot into a child with its genealogy (doc 04 row 7)', function () {
         new PostingLeg('LOT_SPLIT_IN', $f['rm1'], $f['item'], $other, 'UNRESTRICTED', '1'),
     ], [new GenealogyLink($f['lot'], $other, '1', $f['pcs'], '1', $f['pcs']), new GenealogyLink($child, $other, '1', $f['pcs'], '1', $f['pcs'])])))
         ->toThrow(DomainProblem::class, 'Invalid legs');
+    // one leg per child lot, so its single edge carries all it received
+    expect(fn () => pstPost($this->t, new PostingCommand('LOT_SPLIT', $f['plant'], 'split-twice-in', [
+        new PostingLeg('LOT_SPLIT_OUT', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '-2'),
+        new PostingLeg('LOT_SPLIT_IN', $f['rm1'], $f['item'], $other, 'UNRESTRICTED', '1'),
+        new PostingLeg('LOT_SPLIT_IN', $f['rm1'], $f['item'], $other, 'UNRESTRICTED', '1'),
+    ], [new GenealogyLink($f['lot'], $other, '1', $f['pcs'], '1', $f['pcs'])])))->toThrow(DomainProblem::class, 'Invalid legs');
     // one parent lot per split document
     expect(fn () => pstPost($this->t, new PostingCommand('LOT_SPLIT', $f['plant'], 'split-two-parents', [
         new PostingLeg('LOT_SPLIT_OUT', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '-1'),
