@@ -1,6 +1,6 @@
 # ADR-0014 — Inventory posting engine implementation
 
-- **Status:** Accepted as baseline (D-045); MAT_TRANSFER D-048; numbering D-049 (no gapless promise; drafts use UUID/draft reference, official number at posting) · **Date:** 2026-10-09
+- **Status:** Accepted as baseline (D-045); implemented M3 step 1–2 (`app/Modules/Inventory/Application/InventoryPostingService.php`, ledger guarantees in migration `002200`; idempotency in `idempotency_records`; retry = `TenantTransaction` attempts, 3 for write requests); MAT_TRANSFER D-048; numbering D-049 (no gapless promise; drafts use UUID/draft reference, official number at posting) · **Date:** 2026-10-09
 
 ## Context
 ADR-0002 fixes the ledger semantics. Phase 3.5 needs an implementable engine: one service, deterministic locking, idempotency, numbering, outbox and audit in one transaction.

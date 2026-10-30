@@ -17,7 +17,9 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 /**
  * Business-route unit of work (doc 25 §6.2): the whole request runs inside one TenantTransaction with the signed
  * context of the session's user and active tenant. Inside it, the user's credential version and ACTIVE membership
- * are re-checked under RLS (R-39). GET runs read-only. 2xx/3xx commit; any 4xx/5xx response rolls back.
+ * are re-checked under RLS (R-39). GET runs read-only. 2xx/3xx commit; any 4xx/5xx response rolls back. A write that
+ * hits a deadlock or a serialization failure runs again, up to three times (ADR-0014 §3): business writes are
+ * idempotent (keys, If-Match) and nothing leaves the transaction before it commits.
  */
 final class TenantRequest
 {
@@ -47,7 +49,7 @@ final class TenantRequest
                 }
 
                 return $response;
-            });
+            }, attempts: $request->isMethodSafe() ? 1 : 3);
         } catch (RollbackWithResponse $rollback) {
             return $rollback->response;
         } catch (SessionExpiredException $e) {
