@@ -62,7 +62,8 @@ test('RM receipts: a receipt is confirmed before it posts, with one idempotency 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/materials/rm-receipts');
   await expect(page.getByRole('heading', { level: 1, name: 'RM Receipts' })).toBeVisible();
-  await expect(page.getByText(/Mock data/)).toHaveCount(0);
+  // live screen: no Mock data label on the page (the global pre-release banner mentions the words, outside #main)
+  await expect(page.locator('#main').getByText('Mock data')).toHaveCount(0);
   await page.getByRole('button', { name: 'New receipt' }).click();
   const drawer = page.getByRole('dialog', { name: 'New receipt' });
   await choose(page, drawer.getByRole('combobox', { name: 'Plant' }), 'P1 · Plant 1');
