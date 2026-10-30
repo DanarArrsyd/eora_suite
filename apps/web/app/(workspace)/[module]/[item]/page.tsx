@@ -8,6 +8,8 @@ import { ADMIN_IMPLEMENTED } from '@/modules/admin/implemented';
 import { AdminScreen } from '@/modules/admin/registry';
 import { DEMAND_MASTER_IMPLEMENTED, MASTER_IMPLEMENTED } from '@/modules/master/implemented';
 import { MasterDataScreen } from '@/modules/master/registry';
+import { MATERIALS_IMPLEMENTED } from '@/modules/materials/implemented';
+import { MaterialsScreen } from '@/modules/materials/registry';
 import { PPIC_IMPLEMENTED } from '@/modules/ppic/implemented';
 import { PpicScreen } from '@/modules/ppic/registry';
 
@@ -52,6 +54,14 @@ export default async function ItemPage({ params }: { params: Promise<Params> }) 
     return (
       <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
         <MasterDataScreen item={item} />
+      </Suspense>
+    );
+  }
+  if (module === 'materials' && (MATERIALS_IMPLEMENTED as readonly string[]).includes(item)) {
+    // M3 step 3 receiving on the live API (doc 32 §1.3)
+    return (
+      <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
+        <MaterialsScreen item={item} />
       </Suspense>
     );
   }

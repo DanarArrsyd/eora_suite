@@ -2,12 +2,12 @@ import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { useMe } from '@eora/features/auth';
-import { EoraForm, FormDateField, FormSelectField, FormTextField } from '@eora/features/patterns';
+import { ConfirmDialog, EoraForm, FormDateField, FormSelectField, FormTextField } from '@eora/features/patterns';
 import type { Option } from '@eora/features/data';
 import { Button, Drawer, DrawerContent, InlineAlert, type IsoDate } from '@eora/ui';
 import { formFailure } from '@/modules/admin/errors';
 import { queryOptions } from './source';
-import { PartialSave, type FieldSpec, type FormValues, type MasterResource, type MasterRow, type OptionSource } from './types';
+import { PartialSave, type Confirmation, type FieldSpec, type FormValues, type MasterResource, type MasterRow, type OptionSource } from './types';
 
 const PICKERS: Record<
   OptionSource,
@@ -35,6 +35,20 @@ const PICKERS: Record<
   },
   customers: { resource: 'core.customers', label: (r) => `${String(r.code)} · ${String(r.name)}`, activeOnly: true },
   dies: { resource: 'core.dies', label: (r) => `${String(r.plantCode)} / ${String(r.code)} · ${String(r.name)}` },
+  suppliers: { resource: 'core.suppliers', label: (r) => `${String(r.code)} · ${String(r.name)}`, activeOnly: true },
+  // what a supplier receipt takes: raw material and consumables (D-097)
+  receivedItems: {
+    resource: 'core.items',
+    label: (r) => `${String(r.code)} · ${String(r.name)}`,
+    activeOnly: true,
+    filters: { itemType: ['RAW', 'CONSUMABLE'] },
+  },
+  rmLocations: {
+    resource: 'core.locations',
+    label: (r) => `${String(r.plantCode)} / ${String(r.code)} · ${String(r.name)}`,
+    activeOnly: true,
+    filters: { locationType: ['RM_WAREHOUSE'] },
+  },
 };
 
 function usePicker(source: OptionSource | undefined) {
@@ -155,7 +169,22 @@ export function MasterEditor<T extends MasterRow>({
     () => (row ? config.toForm(row) : 'timezone' in config.blank && !config.blank.timezone ? { ...config.blank, timezone: tenantZone } : config.blank),
     [row, config, tenantZone],
   );
-  const title = editing ? `${row.code}` : `New ${config.singular}`;
+  const title = editing ? (config.drawerTitle?.(row) ?? `${row.code}`) : `New ${config.singular}`;
+  // a posting asks first; the form waits for the answer and keeps its idempotency key when declined
+  const [asking, setAsking] = React.useState<{ question: Confirmation; answer: (yes: boolean) => void } | null>(null);
+  const ask = (question: Confirmation) =>
+    new Promise<boolean>((resolve) => {
+      let answered = false;
+      setAsking({
+        question,
+        answer: (yes) => {
+          if (answered) return;
+          answered = true;
+          resolve(yes);
+          setAsking(null);
+        },
+      });
+    });
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -176,40 +205,65 @@ export function MasterEditor<T extends MasterRow>({
               {lockedReason}
             </InlineAlert>
           ) : (
-            <EoraForm
-              key={row ? `${row.id}:${row.version}` : 'new'}
-              label={title}
-              schema={schema}
-              defaultValues={defaults}
-              submitLabel={editing ? 'Save changes' : `Create ${config.singular}`}
-              secondary={
-                <Button type="button" onClick={() => onOpenChange(false)}>
-                  Cancel
-                </Button>
-              }
-              onSubmit={async (values: FormValues) => {
-                const clean = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])) as FormValues;
-                try {
-                  const created = row ? await config.update(row, clean) : await config.create(clean);
-                  onSaved(
-                    editing ? `${row.code} saved` : `${config.singular[0]?.toUpperCase()}${config.singular.slice(1)} ${clean.code ?? ''} created`.trim(),
-                    false,
-                    row ? undefined : created,
-                  );
-                  return { ok: true, message: editing ? 'Saved' : 'Created' };
-                } catch (e) {
-                  if (e instanceof PartialSave) {
-                    onSaved(e.message, true);
-                    return { ok: true };
-                  }
-                  return conflictAware(e);
+            <>
+              <EoraForm
+                key={row ? `${row.id}:${row.version}` : 'new'}
+                label={title}
+                schema={schema}
+                defaultValues={defaults}
+                submitLabel={
+                  editing
+                    ? (config.rowAction?.label ?? 'Save changes')
+                    : config.confirm
+                      ? config.confirm(config.blank, null).confirmLabel
+                      : `Create ${config.singular}`
                 }
-              }}
-            >
-              {fields.map((f) => (
-                <FieldControl key={f.key} field={f} today={todayIn(tenantZone)} />
-              ))}
-            </EoraForm>
+                secondary={
+                  <Button type="button" onClick={() => onOpenChange(false)}>
+                    Cancel
+                  </Button>
+                }
+                onSubmit={async (values: FormValues, ctx) => {
+                  const clean = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])) as FormValues;
+                  if (config.confirm && !(await ask(config.confirm(clean, row)))) {
+                    return { ok: false, message: 'Nothing was posted. Check the values and post again when they are right.' };
+                  }
+                  try {
+                    const created = row ? await config.update(row, clean, ctx) : await config.create(clean, ctx);
+                    onSaved(
+                      config.savedMessage
+                        ? config.savedMessage(created)
+                        : editing
+                          ? `${row.code} saved`
+                          : `${config.singular[0]?.toUpperCase()}${config.singular.slice(1)} ${clean.code ?? ''} created`.trim(),
+                      false,
+                      row ? undefined : created,
+                    );
+                    return { ok: true, message: editing ? 'Saved' : 'Created' };
+                  } catch (e) {
+                    if (e instanceof PartialSave) {
+                      onSaved(e.message, true);
+                      return { ok: true };
+                    }
+                    return conflictAware(e);
+                  }
+                }}
+              >
+                {fields.map((f) => (
+                  <FieldControl key={f.key} field={f} today={todayIn(tenantZone)} />
+                ))}
+              </EoraForm>
+              <ConfirmDialog
+                open={asking !== null}
+                onOpenChange={(open) => {
+                  if (!open) asking?.answer(false);
+                }}
+                title={asking?.question.title ?? ''}
+                description={asking?.question.description ?? ''}
+                confirmLabel={asking?.question.confirmLabel ?? 'Confirm'}
+                onConfirm={async () => asking?.answer(true)}
+              />
+            </>
           )}
         </div>
       </DrawerContent>

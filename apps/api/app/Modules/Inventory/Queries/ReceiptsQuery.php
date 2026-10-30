@@ -56,7 +56,7 @@ final class ReceiptsQuery extends QueryDefinition
     {
         return [
             new Field('id', 'd.id', Field::UUID, filterable: true),
-            new Field('docNo', 'd.doc_no', sortable: true, search: 'prefix'),
+            new Field('code', 'd.doc_no', sortable: true, search: 'prefix'),
             new Field('status', 'd.status', Field::ENUM, sortable: true, filterable: true, options: ['POSTED', 'REVERSED']),
             new Field('plantId', 'd.plant_id', Field::UUID, filterable: true),
             new Field('plantCode', 'p.code', sortable: true),
@@ -92,7 +92,7 @@ final class ReceiptsQuery extends QueryDefinition
     public function exportColumns(): array
     {
         return [
-            new ExportColumn('Receipt', 'docNo'),
+            new ExportColumn('Receipt', 'code'),
             new ExportColumn('Date', 'effectiveDate', ExportColumn::DATE),
             new ExportColumn('Plant', 'plantCode'),
             new ExportColumn('Supplier', 'supplierCode'),

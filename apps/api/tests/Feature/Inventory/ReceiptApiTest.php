@@ -87,7 +87,7 @@ it('receives a lot-controlled coil BLOCKED with a new internal lot, and replays 
     expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => (int) $db->selectOne('select count(*) as n from lots')->n))->toBe(2);
 
     $receipts = spa($this)->getJson('/api/v1/query/inventory.receipts')->assertOk()->assertJsonPath('meta.total', 2)->json('data');
-    expect(collect($receipts)->firstWhere('docNo', $first['docNo']))
+    expect(collect($receipts)->firstWhere('code', $first['docNo']))
         ->supplierCode->toBe('SUP-1')->itemCode->toBe('COIL-1')->supplierLotNo->toBe('HEAT-778')->locationCode->toBe('RM-01')
         ->stockStatus->toBe('BLOCKED')->qty->toBe('10')->uomCode->toBe('PCS');
 
