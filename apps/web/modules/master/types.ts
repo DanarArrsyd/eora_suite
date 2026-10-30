@@ -8,7 +8,20 @@ import type { Option, SortRule } from '@eora/features/data';
 export type MasterRow = { id: string; code: string; version: number; status?: string };
 
 /** Picker lists loaded from other query resources. */
-export type OptionSource = 'companies' | 'plants' | 'warehouses' | 'workCenters' | 'uoms' | 'items' | 'madeItems' | 'materials' | 'customers' | 'dies';
+export type OptionSource =
+  | 'companies'
+  | 'plants'
+  | 'warehouses'
+  | 'workCenters'
+  | 'uoms'
+  | 'items'
+  | 'madeItems'
+  | 'materials'
+  | 'customers'
+  | 'dies'
+  | 'suppliers'
+  | 'receivedItems'
+  | 'rmLocations';
 
 export type FieldSpec = {
   key: string;
@@ -33,9 +46,17 @@ export type FieldSpec = {
   decimals?: number;
   min?: number;
   max?: number;
+  /** For number fields: above zero (a quantity to post). */
+  positive?: boolean;
 };
 
 export type FormValues = Record<string, string>;
+
+/** The form's idempotency key: stable until a submission succeeds, so a retried posting replays (ADR-0014). */
+export type SubmitContext = { idempotencyKey: string };
+
+/** A posting asks before it is sent: posted documents are never edited, only reversed (doc 32 §1). */
+export type Confirmation = { title: string; description: string; confirmLabel: string };
 
 export type MasterResource<T extends MasterRow> = {
   /** Section id (`?show=<id>`). */
@@ -63,9 +84,26 @@ export type MasterResource<T extends MasterRow> = {
   blank: FormValues;
   /** Form values of an existing record. */
   toForm: (row: T) => FormValues;
-  create: (values: FormValues) => Promise<unknown>;
+  create: (values: FormValues, ctx: SubmitContext) => Promise<unknown>;
   /** Saves the edit at the row's version (If-Match); omitted keys are unchanged. */
-  update: (row: T, values: FormValues) => Promise<unknown>;
+  update: (row: T, values: FormValues, ctx: SubmitContext) => Promise<unknown>;
+  /**
+   * Rows act through their own permission and label instead of an edit (e.g. Release on BLOCKED stock): the drawer
+   * submits `update` with the action's label and shows `drawerTitle`.
+   */
+  rowAction?: { label: string; permission: string; deniedReason: string };
+  drawerTitle?: (row: T) => string;
+  /** Filters every list and export of this screen applies (e.g. only BLOCKED stock). */
+  fixedFilters?: Record<string, string | string[]>;
+  /** The notice after a create or row action, from the server's answer. */
+  savedMessage?: (result: unknown) => string;
+  /**
+   * Checks that need data of the chosen records (e.g. the item's unit decimals) before anything is asked or sent:
+   * field key → message; empty when the values are fine.
+   */
+  check?: (values: FormValues, row: T | null) => Promise<Record<string, string>>;
+  /** Ask before the create or row action is sent. */
+  confirm?: (values: FormValues, row: T | null) => Confirmation;
   /** Extra read-only facts shown at the top of the edit drawer. */
   facts?: (row: T) => { label: string; value: React.ReactNode }[];
   /**

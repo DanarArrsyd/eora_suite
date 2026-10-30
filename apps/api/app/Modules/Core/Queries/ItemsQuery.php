@@ -46,6 +46,7 @@ final class ItemsQuery extends QueryDefinition
             new Field('itemType', 'i.item_type', Field::ENUM, sortable: true, filterable: true, options: self::TYPES),
             new Field('baseUomId', 'i.base_uom_id', Field::UUID, filterable: true),
             new Field('baseUomCode', 'u.code', sortable: true),
+            new Field('baseUomDecimals', 'u.decimals', Field::INTEGER),
             new Field('lotControlled', 'i.lot_controlled', Field::BOOLEAN, filterable: true),
             new Field('inspectionRequired', 'i.inspection_required', Field::BOOLEAN, filterable: true),
             new Field('incomingReleaseRequired', 'i.incoming_release_required', Field::BOOLEAN, filterable: true),

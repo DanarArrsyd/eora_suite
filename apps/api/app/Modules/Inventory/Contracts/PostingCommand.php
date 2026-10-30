@@ -28,6 +28,7 @@ final readonly class PostingCommand
         public ?string $note = null,
         public ?string $sourceType = null,
         public ?string $sourceId = null,
+        public ?string $requestHash = null,
     ) {
         if ($legs === []) {
             throw new InvalidArgumentException('A posting has legs.');
@@ -37,10 +38,13 @@ final readonly class PostingCommand
         }
     }
 
-    /** Canonical hash of what the request asks, so a replay under the same key can be told from another request. */
+    /**
+     * Canonical hash of what the request asks, so a replay under the same key can be told from another request. A
+     * command built from a client request that also creates records (a receipt's lot) hashes the client's request.
+     */
     public function hash(): string
     {
-        return hash('sha256', json_encode([$this->docType, $this->plantId, $this->effectiveDate, $this->note, $this->sourceType, $this->sourceId,
+        return $this->requestHash ?? hash('sha256', json_encode([$this->docType, $this->plantId, $this->effectiveDate, $this->note, $this->sourceType, $this->sourceId,
             array_map(static fn (PostingLeg $l) => array_values(get_object_vars($l)), $this->legs),
             array_map(static fn (GenealogyLink $g) => array_values(get_object_vars($g)), $this->genealogy)], JSON_THROW_ON_ERROR));
     }

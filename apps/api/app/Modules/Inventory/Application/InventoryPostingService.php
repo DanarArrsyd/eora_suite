@@ -129,6 +129,7 @@ final class InventoryPostingService
         // per stock line (item and lot; a split's parent and children are one line): one status, or one place for a release
         $lines = [];
         $places = [];
+        $released = [];
         foreach ($command->legs as $leg) {
             $type = $types[$leg->locationId] ?? throw new DomainProblem(422, 'UNKNOWN_LOCATION', 'Unknown location', 'A leg names a location that does not exist.');
             $out = str_starts_with($leg->qty, '-');
@@ -154,7 +155,17 @@ final class InventoryPostingService
             if ($command->docType === 'MAT_TRANSFER') {
                 $places[$line][$out ? 'from' : 'to'][$leg->locationId] = true;
             }
-            $lines[$line][$command->docType === 'INCOMING_RELEASE' ? $leg->locationId : $leg->stockStatus] = true;
+            if ($command->docType === 'INCOMING_RELEASE') {
+                // released in place, rack by rack: what leaves BLOCKED at a location enters UNRESTRICTED there
+                $released[$line.'|'.$leg->locationId] = bcadd($released[$line.'|'.$leg->locationId] ?? '0', self::num($leg->qty), 6);
+            } else {
+                $lines[$line][$leg->stockStatus] = true;
+            }
+        }
+        foreach ($released as $net) {
+            if (bccomp($net, '0', 6) !== 0) {
+                $refuse('An incoming release turns BLOCKED stock into UNRESTRICTED stock at the same location, rack by rack.');
+            }
         }
         // a transfer moves each line somewhere else
         foreach ($places as $p) {
@@ -162,10 +173,10 @@ final class InventoryPostingService
                 $refuse('A transfer moves stock to another location.');
             }
         }
-        // a receipt, transfer or split keeps the status of each line it moves; a release stays at one place per line
+        // a receipt, transfer or split keeps the status of each line it moves
         foreach ($lines as $values) {
             if (count($values) !== 1) {
-                $refuse($command->docType === 'INCOMING_RELEASE' ? 'An incoming release stays at one location.' : 'Stock keeps its status when it moves; a status changes only by its own document.');
+                $refuse('Stock keeps its status when it moves; a status changes only by its own document.');
             }
         }
         if ($command->genealogy !== [] && $command->docType !== 'LOT_SPLIT') {
@@ -193,11 +204,42 @@ final class InventoryPostingService
 
     private function replay(EoraPostgresConnection $db, PostingCommand $command): ?PostingResult
     {
-        $stored = $db->selectOne('select request_hash, response from idempotency_records where idempotency_key = ?', [$command->idempotencyKey]);
+        return $this->previous($db, $command->idempotencyKey, $command->hash());
+    }
+
+    /**
+     * Holds $key until the caller's transaction ends, then answers as previous(): a second request under the same key
+     * waits for the first and replays its result instead of writing anything itself. Commands that create records before
+     * posting (a receipt's lot) claim the key first, before checking master data that may have changed since.
+     */
+    public function claim(EoraPostgresConnection $db, string $key, string $hash): ?PostingResult
+    {
+        if ($db->transactionLevel() === 0) {
+            throw new LogicException('Postings run inside the tenant transaction.');
+        }
+        $db->statement("set local lock_timeout = '3s'");
+        try {
+            $db->selectOne("select pg_advisory_xact_lock(hashtextextended((select c.tenant from ctx_api.context() c)::text || ':' || ?, 0))", [$key]);
+        } catch (QueryException $e) {
+            throw $e->getCode() === '55P03'
+                ? new DomainProblem(409, 'IDEMPOTENCY_IN_PROGRESS', 'Posting in progress', 'A posting with this key is being written. Send the request again to get its result.')
+                : $e;
+        }
+
+        return $this->previous($db, $key, $hash);
+    }
+
+    /**
+     * The result already posted under $key for the request hashed as $hash, null when the key is new; 409 when the key
+     * was used for another request.
+     */
+    public function previous(EoraPostgresConnection $db, string $key, string $hash): ?PostingResult
+    {
+        $stored = $db->selectOne('select request_hash, response from idempotency_records where idempotency_key = ?', [$key]);
         if ($stored === null) {
             return null;
         }
-        if ($stored->request_hash !== $command->hash()) {
+        if ($stored->request_hash !== $hash) {
             throw new DomainProblem(409, 'IDEMPOTENCY_KEY_REUSED', 'Idempotency key reused', 'This key was used for another request. Send a new key for a new posting.');
         }
         $r = json_decode((string) $stored->response, true, flags: JSON_THROW_ON_ERROR);

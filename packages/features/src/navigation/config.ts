@@ -222,8 +222,15 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Receiving',
         items: [
-          { id: 'rm-receipts', label: 'RM Receipts', icon: PackagePlus, release: 'R1', phase: 'later' },
-          { id: 'incoming-release', label: 'Incoming Release', icon: ShieldCheck, release: 'R1', phase: 'later' },
+          { id: 'rm-receipts', label: 'RM Receipts', icon: PackagePlus, release: 'R1', permission: 'materials.receipt.view', phase: 'later' },
+          {
+            id: 'incoming-release',
+            label: 'Incoming Release',
+            icon: ShieldCheck,
+            release: 'R1',
+            permission: 'materials.incoming_release.view',
+            phase: 'later',
+          },
         ],
       },
       {

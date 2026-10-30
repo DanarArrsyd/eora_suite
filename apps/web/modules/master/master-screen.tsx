@@ -46,6 +46,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const perm = config.permission ?? ORG_PERMISSION;
   const canView = permissions.includes(perm.view);
   const canCreate = permissions.includes(perm.create) && !config.noCreate;
+  const canAct = config.rowAction ? permissions.includes(config.rowAction.permission) : canCreate;
   const source = React.useMemo(() => querySource<T>(config.resource), [config.resource]);
   const client = useQueryClient();
   const router = useRouter();
@@ -66,11 +67,11 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const panel = useFilterPanel();
   const [visibility, setVisibility] = React.useState<ColumnVisibility>({});
   const [editor, setEditor] = React.useState<{ open: boolean; row: T | null }>({ open: false, row: null });
-  const [notice, setNotice] = React.useState<{ title: string; partial: boolean } | null>(null);
+  const [notice, setNotice] = React.useState<{ title: string; partial: boolean; saved?: boolean } | null>(null);
 
   const rows = useQuery({
-    queryKey: ['master', config.resource, query],
-    queryFn: ({ signal }) => source.list(query, signal),
+    queryKey: ['master', config.resource, query, config.fixedFilters],
+    queryFn: ({ signal }) => source.list(config.fixedFilters ? { ...query, filters: { ...query.filters, ...config.fixedFilters } } : query, signal),
     placeholderData: keepPreviousData,
     enabled: canView,
   });
@@ -94,7 +95,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const createLabel = `New ${config.singular}`;
   const createReason = `Your roles do not allow changes to ${perm.label}.`;
 
-  const createButton = canCreate ? (
+  const createButton = config.noCreate ? undefined : canCreate ? (
     <Button variant="primary" onClick={() => setEditor({ open: true, row: null })}>
       <Plus aria-hidden="true" className="size-4" />
       {createLabel}
@@ -122,7 +123,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
             </Button>
           }
         >
-          {notice.partial ? notice.title : 'The list shows the saved record.'}
+          {notice.partial ? notice.title : notice.saved ? 'The list shows the posted stock.' : 'The list shows the saved record.'}
         </InlineAlert>
       ) : null}
       <ListWorkspace
@@ -142,7 +143,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
                 resource={config.resource}
                 source={exportSource}
                 filtersApplied={filtersApplied}
-                query={{ filters: query.filters, search: query.search, sort: query.sort }}
+                query={{ filters: { ...query.filters, ...config.fixedFilters }, search: query.search, sort: query.sort }}
                 formats={EXCEL_ONLY}
                 disabledReason={permissions.includes('exchange.export.export') ? undefined : 'Your roles do not allow exports.'}
               />
@@ -226,19 +227,21 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
             primary: (r) =>
               config.openHref
                 ? { id: 'open', label: 'Open', icon: FolderOpen, onSelect: () => router.push(config.openHref!(r)) }
-                : {
-                    id: 'open',
-                    label: config.appendOnly || config.readOnly?.(r) || !canCreate ? 'View' : 'Edit',
-                    icon: Pencil,
-                    onSelect: () => setEditor({ open: true, row: r }),
-                  },
+                : config.rowAction
+                  ? { id: 'act', label: config.rowAction.label, icon: Pencil, onSelect: () => setEditor({ open: true, row: r }) }
+                  : {
+                      id: 'open',
+                      label: config.appendOnly || config.readOnly?.(r) || !canCreate ? 'View' : 'Edit',
+                      icon: Pencil,
+                      onSelect: () => setEditor({ open: true, row: r }),
+                    },
           }}
         />
       </ListWorkspace>
       <MasterEditor
         config={config}
         row={editor.row}
-        canEdit={canCreate}
+        canEdit={canAct}
         open={editor.open}
         onOpenChange={(open) => setEditor((e) => ({ ...e, open }))}
         onSaved={(message, partial, created) => {
@@ -247,7 +250,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
           // a record with its own page opens there once created
           const record = (created as { data?: T } | undefined)?.data;
           if (config.openHref && record?.id && !partial) router.push(config.openHref(record));
-          else setNotice({ title: message, partial: !!partial });
+          else setNotice({ title: message, partial: !!partial, saved: config.savedMessage !== undefined });
         }}
       />
     </EnterprisePage>

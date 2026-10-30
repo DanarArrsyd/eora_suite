@@ -39,6 +39,13 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         404 => ['NOT_FOUND'], 412 => ['VERSION_CONFLICT'], 422 => ['VALIDATION_FAILED'], 428 => ['PRECONDITION_REQUIRED'],
     ];
 
+    /** Inventory postings (doc 24 §5, M3): Idempotency-Key required, stock, period and ledger refusals. */
+    private const array POSTING = self::TENANT_WRITE + self::MASTER_403 + [
+        400 => ['IDEMPOTENCY_KEY_REQUIRED'],
+        409 => ['IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_IN_PROGRESS', 'INSUFFICIENT_STOCK', 'INSUFFICIENT_AVAILABLE', 'PERIOD_CLOSED', 'STOCK_BUSY'],
+        422 => ['VALIDATION_FAILED', 'INVALID_LEGS', 'INVALID_EFFECTIVE_DATE', 'POSTING_REFUSED'],
+    ];
+
     /**
      * Route name => status => error codes (doc 24 §5 catalogue).
      *
@@ -164,6 +171,8 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.exchange.imports.commit' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
         'v1.exchange.imports.reject' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.exchange.exports.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 422 => ['VALIDATION_FAILED', 'FILTER_NOT_ALLOWED']],
+        'v1.inventory.receipts.store' => [409 => [...self::POSTING[409], 'NO_SUPPLIER_LOCATION']] + self::POSTING,
+        'v1.inventory.incoming-releases.store' => self::POSTING,
         'v1.exchange.exports.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
         'v1.exchange.exports.link' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
         'v1.exchange.exports.file' => self::TENANT_READ + [404 => ['NOT_FOUND']],
