@@ -119,8 +119,14 @@ final class InventoryPostingService
         foreach ($db->select('select id, location_type from locations where id = any(?::uuid[])', ['{'.implode(',', $ids).'}']) as $row) {
             $types[(string) $row->id] = (string) $row->location_type;
         }
+        $release = [];
+        $itemIds = array_values(array_unique(array_map(static fn (PostingLeg $l) => $l->itemId, $command->legs)));
+        foreach ($db->select('select id, incoming_release_required from items where id = any(?::uuid[])', ['{'.implode(',', $itemIds).'}']) as $row) {
+            $release[(string) $row->id] = (bool) $row->incoming_release_required;
+        }
         $refuse = static fn (string $why) => throw new DomainProblem(422, 'INVALID_LEGS', 'Invalid legs', $why);
-        $statuses = [];
+        // per stock line (item and lot; a split's parent and children are one line): one status, or one place for a release
+        $lines = [];
         foreach ($command->legs as $leg) {
             $type = $types[$leg->locationId] ?? throw new DomainProblem(422, 'UNKNOWN_LOCATION', 'Unknown location', 'A leg names a location that does not exist.');
             $out = str_starts_with($leg->qty, '-');
@@ -131,22 +137,22 @@ final class InventoryPostingService
                 $refuse('Only a reversal reverses a leg.');
             }
             match ($command->docType) {
-                'RM_RECEIPT' => ($out ? $type === 'V_SUPPLIER' : ($type === 'RM_WAREHOUSE' && in_array($leg->stockStatus, ['UNRESTRICTED', 'BLOCKED'], true)))
-                    || $refuse('A receipt moves from the supplier into a raw-material location, UNRESTRICTED or BLOCKED.'),
+                // BR-ISS-06, D-062: an item that needs its incoming release is received BLOCKED, any other UNRESTRICTED
+                'RM_RECEIPT' => (($out ? $type === 'V_SUPPLIER' : $type === 'RM_WAREHOUSE')
+                        && $leg->stockStatus === (($release[$leg->itemId] ?? false) ? 'BLOCKED' : 'UNRESTRICTED'))
+                    || $refuse('A receipt moves from the supplier into a raw-material location, BLOCKED when the item needs its incoming release, UNRESTRICTED otherwise.'),
                 'INCOMING_RELEASE' => ($leg->stockStatus === ($out ? 'BLOCKED' : 'UNRESTRICTED') && $type === 'RM_WAREHOUSE')
                     || $refuse('An incoming release turns BLOCKED raw material into UNRESTRICTED stock in place, in a raw-material location.'),
                 default => ! str_starts_with($type, 'V_') || $refuse('A transfer or split moves between physical locations.'),
             };
-            if ($command->docType !== 'INCOMING_RELEASE') {
-                $statuses[$leg->stockStatus] = true;
-            }
-            if ($command->docType === 'INCOMING_RELEASE') {
-                $statuses[$leg->locationId] = true;
-            }
+            $line = $leg->itemId.'|'.($command->docType === 'LOT_SPLIT' ? '' : (string) $leg->lotId);
+            $lines[$line][$command->docType === 'INCOMING_RELEASE' ? $leg->locationId : $leg->stockStatus] = true;
         }
-        // a receipt, transfer or split keeps the status of what it moves; a release stays at one place
-        if (count($statuses) !== 1) {
-            $refuse($command->docType === 'INCOMING_RELEASE' ? 'An incoming release stays at one location.' : 'Stock keeps its status when it moves; a status changes only by its own document.');
+        // a receipt, transfer or split keeps the status of each line it moves; a release stays at one place per line
+        foreach ($lines as $values) {
+            if (count($values) !== 1) {
+                $refuse($command->docType === 'INCOMING_RELEASE' ? 'An incoming release stays at one location.' : 'Stock keeps its status when it moves; a status changes only by its own document.');
+            }
         }
         if ($command->genealogy !== [] && $command->docType !== 'LOT_SPLIT') {
             $refuse('Only a lot split records genealogy in M3.');

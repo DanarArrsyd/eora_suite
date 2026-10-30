@@ -250,7 +250,9 @@ it('checks what each leg means: codes per document, sign and place, and status o
         new PostingLeg('OUTPUT_GOOD', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '1'),
     ])))->toThrow(DomainProblem::class, 'Not available yet');
 
-    // the incoming release (D-062): a BLOCKED receipt becomes UNRESTRICTED in place
+    // the incoming release (D-062): an item that needs it is received BLOCKED (never UNRESTRICTED), then released in place
+    pstRun($this->t, fn (EoraPostgresConnection $db) => $db->update('update items set incoming_release_required = true where id = ?', [$f['item']]));
+    expect($refused(pstReceipt($f, '1', 'receipt-unrestricted-but-needs-release')))->toThrow(DomainProblem::class, 'Invalid legs');
     pstPost($this->t, new PostingCommand('RM_RECEIPT', $f['plant'], 'receipt-blocked', [
         new PostingLeg('RCPT_SUPPLIER', $f['supplier'], $f['item'], $f['lot'], 'BLOCKED', '-3'),
         new PostingLeg('RCPT_SUPPLIER', $f['rm2'], $f['item'], $f['lot'], 'BLOCKED', '3'),
