@@ -245,6 +245,11 @@ it('checks what each leg means: codes per document, sign and place, and status o
     ])))->toThrow(DomainProblem::class, 'Invalid legs');
     expect($refused(new PostingCommand('RM_RECEIPT', $f['plant'], 'receipt-genealogy', pstReceipt($f, '1', 'x-unused-key')->legs,
         [new GenealogyLink($f['lot'], $f['lot'], '1', $f['pcs'], '1', $f['pcs'])])))->toThrow(DomainProblem::class, 'Invalid legs');
+    // a transfer goes somewhere else
+    expect($refused(new PostingCommand('MAT_TRANSFER', $f['plant'], 'transfer-in-place', [
+        new PostingLeg('TRANSFER_LOC', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '-1'),
+        new PostingLeg('TRANSFER_LOC', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '1'),
+    ])))->toThrow(DomainProblem::class, 'Invalid legs');
     // documents of M4 are not posted yet
     expect($refused(new PostingCommand('PRODUCTION_POSTING', $f['plant'], 'production-early', [
         new PostingLeg('OUTPUT_GOOD', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '1'),

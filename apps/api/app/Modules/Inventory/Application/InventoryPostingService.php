@@ -78,6 +78,12 @@ final class InventoryPostingService
         if (! isset(self::DIRECT[$command->docType])) {
             throw new DomainProblem(422, 'DOCUMENT_TYPE_NOT_AVAILABLE', 'Not available yet', "{$command->docType} is posted with its own document from M4.");
         }
+
+        // a request already posted answers as it did, whatever master data changed since (checked before the rules)
+        $replay = $this->replay($db, $command);
+        if ($replay !== null) {
+            return $replay;
+        }
         $this->checkLegs($db, $command);
 
         // a split takes one parent lot per document, so the parent's quantity out equals its children's in (conservation)
@@ -86,11 +92,6 @@ final class InventoryPostingService
             if (count($parents) !== 1) {
                 throw new DomainProblem(422, 'LOT_SPLIT_ONE_PARENT', 'One parent lot per split', 'A lot split takes one parent lot; split another lot in its own document.');
             }
-        }
-
-        $replay = $this->replay($db, $command);
-        if ($replay !== null) {
-            return $replay;
         }
 
         $db->statement("set local lock_timeout = '3s'");
@@ -127,6 +128,7 @@ final class InventoryPostingService
         $refuse = static fn (string $why) => throw new DomainProblem(422, 'INVALID_LEGS', 'Invalid legs', $why);
         // per stock line (item and lot; a split's parent and children are one line): one status, or one place for a release
         $lines = [];
+        $places = [];
         foreach ($command->legs as $leg) {
             $type = $types[$leg->locationId] ?? throw new DomainProblem(422, 'UNKNOWN_LOCATION', 'Unknown location', 'A leg names a location that does not exist.');
             $out = str_starts_with($leg->qty, '-');
@@ -145,8 +147,20 @@ final class InventoryPostingService
                     || $refuse('An incoming release turns BLOCKED raw material into UNRESTRICTED stock in place, in a raw-material location.'),
                 default => ! str_starts_with($type, 'V_') || $refuse('A transfer or split moves between physical locations.'),
             };
+            if ($command->docType === 'LOT_SPLIT' && $leg->lotId === null) {
+                $refuse('A split moves lots of a lot-controlled item: every leg names its lot.');
+            }
             $line = $leg->itemId.'|'.($command->docType === 'LOT_SPLIT' ? '' : (string) $leg->lotId);
+            if ($command->docType === 'MAT_TRANSFER') {
+                $places[$line][$out ? 'from' : 'to'][$leg->locationId] = true;
+            }
             $lines[$line][$command->docType === 'INCOMING_RELEASE' ? $leg->locationId : $leg->stockStatus] = true;
+        }
+        // a transfer moves each line somewhere else
+        foreach ($places as $p) {
+            if (array_intersect_key($p['from'] ?? [], $p['to'] ?? []) !== []) {
+                $refuse('A transfer moves stock to another location.');
+            }
         }
         // a receipt, transfer or split keeps the status of each line it moves; a release stays at one place per line
         foreach ($lines as $values) {
