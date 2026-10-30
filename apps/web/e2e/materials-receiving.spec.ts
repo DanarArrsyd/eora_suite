@@ -10,7 +10,16 @@ const ID = (n: number) => `00000000-0000-7000-8000-${String(n).padStart(12, '0')
 
 const PLANT = { id: ID(1), code: 'P1', name: 'Plant 1', status: 'ACTIVE', version: 1 };
 const SUPPLIER = { id: ID(2), code: 'SUP-STEEL', name: 'Steel service centre', status: 'ACTIVE', version: 1 };
-const COIL = { id: ID(3), code: 'COIL-SPCC-12', name: 'SPCC coil 1.2 mm', itemType: 'RAW', baseUomCode: 'KG', status: 'ACTIVE', version: 1 };
+const COIL = {
+  id: ID(3),
+  code: 'COIL-SPCC-12',
+  name: 'SPCC coil 1.2 mm',
+  itemType: 'RAW',
+  baseUomCode: 'KG',
+  baseUomDecimals: 3,
+  status: 'ACTIVE',
+  version: 1,
+};
 const RACK = { id: ID(4), code: 'RM-A01', name: 'Coil rack A01', plantCode: 'P1', locationType: 'RM_WAREHOUSE', status: 'ACTIVE', version: 1 };
 const BLOCKED = {
   id: ID(5),
@@ -29,6 +38,7 @@ const BLOCKED = {
   qty: '2500',
   availableQty: '0',
   uomCode: 'KG',
+  uomDecimals: 3,
   version: 1,
 };
 
@@ -127,6 +137,15 @@ test('incoming release: blocked lines only; Release posts the quantity in place'
   await page.getByRole('button', { name: 'Release COIL-SPCC-12 L2610-0001 at RM-A01' }).click();
   const drawer = page.getByRole('dialog', { name: 'Release COIL-SPCC-12 lot L2610-0001' });
   await expect(drawer.getByRole('textbox', { name: 'Quantity to release' })).toHaveValue('2500');
+  // above zero and within the unit's decimals, before anything is asked or sent
+  await drawer.getByRole('textbox', { name: 'Quantity to release' }).fill('0');
+  await drawer.getByRole('button', { name: 'Release' }).click();
+  await expect(drawer).toContainText('Enter a quantity above zero.');
+  await drawer.getByRole('textbox', { name: 'Quantity to release' }).fill('1.2345');
+  await drawer.getByRole('button', { name: 'Release' }).click();
+  await expect(drawer).toContainText('Enter KG with at most 3 decimals.');
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  expect(calls).toHaveLength(0);
   await drawer.getByRole('textbox', { name: 'Quantity to release' }).fill('2000');
   await drawer.getByRole('button', { name: 'Release' }).click();
   await page.getByRole('alertdialog', { name: 'Release this material' }).getByRole('button', { name: 'Release' }).click();

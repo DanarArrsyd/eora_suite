@@ -109,6 +109,9 @@ it('receives a consumable without a lot as UNRESTRICTED and refuses other item t
     rcReceive($this, $f, ['locationId' => $f['other']], 'receipt-key-0005')->assertStatus(422)->assertJsonValidationErrors(['locationId']);
     rcReceive($this, $f, ['qty' => '0'], 'receipt-key-0006')->assertStatus(422)->assertJsonValidationErrors(['qty']);
     rcReceive($this, $f, ['qty' => '-2'], 'receipt-key-0007')->assertStatus(422)->assertJsonValidationErrors(['qty']);
+    // PCS takes whole numbers: a fraction is the quantity's error, before anything is posted (trailing zeros are fine)
+    rcReceive($this, $f, ['qty' => '2.5'], 'receipt-key-0008')->assertStatus(422)->assertJsonPath('errors.qty', ['Enter a whole number of PCS.']);
+    rcReceive($this, $f, ['qty' => '3.00'], 'receipt-key-0010')->assertCreated();
 })->group('integration', 'inventory');
 
 it('posts receipts and releases only with their permission and inside the plant scope (M3-D1)', function () {
@@ -137,6 +140,7 @@ it('releases BLOCKED stock rack by rack in one document, never more than is bloc
     $release = fn (array $lines, string $key) => spa($this)->postJson('/api/v1/inventory/incoming-releases',
         ['plantId' => $f['plant'], 'itemId' => $f['coil'], 'lotId' => $lot, 'lines' => $lines], ['Idempotency-Key' => $key]);
     $release([['locationId' => $f['rm1'], 'qty' => '7']], 'release-key-0001')->assertStatus(409)->assertJsonPath('code', 'INSUFFICIENT_STOCK');
+    $release([['locationId' => $f['rm1'], 'qty' => '0.5']], 'release-key-0004')->assertStatus(422)->assertJsonValidationErrors(['lines.0.qty']);
     $year = substr($f['today'], 0, 4);
     $release([['locationId' => $f['rm1'], 'qty' => '6'], ['locationId' => $f['rm2'], 'qty' => '3']], 'release-key-0002')
         ->assertCreated()->assertJsonPath('data.docNo', "REL-P1-{$year}-0001")->assertJsonPath('data.lotId', $lot);

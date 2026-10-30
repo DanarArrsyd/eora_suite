@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use LogicException;
+use stdClass;
 
 /**
  * Raw-material receipt (doc 04 row 1, M3-D3/D4) and incoming release (D-062). Quantities are in the item's base unit
@@ -71,7 +72,7 @@ final class ReceiptController
         if ($previous !== null) {
             return $this->answer($db, $previous);
         }
-        $item = $db->selectOne('select id, status, item_type, lot_controlled, incoming_release_required from items where id = ?', [$itemId])
+        $item = $db->selectOne('select i.id, i.status, i.item_type, i.lot_controlled, i.incoming_release_required, u.code as uom, u.decimals from items i join uoms u on u.id = i.base_uom_id where i.id = ?', [$itemId])
             ?? throw ValidationException::withMessages(['itemId' => 'Unknown item.']);
         if ($item->status !== 'ACTIVE') {
             throw ValidationException::withMessages(['itemId' => 'Only active items are received.']);
@@ -79,6 +80,7 @@ final class ReceiptController
         if (! in_array($item->item_type, self::RECEIVED_TYPES, true)) {
             throw ValidationException::withMessages(['itemId' => 'A supplier receipt takes raw material or consumables.']);
         }
+        self::requireUnitPrecision($data['qty'], $item, 'qty');
         $supplier = $db->selectOne("select id from suppliers where id = ? and status = 'ACTIVE'", [$supplierId])
             ?? throw ValidationException::withMessages(['supplierId' => 'Unknown or inactive supplier.']);
         $location = $this->rmLocation($db, $plant, $locationId, 'locationId');
@@ -131,8 +133,11 @@ final class ReceiptController
         if ($previous !== null) {
             return $this->answer($db, $previous);
         }
+        $unit = $db->selectOne('select u.code as uom, u.decimals from items i join uoms u on u.id = i.base_uom_id where i.id = ?', [$item])
+            ?? throw ValidationException::withMessages(['itemId' => 'Unknown item.']);
         foreach ($data['lines'] as $i => $line) {
             $this->rmLocation($db, $plant, $line['locationId'], "lines.{$i}.locationId");
+            self::requireUnitPrecision($line['qty'], $unit, "lines.{$i}.qty");
         }
 
         return $this->answer($db, $this->postings->post($db, $command));
@@ -150,6 +155,18 @@ final class ReceiptController
         $text = is_string($value) ? trim($value) : null;
 
         return $text === null || $text === '' ? null : $text;
+    }
+
+    /** A quantity in the item's base unit has at most the unit's decimals (the ledger stores it so, BR-INV-10). */
+    private static function requireUnitPrecision(string $qty, stdClass $unit, string $field): void
+    {
+        $dot = strpos($qty, '.');
+        $decimals = $dot === false ? 0 : strlen(rtrim(substr($qty, $dot + 1), '0'));
+        if ($decimals > (int) $unit->decimals) {
+            throw ValidationException::withMessages([$field => (int) $unit->decimals === 0
+                ? "Enter a whole number of {$unit->uom}."
+                : "Enter {$unit->uom} with at most {$unit->decimals} decimals."]);
+        }
     }
 
     private function key(Request $request): string

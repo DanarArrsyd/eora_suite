@@ -88,6 +88,7 @@ final class StockQuery extends QueryDefinition
             new Field('qty', 'trim_scale(b.qty)::text'),
             new Field('availableQty', "trim_scale(case when b.stock_status = 'UNRESTRICTED' then b.qty - {$allocated} else 0 end)::text"),
             new Field('uomCode', 'u.code'),
+            new Field('uomDecimals', 'u.decimals', Field::INTEGER),
             new Field('updatedAt', 'b.updated_at', Field::INSTANT, sortable: true),
             new Field('version', 'b.version', Field::INTEGER),
         ];

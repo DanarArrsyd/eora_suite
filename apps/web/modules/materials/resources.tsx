@@ -1,6 +1,6 @@
 import { api, call } from '@eora/features/auth';
 import { DomainStatusBadge, type FilterField } from '@eora/features/patterns';
-import { queryOptions } from '@/modules/master/source';
+import { queryAll, queryOptions } from '@/modules/master/source';
 import type { MasterResource, MasterRow } from '@/modules/master/types';
 
 /*
@@ -45,6 +45,7 @@ export type StockRow = {
   stockStatus: 'BLOCKED';
   qty: string;
   uomCode: string;
+  uomDecimals: number;
 };
 
 type Posted = { data: { documentId: string; docNo: string; lotNo: string | null; replayed: boolean } };
@@ -68,6 +69,13 @@ const ITEM_FILTER: FilterField = {
 };
 
 const idempotent = (key: string) => ({ 'Idempotency-Key': key });
+
+/** The ledger keeps a quantity at its unit's decimals (BR-INV-10): PCS whole numbers, KG up to 3 … */
+export function unitPrecisionError(qty: string, uom: string, decimals: number): string | undefined {
+  const fraction = qty.split('.')[1]?.replace(/0+$/, '') ?? '';
+  if (fraction.length <= decimals) return undefined;
+  return decimals === 0 ? `Enter a whole number of ${uom}.` : `Enter ${uom} with at most ${decimals} decimals.`;
+}
 const posted = (verb: string) => (result: unknown) => {
   const d = (result as Posted).data;
   const lot = d.lotNo ? `, lot ${d.lotNo}` : '';
@@ -118,7 +126,15 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
     { key: 'supplierId', label: 'Supplier', kind: 'select', required: true, options: 'suppliers' },
     { key: 'itemId', label: 'Item', kind: 'select', required: true, options: 'receivedItems', hint: 'Raw material or consumables.' },
     { key: 'locationId', label: 'Put away at', kind: 'select', required: true, options: 'rmLocations', hint: 'A raw-material location of the plant.' },
-    { key: 'qty', label: 'Quantity', kind: 'number', required: true, decimals: 6, min: 0, hint: "In the item's base unit, shown after the item." },
+    {
+      key: 'qty',
+      label: 'Quantity',
+      kind: 'number',
+      required: true,
+      decimals: 6,
+      positive: true,
+      hint: "In the item's base unit, shown after the item.",
+    },
     { key: 'supplierLotNo', label: 'Supplier lot or heat number', kind: 'text', maxLength: 60, hint: 'As on the mill certificate. Optional.' },
     { key: 'note', label: 'Note', kind: 'text', maxLength: 500 },
   ],
@@ -134,6 +150,11 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
     { label: 'Posted by', value: r.postedByName ?? '—' },
     ...(r.note ? [{ label: 'Note', value: r.note }] : []),
   ],
+  check: async (v): Promise<Record<string, string>> => {
+    const [item] = await queryAll<{ baseUomCode: string; baseUomDecimals: number }>('core.items', { id: v.itemId! });
+    const error = item && v.qty ? unitPrecisionError(v.qty, item.baseUomCode, item.baseUomDecimals) : undefined;
+    return error ? { qty: error } : {};
+  },
   confirm: (v) => ({
     title: 'Post this receipt',
     description: v.qty
@@ -192,7 +213,15 @@ export const INCOMING_RELEASE: MasterResource<StockRow> = {
     { id: 'qty', header: 'Blocked', numeric: true, critical: true, cell: (r) => `${r.qty} ${r.uomCode}` },
   ],
   fields: [
-    { key: 'qty', label: 'Quantity to release', kind: 'number', required: true, decimals: 6, min: 0, hint: 'All of it, or part when the rest waits.' },
+    {
+      key: 'qty',
+      label: 'Quantity to release',
+      kind: 'number',
+      required: true,
+      decimals: 6,
+      positive: true,
+      hint: 'All of it, or part when the rest waits.',
+    },
     { key: 'note', label: 'Note', kind: 'text', maxLength: 500, hint: 'E.g. the inspection report number.' },
   ],
   blank: { qty: '', note: '' },
@@ -202,6 +231,10 @@ export const INCOMING_RELEASE: MasterResource<StockRow> = {
     { label: 'Lot', value: r.lotNo ? `${r.lotNo}${r.supplierLotNo ? ` (supplier ${r.supplierLotNo})` : ''}` : 'No lot' },
     { label: 'Blocked', value: `${r.qty} ${r.uomCode} at ${r.plantCode} / ${r.locationCode}` },
   ],
+  check: async (v, r): Promise<Record<string, string>> => {
+    const error = r && v.qty ? unitPrecisionError(v.qty, r.uomCode, r.uomDecimals) : undefined;
+    return error ? { qty: error } : {};
+  },
   confirm: (v, r) => ({
     title: 'Release this material',
     description: `${v.qty ?? ''} ${r ? r.uomCode : ''} becomes Unrestricted at ${r?.locationCode ?? 'its location'} and can be issued to production.`,

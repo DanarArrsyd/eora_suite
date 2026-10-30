@@ -46,6 +46,8 @@ export type FieldSpec = {
   decimals?: number;
   min?: number;
   max?: number;
+  /** For number fields: above zero (a quantity to post). */
+  positive?: boolean;
 };
 
 export type FormValues = Record<string, string>;
@@ -95,6 +97,11 @@ export type MasterResource<T extends MasterRow> = {
   fixedFilters?: Record<string, string | string[]>;
   /** The notice after a create or row action, from the server's answer. */
   savedMessage?: (result: unknown) => string;
+  /**
+   * Checks that need data of the chosen records (e.g. the item's unit decimals) before anything is asked or sent:
+   * field key → message; empty when the values are fine.
+   */
+  check?: (values: FormValues, row: T | null) => Promise<Record<string, string>>;
   /** Ask before the create or row action is sent. */
   confirm?: (values: FormValues, row: T | null) => Confirmation;
   /** Extra read-only facts shown at the top of the edit drawer. */

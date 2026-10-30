@@ -81,7 +81,8 @@ function schemaFor(fields: FieldSpec[]) {
         .refine(
           (v) => v === '' || ((f.min === undefined || Number(v) >= f.min) && (f.max === undefined || Number(v) <= f.max)),
           `Enter a value${f.min !== undefined ? ` from ${f.min}` : ''}${f.max !== undefined ? ` up to ${f.max}` : ''}.`,
-        );
+        )
+        .refine((v) => v === '' || !f.positive || Number(v) > 0, 'Enter a quantity above zero.');
     }
     shape[f.key] = field;
   }
@@ -225,6 +226,10 @@ export function MasterEditor<T extends MasterRow>({
                 }
                 onSubmit={async (values: FormValues, ctx) => {
                   const clean = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])) as FormValues;
+                  const problems = config.check ? await config.check(clean, row).catch(() => ({})) : {};
+                  if (Object.keys(problems).length) {
+                    return { ok: false, message: 'Fix the highlighted field before posting.', fieldErrors: problems };
+                  }
                   if (config.confirm && !(await ask(config.confirm(clean, row)))) {
                     return { ok: false, message: 'Nothing was posted. Check the values and post again when they are right.' };
                   }
