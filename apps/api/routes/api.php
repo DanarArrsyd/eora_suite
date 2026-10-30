@@ -4,6 +4,7 @@ use App\Modules\Core\Http\OrgController;
 use App\Modules\Core\Http\PartController;
 use App\Modules\Core\Http\PartnerController;
 use App\Modules\Core\Http\ResourceController;
+use App\Modules\Inventory\Http\ReceiptController;
 use App\Modules\Planning\Http\BomController;
 use App\Modules\Planning\Http\BomRoutingMapController;
 use App\Modules\Planning\Http\ConversionProfileController;
@@ -145,6 +146,12 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('conversion-profile-versions/{version}/actions/reopen', [ConversionProfileController::class, 'reopen'])->name('conversion-profile-versions.reopen');
         Route::post('conversion-profile-versions/{version}/actions/validate', [ConversionProfileController::class, 'validate'])->name('conversion-profile-versions.validate');
         Route::post('conversion-profile-versions/{version}/actions/retire', [ConversionProfileController::class, 'retire'])->name('conversion-profile-versions.retire');
+    });
+
+    // Inventory postings (doc 32 §1.3, ADR-0014): one tenant transaction, retried on deadlock (the posting is idempotent)
+    Route::prefix('inventory')->name('inventory.')->middleware(['tenant:retry'])->group(function (): void {
+        Route::post('receipts', [ReceiptController::class, 'receive'])->name('receipts.store');
+        Route::post('incoming-releases', [ReceiptController::class, 'release'])->name('incoming-releases.store');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

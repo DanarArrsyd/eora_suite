@@ -1630,6 +1630,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/inventory/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive raw material from a supplier (Idempotency-Key header required). A lot-controlled item gets a new internal
+         *     lot; an item that needs its incoming release is received BLOCKED. 201 when posted, 200 when the same request was
+         *     posted before under the key, 409 when the key was used for another request
+         */
+        post: operations["v1.inventory.receipts.store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inventory/incoming-releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release BLOCKED raw material to UNRESTRICTED in place, one line per rack (Idempotency-Key header required) */
+        post: operations["v1.inventory.incoming-releases.store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/core/work-centers": {
         parameters: {
             query?: never;
@@ -2007,7 +2045,24 @@ export interface components {
             permissions: string[];
         };
     };
-    responses: never;
+    responses: {
+        /** @description Validation error */
+        ValidationException: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @description Errors overview. */
+                    message: string;
+                    /** @description A detailed description of each field that failed validation. */
+                    errors: {
+                        [key: string]: string[];
+                    };
+                };
+            };
+        };
+    };
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -16592,6 +16647,81 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    "v1.inventory.receipts.store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    plantId: string;
+                    /** Format: uuid */
+                    itemId: string;
+                    /** Format: uuid */
+                    locationId: string;
+                    /** Format: uuid */
+                    supplierId: string;
+                    qty: string;
+                    supplierLotNo?: string | null;
+                    note?: string | null;
+                    /** Format: date */
+                    effectiveDate?: string | null;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            422: components["responses"]["ValidationException"];
+        };
+    };
+    "v1.inventory.incoming-releases.store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    plantId: string;
+                    /** Format: uuid */
+                    itemId: string;
+                    /** Format: uuid */
+                    lotId?: string | null;
+                    lines: {
+                        /** Format: uuid */
+                        locationId: string;
+                        qty: string;
+                    }[];
+                    note?: string | null;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            422: components["responses"]["ValidationException"];
         };
     };
     "v1.core.work-centers.store": {

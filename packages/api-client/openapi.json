@@ -32130,6 +32130,176 @@
                 }
             }
         },
+        "/inventory/receipts": {
+            "post": {
+                "operationId": "v1.inventory.receipts.store",
+                "summary": "Receive raw material from a supplier (Idempotency-Key header required). A lot-controlled item gets a new internal\nlot; an item that needs its incoming release is received BLOCKED. 201 when posted, 200 when the same request was\nposted before under the key, 409 when the key was used for another request",
+                "tags": [
+                    "Receipt"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "plantId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "itemId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "locationId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "supplierId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "qty": {
+                                        "type": "string",
+                                        "pattern": "^(?!0+(\\.0+)?$)\\d{1,12}(\\.\\d{1,6})?$"
+                                    },
+                                    "supplierLotNo": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "maxLength": 60
+                                    },
+                                    "note": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "maxLength": 500
+                                    },
+                                    "effectiveDate": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "date"
+                                    }
+                                },
+                                "required": [
+                                    "plantId",
+                                    "itemId",
+                                    "locationId",
+                                    "supplierId",
+                                    "qty"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/inventory/incoming-releases": {
+            "post": {
+                "operationId": "v1.inventory.incoming-releases.store",
+                "summary": "Release BLOCKED raw material to UNRESTRICTED in place, one line per rack (Idempotency-Key header required)",
+                "tags": [
+                    "Receipt"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "plantId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "itemId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "lotId": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "uuid"
+                                    },
+                                    "lines": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "locationId": {
+                                                    "type": "string",
+                                                    "format": "uuid"
+                                                },
+                                                "qty": {
+                                                    "type": "string",
+                                                    "pattern": "^(?!0+(\\.0+)?$)\\d{1,12}(\\.\\d{1,6})?$"
+                                                }
+                                            },
+                                            "required": [
+                                                "locationId",
+                                                "qty"
+                                            ]
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 50,
+                                        "uniqueItems": true
+                                    },
+                                    "note": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "maxLength": 500
+                                    }
+                                },
+                                "required": [
+                                    "plantId",
+                                    "itemId",
+                                    "lines"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
         "/core/work-centers": {
             "post": {
                 "operationId": "v1.core.work-centers.store",
@@ -40088,6 +40258,38 @@
                     "permissions"
                 ],
                 "title": "RoleResource"
+            }
+        },
+        "responses": {
+            "ValidationException": {
+                "description": "Validation error",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "message": {
+                                    "type": "string",
+                                    "description": "Errors overview."
+                                },
+                                "errors": {
+                                    "type": "object",
+                                    "description": "A detailed description of each field that failed validation.",
+                                    "additionalProperties": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            },
+                            "required": [
+                                "message",
+                                "errors"
+                            ]
+                        }
+                    }
+                }
             }
         }
     }
