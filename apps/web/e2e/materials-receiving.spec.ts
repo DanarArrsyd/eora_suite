@@ -10,7 +10,7 @@ const ID = (n: number) => `00000000-0000-7000-8000-${String(n).padStart(12, '0')
 
 const PLANT = { id: ID(1), code: 'P1', name: 'Plant 1', status: 'ACTIVE', version: 1 };
 const SUPPLIER = { id: ID(2), code: 'SUP-STEEL', name: 'Steel service centre', status: 'ACTIVE', version: 1 };
-const COIL = { id: ID(3), code: 'COIL-SPCC-12', name: 'SPCC coil 1.2 mm', itemType: 'RAW', status: 'ACTIVE', version: 1 };
+const COIL = { id: ID(3), code: 'COIL-SPCC-12', name: 'SPCC coil 1.2 mm', itemType: 'RAW', baseUomCode: 'KG', status: 'ACTIVE', version: 1 };
 const RACK = { id: ID(4), code: 'RM-A01', name: 'Coil rack A01', plantCode: 'P1', locationType: 'RM_WAREHOUSE', status: 'ACTIVE', version: 1 };
 const BLOCKED = {
   id: ID(5),
@@ -68,7 +68,7 @@ test('RM receipts: a receipt is confirmed before it posts, with one idempotency 
   const drawer = page.getByRole('dialog', { name: 'New receipt' });
   await choose(page, drawer.getByRole('combobox', { name: 'Plant' }), 'P1 · Plant 1');
   await choose(page, drawer.getByRole('combobox', { name: 'Supplier' }), 'SUP-STEEL · Steel service centre');
-  await choose(page, drawer.getByRole('combobox', { name: 'Item' }), 'COIL-SPCC-12 · SPCC coil 1.2 mm');
+  await choose(page, drawer.getByRole('combobox', { name: 'Item' }), 'COIL-SPCC-12 · SPCC coil 1.2 mm (KG)');
   // the item picker offers purchased material only (D-097)
   expect(decodeURIComponent((await itemsUrl).url())).toContain('filter[itemType][]=RAW');
   await choose(page, drawer.getByRole('combobox', { name: 'Put away at' }), 'P1 / RM-A01 · Coil rack A01');
@@ -138,4 +138,18 @@ test('incoming release: blocked lines only; Release posts the quantity in place'
     lines: [{ locationId: RACK.id, qty: '2000' }],
     note: null,
   });
+});
+
+test('navigation: a quality inspector reaches Incoming Release, and only the live Materials items', async ({ page }) => {
+  // the prototype role "Quality Inspector" does not open Materials; the live permission does
+  await page.addInitScript(() => window.localStorage.setItem('eora.prototype.role', 'quality-inspector'));
+  await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['materials.incoming_release.view', 'materials.incoming_release.post'] } });
+  await mockApi(page, '/query/inventory.stock?*', page1([]));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/materials/incoming-release');
+  await expect(page.getByRole('navigation', { name: 'Modules' }).getByRole('link', { name: 'Materials' })).toBeVisible();
+  const menu = page.getByRole('navigation', { name: 'Materials menu' });
+  await expect(menu.getByRole('link', { name: 'Incoming Release' })).toBeVisible();
+  await expect(menu.getByRole('link', { name: 'RM Receipts' })).toHaveCount(0);
+  await expect(menu.getByRole('link', { name: 'Material Issue' })).toHaveCount(0);
 });

@@ -36,10 +36,10 @@ const PICKERS: Record<
   customers: { resource: 'core.customers', label: (r) => `${String(r.code)} · ${String(r.name)}`, activeOnly: true },
   dies: { resource: 'core.dies', label: (r) => `${String(r.plantCode)} / ${String(r.code)} · ${String(r.name)}` },
   suppliers: { resource: 'core.suppliers', label: (r) => `${String(r.code)} · ${String(r.name)}`, activeOnly: true },
-  // what a supplier receipt takes: raw material and consumables (D-097)
+  // what a supplier receipt takes: raw material and consumables (D-097), with the base unit its quantity is posted in
   receivedItems: {
     resource: 'core.items',
-    label: (r) => `${String(r.code)} · ${String(r.name)}`,
+    label: (r) => `${String(r.code)} · ${String(r.name)} (${String(r.baseUomCode)})`,
     activeOnly: true,
     filters: { itemType: ['RAW', 'CONSUMABLE'] },
   },

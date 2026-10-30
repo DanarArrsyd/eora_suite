@@ -11,7 +11,8 @@ use App\Platform\Query\QueryDefinition;
 
 /**
  * `inventory.stock` — stock on hand per balance key (plant, location, item, lot, status) of the plants inside the
- * caller's `inventory.stock.view` scopes; empty balances are left out. Available = UNRESTRICTED on hand less its active
+ * caller's `inventory.stock.view` scopes, in a warehouse or at a work center (Material at Production); empty balances
+ * are left out. Available = UNRESTRICTED on hand less its active
  * allocations (BR-INV-08); other statuses are never available (D-043).
  */
 final class StockQuery extends QueryDefinition
@@ -38,7 +39,8 @@ final class StockQuery extends QueryDefinition
         return 'stock_balances b
                  join items i on i.tenant_id = b.tenant_id and i.id = b.item_id and b.qty > 0
                  join locations l on l.tenant_id = b.tenant_id and l.id = b.location_id
-                 join warehouses w on w.tenant_id = l.tenant_id and w.id = l.warehouse_id
+                 left join warehouses w on w.tenant_id = l.tenant_id and w.id = l.warehouse_id
+                 left join work_centers wc on wc.tenant_id = l.tenant_id and wc.id = l.work_center_id
                  join plants p on p.tenant_id = b.tenant_id and p.id = b.plant_id
                  join uoms u on u.tenant_id = b.tenant_id and u.id = b.uom_id
                  left join lots lt on lt.tenant_id = b.tenant_id and lt.id = b.lot_id';
@@ -69,6 +71,9 @@ final class StockQuery extends QueryDefinition
             new Field('plantCode', 'p.code', sortable: true),
             new Field('warehouseId', 'l.warehouse_id', Field::UUID, filterable: true),
             new Field('warehouseCode', 'w.code', sortable: true),
+            // Material at Production lies at a work center, not in a warehouse (stock until consumed or returned)
+            new Field('workCenterId', 'l.work_center_id', Field::UUID, filterable: true),
+            new Field('workCenterCode', 'wc.code', sortable: true),
             new Field('locationId', 'b.location_id', Field::UUID, filterable: true),
             new Field('locationCode', 'l.code', sortable: true),
             new Field('locationType', 'l.location_type', Field::ENUM, filterable: true, options: array_keys(Labels::LOCATION_TYPES)),
@@ -99,6 +104,7 @@ final class StockQuery extends QueryDefinition
         return [
             new ExportColumn('Plant', 'plantCode'),
             new ExportColumn('Warehouse', 'warehouseCode'),
+            new ExportColumn('Work center', 'workCenterCode'),
             new ExportColumn('Location', 'locationCode'),
             new ExportColumn('Item', 'itemCode'),
             new ExportColumn('Item name', 'itemName'),

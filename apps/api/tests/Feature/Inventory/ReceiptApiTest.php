@@ -156,3 +156,23 @@ it('releases BLOCKED stock rack by rack in one document, never more than is bloc
         expect($e->errorCode)->toBe('INVALID_LEGS')->and($e->detail)->toContain('rack by rack');
     }
 })->group('integration', 'inventory');
+
+it('lists stock at a work center (Material at Production) with its work center, not only warehouse stock (BR-INV-01)', function () {
+    $f = $this->f;
+    orgUser($this, $this->t, 'MAT');
+    rcReceive($this, $f, ['itemId' => $f['oil'], 'supplierLotNo' => null])->assertCreated();
+    rcRun($this->t, function (EoraPostgresConnection $db) use ($f) {
+        $wc = (string) $db->selectOne("insert into work_centers (tenant_id, plant_id, code, name, work_center_type) values ((select c.tenant from ctx_api.context() c), ?, 'PRS-01', 'Press 1', 'PRESS') returning id", [$f['plant']])->id;
+        // a work center comes with its Material at Production location
+        $map = (string) $db->selectOne('select id from locations where work_center_id = ?', [$wc])->id;
+        app(InventoryPostingService::class)->post($db, new PostingCommand('MAT_TRANSFER', $f['plant'], 'transfer-key-0002', [
+            new PostingLeg('TRANSFER_LOC', $f['rm1'], $f['oil'], null, 'UNRESTRICTED', '-4'),
+            new PostingLeg('TRANSFER_LOC', $map, $f['oil'], null, 'UNRESTRICTED', '4'),
+        ]));
+    });
+
+    $rows = collect(spa($this)->getJson('/api/v1/query/inventory.stock?filter[itemId]='.$f['oil'])->assertOk()->json('data'))->keyBy('locationCode');
+    expect($rows->keys()->sort()->values()->all())->toBe(['MAP-PRS-01', 'RM-01'])
+        ->and($rows['MAP-PRS-01'])->workCenterCode->toBe('PRS-01')->warehouseCode->toBeNull()->qty->toBe('4')
+        ->and($rows['RM-01'])->warehouseCode->toBe('RM')->workCenterCode->toBeNull()->qty->toBe('6');
+})->group('integration', 'inventory');

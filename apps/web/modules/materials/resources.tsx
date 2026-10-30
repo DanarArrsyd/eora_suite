@@ -118,7 +118,7 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
     { key: 'supplierId', label: 'Supplier', kind: 'select', required: true, options: 'suppliers' },
     { key: 'itemId', label: 'Item', kind: 'select', required: true, options: 'receivedItems', hint: 'Raw material or consumables.' },
     { key: 'locationId', label: 'Put away at', kind: 'select', required: true, options: 'rmLocations', hint: 'A raw-material location of the plant.' },
-    { key: 'qty', label: 'Quantity', kind: 'number', required: true, decimals: 6, min: 0, hint: "In the item's base unit." },
+    { key: 'qty', label: 'Quantity', kind: 'number', required: true, decimals: 6, min: 0, hint: "In the item's base unit, shown after the item." },
     { key: 'supplierLotNo', label: 'Supplier lot or heat number', kind: 'text', maxLength: 60, hint: 'As on the mill certificate. Optional.' },
     { key: 'note', label: 'Note', kind: 'text', maxLength: 500 },
   ],
