@@ -17,6 +17,7 @@ const COIL = {
   itemType: 'RAW',
   baseUomCode: 'KG',
   baseUomDecimals: 3,
+  lotControlled: true,
   status: 'ACTIVE',
   version: 1,
 };

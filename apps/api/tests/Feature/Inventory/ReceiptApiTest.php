@@ -100,6 +100,8 @@ it('receives a lot-controlled coil BLOCKED with a new internal lot, and replays 
 it('receives a consumable without a lot as UNRESTRICTED and refuses other item types and places (M3-D4, D-097)', function () {
     orgUser($this, $this->t, 'MAT');
     $f = $this->f;
+    // an item without lots keeps no supplier lot: refused, never dropped
+    rcReceive($this, $f, ['itemId' => $f['oil']], 'receipt-key-0011')->assertStatus(422)->assertJsonValidationErrors(['supplierLotNo']);
     rcReceive($this, $f, ['itemId' => $f['oil'], 'supplierLotNo' => null])->assertCreated()->assertJsonPath('data.lotNo', null);
     $stock = spa($this)->getJson('/api/v1/query/inventory.stock?filter[itemId]='.$f['oil'])->assertOk()->json('data');
     expect($stock)->toHaveCount(1)->and($stock[0])->stockStatus->toBe('UNRESTRICTED')->availableQty->toBe('10');

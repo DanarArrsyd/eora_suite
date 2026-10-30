@@ -81,6 +81,10 @@ final class ReceiptController
             throw ValidationException::withMessages(['itemId' => 'A supplier receipt takes raw material or consumables.']);
         }
         self::requireUnitPrecision($data['qty'], $item, 'qty');
+        // a supplier lot is kept on the lot; an item without lots has nowhere to keep it, so it is refused, never dropped
+        if (! (bool) $item->lot_controlled && $supplierLot !== null) {
+            throw ValidationException::withMessages(['supplierLotNo' => 'This item is not tracked by lot. Leave the supplier lot or heat number empty.']);
+        }
         $supplier = $db->selectOne("select id from suppliers where id = ? and status = 'ACTIVE'", [$supplierId])
             ?? throw ValidationException::withMessages(['supplierId' => 'Unknown or inactive supplier.']);
         $location = $this->rmLocation($db, $plant, $locationId, 'locationId');

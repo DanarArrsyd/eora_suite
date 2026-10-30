@@ -135,7 +135,13 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
       positive: true,
       hint: "In the item's base unit, shown after the item.",
     },
-    { key: 'supplierLotNo', label: 'Supplier lot or heat number', kind: 'text', maxLength: 60, hint: 'As on the mill certificate. Optional.' },
+    {
+      key: 'supplierLotNo',
+      label: 'Supplier lot or heat number',
+      kind: 'text',
+      maxLength: 60,
+      hint: 'As on the mill certificate. Lot-tracked items only; optional.',
+    },
     { key: 'note', label: 'Note', kind: 'text', maxLength: 500 },
   ],
   blank: { plantId: '', supplierId: '', itemId: '', locationId: '', qty: '', supplierLotNo: '', note: '' },
@@ -151,9 +157,14 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
     ...(r.note ? [{ label: 'Note', value: r.note }] : []),
   ],
   check: async (v): Promise<Record<string, string>> => {
-    const [item] = await queryAll<{ baseUomCode: string; baseUomDecimals: number }>('core.items', { id: v.itemId! });
-    const error = item && v.qty ? unitPrecisionError(v.qty, item.baseUomCode, item.baseUomDecimals) : undefined;
-    return error ? { qty: error } : {};
+    const [item] = await queryAll<{ baseUomCode: string; baseUomDecimals: number; lotControlled: boolean }>('core.items', { id: v.itemId! });
+    if (!item) return {};
+    const problems: Record<string, string> = {};
+    const qty = v.qty ? unitPrecisionError(v.qty, item.baseUomCode, item.baseUomDecimals) : undefined;
+    if (qty) problems.qty = qty;
+    // a supplier lot is kept on the lot: an item without lots has nowhere to keep it
+    if (!item.lotControlled && v.supplierLotNo) problems.supplierLotNo = 'This item is not tracked by lot. Leave the supplier lot or heat number empty.';
+    return problems;
   },
   confirm: (v) => ({
     title: 'Post this receipt',
