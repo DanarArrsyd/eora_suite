@@ -136,6 +136,7 @@ it('posts only into an open period: this and last month open on first use, older
     expect(fn () => pstPost($this->t, pstReceipt($f, '1', 'receipt-older', $older)))->toThrow(DomainProblem::class, 'Period closed');
     expect(fn () => pstPost($this->t, pstReceipt($f, '1', 'receipt-tomorrow', (new DateTimeImmutable($f['today']))->modify('+1 day')->format('Y-m-d'))))
         ->toThrow(DomainProblem::class, 'Invalid effective date');
+    expect(fn () => pstPost($this->t, pstReceipt($f, '1', 'receipt-no-such-day', substr($f['today'], 0, 4).'-02-31')))->toThrow(DomainProblem::class, 'Invalid effective date');
 
     // the current month closes (requested, closed by a second person); postings into it stop
     pstPost($this->t, pstReceipt($f, '1', 'receipt-before-close'));

@@ -210,7 +210,8 @@ final class InventoryPostingService
         $now = new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t);
         $time = $this->calendar->resolve($db, $command->plantId, $now);
         $effective = $command->effectiveDate ?? $time->productionDate;
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $effective) !== 1 || $effective > $time->productionDate) {
+        $day = DateTimeImmutable::createFromFormat('!Y-m-d', $effective);
+        if ($day === false || $day->format('Y-m-d') !== $effective || $effective > $time->productionDate) {
             throw new DomainProblem(422, 'INVALID_EFFECTIVE_DATE', 'Invalid effective date', 'A posting belongs to today or an earlier day of an open period.');
         }
         // a backdated posting keeps the day it belongs to; the shift is resolved only for today's postings
