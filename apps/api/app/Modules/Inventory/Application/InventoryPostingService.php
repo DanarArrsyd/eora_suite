@@ -133,8 +133,8 @@ final class InventoryPostingService
             match ($command->docType) {
                 'RM_RECEIPT' => ($out ? $type === 'V_SUPPLIER' : ($type === 'RM_WAREHOUSE' && in_array($leg->stockStatus, ['UNRESTRICTED', 'BLOCKED'], true)))
                     || $refuse('A receipt moves from the supplier into a raw-material location, UNRESTRICTED or BLOCKED.'),
-                'INCOMING_RELEASE' => ($leg->stockStatus === ($out ? 'BLOCKED' : 'UNRESTRICTED') && ! str_starts_with($type, 'V_'))
-                    || $refuse('An incoming release turns BLOCKED stock into UNRESTRICTED stock in place.'),
+                'INCOMING_RELEASE' => ($leg->stockStatus === ($out ? 'BLOCKED' : 'UNRESTRICTED') && $type === 'RM_WAREHOUSE')
+                    || $refuse('An incoming release turns BLOCKED raw material into UNRESTRICTED stock in place, in a raw-material location.'),
                 default => ! str_starts_with($type, 'V_') || $refuse('A transfer or split moves between physical locations.'),
             };
             if ($command->docType !== 'INCOMING_RELEASE') {
@@ -150,6 +150,23 @@ final class InventoryPostingService
         }
         if ($command->genealogy !== [] && $command->docType !== 'LOT_SPLIT') {
             $refuse('Only a lot split records genealogy in M3.');
+        }
+        // a split's links are exactly its parent → child pairs, with the child leg's quantity (one link per child)
+        $children = [];
+        foreach ($command->legs as $leg) {
+            if ($leg->movementCode === 'LOT_SPLIT_IN') {
+                $children[(string) $leg->lotId] = $leg->qty;
+            }
+        }
+        $parents = array_values(array_unique(array_map(static fn (PostingLeg $l) => (string) $l->lotId,
+            array_filter($command->legs, static fn (PostingLeg $l) => $l->movementCode === 'LOT_SPLIT_OUT'))));
+        $linked = [];
+        foreach ($command->genealogy as $g) {
+            if (! in_array($g->fromLotId, $parents, true) || ! isset($children[$g->toLotId]) || isset($linked[$g->toLotId])
+                || bccomp(self::num($g->qtyFrom), self::num($children[$g->toLotId]), 6) !== 0 || bccomp(self::num($g->qtyTo), self::num($children[$g->toLotId]), 6) !== 0) {
+                $refuse('A split links its parent to each of its children once, with the child\'s quantity.');
+            }
+            $linked[$g->toLotId] = true;
         }
     }
 

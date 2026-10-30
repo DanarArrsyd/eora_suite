@@ -175,6 +175,15 @@ it('splits a lot into a child with its genealogy (doc 04 row 7)', function () {
         new PostingLeg('LOT_SPLIT_IN', $f['rm1'], $f['item'], $child, 'UNRESTRICTED', '4'),
     ], [new GenealogyLink($f['lot'], $child, '4', $f['pcs'], '4', $f['pcs'])]));
     expect($split->docNo)->toStartWith('SPL-P1-');
+    // a split invents no other ancestry: an extra link between unrelated lots is refused
+    $other = pstRun($this->t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
+        "insert into lots (tenant_id, item_id, lot_no, origin, parent_lot_id) values (?, ?, 'L2610-0003', 'SPLIT', ?) returning id", [$this->t['tenant'], $f['item'], $f['lot']],
+    )->id);
+    expect(fn () => pstPost($this->t, new PostingCommand('LOT_SPLIT', $f['plant'], 'split-extra-link', [
+        new PostingLeg('LOT_SPLIT_OUT', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '-1'),
+        new PostingLeg('LOT_SPLIT_IN', $f['rm1'], $f['item'], $other, 'UNRESTRICTED', '1'),
+    ], [new GenealogyLink($f['lot'], $other, '1', $f['pcs'], '1', $f['pcs']), new GenealogyLink($child, $other, '1', $f['pcs'], '1', $f['pcs'])])))
+        ->toThrow(DomainProblem::class, 'Invalid legs');
     // one parent lot per split document
     expect(fn () => pstPost($this->t, new PostingCommand('LOT_SPLIT', $f['plant'], 'split-two-parents', [
         new PostingLeg('LOT_SPLIT_OUT', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '-1'),
