@@ -63,3 +63,18 @@ it('documents every v1 error as problem+json with codes from the doc 24 §5 cata
         }
     }
 });
+
+it('documents the posting endpoints with the Idempotency-Key header and the posted document (201 posted, 200 replayed)', function () {
+    $paths = openApiDocument()['paths'];
+    foreach (['/inventory/receipts', '/inventory/incoming-releases', '/inventory/transfers'] as $path) {
+        $operation = $paths[$path]['post'];
+        $header = collect($operation['parameters'] ?? [])->firstWhere('name', 'Idempotency-Key');
+        expect($header)->not->toBeNull($path)
+            ->and($header['in'])->toBe('header')
+            ->and($header['required'])->toBeTrue();
+        foreach ([201, 200] as $status) {
+            $data = $operation['responses'][$status]['content']['application/json']['schema']['properties']['data'];
+            expect($data['required'])->toBe(['documentId', 'docNo', 'productionDate', 'replayed', 'lotId', 'lotNo']);
+        }
+    }
+});

@@ -32137,6 +32137,20 @@
                 "tags": [
                     "Receipt"
                 ],
+                "parameters": [
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true,
+                        "description": "One key per posting; a retry with the same key and body answers with what it posted.",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9._:-]+$",
+                            "minLength": 8,
+                            "maxLength": 200
+                        }
+                    }
+                ],
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -32198,12 +32212,112 @@
                     }
                 },
                 "responses": {
-                    "200": {
-                        "description": "",
+                    "201": {
+                        "description": "Posted.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "string"
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "documentId": {
+                                                    "type": "string",
+                                                    "format": "uuid"
+                                                },
+                                                "docNo": {
+                                                    "type": "string"
+                                                },
+                                                "productionDate": {
+                                                    "type": "string",
+                                                    "format": "date"
+                                                },
+                                                "replayed": {
+                                                    "type": "boolean"
+                                                },
+                                                "lotId": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "uuid"
+                                                },
+                                                "lotNo": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "documentId",
+                                                "docNo",
+                                                "productionDate",
+                                                "replayed",
+                                                "lotId",
+                                                "lotNo"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Replayed: this key already posted; nothing new was posted.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "documentId": {
+                                                    "type": "string",
+                                                    "format": "uuid"
+                                                },
+                                                "docNo": {
+                                                    "type": "string"
+                                                },
+                                                "productionDate": {
+                                                    "type": "string",
+                                                    "format": "date"
+                                                },
+                                                "replayed": {
+                                                    "type": "boolean"
+                                                },
+                                                "lotId": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "uuid"
+                                                },
+                                                "lotNo": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "documentId",
+                                                "docNo",
+                                                "productionDate",
+                                                "replayed",
+                                                "lotId",
+                                                "lotNo"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
                                 }
                             }
                         }
@@ -32582,6 +32696,20 @@
                 "tags": [
                     "Receipt"
                 ],
+                "parameters": [
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true,
+                        "description": "One key per posting; a retry with the same key and body answers with what it posted.",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9._:-]+$",
+                            "minLength": 8,
+                            "maxLength": 200
+                        }
+                    }
+                ],
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -32645,12 +32773,112 @@
                     }
                 },
                 "responses": {
-                    "200": {
-                        "description": "",
+                    "201": {
+                        "description": "Posted.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "string"
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "documentId": {
+                                                    "type": "string",
+                                                    "format": "uuid"
+                                                },
+                                                "docNo": {
+                                                    "type": "string"
+                                                },
+                                                "productionDate": {
+                                                    "type": "string",
+                                                    "format": "date"
+                                                },
+                                                "replayed": {
+                                                    "type": "boolean"
+                                                },
+                                                "lotId": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "uuid"
+                                                },
+                                                "lotNo": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "documentId",
+                                                "docNo",
+                                                "productionDate",
+                                                "replayed",
+                                                "lotId",
+                                                "lotNo"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Replayed: this key already posted; nothing new was posted.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "documentId": {
+                                                    "type": "string",
+                                                    "format": "uuid"
+                                                },
+                                                "docNo": {
+                                                    "type": "string"
+                                                },
+                                                "productionDate": {
+                                                    "type": "string",
+                                                    "format": "date"
+                                                },
+                                                "replayed": {
+                                                    "type": "boolean"
+                                                },
+                                                "lotId": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "uuid"
+                                                },
+                                                "lotNo": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "documentId",
+                                                "docNo",
+                                                "productionDate",
+                                                "replayed",
+                                                "lotId",
+                                                "lotNo"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
                                 }
                             }
                         }
@@ -40759,6 +40987,20 @@
                 "tags": [
                     "Transfer"
                 ],
+                "parameters": [
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true,
+                        "description": "One key per posting; a retry with the same key and body answers with what it posted.",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9._:-]+$",
+                            "minLength": 8,
+                            "maxLength": 200
+                        }
+                    }
+                ],
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -40826,12 +41068,112 @@
                     }
                 },
                 "responses": {
-                    "200": {
-                        "description": "",
+                    "201": {
+                        "description": "Posted.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "string"
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "documentId": {
+                                                    "type": "string",
+                                                    "format": "uuid"
+                                                },
+                                                "docNo": {
+                                                    "type": "string"
+                                                },
+                                                "productionDate": {
+                                                    "type": "string",
+                                                    "format": "date"
+                                                },
+                                                "replayed": {
+                                                    "type": "boolean"
+                                                },
+                                                "lotId": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "uuid"
+                                                },
+                                                "lotNo": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "documentId",
+                                                "docNo",
+                                                "productionDate",
+                                                "replayed",
+                                                "lotId",
+                                                "lotNo"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Replayed: this key already posted; nothing new was posted.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "documentId": {
+                                                    "type": "string",
+                                                    "format": "uuid"
+                                                },
+                                                "docNo": {
+                                                    "type": "string"
+                                                },
+                                                "productionDate": {
+                                                    "type": "string",
+                                                    "format": "date"
+                                                },
+                                                "replayed": {
+                                                    "type": "boolean"
+                                                },
+                                                "lotId": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "uuid"
+                                                },
+                                                "lotNo": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "documentId",
+                                                "docNo",
+                                                "productionDate",
+                                                "replayed",
+                                                "lotId",
+                                                "lotNo"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
                                 }
                             }
                         }

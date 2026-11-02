@@ -67,7 +67,8 @@ final class TransferController
         // stock may leave a location that no longer takes new stock; it only enters an active one
         $source = $db->selectOne("select location_type from locations where id = ? and plant_id = ? and location_type not like 'V\\_%'", [$from, $plant])
             ?? throw ValidationException::withMessages(['fromLocationId' => 'Choose a location of this plant that holds stock.']);
-        $target = $db->selectOne("select location_type from locations where id = ? and plant_id = ? and status = 'ACTIVE'", [$to, $plant])
+        // locked until the posting commits, so the location cannot be deactivated in between
+        $target = $db->selectOne("select location_type from locations where id = ? and plant_id = ? and status = 'ACTIVE' for share", [$to, $plant])
             ?? throw ValidationException::withMessages(['toLocationId' => 'Choose an active location of this plant.']);
         if ($target->location_type !== $source->location_type) {
             throw ValidationException::withMessages(['toLocationId' => 'A transfer stays between locations of the same kind. Issue to production, returns, QC and finished-goods receipt have their own documents.']);

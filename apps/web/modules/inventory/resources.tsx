@@ -157,7 +157,7 @@ export const STOCK_OVERVIEW: MasterResource<StockLineRow> = {
   update: (r, v, ctx) =>
     call(() =>
       api.POST('/inventory/transfers', {
-        headers: { 'Idempotency-Key': ctx.idempotencyKey },
+        params: { header: { 'Idempotency-Key': ctx.idempotencyKey } },
         body: {
           plantId: r.plantId,
           itemId: r.itemId,
@@ -168,6 +168,6 @@ export const STOCK_OVERVIEW: MasterResource<StockLineRow> = {
           qty: v.qty!,
           note: v.note || null,
         },
-      } as never),
+      }),
     ),
 };
