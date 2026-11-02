@@ -88,6 +88,8 @@ const LOCATION_TYPES = opts([
   ['STAGING', 'Staging'],
   ['CUSTODY_TRANSIT', 'Custody transit'],
 ]);
+/** Locations that hold stock (ADR-0002 §3): the user-made kinds and Material at Production. */
+export const PHYSICAL_LOCATION_TYPES: Option[] = [...LOCATION_TYPES, { value: 'MAT_AT_PROD', label: 'Material at Production' }];
 const ALL_LOCATION_TYPES = [
   ...LOCATION_TYPES,
   ...opts([

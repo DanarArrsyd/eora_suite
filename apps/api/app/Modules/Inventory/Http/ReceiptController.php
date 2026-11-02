@@ -8,19 +8,14 @@ use App\Modules\Inventory\Application\InventoryPostingService;
 use App\Modules\Inventory\Application\LotNumbers;
 use App\Modules\Inventory\Contracts\PostingCommand;
 use App\Modules\Inventory\Contracts\PostingLeg;
-use App\Modules\Inventory\Contracts\PostingResult;
 use App\Platform\Access\Authorizer;
-use App\Platform\Access\Scope;
 use App\Platform\Calendar\BusinessCalendar;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
 use DateTimeImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use LogicException;
-use stdClass;
 
 /**
  * Raw-material receipt (doc 04 row 1, M3-D3/D4) and incoming release (D-062). Quantities are in the item's base unit
@@ -28,6 +23,8 @@ use stdClass;
  */
 final class ReceiptController
 {
+    use PostingRequests;
+
     /** D-097: purchased material only; semi-finished from a subcontractor comes with its own flow. */
     private const array RECEIVED_TYPES = ['RAW', 'CONSUMABLE'];
 
@@ -148,66 +145,11 @@ final class ReceiptController
         return $this->answer($db, $this->postings->post($db, $command));
     }
 
-    private function db(): EoraPostgresConnection
-    {
-        $db = DB::connection();
-
-        return $db instanceof EoraPostgresConnection ? $db : throw new LogicException('Postings require the EORA PostgreSQL connection.');
-    }
-
-    private static function optionalText(mixed $value): ?string
-    {
-        $text = is_string($value) ? trim($value) : null;
-
-        return $text === null || $text === '' ? null : $text;
-    }
-
-    /** A quantity in the item's base unit has at most the unit's decimals (the ledger stores it so, BR-INV-10). */
-    private static function requireUnitPrecision(string $qty, stdClass $unit, string $field): void
-    {
-        $dot = strpos($qty, '.');
-        $decimals = $dot === false ? 0 : strlen(rtrim(substr($qty, $dot + 1), '0'));
-        if ($decimals > (int) $unit->decimals) {
-            throw ValidationException::withMessages([$field => (int) $unit->decimals === 0
-                ? "Enter a whole number of {$unit->uom}."
-                : "Enter {$unit->uom} with at most {$unit->decimals} decimals."]);
-        }
-    }
-
-    private function key(Request $request): string
-    {
-        $key = (string) $request->header('Idempotency-Key', '');
-        if (preg_match('/^[A-Za-z0-9._:-]{8,200}$/', $key) !== 1) {
-            throw new DomainProblem(400, 'IDEMPOTENCY_KEY_REQUIRED', 'Idempotency key required', 'Send an Idempotency-Key header (8–200 letters, digits, . _ : -).');
-        }
-
-        return $key;
-    }
-
-    private function plant(EoraPostgresConnection $db, string $plantId, string $permission): string
-    {
-        $this->authorizer->requireAnywhere($db, $permission);
-        $plant = strtolower($plantId);
-        if ($db->selectOne('select 1 as ok from plants where id = ?', [$plant]) === null) {
-            throw ValidationException::withMessages(['plantId' => 'Unknown plant.']);
-        }
-        $this->authorizer->authorize($db, $permission, Scope::plant($plant, (string) $db->selectOne('select company_id from plants where id = ?', [$plant])->company_id));
-
-        return $plant;
-    }
-
     private function rmLocation(EoraPostgresConnection $db, string $plant, string $id, string $field): string
     {
         $row = $db->selectOne("select id from locations where id = ? and plant_id = ? and location_type = 'RM_WAREHOUSE' and status = 'ACTIVE'", [strtolower($id), $plant])
             ?? throw ValidationException::withMessages([$field => 'Choose an active raw-material location of this plant.']);
 
         return (string) $row->id;
-    }
-
-    private function answer(EoraPostgresConnection $db, PostingResult $result): JsonResponse
-    {
-        $lot = $db->selectOne('select l.id, l.lot_no from inventory_movements m join lots l on l.id = m.lot_id where m.document_id = ? limit 1', [$result->documentId]);
-
-        return response()->json(['data' => $result->toArray() + ['replayed' => $result->replayed, 'lotId' => $lot?->id, 'lotNo' => $lot?->lot_no]], $result->replayed ? 200 : 201);
     }
 }

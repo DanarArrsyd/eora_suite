@@ -173,6 +173,7 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.exchange.exports.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 422 => ['VALIDATION_FAILED', 'FILTER_NOT_ALLOWED']],
         'v1.inventory.receipts.store' => [409 => [...self::POSTING[409], 'NO_SUPPLIER_LOCATION']] + self::POSTING,
         'v1.inventory.incoming-releases.store' => self::POSTING,
+        'v1.inventory.transfers.store' => self::POSTING,
         'v1.exchange.exports.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
         'v1.exchange.exports.link' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
         'v1.exchange.exports.file' => self::TENANT_READ + [404 => ['NOT_FOUND']],
