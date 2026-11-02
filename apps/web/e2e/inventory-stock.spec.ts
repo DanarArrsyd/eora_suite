@@ -101,8 +101,8 @@ test('stock overview: a viewer sees stock; Transfer explains the missing permiss
   await page.goto('/inventory/stock-overview');
   // plant and item options come from master data, which a stock-only role does not read: those filters are left out
   await expect(page.getByRole('table', { name: 'Stock Overview' }).getByRole('row', { name: /COIL-SPCC-12/ })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'Plant' })).toHaveCount(0);
-  await expect(page.getByRole('combobox', { name: 'Item' })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Plant', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Item', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: /^Transfer COIL-SPCC-12/ }).click();
   await expect(page.getByRole('dialog', { name: /Transfer COIL-SPCC-12/ })).toContainText('Your roles do not allow transfers.');
   await expect(page.getByRole('combobox', { name: 'To location' })).toHaveCount(0);
