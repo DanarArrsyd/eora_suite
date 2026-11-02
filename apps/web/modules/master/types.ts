@@ -21,7 +21,8 @@ export type OptionSource =
   | 'dies'
   | 'suppliers'
   | 'receivedItems'
-  | 'rmLocations';
+  | 'rmLocations'
+  | 'locations';
 
 export type FieldSpec = {
   key: string;
@@ -31,6 +32,8 @@ export type FieldSpec = {
   hint?: string;
   /** Static options, or a live picker. */
   options?: Option[] | OptionSource;
+  /** Live pickers: filters from the record the drawer acts on (e.g. locations of the row's plant and kind). */
+  optionFilter?: (row: unknown) => Record<string, string | string[]>;
   /** Shown only when creating (codes and parents are fixed afterwards). */
   createOnly?: boolean;
   /** Shown only when editing (e.g. status: a new record always starts active). */
@@ -75,6 +78,8 @@ export type MasterResource<T extends MasterRow> = {
   singular: string;
   columns: EoraColumn<T>[];
   filters: FilterField[];
+  /** Filters whose options load from a list the user may lack (filter key → that list's view permission): hidden without it. */
+  filterPermissions?: Record<string, string>;
   defaultSort: SortRule[];
   searchPlaceholder: string;
   rowLabel: (row: T) => string;
@@ -91,7 +96,13 @@ export type MasterResource<T extends MasterRow> = {
    * Rows act through their own permission and label instead of an edit (e.g. Release on BLOCKED stock): the drawer
    * submits `update` with the action's label and shows `drawerTitle`.
    */
-  rowAction?: { label: string; permission: string; deniedReason: string };
+  rowAction?: {
+    label: string;
+    permission: string;
+    deniedReason: string;
+    /** Lists the drawer reads (e.g. locations for a destination): without them the action cannot be completed. */
+    needs?: { permission: string; reason: string }[];
+  };
   drawerTitle?: (row: T) => string;
   /** Filters every list and export of this screen applies (e.g. only BLOCKED stock). */
   fixedFilters?: Record<string, string | string[]>;

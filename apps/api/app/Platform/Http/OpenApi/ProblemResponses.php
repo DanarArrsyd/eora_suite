@@ -10,6 +10,7 @@ use Dedoc\Scramble\OpenApiContext;
 use Dedoc\Scramble\Support\Generator\Header;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\Operation;
+use Dedoc\Scramble\Support\Generator\Parameter;
 use Dedoc\Scramble\Support\Generator\Reference;
 use Dedoc\Scramble\Support\Generator\Response;
 use Dedoc\Scramble\Support\Generator\Schema;
@@ -173,10 +174,14 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.exchange.exports.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 422 => ['VALIDATION_FAILED', 'FILTER_NOT_ALLOWED']],
         'v1.inventory.receipts.store' => [409 => [...self::POSTING[409], 'NO_SUPPLIER_LOCATION']] + self::POSTING,
         'v1.inventory.incoming-releases.store' => self::POSTING,
+        'v1.inventory.transfers.store' => self::POSTING,
         'v1.exchange.exports.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
         'v1.exchange.exports.link' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
         'v1.exchange.exports.file' => self::TENANT_READ + [404 => ['NOT_FOUND']],
     ];
+
+    /** Posting routes (doc 24 §5.3): the Idempotency-Key header and the posted document, 201 first time, 200 on replay. */
+    private const array POSTINGS = ['v1.inventory.receipts.store', 'v1.inventory.incoming-releases.store', 'v1.inventory.transfers.store'];
 
     /** Laravel-shaped error components Scramble registers; replaced by the problem responses above. */
     private const array INFERRED_COMPONENTS = ['ValidationException', 'AuthenticationException', 'NotFoundHttpException', 'AuthorizationException', 'AccessDeniedHttpException'];
@@ -199,6 +204,9 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         if ($errors === []) {
             return;
         }
+        if (in_array($context->route->getName(), self::POSTINGS, true)) {
+            self::posting($subject);
+        }
 
         $subject->responses = array_values(array_filter(
             $subject->responses ?? [],
@@ -214,6 +222,30 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
             }
             $subject->addResponse($response);
         }
+    }
+
+    private static function posting(Operation $operation): void
+    {
+        $operation->addParameters([Parameter::make('Idempotency-Key', 'header')->required(true)
+            ->description('One key per posting; a retry with the same key and body answers with what it posted.')
+            ->setSchema(Schema::fromType(tap((new T\StringType)->setMin(8)->setMax(200), static function (T\StringType $t): void {
+                $t->pattern = '^[A-Za-z0-9._:-]+$';
+            })))]);
+        $operation->responses = array_values(array_filter(
+            $operation->responses ?? [],
+            static fn (Response|Reference $r) => $r instanceof Response && (int) $r->code >= 400,
+        ));
+        $posted = (new T\ObjectType)
+            ->addProperty('documentId', (new T\StringType)->format('uuid'))
+            ->addProperty('docNo', new T\StringType)
+            ->addProperty('productionDate', (new T\StringType)->format('date'))
+            ->addProperty('replayed', new T\BooleanType)
+            ->addProperty('lotId', (new T\StringType)->format('uuid')->nullable(true))
+            ->addProperty('lotNo', (new T\StringType)->nullable(true))
+            ->setRequired(['documentId', 'docNo', 'productionDate', 'replayed', 'lotId', 'lotNo']);
+        $body = Schema::fromType((new T\ObjectType)->addProperty('data', $posted)->setRequired(['data']));
+        $operation->addResponse(Response::make(201)->setDescription('Posted.')->setContent('application/json', $body));
+        $operation->addResponse(Response::make(200)->setDescription('Replayed: this key already posted; nothing new was posted.')->setContent('application/json', $body));
     }
 
     /** @param  list<string>  $codes */

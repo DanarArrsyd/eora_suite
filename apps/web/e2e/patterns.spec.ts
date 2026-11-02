@@ -240,6 +240,8 @@ test('rapid list interactions are never lost (tab → tab → sort without waiti
 
 test('date range filter: an end date only ("until") can be chosen, and a malformed URL date does not break the picker', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
+  // the calendar opens on the current month; the sample lots are received in October 2026
+  await page.clock.setFixedTime(new Date('2026-10-15T09:00:00+07:00'));
   await page.goto('/system/examples/raw-material-lots?f.received=abc..def');
   await page.getByRole('button', { name: /^Receipt date: not set/ }).click();
   const panel = page.getByRole('dialog', { name: 'Receipt date' });

@@ -36,3 +36,15 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
 | 2 | **Release** pada coil → quantity terisi 2500; ubah ke `2000` → **Release** → konfirmasi **Release**. | Pesan `REL-P1-<tahun>-0001 released`. Baris tersisa Blocked **500 KG**. | |
 | 3 | **Release** pada sisa coil dengan quantity `9999`. | Ditolak: "Only 500 is on hand there …"; tidak ada yang berubah. | |
 | 4 | Release sisa 500. | Baris hilang dari daftar (tidak ada lagi stok Blocked). | |
+
+## 3. Transfer dalam plant — Stock Overview (langkah 4, D-048, D-098)
+Siapkan dulu sebagai `csa`: rak RM kedua di gudang RM plant P1 (Master Data → Plants & Warehouses → Locations, mis. `RM-A02`).
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `mat` → Inventory → **Stock Overview**. | Stok dari ledger per lokasi, lot dan status: coil Unrestricted dan Blocked dari §1–2, oli. Kolom **Available** = 0 untuk stok Blocked. | |
+| 2 | **Transfer** pada coil Unrestricted → buka pilihan **To location**. | Hanya rak RM plant P1 (tidak ada lokasi Material at Production, QC, FG). | |
+| 3 | Pilih rak asal yang sama → **Transfer**. | Ditolak sebelum konfirmasi: "Choose another location than the one the stock is in." | |
+| 4 | Pilih `RM-A02`, quantity `800` → **Transfer** → konfirmasi **Transfer**. | Pesan `TRF-P1-<tahun>-0001 transferred`. Rak asal berkurang 800, `RM-A02` 800 KG, status tetap Unrestricted, lot sama. | |
+| 5 | Transfer coil **Blocked** ke `RM-A02`. | Berhasil; di `RM-A02` muncul baris Blocked terpisah (status tidak berubah karena transfer). | |
+| 6 | Login `qci` → Inventory → Stock Overview → **Transfer** pada baris mana pun. | Stok terlihat; drawer menjelaskan "Your roles do not allow transfers.", tidak ada form. | |

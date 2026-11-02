@@ -313,7 +313,7 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Stock',
         items: [
-          { id: 'stock-overview', label: 'Stock Overview', icon: LayoutList, release: 'R1', phase: 'later' },
+          { id: 'stock-overview', label: 'Stock Overview', icon: LayoutList, release: 'R1', permission: 'inventory.stock.view', phase: 'later' },
           { id: 'raw-material', label: 'Raw Material', icon: Cylinder, release: 'R1', phase: 'later', topbarContext: 'warehouse' },
           { id: 'semi-finished', label: 'Semi-Finished Material', icon: Component, release: 'R1', phase: 'later' },
           { id: 'finished-goods', label: 'Finished Goods', icon: PackageCheck, release: 'R1', phase: 'later' },

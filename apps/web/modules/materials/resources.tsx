@@ -68,7 +68,7 @@ const ITEM_FILTER: FilterField = {
   loadOptions: (_deps, signal) => queryOptions('core.items', (r) => `${String(r.code)} · ${String(r.name)}`, { itemType: ['RAW', 'CONSUMABLE'] }, signal),
 };
 
-const idempotent = (key: string) => ({ 'Idempotency-Key': key });
+const idempotent = (key: string) => ({ header: { 'Idempotency-Key': key } });
 
 /** The ledger keeps a quantity at its unit's decimals (BR-INV-10): PCS whole numbers, KG up to 3 … */
 export function unitPrecisionError(qty: string, uom: string, decimals: number): string | undefined {
@@ -177,7 +177,7 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
   create: (v, ctx) =>
     call(() =>
       api.POST('/inventory/receipts', {
-        headers: idempotent(ctx.idempotencyKey),
+        params: idempotent(ctx.idempotencyKey),
         body: {
           plantId: v.plantId!,
           supplierId: v.supplierId!,
@@ -187,7 +187,7 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
           supplierLotNo: v.supplierLotNo || null,
           note: v.note || null,
         },
-      } as never),
+      }),
     ),
   update: () => Promise.reject(new Error('Receipts are never edited.')),
 };
@@ -256,8 +256,8 @@ export const INCOMING_RELEASE: MasterResource<StockRow> = {
   update: (r, v, ctx) =>
     call(() =>
       api.POST('/inventory/incoming-releases', {
-        headers: idempotent(ctx.idempotencyKey),
+        params: idempotent(ctx.idempotencyKey),
         body: { plantId: r.plantId, itemId: r.itemId, lotId: r.lotId, lines: [{ locationId: r.locationId, qty: v.qty! }], note: v.note || null },
-      } as never),
+      }),
     ),
 };

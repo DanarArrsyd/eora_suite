@@ -43,6 +43,11 @@ const PICKERS: Record<
     activeOnly: true,
     filters: { itemType: ['RAW', 'CONSUMABLE'] },
   },
+  locations: {
+    resource: 'core.locations',
+    label: (r) => `${String(r.plantCode)} / ${String(r.code)} · ${String(r.name)}`,
+    activeOnly: true,
+  },
   rmLocations: {
     resource: 'core.locations',
     label: (r) => `${String(r.plantCode)} / ${String(r.code)} · ${String(r.name)}`,
@@ -51,11 +56,11 @@ const PICKERS: Record<
   },
 };
 
-function usePicker(source: OptionSource | undefined) {
+function usePicker(source: OptionSource | undefined, extra: Record<string, string | string[]> = {}) {
   const p = source ? PICKERS[source] : undefined;
   return useQuery({
-    queryKey: ['master', 'picker', source],
-    queryFn: ({ signal }) => queryOptions(p!.resource, p!.label, { ...(p!.activeOnly ? { status: 'ACTIVE' } : {}), ...(p!.filters ?? {}) }, signal),
+    queryKey: ['master', 'picker', source, extra],
+    queryFn: ({ signal }) => queryOptions(p!.resource, p!.label, { ...(p!.activeOnly ? { status: 'ACTIVE' } : {}), ...(p!.filters ?? {}), ...extra }, signal),
     enabled: !!p,
     staleTime: 30_000,
   });
@@ -89,8 +94,8 @@ function schemaFor(fields: FieldSpec[]) {
   return z.object(shape);
 }
 
-function FieldControl({ field, today }: { field: FieldSpec; today: string }) {
-  const picker = usePicker(typeof field.options === 'string' ? field.options : undefined);
+function FieldControl({ field, today, row }: { field: FieldSpec; today: string; row: unknown }) {
+  const picker = usePicker(typeof field.options === 'string' ? field.options : undefined, row && field.optionFilter ? field.optionFilter(row) : undefined);
   if (field.kind === 'date') {
     return (
       <FormDateField
@@ -140,6 +145,7 @@ export function MasterEditor<T extends MasterRow>({
   config,
   row,
   canEdit,
+  deniedReason,
   open,
   onOpenChange,
   onSaved,
@@ -149,6 +155,8 @@ export function MasterEditor<T extends MasterRow>({
   row: T | null;
   /** The caller's create/edit permission hint (the server decides). */
   canEdit: boolean;
+  /** Why the row action is not available (its permission or a list its drawer reads). */
+  deniedReason?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Called after a save; `partial` names what was saved when a later write failed; `created` is the create response. */
@@ -160,7 +168,11 @@ export function MasterEditor<T extends MasterRow>({
   const lockedReason = row
     ? (config.appendOnly ??
       config.readOnly?.(row) ??
-      (canEdit ? undefined : `Your roles allow viewing ${config.permission?.label ?? 'organisation master data'}, not changing it.`))
+      (canEdit
+        ? undefined
+        : (deniedReason ??
+          config.rowAction?.deniedReason ??
+          `Your roles allow viewing ${config.permission?.label ?? 'organisation master data'}, not changing it.`)))
     : undefined;
   const schema = React.useMemo(() => schemaFor(fields), [fields]);
   const me = useMe();
@@ -255,7 +267,7 @@ export function MasterEditor<T extends MasterRow>({
                 }}
               >
                 {fields.map((f) => (
-                  <FieldControl key={f.key} field={f} today={todayIn(tenantZone)} />
+                  <FieldControl key={f.key} field={f} today={todayIn(tenantZone)} row={row} />
                 ))}
               </EoraForm>
               <ConfirmDialog

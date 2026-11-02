@@ -19,10 +19,16 @@ export type ShellNavigation = {
 };
 
 /** Modules running on the live API, whose menus follow the user's permission hints item by item. */
-const LIVE_MODULES = new Set(['master', 'admin', 'materials']);
+const LIVE_MODULES = new Set(['master', 'admin', 'materials', 'inventory']);
 
-/** Materials items on the live API (M3 receiving); the module's other items are still prototype screens. */
-const LIVE_MATERIALS = ['materials.receipt.view', 'materials.incoming_release.view'];
+/**
+ * Modules partly on the live API (M3): the view permissions of their live items. Their other items are still prototype
+ * screens, shown only to prototype roles that open the module.
+ */
+const PARTLY_LIVE: Record<string, readonly string[]> = {
+  materials: ['materials.receipt.view', 'materials.incoming_release.view'],
+  inventory: ['inventory.stock.view'],
+};
 
 /** Navigation state derived from the single config + session role + current route. */
 export function useShellNavigation(): ShellNavigation {
@@ -31,8 +37,9 @@ export function useShellNavigation(): ShellNavigation {
   const permissions = identity?.permissions;
   const modules = React.useMemo(() => {
     let allowed = source.allowedModules(role);
-    // a user whose prototype role does not open Materials still reaches its live items (e.g. QC releasing incoming material)
-    let liveMaterialsOnly = false;
+    // a user whose prototype role does not open a partly live module still reaches its live items (e.g. QC releasing
+    // incoming material), and only those
+    const liveOnly = new Set<string>();
     // Administration and Master Data run on the live API: shown from the user's permission hints, not from the
     // prototype role. Each page checks its own permission; the server enforces every call.
     if (permissions) {
@@ -43,14 +50,11 @@ export function useShellNavigation(): ShellNavigation {
       const master = ['master.org.view', 'master.part.view', 'master.routing.view', 'master.conversion.view', 'exchange.import.create'].some((p) =>
         permissions.includes(p),
       );
-      const materials = others.includes('materials') || LIVE_MATERIALS.some((p) => permissions.includes(p));
-      liveMaterialsOnly = !others.includes('materials');
-      allowed = [
-        ...others.filter((id) => id !== 'admin' && id !== 'master' && id !== 'materials'),
-        ...(master ? ['master'] : []),
-        ...(admin ? ['admin'] : []),
-        ...(materials ? ['materials'] : []),
-      ];
+      const partly = Object.entries(PARTLY_LIVE)
+        .filter(([id, views]) => !others.includes(id) && views.some((p) => permissions.includes(p)))
+        .map(([id]) => id);
+      partly.forEach((id) => liveOnly.add(id));
+      allowed = [...others.filter((id) => id !== 'admin' && id !== 'master'), ...(master ? ['master'] : []), ...(admin ? ['admin'] : []), ...partly];
     }
     const visible = visibleModules(NAV_MODULES, { allowedModules: allowed, showPendingDecisions: false });
     // live modules also hide the items whose own view permission the user lacks; prototype modules keep their menus
@@ -62,9 +66,7 @@ export function useShellNavigation(): ShellNavigation {
               groups: m.groups
                 .map((g) => ({
                   ...g,
-                  items: g.items.filter(
-                    (i) => isItemVisible(i, { allowedModules: '*', permissions }) && !(m.id === 'materials' && liveMaterialsOnly && !i.permission),
-                  ),
+                  items: g.items.filter((i) => isItemVisible(i, { allowedModules: '*', permissions }) && !(liveOnly.has(m.id) && !i.permission)),
                 }))
                 .filter((g) => g.items.length > 0),
             }

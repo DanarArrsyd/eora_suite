@@ -8,6 +8,8 @@ import { ADMIN_IMPLEMENTED } from '@/modules/admin/implemented';
 import { AdminScreen } from '@/modules/admin/registry';
 import { DEMAND_MASTER_IMPLEMENTED, MASTER_IMPLEMENTED } from '@/modules/master/implemented';
 import { MasterDataScreen } from '@/modules/master/registry';
+import { INVENTORY_IMPLEMENTED } from '@/modules/inventory/implemented';
+import { InventoryScreen } from '@/modules/inventory/registry';
 import { MATERIALS_IMPLEMENTED } from '@/modules/materials/implemented';
 import { MaterialsScreen } from '@/modules/materials/registry';
 import { PPIC_IMPLEMENTED } from '@/modules/ppic/implemented';
@@ -62,6 +64,14 @@ export default async function ItemPage({ params }: { params: Promise<Params> }) 
     return (
       <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
         <MaterialsScreen item={item} />
+      </Suspense>
+    );
+  }
+  if (module === 'inventory' && (INVENTORY_IMPLEMENTED as readonly string[]).includes(item)) {
+    // M3 step 4 stock on the live API (doc 32 §1.4)
+    return (
+      <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
+        <InventoryScreen item={item} />
       </Suspense>
     );
   }
