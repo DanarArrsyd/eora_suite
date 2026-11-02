@@ -99,7 +99,26 @@ test('stock overview: a viewer sees stock; Transfer explains the missing permiss
   await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['inventory.stock.view'] } });
   await mockApi(page, '/query/inventory.stock?*', page1([LINE]));
   await page.goto('/inventory/stock-overview');
+  // plant and item options come from master data, which a stock-only role does not read: those filters are left out
+  await expect(page.getByRole('table', { name: 'Stock Overview' }).getByRole('row', { name: /COIL-SPCC-12/ })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Plant' })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Item' })).toHaveCount(0);
   await page.getByRole('button', { name: /^Transfer COIL-SPCC-12/ }).click();
   await expect(page.getByRole('dialog', { name: /Transfer COIL-SPCC-12/ })).toContainText('Your roles do not allow transfers.');
   await expect(page.getByRole('combobox', { name: 'To location' })).toHaveCount(0);
+});
+
+test('stock overview: allocated stock stays put — Transfer offers and allows only the available quantity (BR-INV-08)', async ({ page }) => {
+  await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['inventory.stock.view', 'materials.transfer.post'] } });
+  await mockApi(page, '/query/inventory.stock?*', page1([{ ...LINE, availableQty: '1500' }]));
+  await mockApi(page, '/query/core.locations?*', page1(RACKS));
+  await page.goto('/inventory/stock-overview');
+  await page.getByRole('button', { name: /^Transfer COIL-SPCC-12/ }).click();
+  const drawer = page.getByRole('dialog', { name: /Transfer COIL-SPCC-12/ });
+  await expect(drawer.getByRole('textbox', { name: 'Quantity' })).toHaveValue('1500');
+  await choose(page, drawer.getByRole('combobox', { name: 'To location' }), 'P1 / RM-A02 · Coil rack A02');
+  await drawer.getByRole('textbox', { name: 'Quantity' }).fill('1800');
+  await drawer.getByRole('button', { name: 'Transfer' }).click();
+  await expect(drawer).toContainText('Only 1500 KG is available here; the rest is allocated.');
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
 });

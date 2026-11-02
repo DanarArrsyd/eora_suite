@@ -78,6 +78,8 @@ export type MasterResource<T extends MasterRow> = {
   singular: string;
   columns: EoraColumn<T>[];
   filters: FilterField[];
+  /** Filters whose options load from a list the user may lack (filter key → that list's view permission): hidden without it. */
+  filterPermissions?: Record<string, string>;
   defaultSort: SortRule[];
   searchPlaceholder: string;
   rowLabel: (row: T) => string;

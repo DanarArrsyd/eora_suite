@@ -48,19 +48,24 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const canCreate = permissions.includes(perm.create) && !config.noCreate;
   const canAct = config.rowAction ? permissions.includes(config.rowAction.permission) : canCreate;
   const source = React.useMemo(() => querySource<T>(config.resource), [config.resource]);
+  const permissionKey = permissions.join(' ');
+  const filters = React.useMemo(
+    () => config.filters.filter((f) => !config.filterPermissions?.[f.key] || permissionKey.split(' ').includes(config.filterPermissions[f.key]!)),
+    [config.filters, config.filterPermissions, permissionKey],
+  );
   const client = useQueryClient();
   const router = useRouter();
   const [density, setDensity] = useDensityPreference();
   const [prefSize, setPrefSize] = usePageSizePreference();
   const urlConfig = React.useMemo<ListUrlConfig>(
     () => ({
-      filterKeys: config.filters.map((f) => f.key),
+      filterKeys: filters.map((f) => f.key),
       defaultSort: config.defaultSort,
       defaultView: 'all',
       defaultPageSize: Number(prefSize),
       keepParams: ['show'],
     }),
-    [config.filters, config.defaultSort, prefSize],
+    [filters, config.defaultSort, prefSize],
   );
   const list = useListUrlState(urlConfig);
   const { query } = list;
@@ -132,7 +137,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
           <>
             <div className="flex min-w-0 flex-wrap items-center gap-2 max-md:w-full">
               <ListSearch label={`Search ${config.itemLabel}`} placeholder={config.searchPlaceholder} value={query.search} onChange={list.setSearch} />
-              {config.filters.length ? <FilterToggle panel={panel} count={filtersApplied} controlsId={`${config.id}-filters`} /> : null}
+              {filters.length ? <FilterToggle panel={panel} count={filtersApplied} controlsId={`${config.id}-filters`} /> : null}
               <span className="text-[13px] whitespace-nowrap text-ink-2" aria-live="polite">
                 <b className="font-semibold text-ink tabular-nums">{meta ? meta.total.toLocaleString('en-US') : '…'}</b>{' '}
                 {meta?.total === 1 ? config.singular : config.itemLabel}
@@ -153,19 +158,13 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
           </>
         }
         filterBar={
-          config.filters.length ? (
-            <FilterBar
-              id={`${config.id}-filters`}
-              fields={config.filters}
-              values={query.filters}
-              onApply={(v: FilterValues) => list.applyFilters(v)}
-              panel={panel}
-            />
+          filters.length ? (
+            <FilterBar id={`${config.id}-filters`} fields={filters} values={query.filters} onApply={(v: FilterValues) => list.applyFilters(v)} panel={panel} />
           ) : undefined
         }
         activeFilters={
           <ActiveFilters
-            fields={config.filters}
+            fields={filters}
             values={query.filters}
             search={query.search}
             onRemove={list.removeFilter}

@@ -76,6 +76,8 @@ export const STOCK_OVERVIEW: MasterResource<StockLineRow> = {
     { id: 'locationCode', desc: false },
   ],
   filters: FILTERS,
+  // stock is for every role; plant and item options come from master data, which some roles (operators) do not read
+  filterPermissions: { plantId: 'master.org.view', itemId: 'master.part.view' },
   columns: [
     { id: 'itemCode', header: 'Item', lead: true, sortable: true, cell: (r) => <span className="font-mono">{r.itemCode}</span>, sub: (r) => r.itemName },
     {
@@ -104,23 +106,36 @@ export const STOCK_OVERVIEW: MasterResource<StockLineRow> = {
       },
       hint: 'Same plant and same kind of location. Issue, return and QC have their own documents.',
     },
-    { key: 'qty', label: 'Quantity', kind: 'number', required: true, decimals: 6, positive: true, hint: 'All of the line, or part of it.' },
+    {
+      key: 'qty',
+      label: 'Quantity',
+      kind: 'number',
+      required: true,
+      decimals: 6,
+      positive: true,
+      hint: 'Up to what is available: allocated stock stays where it is.',
+    },
     { key: 'note', label: 'Note', kind: 'text', maxLength: 500 },
   ],
   blank: { toLocationId: '', qty: '', note: '' },
-  toForm: (r) => ({ toLocationId: '', qty: r.qty, note: '' }),
+  // unrestricted stock moves only what is not allocated (BR-INV-08)
+  toForm: (r) => ({ toLocationId: '', qty: r.stockStatus === 'UNRESTRICTED' ? r.availableQty : r.qty, note: '' }),
   facts: (r) => [
     { label: 'Item', value: `${r.itemCode} · ${r.itemName}` },
     { label: 'Lot', value: r.lotNo ? `${r.lotNo}${r.supplierLotNo ? ` (supplier ${r.supplierLotNo})` : ''}` : 'No lot' },
     { label: 'From', value: `${r.locationCode} · ${place(r)}` },
     { label: 'Status', value: <DomainStatusBadge domain="stock" status={r.stockStatus} /> },
     { label: 'On hand', value: `${r.qty} ${r.uomCode}` },
+    { label: 'Available', value: `${r.availableQty} ${r.uomCode}` },
   ],
   check: async (v, r): Promise<Record<string, string>> => {
     const problems: Record<string, string> = {};
     if (r && v.toLocationId === r.locationId) problems.toLocationId = 'Choose another location than the one the stock is in.';
     const qty = r && v.qty ? unitPrecisionError(v.qty, r.uomCode, r.uomDecimals) : undefined;
     if (qty) problems.qty = qty;
+    else if (r?.stockStatus === 'UNRESTRICTED' && v.qty && Number(v.qty) > Number(r.availableQty)) {
+      problems.qty = `Only ${r.availableQty} ${r.uomCode} is available here; the rest is allocated.`;
+    }
     return problems;
   },
   confirm: (v, r) => ({
