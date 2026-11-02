@@ -96,7 +96,13 @@ export type MasterResource<T extends MasterRow> = {
    * Rows act through their own permission and label instead of an edit (e.g. Release on BLOCKED stock): the drawer
    * submits `update` with the action's label and shows `drawerTitle`.
    */
-  rowAction?: { label: string; permission: string; deniedReason: string };
+  rowAction?: {
+    label: string;
+    permission: string;
+    deniedReason: string;
+    /** Lists the drawer reads (e.g. locations for a destination): without them the action cannot be completed. */
+    needs?: { permission: string; reason: string }[];
+  };
   drawerTitle?: (row: T) => string;
   /** Filters every list and export of this screen applies (e.g. only BLOCKED stock). */
   fixedFilters?: Record<string, string | string[]>;

@@ -42,7 +42,7 @@ async function axe(page: Page) {
 }
 
 test('stock overview: ledger stock with available quantity; Transfer moves it to a location of the same kind', async ({ page }) => {
-  await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['inventory.stock.view', 'materials.transfer.post'] } });
+  await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['inventory.stock.view', 'materials.transfer.post', 'master.org.view'] } });
   await mockApi(page, '/query/inventory.stock?*', page1([LINE]));
   const racksUrl = page.waitForRequest((r) => r.url().includes('/query/core.locations?'));
   await mockApi(page, '/query/core.locations?*', page1(RACKS));
@@ -109,7 +109,7 @@ test('stock overview: a viewer sees stock; Transfer explains the missing permiss
 });
 
 test('stock overview: allocated stock stays put — Transfer offers and allows only the available quantity (BR-INV-08)', async ({ page }) => {
-  await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['inventory.stock.view', 'materials.transfer.post'] } });
+  await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['inventory.stock.view', 'materials.transfer.post', 'master.org.view'] } });
   await mockApi(page, '/query/inventory.stock?*', page1([{ ...LINE, availableQty: '1500' }]));
   await mockApi(page, '/query/core.locations?*', page1(RACKS));
   await page.goto('/inventory/stock-overview');
@@ -121,4 +121,13 @@ test('stock overview: allocated stock stays put — Transfer offers and allows o
   await drawer.getByRole('button', { name: 'Transfer' }).click();
   await expect(drawer).toContainText('Only 1500 KG is available here; the rest is allocated.');
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
+});
+
+test('stock overview: a transfer role without the locations list is told why instead of an empty picker', async ({ page }) => {
+  await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['inventory.stock.view', 'materials.transfer.post'] } });
+  await mockApi(page, '/query/inventory.stock?*', page1([LINE]));
+  await page.goto('/inventory/stock-overview');
+  await page.getByRole('button', { name: /^Transfer COIL-SPCC-12/ }).click();
+  await expect(page.getByRole('dialog', { name: /Transfer COIL-SPCC-12/ })).toContainText('which your roles cannot read');
+  await expect(page.getByRole('combobox', { name: 'To location' })).toHaveCount(0);
 });

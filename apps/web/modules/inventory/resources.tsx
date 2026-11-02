@@ -61,7 +61,13 @@ export const STOCK_OVERVIEW: MasterResource<StockLineRow> = {
   resource: 'inventory.stock',
   permission: { view: 'inventory.stock.view', create: 'materials.transfer.post', label: 'stock' },
   noCreate: true,
-  rowAction: { label: 'Transfer', permission: 'materials.transfer.post', deniedReason: 'Your roles do not allow transfers.' },
+  rowAction: {
+    label: 'Transfer',
+    permission: 'materials.transfer.post',
+    deniedReason: 'Your roles do not allow transfers.',
+    // the destination comes from the locations list (organisation master data)
+    needs: [{ permission: 'master.org.view', reason: 'Transfers choose a destination from the locations list, which your roles cannot read.' }],
+  },
   title: 'Stock Overview',
   description:
     'Stock on hand from the ledger, per location, lot and status. Available is unrestricted stock not yet allocated; blocked, pending QC and held stock is never available.',

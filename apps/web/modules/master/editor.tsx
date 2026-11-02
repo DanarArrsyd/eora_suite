@@ -145,6 +145,7 @@ export function MasterEditor<T extends MasterRow>({
   config,
   row,
   canEdit,
+  deniedReason,
   open,
   onOpenChange,
   onSaved,
@@ -154,6 +155,8 @@ export function MasterEditor<T extends MasterRow>({
   row: T | null;
   /** The caller's create/edit permission hint (the server decides). */
   canEdit: boolean;
+  /** Why the row action is not available (its permission or a list its drawer reads). */
+  deniedReason?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Called after a save; `partial` names what was saved when a later write failed; `created` is the create response. */
@@ -167,7 +170,9 @@ export function MasterEditor<T extends MasterRow>({
       config.readOnly?.(row) ??
       (canEdit
         ? undefined
-        : (config.rowAction?.deniedReason ?? `Your roles allow viewing ${config.permission?.label ?? 'organisation master data'}, not changing it.`)))
+        : (deniedReason ??
+          config.rowAction?.deniedReason ??
+          `Your roles allow viewing ${config.permission?.label ?? 'organisation master data'}, not changing it.`)))
     : undefined;
   const schema = React.useMemo(() => schemaFor(fields), [fields]);
   const me = useMe();

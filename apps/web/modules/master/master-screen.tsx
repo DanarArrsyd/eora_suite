@@ -46,7 +46,13 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const perm = config.permission ?? ORG_PERMISSION;
   const canView = permissions.includes(perm.view);
   const canCreate = permissions.includes(perm.create) && !config.noCreate;
-  const canAct = config.rowAction ? permissions.includes(config.rowAction.permission) : canCreate;
+  // why the row action is not available to this user: its own permission, then the lists its drawer reads
+  const actDenied = config.rowAction
+    ? !permissions.includes(config.rowAction.permission)
+      ? config.rowAction.deniedReason
+      : config.rowAction.needs?.find((n) => !permissions.includes(n.permission))?.reason
+    : undefined;
+  const canAct = config.rowAction ? actDenied === undefined : canCreate;
   const source = React.useMemo(() => querySource<T>(config.resource), [config.resource]);
   const permissionKey = permissions.join(' ');
   const filters = React.useMemo(
@@ -241,6 +247,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
         config={config}
         row={editor.row}
         canEdit={canAct}
+        deniedReason={actDenied}
         open={editor.open}
         onOpenChange={(open) => setEditor((e) => ({ ...e, open }))}
         onSaved={(message, partial, created) => {
