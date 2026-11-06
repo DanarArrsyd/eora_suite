@@ -16,7 +16,7 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
    ```bash
    npx pnpm@12.10.1 --filter @eora/web dev
    ```
-3. Login pakai password demo. Akun yang dipakai: `mat@demo-stamping.test` (gudang bahan: terima), `qci@demo-stamping.test` (QC incoming: release), `csa@demo-stamping.test` (admin: hanya melihat).
+3. Login pakai password demo. Akun yang dipakai: `mat@demo-stamping.test` (gudang bahan: terima), `qci@demo-stamping.test` (QC incoming: release), `prl@demo-stamping.test` (production leader: split lot), `csa@demo-stamping.test` (admin: hanya melihat).
 
 ## 1. Penerimaan bahan — RM Receipts (langkah 3, D-062, D-097)
 | # | Langkah | Yang diharapkan | Hasil |
@@ -48,3 +48,13 @@ Siapkan dulu sebagai `csa`: rak RM kedua di gudang RM plant P1 (Master Data → 
 | 4 | Pilih `RM-A02`, quantity `800` → **Transfer** → konfirmasi **Transfer**. | Pesan `TRF-P1-<tahun>-0001 transferred`. Rak asal berkurang 800, `RM-A02` 800 KG, status tetap Unrestricted, lot sama. | |
 | 5 | Transfer coil **Blocked** ke `RM-A02`. | Berhasil; di `RM-A02` muncul baris Blocked terpisah (status tidak berubah karena transfer). | |
 | 6 | Login `qci` → Inventory → Stock Overview → **Transfer** pada baris mana pun. | Stok terlihat; drawer menjelaskan "Your roles do not allow transfers.", tidak ada form. | |
+
+## 4. Split lot / remnant — Material Lots (langkah 5, D-099)
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `prl` → Materials → **Material Lots**. | Hanya stok yang punya lot (coil dari §1–3); oli (tanpa lot) tidak muncul. Tanpa label Mock data. | |
+| 2 | **Split** pada coil Unrestricted di `RM-A02` → quantity lebih dari on hand → **Split**. | Ditolak sebelum konfirmasi: "Only … is available here …"; tidak ada yang diposting. | |
+| 3 | Quantity `300`, lebar `1219`, panjang `2438` → **Split** → konfirmasi **Split**. | Pesan `SPL-P1-<tahun>-0001 split off lot <lot>-01`. Baris induk berkurang 300; baris baru `<lot>-01` 300 KG di lokasi dan status yang sama, keterangan "Split from <lot>" + nomor heat supplier. Total di lokasi tidak berubah. | |
+| 4 | Split induk yang sama sekali lagi (mis. `100`). | Anak berikutnya bernomor `<lot>-02`. | |
+| 5 | Filter **Origin** = Split. | Hanya lot anak. | |
+| 6 | Login `mat` → Materials → Material Lots → **Split**. | Stok terlihat; drawer menjelaskan "Your roles do not allow lot splits.", tidak ada form. | |

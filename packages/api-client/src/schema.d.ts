@@ -1136,6 +1136,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/inventory/lot-splits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Split part of a lot into child lots where it lies (Idempotency-Key header required). 201 when posted, 200 when the
+         *     same request was posted before under the key, 409 when the key was used for another request
+         */
+        post: operations["v1.inventory.lot-splits.store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/core/members/invitations": {
         parameters: {
             query?: never;
@@ -11693,6 +11713,255 @@ export interface operations {
                         correlationId?: string;
                         /** @description Short support reference derived from the correlation id. */
                         reference?: string;
+                    };
+                };
+            };
+            /** @description RETRYABLE_CONFLICT */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before retrying. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 503;
+                        /** @enum {string} */
+                        code: "RETRYABLE_CONFLICT";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+        };
+    };
+    "v1.inventory.lot-splits.store": {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description One key per posting; a retry with the same key and body answers with what it posted. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    plantId: string;
+                    /** Format: uuid */
+                    itemId: string;
+                    /** Format: uuid */
+                    lotId: string;
+                    /** @enum {string} */
+                    stockStatus: "UNRESTRICTED" | "PENDING_QC" | "QC_RELEASED" | "HOLD" | "REWORK" | "REJECTED" | "BLOCKED";
+                    /** Format: uuid */
+                    locationId: string;
+                    children: {
+                        qty: string;
+                        widthMm?: string | null;
+                        lengthMm?: string | null;
+                        thicknessMm?: string | null;
+                    }[];
+                    note?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Replayed: this key already posted; nothing new was posted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** Format: uuid */
+                            documentId: string;
+                            docNo: string;
+                            /** Format: date */
+                            productionDate: string;
+                            replayed: boolean;
+                            /** Format: uuid */
+                            lotId: string | null;
+                            lotNo: string | null;
+                            children: {
+                                /** Format: uuid */
+                                lotId: string;
+                                lotNo: string;
+                                qty: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+            /** @description Posted. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** Format: uuid */
+                            documentId: string;
+                            docNo: string;
+                            /** Format: date */
+                            productionDate: string;
+                            replayed: boolean;
+                            /** Format: uuid */
+                            lotId: string | null;
+                            lotNo: string | null;
+                            children: {
+                                /** Format: uuid */
+                                lotId: string;
+                                lotNo: string;
+                                qty: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+            /** @description IDEMPOTENCY_KEY_REQUIRED */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 400;
+                        /** @enum {string} */
+                        code: "IDEMPOTENCY_KEY_REQUIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description UNAUTHENTICATED, SESSION_EXPIRED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 401;
+                        /** @enum {string} */
+                        code: "UNAUTHENTICATED" | "SESSION_EXPIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description FORBIDDEN, SCOPE_FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 403;
+                        /** @enum {string} */
+                        code: "FORBIDDEN" | "SCOPE_FORBIDDEN";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_IN_PROGRESS, INSUFFICIENT_STOCK, INSUFFICIENT_AVAILABLE, PERIOD_CLOSED, STOCK_BUSY */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 409;
+                        /** @enum {string} */
+                        code: "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_IN_PROGRESS" | "INSUFFICIENT_STOCK" | "INSUFFICIENT_AVAILABLE" | "PERIOD_CLOSED" | "STOCK_BUSY";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description CSRF_TOKEN_MISMATCH */
+            419: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 419;
+                        /** @enum {string} */
+                        code: "CSRF_TOKEN_MISMATCH";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description VALIDATION_FAILED, INVALID_LEGS, INVALID_EFFECTIVE_DATE, POSTING_REFUSED */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 422;
+                        /** @enum {string} */
+                        code: "VALIDATION_FAILED" | "INVALID_LEGS" | "INVALID_EFFECTIVE_DATE" | "POSTING_REFUSED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                        errors?: {
+                            [key: string]: string[];
+                        };
                     };
                 };
             };

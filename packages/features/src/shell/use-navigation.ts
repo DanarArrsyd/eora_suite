@@ -26,7 +26,7 @@ const LIVE_MODULES = new Set(['master', 'admin', 'materials', 'inventory']);
  * screens, shown only to prototype roles that open the module.
  */
 const PARTLY_LIVE: Record<string, readonly string[]> = {
-  materials: ['materials.receipt.view', 'materials.incoming_release.view'],
+  materials: ['materials.receipt.view', 'materials.incoming_release.view', 'production.lot_split.view'],
   inventory: ['inventory.stock.view'],
 };
 
