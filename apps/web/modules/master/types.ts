@@ -23,7 +23,9 @@ export type OptionSource =
   | 'receivedItems'
   | 'rmLocations'
   | 'locations'
-  | 'stockLines';
+  | 'stockLines'
+  | 'physicalLocations'
+  | 'lots';
 
 export type FieldSpec = {
   key: string;

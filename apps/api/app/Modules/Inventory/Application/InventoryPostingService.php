@@ -257,6 +257,11 @@ final class InventoryPostingService
         $this->lockKey($db, $key);
         $previous = $db->selectOne("select id, doc_type, request ->> 'hash' as hash from inventory_documents where idempotency_key = ?", [$key]);
         if ($previous === null) {
+            // one key, one command: a key that posted (or approved) something never submits a request
+            if ($db->selectOne('select 1 as used from idempotency_records where idempotency_key = ?', [$key]) !== null) {
+                throw new DomainProblem(409, 'IDEMPOTENCY_KEY_REUSED', 'Idempotency key reused', 'This key was used for another request. Send a new key for a new request.');
+            }
+
             return null;
         }
         if ($previous->doc_type !== $docType || $previous->hash !== $hash) {
@@ -374,6 +379,11 @@ final class InventoryPostingService
     {
         $stored = $db->selectOne('select request_hash, response from idempotency_records where idempotency_key = ?', [$key]);
         if ($stored === null) {
+            // one key, one command: a key that submitted a request (adjustment) never posts anything else
+            if ($db->selectOne('select 1 as used from inventory_documents where idempotency_key = ? and requested_by is not null', [$key]) !== null) {
+                throw new DomainProblem(409, 'IDEMPOTENCY_KEY_REUSED', 'Idempotency key reused', 'This key was used for another request. Send a new key for a new posting.');
+            }
+
             return null;
         }
         if ($stored->request_hash !== $hash) {

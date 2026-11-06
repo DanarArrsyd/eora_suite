@@ -143,3 +143,76 @@ test('adjustments: the requester sees its request waiting and has no decision to
   await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Reject' })).toHaveCount(0);
 });
+
+test('adjustments: found stock where none is recorded is added by naming location, item and lot (D-100)', async ({ page }) => {
+  await mockApi(
+    page,
+    '/auth/me',
+    ME(['inventory.adjustment.view', 'inventory.adjustment.create', 'inventory.stock.view', 'master.org.view', 'master.part.view']),
+  );
+  await mockApi(page, '/query/inventory.adjustments?*', page1([]));
+  await mockApi(page, '/query/inventory.stock?*', page1([]));
+  await mockApi(
+    page,
+    '/query/core.locations?*',
+    page1([
+      {
+        id: ID(11),
+        code: 'RM-A02',
+        name: 'Sheet rack A02',
+        plantId: LINE.plantId,
+        plantCode: 'P1',
+        locationType: 'RM_WAREHOUSE',
+        status: 'ACTIVE',
+        version: 1,
+      },
+    ]),
+  );
+  await mockApi(
+    page,
+    '/query/core.items?*',
+    page1([
+      { id: LINE.itemId, code: LINE.itemCode, name: LINE.itemName, lotControlled: true, baseUomCode: 'KG', baseUomDecimals: 3, status: 'ACTIVE', version: 1 },
+    ]),
+  );
+  await mockApi(page, '/query/inventory.lots?*', page1([{ id: LINE.lotId, code: LINE.lotNo, itemId: LINE.itemId, itemCode: LINE.itemCode, version: 1 }]));
+  const calls: unknown[] = [];
+  await page.route('**/api/v1/inventory/adjustments', (route) => {
+    calls.push(route.request().postDataJSON());
+    return route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { documentId: ID(7), status: 'SUBMITTED', replayed: false } }),
+    });
+  });
+
+  await page.goto('/inventory/adjustments');
+  await page.getByRole('button', { name: 'New adjustment request' }).click();
+  const drawer = page.getByRole('dialog', { name: 'New adjustment request' });
+  await drawer.getByRole('textbox', { name: 'Quantity' }).fill('40');
+  await choose(page, drawer.getByRole('combobox', { name: 'Reason' }), 'Found stock');
+  await drawer.getByRole('button', { name: 'Request adjustment' }).click();
+  // removing needs the line that holds the stock
+  await expect(drawer).toContainText('Choose the stock line to remove from.');
+
+  await choose(page, drawer.getByRole('combobox', { name: 'Change' }), 'Add to stock');
+  await choose(page, drawer.getByRole('combobox', { name: 'Location (new line)' }), 'P1 / RM-A02 · Sheet rack A02');
+  await choose(page, drawer.getByRole('combobox', { name: 'Item (new line)' }), 'SHEET-SPCC-12 · SPCC sheet 1.2 mm');
+  await drawer.getByRole('button', { name: 'Request adjustment' }).click();
+  await expect(drawer).toContainText('This item is tracked by lot: choose one of its lots.');
+  await choose(page, drawer.getByRole('combobox', { name: 'Lot (new line)' }), 'L2611-0001 · SHEET-SPCC-12');
+  await drawer.getByRole('button', { name: 'Request adjustment' }).click();
+  await page.getByRole('alertdialog', { name: 'Request this adjustment' }).getByRole('button', { name: 'Request adjustment' }).click();
+  await expect(page.getByText('Adjustment requested; it waits for a second person to approve it')).toBeVisible();
+  expect(calls[0]).toEqual({
+    plantId: LINE.plantId,
+    itemId: LINE.itemId,
+    lotId: LINE.lotId,
+    locationId: ID(11),
+    stockStatus: 'UNRESTRICTED',
+    direction: 'PLUS',
+    qty: '40',
+    reasonCode: 'FOUND',
+    note: null,
+  });
+});

@@ -70,8 +70,16 @@ it('requests an adjustment that moves nothing until a second person approves it 
     adApprove($this, $id)->assertOk()->assertJsonPath('data.documentId', $posted['documentId'])->assertJsonPath('data.replayed', true);
     adApprove($this, $id, 'approve-key-0002')->assertStatus(409)->assertJsonPath('code', 'INVALID_STATE_TRANSITION');
     expect(adStock($this, $f['lotId']))->toBe(['RM-01 BLOCKED' => '7']);
+    // one key, one command: the approval's key never submits a request, a request's key never posts or approves
+    rtSwitch($this, $this->t, 'INV', ['PLANT', $f['plant']]);
+    adRequest($this, $f, [], 'approve-key-0001')->assertStatus(409)->assertJsonPath('code', 'IDEMPOTENCY_KEY_REUSED');
+    $next = adRequest($this, $f, ['qty' => '1'], 'adjust-key-0009')->assertCreated()->json('data.documentId');
+    rtSwitch($this, $this->t, 'MAT');
+    trMove($this, $f + ['lotId' => $f['lotId']], [], 'adjust-key-0009')->assertStatus(409)->assertJsonPath('code', 'IDEMPOTENCY_KEY_REUSED');
+    rtSwitch($this, $this->t, 'CSA');
+    adApprove($this, $next, 'adjust-key-0001')->assertStatus(409)->assertJsonPath('code', 'IDEMPOTENCY_KEY_REUSED');
     // the approver reads the requests it decides without the requesters' view permission
-    spa($this)->getJson('/api/v1/query/inventory.adjustments')->assertOk()
+    spa($this)->getJson('/api/v1/query/inventory.adjustments?filter[status]=POSTED')->assertOk()
         ->assertJsonPath('data.0.status', 'POSTED')->assertJsonPath('data.0.code', "ADJ-P1-{$year}-0001")->assertJsonPath('data.0.decidedByName', fn ($n) => $n !== null);
     expect(rcRun($this->t, fn (EoraPostgresConnection $db) => $db->select(
         'select movement_code, l.location_type, trim_scale(qty_signed)::text as q from inventory_movements m join locations l on l.id = m.location_id where document_id = ? order by leg_no', [$id],

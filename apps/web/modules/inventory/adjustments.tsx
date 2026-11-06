@@ -90,6 +90,58 @@ async function stockLine(id: string): Promise<StockLine | undefined> {
 
 type Submitted = { data: { documentId: string; replayed: boolean } };
 
+const STOCK_STATUS_OPTIONS: Option[] = Object.entries(STATUS_CATALOGUE.stock).map(([value, e]) => ({ value, label: e.label }));
+const BLANK = { stockLineId: '', locationId: '', itemId: '', lotId: '', stockStatus: 'UNRESTRICTED', direction: 'MINUS', qty: '', reasonCode: '', note: '' };
+
+type Target = {
+  plantId: string;
+  locationId: string;
+  itemId: string;
+  lotId: string | null;
+  stockStatus: StockStatus;
+  uomCode: string;
+  uomDecimals: number;
+  /** On hand on a chosen stock line; null for a new line (nothing recorded there). */
+  onHand: string | null;
+};
+
+/**
+ * What the request corrects: a chosen stock line, or — to add found stock where none is recorded — a location, item,
+ * lot and status named one by one. A field and its message when the form does not name one completely.
+ */
+async function resolveTarget(v: Record<string, string>): Promise<Target | { field: string; message: string }> {
+  if (v.stockLineId) {
+    const line = await stockLine(v.stockLineId);
+    if (!line) return { field: 'stockLineId', message: 'That stock line is no longer there. Choose it again.' };
+    return { ...line, onHand: line.qty };
+  }
+  if (v.direction !== 'PLUS') return { field: 'stockLineId', message: 'Choose the stock line to remove from.' };
+  if (!v.locationId) return { field: 'locationId', message: 'Choose a stock line, or the location where the stock was found.' };
+  if (!v.itemId) return { field: 'itemId', message: 'Choose the item that was found.' };
+  const [location] = await queryAll<{ id: string; plantId: string }>('core.locations', { id: v.locationId });
+  const [item] = await queryAll<{ id: string; lotControlled: boolean; baseUomCode: string; baseUomDecimals: number }>('core.items', { id: v.itemId });
+  if (!location) return { field: 'locationId', message: 'That location is no longer there. Choose it again.' };
+  if (!item) return { field: 'itemId', message: 'That item is no longer there. Choose it again.' };
+  let lotId: string | null = null;
+  if (item.lotControlled) {
+    const [lot] = v.lotId ? await queryAll<{ id: string; itemId: string }>('inventory.lots', { id: v.lotId }) : [];
+    if (!lot || lot.itemId !== item.id) return { field: 'lotId', message: 'This item is tracked by lot: choose one of its lots.' };
+    lotId = lot.id;
+  } else if (v.lotId) {
+    return { field: 'lotId', message: 'This item is not tracked by lot. Leave the lot empty.' };
+  }
+  return {
+    plantId: location.plantId,
+    locationId: location.id,
+    itemId: item.id,
+    lotId,
+    stockStatus: (v.stockStatus || 'UNRESTRICTED') as StockStatus,
+    uomCode: item.baseUomCode,
+    uomDecimals: item.baseUomDecimals,
+    onHand: null,
+  };
+}
+
 export const ADJUSTMENTS: MasterResource<AdjustmentRow & { code: string }> = {
   id: 'adjustments',
   resource: 'inventory.adjustments',
@@ -144,24 +196,31 @@ export const ADJUSTMENTS: MasterResource<AdjustmentRow & { code: string }> = {
       key: 'stockLineId',
       label: 'Stock line',
       kind: 'select',
-      required: true,
       options: 'stockLines',
-      hint: 'Item, lot, place and status to correct, with what is on hand now.',
+      hint: 'Item, lot, place and status to correct, with what is on hand now. Leave it empty to add found stock where none is recorded.',
     },
+    // found stock where no line is recorded (D-100): its place, item and lot, added only
+    { key: 'locationId', label: 'Location (new line)', kind: 'select', options: 'physicalLocations', hint: 'Only when no stock line is chosen.' },
+    { key: 'itemId', label: 'Item (new line)', kind: 'select', options: 'items' },
+    { key: 'lotId', label: 'Lot (new line)', kind: 'select', options: 'lots', hint: 'For an item tracked by lot: one of its lots.' },
+    { key: 'stockStatus', label: 'Stock status (new line)', kind: 'select', options: STOCK_STATUS_OPTIONS },
     { key: 'direction', label: 'Change', kind: 'select', required: true, options: DIRECTIONS },
     { key: 'qty', label: 'Quantity', kind: 'number', required: true, decimals: 6, positive: true, hint: 'In the item’s base unit.' },
     { key: 'reasonCode', label: 'Reason', kind: 'select', required: true, options: REASONS },
     { key: 'note', label: 'Note', kind: 'text', maxLength: 500, hint: 'What was found, e.g. the count sheet or the damage. Required for Other.' },
   ],
-  blank: { stockLineId: '', direction: 'MINUS', qty: '', reasonCode: '', note: '' },
-  toForm: () => ({ stockLineId: '', direction: 'MINUS', qty: '', reasonCode: '', note: '' }),
+  blank: BLANK,
+  toForm: () => BLANK,
   check: async (v) => {
     const problems: Record<string, string> = {};
     if (v.reasonCode === 'OTHER' && (v.note ?? '').trim().length < 3) problems.note = 'Explain the adjustment when the reason is Other.';
-    const line = v.stockLineId ? await stockLine(v.stockLineId) : undefined;
-    const precision = line && v.qty ? unitPrecisionError(v.qty, line.uomCode, line.uomDecimals) : undefined;
+    const target = await resolveTarget(v);
+    if ('field' in target) return { ...problems, [target.field]: target.message };
+    const precision = v.qty ? unitPrecisionError(v.qty, target.uomCode, target.uomDecimals) : undefined;
     if (precision) problems.qty = precision;
-    else if (line && v.direction === 'MINUS' && v.qty && Number(v.qty) > Number(line.qty)) problems.qty = `Only ${line.qty} ${line.uomCode} is on hand there.`;
+    else if (target.onHand !== null && v.direction === 'MINUS' && v.qty && Number(v.qty) > Number(target.onHand)) {
+      problems.qty = `Only ${target.onHand} ${target.uomCode} is on hand there.`;
+    }
     return problems;
   },
   confirm: (v) => ({
@@ -175,17 +234,17 @@ export const ADJUSTMENTS: MasterResource<AdjustmentRow & { code: string }> = {
       : 'Adjustment requested; it waits for a second person to approve it',
   savedNote: 'It is listed as Submitted until a second person approves or rejects it.',
   create: async (v, ctx) => {
-    const line = await stockLine(v.stockLineId!);
-    if (!line) throw new Error('That stock line is no longer there. Choose it again.');
+    const target = await resolveTarget(v);
+    if ('field' in target) throw new Error(target.message);
     return call(() =>
       api.POST('/inventory/adjustments', {
         params: { header: { 'Idempotency-Key': ctx.idempotencyKey } },
         body: {
-          plantId: line.plantId,
-          itemId: line.itemId,
-          lotId: line.lotId,
-          locationId: line.locationId,
-          stockStatus: line.stockStatus,
+          plantId: target.plantId,
+          itemId: target.itemId,
+          lotId: target.lotId,
+          locationId: target.locationId,
+          stockStatus: target.stockStatus,
           direction: v.direction as 'PLUS' | 'MINUS',
           qty: v.qty!,
           reasonCode: v.reasonCode as 'COUNT_CORRECTION' | 'DAMAGE' | 'FOUND' | 'OTHER',

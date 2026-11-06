@@ -67,4 +67,5 @@ Siapkan dulu sebagai `csa`: rak RM kedua di gudang RM plant P1 (Master Data → 
 | 3 | **Open** permintaan itu (masih sebagai `inv`). | Kotak "You requested this adjustment"; tidak ada tombol Approve/Reject. | |
 | 4 | Login `csa` → Inventory → Adjustments → **Open** permintaan → **Approve**. | Judul menjadi `ADJ-P1-<tahun>-0001`, status **Posted**, "Approved: csa, <waktu>". Stock Overview: coil di `RM-A02` berkurang 50. | |
 | 5 | Sebagai `inv`, minta **Add to stock** `5` reason **Found stock** pada baris yang sama; login `csa` → **Reject** dengan alasan "Tidak ada lembar hitung". | Status **Rejected** dengan alasannya; stok tidak berubah. | |
-| 6 | Login `mat` → menu Inventory. | Adjustments tidak muncul (M3: MAT hanya melihat stok). | |
+| 6 | Sebagai `inv`: **New adjustment request** tanpa stock line, Change **Add to stock**, Location `RM-A01`, Item coil, Lot coil, status **Hold**, quantity `5`, reason **Found stock** → kirim; login `csa` → Approve. | Baris baru coil **Hold** 5 KG di `RM-A01` di Stock Overview (stok ditemukan di tempat yang belum tercatat). | |
+| 7 | Login `mat` → menu Inventory. | Adjustments tidak muncul (M3: MAT hanya melihat stok). | |
