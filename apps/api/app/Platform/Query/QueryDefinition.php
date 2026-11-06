@@ -21,6 +21,17 @@ abstract class QueryDefinition
     /** View permission; its scopes limit the rows. */
     abstract public function permission(): string;
 
+    /**
+     * Every permission that reads this list; the rows are those inside any of their scopes (e.g. an approver reads the
+     * requests it decides without the requesters' view permission).
+     *
+     * @return non-empty-list<string>
+     */
+    public function permissions(): array
+    {
+        return [$this->permission()];
+    }
+
     /** FROM clause (with joins) in trusted SQL; every table is tenant-owned and under forced RLS. */
     abstract public function from(): string;
 

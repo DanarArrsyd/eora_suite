@@ -331,7 +331,16 @@ export const NAV_MODULES: readonly NavModule[] = [
         label: 'Control',
         items: [
           { id: 'stock-count', label: 'Stock Count', icon: ClipboardList, release: 'R2', phase: 'later' },
-          { id: 'adjustments', label: 'Adjustments', icon: SlidersHorizontal, release: 'R1', badge: 'approvals', phase: 'later' },
+          {
+            id: 'adjustments',
+            label: 'Adjustments',
+            icon: SlidersHorizontal,
+            release: 'R1',
+            // requesters read it with view, approvers with approve (D-100)
+            permission: ['inventory.adjustment.view', 'inventory.adjustment.approve'],
+            badge: 'approvals',
+            phase: 'later',
+          },
           { id: 'reversals', label: 'Reversals', icon: RotateCcw, release: 'R1', phase: 'later' },
           { id: 'period-close', label: 'Period Close', icon: Lock, release: 'R1', phase: 'later' },
         ],

@@ -27,7 +27,7 @@ const LIVE_MODULES = new Set(['master', 'admin', 'materials', 'inventory']);
  */
 const PARTLY_LIVE: Record<string, readonly string[]> = {
   materials: ['materials.receipt.view', 'materials.incoming_release.view', 'production.lot_split.view'],
-  inventory: ['inventory.stock.view'],
+  inventory: ['inventory.stock.view', 'inventory.adjustment.view', 'inventory.adjustment.approve'],
 };
 
 /** Navigation state derived from the single config + session role + current route. */

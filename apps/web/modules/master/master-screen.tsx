@@ -44,7 +44,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const me = useMe();
   const permissions = me.data?.permissions ?? [];
   const perm = config.permission ?? ORG_PERMISSION;
-  const canView = permissions.includes(perm.view);
+  const canView = permissions.includes(perm.view) || ('alsoView' in perm && !!perm.alsoView?.some((p) => permissions.includes(p)));
   const canCreate = permissions.includes(perm.create) && !config.noCreate;
   // why the row action is not available to this user: its own permission, then the lists its drawer reads
   const actDenied = config.rowAction
@@ -134,7 +134,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
             </Button>
           }
         >
-          {notice.partial ? notice.title : notice.saved ? 'The list shows the posted stock.' : 'The list shows the saved record.'}
+          {notice.partial ? notice.title : notice.saved ? (config.savedNote ?? 'The list shows the posted stock.') : 'The list shows the saved record.'}
         </InlineAlert>
       ) : null}
       <ListWorkspace

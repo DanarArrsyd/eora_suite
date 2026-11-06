@@ -52,7 +52,7 @@ final class QueryRunner
      */
     public function build(EoraPostgresConnection $db, QueryDefinition $definition, array $input): BuiltQuery
     {
-        $scopes = $this->authorizer->requireAnywhere($db, $definition->permission());
+        $scopes = $this->authorizer->requireAnyOf($db, $definition->permissions());
         $fields = [];
         foreach ($definition->fields() as $field) {
             $fields[$field->key] = $field;

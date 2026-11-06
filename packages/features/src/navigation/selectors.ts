@@ -17,7 +17,8 @@ export function isItemVisible(item: NavItem, opts: VisibilityOptions): boolean {
   const releases = opts.releases ?? DEFAULT_RELEASES;
   if (!releases.includes(item.release)) return false;
   if (item.decision && !opts.showPendingDecisions) return false;
-  if (item.permission && opts.permissions && !opts.permissions.includes(item.permission)) return false;
+  const needed = typeof item.permission === 'string' ? [item.permission] : item.permission;
+  if (needed && opts.permissions && !needed.some((p) => opts.permissions!.includes(p))) return false;
   return true;
 }
 

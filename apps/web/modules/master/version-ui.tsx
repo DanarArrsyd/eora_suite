@@ -58,6 +58,7 @@ export function ApprovalPanel({
   onDone,
   verb = 'approve',
   retire,
+  rejectNote = 'The preparer sees the reason and can reopen it to rework it.',
 }: {
   /** e.g. "Version 2", "Map revision 1" — used in buttons' results and the reject dialog. */
   label: string;
@@ -74,6 +75,8 @@ export function ApprovalPanel({
   verb?: CheckVerb;
   /** Manual stop of a validated record (D-080): what retiring does to this one, and the call. */
   retire?: { effect: string; run: () => Promise<unknown> };
+  /** What happens after a rejection, shown in the reject dialog. */
+  rejectNote?: string;
 }) {
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<LifecycleAction | 'retire' | null>(null);
@@ -190,7 +193,7 @@ export function ApprovalPanel({
         </Modal>
       ) : null}
       <Modal open={rejecting} onOpenChange={setRejecting}>
-        <ModalContent title={`Reject ${label.toLowerCase()}`} description="The preparer sees the reason and can reopen it to rework it." closeLabel="Close">
+        <ModalContent title={`Reject ${label.toLowerCase()}`} description={rejectNote} closeLabel="Close">
           <ModalBody>
             <EoraForm
               label={`Reject ${label.toLowerCase()}`}

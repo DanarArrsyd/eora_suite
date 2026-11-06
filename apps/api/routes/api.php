@@ -4,6 +4,7 @@ use App\Modules\Core\Http\OrgController;
 use App\Modules\Core\Http\PartController;
 use App\Modules\Core\Http\PartnerController;
 use App\Modules\Core\Http\ResourceController;
+use App\Modules\Inventory\Http\AdjustmentController;
 use App\Modules\Inventory\Http\LotSplitController;
 use App\Modules\Inventory\Http\ReceiptController;
 use App\Modules\Inventory\Http\TransferController;
@@ -156,6 +157,9 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('incoming-releases', [ReceiptController::class, 'release'])->name('incoming-releases.store');
         Route::post('transfers', [TransferController::class, 'transfer'])->name('transfers.store');
         Route::post('lot-splits', [LotSplitController::class, 'store'])->name('lot-splits.store');
+        Route::post('adjustments', [AdjustmentController::class, 'store'])->name('adjustments.store');
+        Route::post('adjustments/{adjustment}/approve', [AdjustmentController::class, 'approve'])->name('adjustments.approve');
+        Route::post('adjustments/{adjustment}/reject', [AdjustmentController::class, 'reject'])->name('adjustments.reject');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

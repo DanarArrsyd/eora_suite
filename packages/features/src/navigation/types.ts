@@ -11,8 +11,8 @@ export type NavItem = {
   label: string;
   icon: LucideIcon;
   release: Release;
-  /** Permission key checked server-side; UI filtering is convenience only. */
-  permission?: string;
+  /** Permission key checked server-side (any of them, when several); UI filtering is convenience only. */
+  permission?: string | readonly string[];
   badge?: BadgeSource;
   /** Depends on an OPEN decision in docs/13 — hidden in production builds. */
   decision?: `O-${string}`;
