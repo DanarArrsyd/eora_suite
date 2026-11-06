@@ -43,7 +43,8 @@ final class StockQuery extends QueryDefinition
                  left join work_centers wc on wc.tenant_id = l.tenant_id and wc.id = l.work_center_id
                  join plants p on p.tenant_id = b.tenant_id and p.id = b.plant_id
                  join uoms u on u.tenant_id = b.tenant_id and u.id = b.uom_id
-                 left join lots lt on lt.tenant_id = b.tenant_id and lt.id = b.lot_id';
+                 left join lots lt on lt.tenant_id = b.tenant_id and lt.id = b.lot_id
+                 left join lots plt on plt.tenant_id = lt.tenant_id and plt.id = lt.parent_lot_id';
     }
 
     public function idColumn(): string
@@ -84,6 +85,10 @@ final class StockQuery extends QueryDefinition
             new Field('lotId', 'b.lot_id', Field::UUID, filterable: true),
             new Field('lotNo', 'lt.lot_no', sortable: true),
             new Field('supplierLotNo', 'lt.supplier_lot_no'),
+            // lot-tracked stock only (Material Lots), how the lot came about, and the lot it was split from (D-099)
+            new Field('lotTracked', '(b.lot_id is not null)', Field::BOOLEAN, filterable: true),
+            new Field('lotOrigin', 'lt.origin', Field::ENUM, filterable: true, options: ['RECEIPT', 'OUTPUT', 'SPLIT']),
+            new Field('parentLotNo', 'plt.lot_no'),
             new Field('stockStatus', 'b.stock_status', Field::ENUM, sortable: true, filterable: true, options: self::STATUSES),
             new Field('qty', 'trim_scale(b.qty)::text'),
             new Field('availableQty', "trim_scale(case when b.stock_status = 'UNRESTRICTED' then b.qty - {$allocated} else 0 end)::text"),
@@ -111,6 +116,7 @@ final class StockQuery extends QueryDefinition
             new ExportColumn('Item name', 'itemName'),
             new ExportColumn('Lot', 'lotNo'),
             new ExportColumn('Supplier lot', 'supplierLotNo'),
+            new ExportColumn('Split from', 'parentLotNo'),
             new ExportColumn('Status', 'stockStatus', labels: self::STATUS_LABELS),
             new ExportColumn('On hand', 'qty', ExportColumn::DECIMAL),
             new ExportColumn('Available', 'availableQty', ExportColumn::DECIMAL),

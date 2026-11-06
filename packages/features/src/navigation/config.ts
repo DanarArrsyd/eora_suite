@@ -245,7 +245,7 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Lots',
         items: [
-          { id: 'material-lots', label: 'Material Lots', icon: Tags, release: 'R1', phase: 'later' },
+          { id: 'material-lots', label: 'Material Lots', icon: Tags, release: 'R1', permission: 'production.lot_split.view', phase: 'later' },
           { id: 'remnants', label: 'Remnants', icon: Scissors, release: 'R1', phase: 'later' },
         ],
       },
