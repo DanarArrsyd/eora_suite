@@ -67,8 +67,9 @@ export async function queryOptions(
   label: (row: Record<string, unknown>) => string,
   filters: Record<string, string | string[]> = {},
   signal?: AbortSignal,
+  sortBy = 'code',
 ): Promise<Option[]> {
-  return (await queryAll(resource, filters, signal)).map((r) => ({ value: String(r.id), label: label(r) }));
+  return (await queryAll(resource, filters, signal, sortBy)).map((r) => ({ value: String(r.id), label: label(r) }));
 }
 
 /**

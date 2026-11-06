@@ -22,6 +22,8 @@ export const STATUS_CATALOGUE = {
   document: {
     DRAFT: { label: 'Draft', tone: 'neutral' },
     SUBMITTED: { label: 'Submitted', tone: 'info' },
+    // a request decided against by a second person (D-060, D-100): final, nothing moved
+    REJECTED: { label: 'Rejected', tone: 'warning' },
     APPROVED: { label: 'Approved', tone: 'success' },
     RELEASED: { label: 'Released', tone: 'info' },
     POSTED: { label: 'Posted', tone: 'success' },

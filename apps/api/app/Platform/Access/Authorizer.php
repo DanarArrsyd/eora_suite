@@ -63,6 +63,22 @@ final class Authorizer
     }
 
     /**
+     * The scopes of every permission in $permissions together; 403 FORBIDDEN when the actor holds none of them.
+     *
+     * @param  non-empty-list<string>  $permissions
+     * @return list<Scope>
+     */
+    public function requireAnyOf(EoraPostgresConnection $db, array $permissions): array
+    {
+        $scopes = [];
+        foreach ($permissions as $permission) {
+            array_push($scopes, ...$this->scopes($db, $permission));
+        }
+
+        return $scopes !== [] ? $scopes : throw new DomainProblem(403, 'FORBIDDEN', 'Forbidden');
+    }
+
+    /**
      * Grantor ⊇ target (doc 25 §13): 403 SCOPE_FORBIDDEN unless one of $scopes covers $target.
      *
      * @param  list<Scope>  $scopes

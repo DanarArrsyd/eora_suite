@@ -108,7 +108,7 @@ final class ExportController
     private function stillAllowed(EoraPostgresConnection $db, string $id): void
     {
         $job = $db->selectOne('select resource, scopes from export_jobs where id = ?', [$id]);
-        $current = $this->authorizer->requireAnywhere($db, $this->exports->definition((string) $job->resource)->permission());
+        $current = $this->authorizer->requireAnyOf($db, $this->exports->definition((string) $job->resource)->permissions());
         /** @var list<array{type: string, companyId: string|null, plantId: string|null}> $written */
         $written = $job->scopes === null ? [] : json_decode((string) $job->scopes, true, flags: JSON_THROW_ON_ERROR);
         if (! Exports::covered($written, $current)) {

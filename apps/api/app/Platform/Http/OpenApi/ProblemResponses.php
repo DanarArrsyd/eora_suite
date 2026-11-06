@@ -176,13 +176,26 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.inventory.incoming-releases.store' => self::POSTING,
         'v1.inventory.transfers.store' => self::POSTING,
         'v1.inventory.lot-splits.store' => self::POSTING,
+        // D-060, D-100: an adjustment is requested, then approved (posted) or rejected by a second person
+        'v1.inventory.adjustments.store' => self::TENANT_WRITE + self::MASTER_403 + [
+            400 => ['IDEMPOTENCY_KEY_REQUIRED'], 409 => ['IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_IN_PROGRESS', 'NO_ADJUSTMENT_LOCATION'],
+            422 => ['VALIDATION_FAILED', 'INVALID_LEGS'],
+        ],
+        'v1.inventory.adjustments.approve' => [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION'], 404 => ['NOT_FOUND'],
+            409 => [...self::POSTING[409], 'INVALID_STATE_TRANSITION']] + self::POSTING,
+        'v1.inventory.adjustments.reject' => self::TENANT_WRITE + [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION'], 404 => ['NOT_FOUND'],
+            409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.exchange.exports.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
         'v1.exchange.exports.link' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
         'v1.exchange.exports.file' => self::TENANT_READ + [404 => ['NOT_FOUND']],
     ];
 
     /** Posting routes (doc 24 §5.3): the Idempotency-Key header and the posted document, 201 first time, 200 on replay. */
-    private const array POSTINGS = ['v1.inventory.receipts.store', 'v1.inventory.incoming-releases.store', 'v1.inventory.transfers.store', 'v1.inventory.lot-splits.store'];
+    private const array POSTINGS = ['v1.inventory.receipts.store', 'v1.inventory.incoming-releases.store', 'v1.inventory.transfers.store', 'v1.inventory.lot-splits.store',
+        'v1.inventory.adjustments.approve'];
+
+    /** Requests decided by a second person (D-060): the Idempotency-Key header and the submitted request, 201 first time, 200 on replay. */
+    private const array REQUESTS = ['v1.inventory.adjustments.store'];
 
     /** Laravel-shaped error components Scramble registers; replaced by the problem responses above. */
     private const array INFERRED_COMPONENTS = ['ValidationException', 'AuthenticationException', 'NotFoundHttpException', 'AuthorizationException', 'AccessDeniedHttpException'];
@@ -205,6 +218,9 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         if ($errors === []) {
             return;
         }
+        if (in_array($context->route->getName(), self::REQUESTS, true)) {
+            self::request($subject);
+        }
         if (in_array($context->route->getName(), self::POSTINGS, true)) {
             self::posting($subject, $context->route->getName() === 'v1.inventory.lot-splits.store');
         }
@@ -225,13 +241,35 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         }
     }
 
-    private static function posting(Operation $operation, bool $split): void
+    private static function request(Operation $operation): void
+    {
+        self::idempotencyKey($operation);
+        $operation->responses = array_values(array_filter(
+            $operation->responses ?? [],
+            static fn (Response|Reference $r) => $r instanceof Response && (int) $r->code >= 400,
+        ));
+        $submitted = (new T\ObjectType)
+            ->addProperty('documentId', (new T\StringType)->format('uuid'))
+            ->addProperty('status', (new T\StringType)->enum(['SUBMITTED']))
+            ->addProperty('replayed', new T\BooleanType)
+            ->setRequired(['documentId', 'status', 'replayed']);
+        $body = Schema::fromType((new T\ObjectType)->addProperty('data', $submitted)->setRequired(['data']));
+        $operation->addResponse(Response::make(201)->setDescription('Submitted; nothing moves until a second person approves it.')->setContent('application/json', $body));
+        $operation->addResponse(Response::make(200)->setDescription('Replayed: this key already submitted this request.')->setContent('application/json', $body));
+    }
+
+    private static function idempotencyKey(Operation $operation): void
     {
         $operation->addParameters([Parameter::make('Idempotency-Key', 'header')->required(true)
             ->description('One key per posting; a retry with the same key and body answers with what it posted.')
             ->setSchema(Schema::fromType(tap((new T\StringType)->setMin(8)->setMax(200), static function (T\StringType $t): void {
                 $t->pattern = '^[A-Za-z0-9._:-]+$';
             })))]);
+    }
+
+    private static function posting(Operation $operation, bool $split): void
+    {
+        self::idempotencyKey($operation);
         $operation->responses = array_values(array_filter(
             $operation->responses ?? [],
             static fn (Response|Reference $r) => $r instanceof Response && (int) $r->code >= 400,

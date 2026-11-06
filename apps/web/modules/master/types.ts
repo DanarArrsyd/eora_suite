@@ -22,7 +22,8 @@ export type OptionSource =
   | 'suppliers'
   | 'receivedItems'
   | 'rmLocations'
-  | 'locations';
+  | 'locations'
+  | 'stockLines';
 
 export type FieldSpec = {
   key: string;
@@ -66,7 +67,12 @@ export type MasterResource<T extends MasterRow> = {
   id: string;
   resource: string;
   /** View / change permission hints (default: organisation master). The server decides. */
-  permission?: { view: string; create: string; label: string };
+  permission?: {
+    view: string;
+    create: string;
+    label: string;
+    /** Other permissions that also read the list (e.g. an approver's). */ alsoView?: readonly string[];
+  };
   /** No create action on this screen (records come from elsewhere). */
   noCreate?: boolean;
   /** Records are added but never edited (e.g. versions); the drawer only shows them. */
@@ -108,6 +114,8 @@ export type MasterResource<T extends MasterRow> = {
   fixedFilters?: Record<string, string | string[]>;
   /** The notice after a create or row action, from the server's answer. */
   savedMessage?: (result: unknown) => string;
+  /** The line under that notice (default: the list shows the posted stock). */
+  savedNote?: string;
   /**
    * Checks that need data of the chosen records (e.g. the item's unit decimals) before anything is asked or sent:
    * field key → message; empty when the values are fine.

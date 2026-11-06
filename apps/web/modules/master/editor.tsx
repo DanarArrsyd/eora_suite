@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { useMe } from '@eora/features/auth';
-import { ConfirmDialog, EoraForm, FormDateField, FormSelectField, FormTextField } from '@eora/features/patterns';
+import { ConfirmDialog, EoraForm, FormDateField, FormSelectField, FormTextField, STATUS_CATALOGUE } from '@eora/features/patterns';
 import type { Option } from '@eora/features/data';
 import { Button, Drawer, DrawerContent, InlineAlert, type IsoDate } from '@eora/ui';
 import { formFailure } from '@/modules/admin/errors';
@@ -11,7 +11,7 @@ import { PartialSave, type Confirmation, type FieldSpec, type FormValues, type M
 
 const PICKERS: Record<
   OptionSource,
-  { resource: string; label: (r: Record<string, unknown>) => string; activeOnly?: boolean; filters?: Record<string, string[]> }
+  { resource: string; label: (r: Record<string, unknown>) => string; activeOnly?: boolean; filters?: Record<string, string[]>; sortBy?: string }
 > = {
   companies: { resource: 'core.companies', label: (r) => `${String(r.code)} · ${String(r.legalName)}` },
   plants: { resource: 'core.plants', label: (r) => `${String(r.code)} · ${String(r.name)}` },
@@ -54,13 +54,21 @@ const PICKERS: Record<
     activeOnly: true,
     filters: { locationType: ['RM_WAREHOUSE'] },
   },
+  // stock on hand per line (item, lot, place, status): what an adjustment corrects
+  stockLines: {
+    resource: 'inventory.stock',
+    label: (r) =>
+      `${String(r.itemCode)} · ${r.lotNo ? String(r.lotNo) : 'no lot'} · ${String(r.plantCode)} / ${String(r.locationCode)} · ${STATUS_CATALOGUE.stock[r.stockStatus as keyof typeof STATUS_CATALOGUE.stock]?.label ?? String(r.stockStatus)} · ${String(r.qty)} ${String(r.uomCode)}`,
+    sortBy: 'itemCode',
+  },
 };
 
 function usePicker(source: OptionSource | undefined, extra: Record<string, string | string[]> = {}) {
   const p = source ? PICKERS[source] : undefined;
   return useQuery({
     queryKey: ['master', 'picker', source, extra],
-    queryFn: ({ signal }) => queryOptions(p!.resource, p!.label, { ...(p!.activeOnly ? { status: 'ACTIVE' } : {}), ...(p!.filters ?? {}), ...extra }, signal),
+    queryFn: ({ signal }) =>
+      queryOptions(p!.resource, p!.label, { ...(p!.activeOnly ? { status: 'ACTIVE' } : {}), ...(p!.filters ?? {}), ...extra }, signal, p!.sortBy),
     enabled: !!p,
     staleTime: 30_000,
   });

@@ -51,6 +51,11 @@ final class InventoryPostingService
         'LOT_SPLIT' => ['LOT_SPLIT_OUT', 'LOT_SPLIT_IN'],
     ];
 
+    /** Requests decided by a second person, with the codes of their legs; reversals follow in M3 step 7. */
+    private const array REQUEST_CODES = [
+        'STOCK_ADJUSTMENT' => ['ADJ_PLUS', 'ADJ_MINUS'],
+    ];
+
     private const array PREFIX = [
         'RM_RECEIPT' => 'RCV', 'INCOMING_RELEASE' => 'REL', 'MAT_ISSUE' => 'ISS', 'CUSTODY_ACCEPT' => 'CUS', 'MAT_TRANSFER' => 'TRF',
         'MAT_RETURN' => 'RET', 'LOT_SPLIT' => 'SPL', 'PRODUCTION_POSTING' => 'PRD', 'QC_DISPOSITION' => 'QCD', 'FG_RECEIPT' => 'FGR',
@@ -133,7 +138,7 @@ final class InventoryPostingService
         foreach ($command->legs as $leg) {
             $type = $types[$leg->locationId] ?? throw new DomainProblem(422, 'UNKNOWN_LOCATION', 'Unknown location', 'A leg names a location that does not exist.');
             $out = str_starts_with($leg->qty, '-');
-            if (! in_array($leg->movementCode, self::DIRECT[$command->docType], true)) {
+            if (! in_array($leg->movementCode, (self::DIRECT + self::REQUEST_CODES)[$command->docType], true)) {
                 $refuse("A {$command->docType} does not post {$leg->movementCode}.");
             }
             if ($leg->reversesMovementId !== null) {
@@ -146,6 +151,9 @@ final class InventoryPostingService
                     || $refuse('A receipt moves from the supplier into a raw-material location, BLOCKED when the item needs its incoming release, UNRESTRICTED otherwise.'),
                 'INCOMING_RELEASE' => ($leg->stockStatus === ($out ? 'BLOCKED' : 'UNRESTRICTED') && $type === 'RM_WAREHOUSE')
                     || $refuse('An incoming release turns BLOCKED raw material into UNRESTRICTED stock in place, in a raw-material location.'),
+                // doc 04 row 12: ADJ_PLUS comes from the adjustment location into stock, ADJ_MINUS goes back to it
+                'STOCK_ADJUSTMENT' => (($leg->movementCode === 'ADJ_PLUS') === $out ? $type === 'V_ADJUSTMENT' : ! str_starts_with($type, 'V_'))
+                    || $refuse('An adjustment moves stock between the plant\'s adjustment location and one physical location.'),
                 default => ! str_starts_with($type, 'V_') || $refuse('A transfer or split moves between physical locations.'),
             };
             if ($command->docType === 'LOT_SPLIT' && $leg->lotId === null) {
@@ -202,17 +210,131 @@ final class InventoryPostingService
         }
     }
 
-    private function replay(EoraPostgresConnection $db, PostingCommand $command): ?PostingResult
+    /**
+     * Submits a request decided by a second person (D-060): an adjustment (doc 04 row 12) with its reason code, for the
+     * production day it is asked on. Nothing moves until it is approved. A retry under the same key answers with the
+     * same request; the key used for another request is refused (409).
+     *
+     * @return array{documentId: string, replayed: bool}
+     */
+    public function submit(EoraPostgresConnection $db, PostingCommand $command, string $reasonCode): array
     {
-        return $this->previous($db, $command->idempotencyKey, $command->hash());
+        if (! isset(self::REQUEST_CODES[$command->docType])) {
+            throw new DomainProblem(422, 'DOCUMENT_TYPE_NOT_AVAILABLE', 'Not available yet', "{$command->docType} is not requested this way.");
+        }
+        $previous = $this->requested($db, $command->idempotencyKey, $command->docType, $command->hash());
+        if ($previous !== null) {
+            return ['documentId' => $previous, 'replayed' => true];
+        }
+        $this->checkLegs($db, $command);
+        $this->items($db, $command->legs);
+        $this->physicalLocations($db, $command->plantId, $command->legs);
+        $day = $this->calendar->resolve($db, $command->plantId, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
+        $request = ['hash' => $command->hash(), 'legs' => array_map(static fn (PostingLeg $l) => [
+            'movementCode' => $l->movementCode, 'locationId' => $l->locationId, 'itemId' => $l->itemId, 'lotId' => $l->lotId,
+            'stockStatus' => $l->stockStatus, 'qty' => $l->qty,
+        ], $command->legs)];
+        $id = (string) $db->selectOne(
+            "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, requested_by, submitted_at, reason_code, note, request, idempotency_key)
+             values ((select c.tenant from ctx_api.context() c), ?, ?, 'SUBMITTED', ?, (select c.actor from ctx_api.context() c), now(), ?, ?, ?::jsonb, ?)
+             returning id",
+            [$command->plantId, $command->docType, $day, $reasonCode, $command->note, json_encode($request, JSON_THROW_ON_ERROR), $command->idempotencyKey],
+        )->id;
+        $this->audit->record($db, 'inventory_document.submitted', 'inventory_document', $id, null,
+            (array) $db->selectOne('select * from inventory_documents where id = ?', [$id]), ['docType' => $command->docType, 'reasonCode' => $reasonCode], $command->plantId);
+        $this->outbox->publish($db, 'inventory.request_submitted', 'inventory_document', $id, ['docType' => $command->docType, 'plantId' => $command->plantId]);
+
+        return ['documentId' => $id, 'replayed' => false];
     }
 
     /**
-     * Holds $key until the caller's transaction ends, then answers as previous(): a second request under the same key
-     * waits for the first and replays its result instead of writing anything itself. Commands that create records before
-     * posting (a receipt's lot) claim the key first, before checking master data that may have changed since.
+     * Holds $key until the caller's transaction ends, then answers with the request already submitted under it (its id),
+     * null when the key is new; 409 when the key was used for another request. Callers claim the key this way before
+     * checking stock or master data that may have changed since.
      */
-    public function claim(EoraPostgresConnection $db, string $key, string $hash): ?PostingResult
+    public function requested(EoraPostgresConnection $db, string $key, string $docType, string $hash): ?string
+    {
+        $this->lockKey($db, $key);
+        $previous = $db->selectOne("select id, doc_type, request ->> 'hash' as hash from inventory_documents where idempotency_key = ?", [$key]);
+        if ($previous === null) {
+            return null;
+        }
+        if ($previous->doc_type !== $docType || $previous->hash !== $hash) {
+            throw new DomainProblem(409, 'IDEMPOTENCY_KEY_REUSED', 'Idempotency key reused', 'This key was used for another request. Send a new key for a new request.');
+        }
+
+        return (string) $previous->id;
+    }
+
+    /**
+     * Posts a submitted request as it was submitted (D-060): the approver is the poster and never its requester; the
+     * stock, period and allocation checks run now, at approval. Retried under the same key, it answers as it posted.
+     */
+    public function approve(EoraPostgresConnection $db, string $requestId, string $key): PostingResult
+    {
+        $hash = hash('sha256', 'approve:'.$requestId);
+        $previous = $this->claim($db, $key, $hash);
+        if ($previous !== null) {
+            return $previous;
+        }
+        $doc = $this->decidable($db, $requestId) ?? throw new LogicException('An approval decides a submitted request.');
+        $request = json_decode((string) $doc->request, true, flags: JSON_THROW_ON_ERROR);
+        $command = new PostingCommand((string) $doc->doc_type, (string) $doc->plant_id, $key, array_values(array_map(static fn (array $l) => new PostingLeg(
+            $l['movementCode'], $l['locationId'], $l['itemId'], $l['lotId'], $l['stockStatus'], $l['qty'],
+        ), $request['legs'])), effectiveDate: (string) $doc->effective_date, note: $doc->note, requestHash: $hash);
+        $this->checkLegs($db, $command);
+        $db->statement("set local statement_timeout = '10s'");
+        try {
+            $result = $this->write($db, $command, $requestId);
+            $db->statement('set constraints all immediate');
+        } catch (QueryException $e) {
+            throw $this->refusal($e) ?? $e;
+        }
+
+        return $result;
+    }
+
+    /** Rejects a submitted request with the reason (D-060); nothing moves. Rejecting it again changes nothing. */
+    public function reject(EoraPostgresConnection $db, string $requestId, string $reason): void
+    {
+        $doc = $this->decidable($db, $requestId, rejecting: true);
+        if ($doc === null) {
+            return;
+        }
+        $db->update(
+            "update inventory_documents set status = 'REJECTED', decided_by = (select c.actor from ctx_api.context() c), decided_at = now(), reject_reason = ? where id = ?",
+            [$reason, $requestId],
+        );
+        $this->audit->record($db, 'inventory_document.rejected', 'inventory_document', $requestId, (array) $doc,
+            (array) $db->selectOne('select * from inventory_documents where id = ?', [$requestId]), ['reason' => $reason], (string) $doc->plant_id);
+        $this->outbox->publish($db, 'inventory.request_rejected', 'inventory_document', $requestId, ['docType' => $doc->doc_type, 'plantId' => $doc->plant_id]);
+    }
+
+    /**
+     * The submitted request, locked until the decision commits: 404 when unknown, 403 SOD_VIOLATION for its requester,
+     * 409 INVALID_STATE_TRANSITION once decided (null for a request already rejected when $rejecting).
+     */
+    private function decidable(EoraPostgresConnection $db, string $requestId, bool $rejecting = false): ?stdClass
+    {
+        $doc = $db->selectOne(
+            'select id, doc_type, plant_id, status, requested_by, effective_date::text as effective_date, note, request::text as request
+               from inventory_documents where id = ? and requested_by is not null for update',
+            [$requestId],
+        ) ?? throw new DomainProblem(404, 'NOT_FOUND', 'Not found');
+        if ((string) $doc->requested_by === (string) $db->selectOne('select c.actor from ctx_api.context() c')->actor) {
+            throw new DomainProblem(403, 'SOD_VIOLATION', 'Second person required', 'A request is approved or rejected by someone other than its requester.');
+        }
+        if ($rejecting && $doc->status === 'REJECTED') {
+            return null;
+        }
+        if ($doc->status !== 'SUBMITTED') {
+            throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Already decided', 'This request has already been decided.');
+        }
+
+        return $doc;
+    }
+
+    private function lockKey(EoraPostgresConnection $db, string $key): void
     {
         if ($db->transactionLevel() === 0) {
             throw new LogicException('Postings run inside the tenant transaction.');
@@ -225,6 +347,21 @@ final class InventoryPostingService
                 ? new DomainProblem(409, 'IDEMPOTENCY_IN_PROGRESS', 'Posting in progress', 'A posting with this key is being written. Send the request again to get its result.')
                 : $e;
         }
+    }
+
+    private function replay(EoraPostgresConnection $db, PostingCommand $command): ?PostingResult
+    {
+        return $this->previous($db, $command->idempotencyKey, $command->hash());
+    }
+
+    /**
+     * Holds $key until the caller's transaction ends, then answers as previous(): a second request under the same key
+     * waits for the first and replays its result instead of writing anything itself. Commands that create records before
+     * posting (a receipt's lot) claim the key first, before checking master data that may have changed since.
+     */
+    public function claim(EoraPostgresConnection $db, string $key, string $hash): ?PostingResult
+    {
+        $this->lockKey($db, $key);
 
         return $this->previous($db, $key, $hash);
     }
@@ -247,7 +384,8 @@ final class InventoryPostingService
         return new PostingResult($r['documentId'], $r['docNo'], $r['productionDate'], replayed: true);
     }
 
-    private function write(EoraPostgresConnection $db, PostingCommand $command): PostingResult
+    /** @param  ?string  $requestId  the submitted request this posting decides (D-060); null for a direct posting */
+    private function write(EoraPostgresConnection $db, PostingCommand $command, ?string $requestId = null): PostingResult
     {
         $now = new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t);
         $time = $this->calendar->resolve($db, $command->plantId, $now);
@@ -280,14 +418,22 @@ final class InventoryPostingService
         )->last_no;
         $docNo = sprintf('%s-%s-%d-%04d', self::PREFIX[$command->docType], $plantCode, $year, $number);
 
-        $documentId = (string) $db->selectOne(
-            'insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, shift_id, shift_date,
-                                              posted_at, posted_by, note, source_type, source_id, idempotency_key)
-             values ((select c.tenant from ctx_api.context() c), ?, ?, ?, \'POSTED\', ?, ?, ?, ?, ?, now(), (select c.actor from ctx_api.context() c), ?, ?, ?, ?)
-             returning id',
-            [$command->plantId, $command->docType, $docNo, $effective, $effective, $time->calendarDate, $backdated ? null : $time->shiftId,
-                $backdated ? null : $time->shiftDate, $command->note, $command->sourceType, $command->sourceId, $command->idempotencyKey],
-        )->id;
+        $documentId = $requestId !== null
+            // the request becomes the posted document, decided by the signed actor (the database refuses its requester)
+            ? (string) $db->selectOne(
+                "update inventory_documents set status = 'POSTED', doc_no = ?, production_date = ?, calendar_date = ?, shift_id = ?, shift_date = ?,
+                        posted_at = now(), posted_by = (select c.actor from ctx_api.context() c), decided_by = (select c.actor from ctx_api.context() c), decided_at = now()
+                  where id = ? returning id",
+                [$docNo, $effective, $time->calendarDate, $backdated ? null : $time->shiftId, $backdated ? null : $time->shiftDate, $requestId],
+            )->id
+            : (string) $db->selectOne(
+                'insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, shift_id, shift_date,
+                                                  posted_at, posted_by, note, source_type, source_id, idempotency_key)
+                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, \'POSTED\', ?, ?, ?, ?, ?, now(), (select c.actor from ctx_api.context() c), ?, ?, ?, ?)
+                 returning id',
+                [$command->plantId, $command->docType, $docNo, $effective, $effective, $time->calendarDate, $backdated ? null : $time->shiftId,
+                    $backdated ? null : $time->shiftDate, $command->note, $command->sourceType, $command->sourceId, $command->idempotencyKey],
+            )->id;
 
         foreach ($command->legs as $i => $leg) {
             $db->insert(

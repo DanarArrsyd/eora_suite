@@ -93,3 +93,15 @@ describe('routing', () => {
     expect(allRouteParams(NAV_MODULES)).toHaveLength(count);
   });
 });
+
+describe('item permissions', () => {
+  const adjustments = NAV_MODULES.find((m) => m.id === 'inventory')!
+    .groups.flatMap((g) => g.items)
+    .find((i) => i.id === 'adjustments')!;
+
+  it('shows an item to a holder of any of its permissions: requesters view, approvers decide (D-100)', () => {
+    expect(isItemVisible(adjustments, { ...all, permissions: ['inventory.adjustment.view'] })).toBe(true);
+    expect(isItemVisible(adjustments, { ...all, permissions: ['inventory.adjustment.approve'] })).toBe(true);
+    expect(isItemVisible(adjustments, { ...all, permissions: ['inventory.stock.view'] })).toBe(false);
+  });
+});

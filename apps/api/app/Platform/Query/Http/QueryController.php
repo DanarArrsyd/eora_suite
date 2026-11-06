@@ -42,7 +42,7 @@ final class QueryController
     public function schema(string $resource): JsonResponse
     {
         $definition = $this->definition($resource);
-        $this->authorizer->requireAnywhere($this->db(), $definition->permission());
+        $this->authorizer->requireAnyOf($this->db(), $definition->permissions());
 
         return response()->json(['data' => [
             'resource' => $definition->resource(),

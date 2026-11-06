@@ -16,7 +16,7 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
    ```bash
    npx pnpm@12.10.1 --filter @eora/web dev
    ```
-3. Login pakai password demo. Akun yang dipakai: `mat@demo-stamping.test` (gudang bahan: terima), `qci@demo-stamping.test` (QC incoming: release), `prl@demo-stamping.test` (production leader: split lot), `csa@demo-stamping.test` (admin: hanya melihat).
+3. Login pakai password demo. Akun yang dipakai: `mat@demo-stamping.test` (gudang bahan: terima), `qci@demo-stamping.test` (QC incoming: release), `prl@demo-stamping.test` (production leader: split lot), `inv@demo-stamping.test` (inventory control: minta adjustment), `csa@demo-stamping.test` (admin: melihat; menyetujui adjustment).
 
 ## 1. Penerimaan bahan — RM Receipts (langkah 3, D-062, D-097)
 | # | Langkah | Yang diharapkan | Hasil |
@@ -58,3 +58,13 @@ Siapkan dulu sebagai `csa`: rak RM kedua di gudang RM plant P1 (Master Data → 
 | 4 | Split induk yang sama sekali lagi (mis. `100`). | Anak berikutnya bernomor `<lot>-02`. | |
 | 5 | Filter **Origin** = Split. | Hanya lot anak. | |
 | 6 | Login `mat` → Materials → Material Lots → **Split**. | Stok terlihat; drawer menjelaskan "Your roles do not allow lot splits.", tidak ada form. | |
+
+## 5. Adjustment — dua orang (langkah 6, D-060, D-100)
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `inv` → Inventory → **Adjustments** → **New adjustment request**. Pilih stock line coil di `RM-A02`, Change **Remove from stock**, quantity lebih dari on hand, reason **Other**, note kosong → **Request adjustment**. | Ditolak sebelum konfirmasi: "Only … is on hand there." dan "Explain the adjustment when the reason is Other."; tidak ada yang terkirim. | |
+| 2 | Quantity `50`, reason **Damage**, note "Ujung coil penyok" → **Request adjustment** → konfirmasi. | Pesan "Adjustment requested; it waits for a second person to approve it". Baris baru status **Submitted**, Change `−50 KG`. Stock Overview **belum berubah**. | |
+| 3 | **Open** permintaan itu (masih sebagai `inv`). | Kotak "You requested this adjustment"; tidak ada tombol Approve/Reject. | |
+| 4 | Login `csa` → Inventory → Adjustments → **Open** permintaan → **Approve**. | Judul menjadi `ADJ-P1-<tahun>-0001`, status **Posted**, "Approved: csa, <waktu>". Stock Overview: coil di `RM-A02` berkurang 50. | |
+| 5 | Sebagai `inv`, minta **Add to stock** `5` reason **Found stock** pada baris yang sama; login `csa` → **Reject** dengan alasan "Tidak ada lembar hitung". | Status **Rejected** dengan alasannya; stok tidak berubah. | |
+| 6 | Login `mat` → menu Inventory. | Adjustments tidak muncul (M3: MAT hanya melihat stok). | |
