@@ -71,17 +71,13 @@ type PostedDocument = {
 };
 
 /**
- * The posted document with exactly this number in the plants the user sees, looked up on the server (any history size),
- * or why it cannot be reversed (D-101).
+ * The posted document with exactly this number in the plants the user sees, looked up on the server (any history size).
+ * Whether it may still be reversed is the server's answer: a retried request replays there before that check (D-101).
  */
 async function findDocument(no: string): Promise<PostedDocument | string> {
   const number = no.trim().toUpperCase();
   const doc = (await queryAll<PostedDocument>('inventory.documents', { code: number }, undefined, 'code')).find((d) => d.code === number);
-  if (!doc) return `No posted document ${number} in the plants you can see.`;
-  if (doc.docType === 'REVERSAL') return 'A reversal is not reversed. Post the corrected document instead.';
-  if (doc.status === 'REVERSED') return `${number} is already reversed${doc.reversalCode ? ` by ${doc.reversalCode}` : ''}.`;
-  if (!doc.reversible) return `A reversal of ${number} is already waiting for approval.`;
-  return doc;
+  return doc ?? `No posted document ${number} in the plants you can see.`;
 }
 
 const READ = ['inventory.reversal.view', 'inventory.reversal.request_correction', 'inventory.reversal.approve'] as const;
@@ -225,6 +221,7 @@ function ReversalPage({ id }: { id: string }) {
     enabled: canView,
   });
   const originalId = row.data?.originalId;
+  const canReadLegs = permissions.includes('inventory.stock.view');
   const legs = useQuery({
     queryKey: ['master', 'inventory.movements', 'of', originalId],
     queryFn: async ({ signal }) =>
@@ -234,7 +231,7 @@ function ReversalPage({ id }: { id: string }) {
           signal,
         )
       ).rows,
-    enabled: !!originalId && permissions.includes('inventory.stock.view'),
+    enabled: !!originalId && canReadLegs,
   });
 
   if (me.isPending || (canView && row.isPending)) return <LoadingState title="Loading reversal" />;
@@ -334,12 +331,28 @@ function ReversalPage({ id }: { id: string }) {
               </dl>
             </CardContent>
           </Card>
-          {legs.data ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Legs undone</CardTitle>
-              </CardHeader>
-              <CardContent>
+          <Card>
+            <CardHeader>
+              <CardTitle>Legs undone</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!canReadLegs ? (
+                <InlineAlert tone="warning" title="The legs cannot be shown">
+                  Your roles cannot read stock, so this reversal is decided by someone who can see what it undoes.
+                </InlineAlert>
+              ) : legs.isError ? (
+                <ErrorState
+                  title="The legs could not be loaded"
+                  description="They are needed before this reversal can be approved."
+                  action={
+                    <Button size="sm" onClick={() => void legs.refetch()}>
+                      Try again
+                    </Button>
+                  }
+                />
+              ) : !legs.data ? (
+                <LoadingState title="Loading the legs" />
+              ) : (
                 <DataTable
                   label={`Legs of ${r.originalCode}`}
                   columns={LEG_COLUMNS}
@@ -352,9 +365,9 @@ function ReversalPage({ id }: { id: string }) {
                   density="compact"
                   empty={<EmptyState title="No legs" description="This document posted no legs." />}
                 />
-              </CardContent>
-            </Card>
-          ) : null}
+              )}
+            </CardContent>
+          </Card>
         </div>
         <ApprovalPanel
           label="Reversal"
@@ -364,7 +377,8 @@ function ReversalPage({ id }: { id: string }) {
             approvedByName: r.decidedByName,
             approvedAt: r.decidedAt,
           }}
-          can={{ view: true, create: false, submit: false, approve: canApprove && !mine }}
+          // the approver decides only with the legs in front of them (what the reversal undoes)
+          can={{ view: true, create: false, submit: false, approve: canApprove && !mine && legs.isSuccess }}
           approvedNote={`Posted as ${r.code ?? 'a reversal'}. ${r.originalCode} is now reversed; post the corrected document if one is needed.`}
           rejectNote="Nothing changes in stock. The requester sees the reason and can request again."
           act={async () => {

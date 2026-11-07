@@ -160,3 +160,25 @@ test('reversals: the requester sees its request waiting and has no decision to m
   await expect(page.getByText('You requested this reversal')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
 });
+
+test('reversals: no approval until the legs it undoes are on screen; a failed load says so and retries', async ({ page }) => {
+  await mockApi(page, '/auth/me', ME(['inventory.reversal.approve', 'inventory.stock.view']));
+  await mockApi(page, '/query/inventory.reversals?*', page1([REQUEST]));
+  let fail = true;
+  await page.route('**/api/v1/query/inventory.movements?*', (route) =>
+    fail
+      ? route.fulfill({
+          status: 500,
+          contentType: 'application/problem+json',
+          body: JSON.stringify({ type: 'about:blank', title: 'Error', status: 500, code: 'INTERNAL_ERROR' }),
+        })
+      : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: LEGS, meta: { ...META, total: LEGS.length } }) }),
+  );
+  await page.goto(`/inventory/reversals?request=${REQUEST.id}`);
+  await expect(page.getByText('The legs could not be loaded')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+  fail = false;
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('table', { name: 'Legs of ADJ-P1-2026-0001' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();
+});
