@@ -34365,7 +34365,7 @@
                         }
                     },
                     "409": {
-                        "description": "INVALID_STATE_TRANSITION",
+                        "description": "INVALID_STATE_TRANSITION, PERIOD_HAS_PENDING_REQUESTS",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -34387,7 +34387,8 @@
                                         "code": {
                                             "type": "string",
                                             "enum": [
-                                                "INVALID_STATE_TRANSITION"
+                                                "INVALID_STATE_TRANSITION",
+                                                "PERIOD_HAS_PENDING_REQUESTS"
                                             ]
                                         },
                                         "detail": {

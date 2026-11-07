@@ -289,8 +289,9 @@ final class InventoryPostingService
         $plant = (string) $original->plant_id;
         $day = $this->calendar->resolve($db, $plant, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
         // BR-PER-02, D-102: a document of a closed month is corrected in the open period, as a correction with its evidence
-        $closed = $db->selectOne("select 1 as closed from inventory_periods where plant_id = ? and period = date_trunc('month', ?::date)::date and status = 'CLOSED'",
-            [$plant, $original->effective_date]) !== null;
+        // FOR SHARE: a close of that month (which locks the period) waits for this request, then sees it as pending
+        $closed = $db->selectOne("select status from inventory_periods where plant_id = ? and period = date_trunc('month', ?::date)::date for share",
+            [$plant, $original->effective_date])?->status === 'CLOSED';
         if ($closed && ($evidence === null || trim($evidence) === '')) {
             throw ValidationException::withMessages(['evidence' => "{$original->doc_no} is in a closed month: give the evidence for this correction (e.g. the report number)."]);
         }

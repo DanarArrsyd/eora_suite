@@ -194,7 +194,7 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
             409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         // D-102: periods close and reopen on requests decided by a second person
         'v1.inventory.periods.close-request' => self::TENANT_WRITE + self::MASTER_403 + [409 => ['INVALID_STATE_TRANSITION', 'PERIOD_HAS_PENDING_REQUESTS'], 422 => ['VALIDATION_FAILED']],
-        'v1.inventory.periods.close' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
+        'v1.inventory.periods.close' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION', 'PERIOD_HAS_PENDING_REQUESTS']],
         'v1.inventory.periods.close-return' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.inventory.periods.reopen-request' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.inventory.periods.reopen' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],

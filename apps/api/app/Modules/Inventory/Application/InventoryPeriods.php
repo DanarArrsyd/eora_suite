@@ -43,19 +43,7 @@ final class InventoryPeriods
         if ($row->status !== 'OPEN') {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Already closing', $row->status === 'CLOSED' ? "{$month} is already closed." : "A close of {$month} is already waiting for approval.");
         }
-        // requests of the month, and reversal requests of the month's documents (asked later, still undecided)
-        $pending = (int) $db->selectOne(
-            "select count(*) as n from inventory_documents d
-              where d.plant_id = ? and d.status = 'SUBMITTED'
-                and ((d.effective_date >= ?::date and d.effective_date < (?::date + interval '1 month'))
-                     or exists (select 1 from inventory_documents o where o.id = d.reverses_document_id
-                                   and o.effective_date >= ?::date and o.effective_date < (?::date + interval '1 month')))",
-            [$plantId, $period, $period, $period, $period],
-        )->n;
-        if ($pending > 0) {
-            throw new DomainProblem(409, 'PERIOD_HAS_PENDING_REQUESTS', 'Requests still waiting',
-                "{$pending} adjustment or reversal request(s) of {$month} still wait for a decision. Approve or reject them first.");
-        }
+        $this->requireDecided($db, $plantId, $period, $month);
 
         return $this->move($db, $row, "status = 'CLOSING', close_requested_by = (select c.actor from ctx_api.context() c), close_requested_at = now()",
             'inventory_period.close_requested', ['month' => $month]);
@@ -67,6 +55,8 @@ final class InventoryPeriods
         $row = $this->locked($db, $id);
         $this->expect($row, 'CLOSING', 'No close of this month is waiting.');
         $this->secondPerson($db, (string) $row->close_requested_by, 'A month is closed by someone other than the person who asked to close it.');
+        // a request may have come in while the month was closing (a reversal of one of its documents): decided first
+        $this->requireDecided($db, (string) $row->plant_id, $row->month.'-01', (string) $row->month);
 
         return $this->move($db, $row, "status = 'CLOSED', closed_by = (select c.actor from ctx_api.context() c), closed_at = now()", 'inventory_period.closed', []);
     }
@@ -132,6 +122,26 @@ final class InventoryPeriods
             ? $db->selectOne("select {$columns} from inventory_periods where id = ? for update", [$id])
             : $db->selectOne("select {$columns} from inventory_periods where plant_id = ? and period = ?::date for update", [$plantId, $period]))
             ?? throw new DomainProblem(404, 'NOT_FOUND', 'Not found');
+    }
+
+    /**
+     * D-102: no request of the month, nor a reversal request of one of its documents, may still wait. Reversal requests
+     * read the period FOR SHARE (InventoryPostingService::submitReversal), so they serialize with the locked period here.
+     */
+    private function requireDecided(EoraPostgresConnection $db, string $plantId, string $period, string $month): void
+    {
+        $pending = (int) $db->selectOne(
+            "select count(*) as n from inventory_documents d
+              where d.plant_id = ? and d.status = 'SUBMITTED'
+                and ((d.effective_date >= ?::date and d.effective_date < (?::date + interval '1 month'))
+                     or exists (select 1 from inventory_documents o where o.id = d.reverses_document_id
+                                   and o.effective_date >= ?::date and o.effective_date < (?::date + interval '1 month')))",
+            [$plantId, $period, $period, $period, $period],
+        )->n;
+        if ($pending > 0) {
+            throw new DomainProblem(409, 'PERIOD_HAS_PENDING_REQUESTS', 'Requests still waiting',
+                "{$pending} adjustment or reversal request(s) of {$month} still wait for a decision. Approve or reject them first.");
+        }
     }
 
     private function expect(stdClass $row, string $status, string $why): void

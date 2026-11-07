@@ -83,7 +83,12 @@ it('corrects a document of a closed month in the open period, with its evidence 
     $receipt = rcReceive($this, $f, ['effectiveDate' => $f['lastMonth'].'-15'])->assertCreated()->json('data');
     rtSwitch($this, $this->t, 'INV', ['PLANT', $f['plant']]);
     $id = pdClose($this, $f)->assertCreated()->json('data.id');
+    // a reversal of one of its documents asked while the month is closing must be decided before it closes
+    rtSwitch($this, $this->t, 'MAT');
+    $late = rvRequest($this, $receipt['documentId'], 'reverse-key-0009')->assertCreated()->json('data.documentId');
     rtSwitch($this, $this->t, 'CSA');
+    spa($this)->postJson("/api/v1/inventory/periods/{$id}/close")->assertStatus(409)->assertJsonPath('code', 'PERIOD_HAS_PENDING_REQUESTS');
+    spa($this)->postJson("/api/v1/inventory/reversals/{$late}/reject", ['reason' => 'Correct it after the close'])->assertNoContent();
     spa($this)->postJson("/api/v1/inventory/periods/{$id}/close")->assertOk();
 
     rtSwitch($this, $this->t, 'MAT');

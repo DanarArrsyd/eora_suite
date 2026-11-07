@@ -17834,7 +17834,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description INVALID_STATE_TRANSITION */
+            /** @description INVALID_STATE_TRANSITION, PERIOD_HAS_PENDING_REQUESTS */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17847,7 +17847,7 @@ export interface operations {
                         /** @enum {integer} */
                         status: 409;
                         /** @enum {string} */
-                        code: "INVALID_STATE_TRANSITION";
+                        code: "INVALID_STATE_TRANSITION" | "PERIOD_HAS_PENDING_REQUESTS";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;
