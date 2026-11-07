@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { choose, expect, mockApi, SESSION, test, type Page } from './fixtures';
+import { expect, mockApi, SESSION, test, type Page } from './fixtures';
 
 /* M3 step 7 (doc 32 §1.7, doc 04 row 13, D-060, D-101): Inventory → Reversals against a mocked API. */
 
@@ -99,8 +99,13 @@ test('reversals: a correction requester picks a posted document and gives the re
 
   await page.getByRole('button', { name: 'New reversal request' }).click();
   const drawer = page.getByRole('dialog', { name: 'New reversal request' });
-  await choose(page, drawer.getByRole('combobox', { name: 'Document' }), 'ADJ-P1-2026-0001 · Adjustment · 2026-11-06');
-  expect(decodeURIComponent((await docsUrl).url())).toContain('filter[reversible]');
+  await drawer.getByRole('textbox', { name: 'Document number' }).fill('ADJ-P1-2026-0009');
+  await drawer.getByRole('textbox', { name: 'Reason' }).fill('x');
+  await drawer.getByRole('button', { name: 'Request reversal' }).click();
+  await expect(drawer).toContainText('No posted document ADJ-P1-2026-0009 in the plants you can see.');
+  await expect(drawer).toContainText('Say why the document is wrong.');
+  await drawer.getByRole('textbox', { name: 'Document number' }).fill('adj-p1-2026-0001');
+  expect(decodeURIComponent((await docsUrl).url())).toContain('filter[code]=ADJ-P1-2026-0009');
   await drawer.getByRole('textbox', { name: 'Reason' }).fill('Damage was on another sheet');
   await drawer.getByRole('button', { name: 'Request reversal' }).click();
   await page.getByRole('alertdialog', { name: 'Request this reversal' }).getByRole('button', { name: 'Request reversal' }).click();

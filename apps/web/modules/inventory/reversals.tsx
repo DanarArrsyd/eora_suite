@@ -11,7 +11,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle, EmptyState, ErrorStat
 import { DOCUMENT_TYPES } from '@/modules/master/document-types';
 import { MasterScreen } from '@/modules/master/master-screen';
 import { PLANT_FILTER } from '@/modules/master/resources';
-import { querySource } from '@/modules/master/source';
+import { queryAll, querySource } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
 import { ApprovalPanel, when } from '@/modules/master/version-ui';
 
@@ -59,6 +59,30 @@ type Leg = {
 };
 
 type Submitted = { data: { documentId: string; replayed: boolean } };
+
+type PostedDocument = {
+  id: string;
+  code: string;
+  docType: string;
+  status: 'POSTED' | 'REVERSED';
+  reversible: boolean;
+  reversalCode: string | null;
+  reversalStatus: string | null;
+};
+
+/**
+ * The posted document with exactly this number in the plants the user sees, looked up on the server (any history size),
+ * or why it cannot be reversed (D-101).
+ */
+async function findDocument(no: string): Promise<PostedDocument | string> {
+  const number = no.trim().toUpperCase();
+  const doc = (await queryAll<PostedDocument>('inventory.documents', { code: number }, undefined, 'code')).find((d) => d.code === number);
+  if (!doc) return `No posted document ${number} in the plants you can see.`;
+  if (doc.docType === 'REVERSAL') return 'A reversal is not reversed. Post the corrected document instead.';
+  if (doc.status === 'REVERSED') return `${number} is already reversed${doc.reversalCode ? ` by ${doc.reversalCode}` : ''}.`;
+  if (!doc.reversible) return `A reversal of ${number} is already waiting for approval.`;
+  return doc;
+}
 
 const READ = ['inventory.reversal.view', 'inventory.reversal.request_correction', 'inventory.reversal.approve'] as const;
 const typeLabel = (t: string) => DOCUMENT_TYPES[t] ?? t;
@@ -112,18 +136,26 @@ export const REVERSALS: MasterResource<ReversalRow> = {
   ],
   fields: [
     {
-      key: 'documentId',
-      label: 'Document',
-      kind: 'select',
+      key: 'documentNo',
+      label: 'Document number',
+      kind: 'text',
       required: true,
-      options: 'reversibleDocuments',
-      hint: 'A posted document that is not reversed yet and has no reversal waiting.',
+      code: true,
+      codePattern: { pattern: /^[A-Z0-9/_-]*$/, message: 'Use the number as printed, e.g. RCV-P1-2026-0001.' },
+      maxLength: 40,
+      hint: 'As printed on the document, e.g. RCV-P1-2026-0001.',
     },
     { key: 'reason', label: 'Reason', kind: 'text', required: true, maxLength: 500, hint: 'Why it is wrong, e.g. "Received on the wrong rack".' },
   ],
-  blank: { documentId: '', reason: '' },
-  toForm: () => ({ documentId: '', reason: '' }),
-  check: async (v): Promise<Record<string, string>> => ((v.reason ?? '').trim().length < 3 ? { reason: 'Say why the document is wrong.' } : {}),
+  blank: { documentNo: '', reason: '' },
+  toForm: () => ({ documentNo: '', reason: '' }),
+  check: async (v): Promise<Record<string, string>> => {
+    const problems: Record<string, string> = {};
+    if ((v.reason ?? '').trim().length < 3) problems.reason = 'Say why the document is wrong.';
+    const found = v.documentNo ? await findDocument(v.documentNo) : null;
+    if (typeof found === 'string') problems.documentNo = found;
+    return problems;
+  },
   confirm: () => ({
     title: 'Request this reversal',
     description: 'Every leg of the document will be undone once a second person approves it. Nothing changes in stock until then.',
@@ -134,13 +166,16 @@ export const REVERSALS: MasterResource<ReversalRow> = {
       ? 'This request was already sent; it is waiting for approval'
       : 'Reversal requested; it waits for a second person to approve it',
   savedNote: 'It is listed as Submitted until a second person approves or rejects it.',
-  create: (v, ctx) =>
-    call(() =>
+  create: async (v, ctx) => {
+    const found = await findDocument(v.documentNo!);
+    if (typeof found === 'string') throw new Error(found);
+    return call(() =>
       api.POST('/inventory/reversals', {
         params: { header: { 'Idempotency-Key': ctx.idempotencyKey } },
-        body: { documentId: v.documentId!, reason: v.reason! },
+        body: { documentId: found.id, reason: v.reason! },
       }),
-    ),
+    );
+  },
   update: () => Promise.reject(new Error('A request is never edited: reject it and request again.')),
 };
 

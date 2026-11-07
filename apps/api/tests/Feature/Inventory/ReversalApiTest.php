@@ -52,6 +52,8 @@ it('reverses a posted receipt once a second person approves, negating every leg 
     expect($legs->pluck('movementCode')->unique()->values()->all())->toBe(['RCPT_SUPPLIER'])
         ->and($legs->pluck('qty')->all())->toBe(['10', '-10'])
         ->and($legs->every(fn ($l) => $l['reversesMovementId'] !== null))->toBeTrue();
+    // found by its number, however long the history (D-101)
+    spa($this)->getJson("/api/v1/query/inventory.documents?filter[code]={$receipt['docNo']}")->assertOk()->assertJsonPath('data.0.id', $receipt['documentId']);
     spa($this)->getJson("/api/v1/query/inventory.documents?filter[id]={$receipt['documentId']}")->assertOk()
         ->assertJsonPath('data.0.status', 'REVERSED')->assertJsonPath('data.0.reversalCode', "REV-P1-{$year}-0001")->assertJsonPath('data.0.reversible', false);
 

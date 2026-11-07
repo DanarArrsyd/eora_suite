@@ -64,7 +64,7 @@ final class DocumentsQuery extends QueryDefinition
     {
         return [
             new Field('id', 'd.id', Field::UUID, filterable: true),
-            new Field('code', 'd.doc_no', sortable: true, search: 'prefix'),
+            new Field('code', 'd.doc_no', sortable: true, filterable: true, search: 'prefix'),
             new Field('docType', 'd.doc_type', Field::ENUM, sortable: true, filterable: true, options: self::TYPES),
             new Field('status', 'd.status', Field::ENUM, filterable: true, options: ['POSTED', 'REVERSED']),
             new Field('plantId', 'd.plant_id', Field::UUID, filterable: true),

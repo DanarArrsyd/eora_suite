@@ -73,8 +73,8 @@ Siapkan dulu sebagai `csa`: rak RM kedua di gudang RM plant P1 (Master Data → 
 ## 6. Reversal — dua orang (langkah 7, D-060, D-101)
 | # | Langkah | Yang diharapkan | Hasil |
 |---|---|---|---|
-| 1 | Login `mat` → Inventory → **Reversals** → **New reversal request** → buka pilihan **Document**. | Hanya dokumen posted yang belum di-reverse (receipt, release, transfer, split, adjustment), tanpa reversal. | |
-| 2 | Pilih adjustment `ADJ-P1-<tahun>-0001` dari §5, reason "Rusak ternyata di coil lain" → **Request reversal** → konfirmasi. | "Reversal requested …"; baris **Submitted**. Stok belum berubah. Meminta lagi untuk dokumen yang sama → ditolak "already waiting for approval". | |
+| 1 | Login `mat` → Inventory → **Reversals** → **New reversal request** → Document number `ADJ-P1-<tahun>-0099` (tidak ada) → **Request reversal**. | Ditolak sebelum konfirmasi: "No posted document … in the plants you can see." | |
+| 2 | Document number adjustment `ADJ-P1-<tahun>-0001` dari §5 (huruf kecil juga boleh), reason "Rusak ternyata di coil lain" → **Request reversal** → konfirmasi. | "Reversal requested …"; baris **Submitted**. Stok belum berubah. Meminta lagi untuk dokumen yang sama → ditolak "already waiting for approval". | |
 | 3 | Login `inv` → Reversals → **Open** → lihat **Legs undone** → **Approve**. | Judul `REV-P1-<tahun>-0001`, status **Posted**; coil di `RM-A02` kembali +50. Di Reversals, adjustment tidak bisa dipilih lagi. | |
 | 4 | Sebagai `mat`, minta reversal **receipt** coil dari §1 (stok sudah di-transfer/split). Login `inv` → **Approve**. | Ditolak: "The stock this document moved is no longer all there … Reverse what came after it first."; permintaan tetap **Submitted**. **Reject** dengan alasan. | |
 | 5 | Login `opr` → menu Inventory. | Reversals tidak muncul (OPR tanpa izin reversal). | |
