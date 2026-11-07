@@ -17,14 +17,6 @@ beforeEach(function () {
     $this->f = rcFixture($this->t);
 });
 
-function lsSplit(object $test, array $f, array $body = [], string $key = 'split-key-0001')
-{
-    return spa($test)->postJson('/api/v1/inventory/lot-splits', $body + [
-        'plantId' => $f['plant'], 'itemId' => $f['coil'], 'lotId' => $f['lotId'] ?? null, 'stockStatus' => 'BLOCKED',
-        'locationId' => $f['rm1'], 'children' => [['qty' => '3', 'widthMm' => '1219', 'lengthMm' => '2438.5'], ['qty' => '2']],
-    ], ['Idempotency-Key' => $key]);
-}
-
 /** A received coil lot (10 PCS, BLOCKED at RM-01), then signed in as the production leader who splits it. */
 function lsLot(object $test, array $t, array $f, array $scope = ['TENANT']): array
 {

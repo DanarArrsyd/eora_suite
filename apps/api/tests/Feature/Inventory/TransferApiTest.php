@@ -17,21 +17,6 @@ beforeEach(function () {
     $this->f = rcFixture($this->t);
 });
 
-function trMove(object $test, array $f, array $body = [], string $key = 'transfer-key-0001')
-{
-    return spa($test)->postJson('/api/v1/inventory/transfers', $body + [
-        'plantId' => $f['plant'], 'itemId' => $f['coil'], 'lotId' => $f['lotId'] ?? null, 'stockStatus' => 'BLOCKED',
-        'fromLocationId' => $f['rm1'], 'toLocationId' => $f['rm2'], 'qty' => '4',
-    ], ['Idempotency-Key' => $key]);
-}
-
-/** @return array<string, string> "<location> <status>" => qty of the lot */
-function trStock(object $test, string $lot): array
-{
-    return collect(spa($test)->getJson('/api/v1/query/inventory.stock?filter[lotId]='.$lot)->assertOk()->json('data'))
-        ->mapWithKeys(fn ($r) => [$r['locationCode'].' '.$r['stockStatus'] => $r['qty']])->sortKeys()->all();
-}
-
 it('moves part of a lot rack to rack in one step, keeping its status, and replays a retried request (D-048)', function () {
     orgUser($this, $this->t, 'MAT');
     $f = $this->f + ['lotId' => rcReceive($this, $this->f)->assertCreated()->json('data.lotId')];

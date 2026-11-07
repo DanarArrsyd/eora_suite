@@ -95,7 +95,7 @@ it('gives every exportable master list export columns that read only its own fie
             expect($definition->title())->not->toBe($resource);
         }
     }
-    expect($exportable)->toHaveCount(22)->toContain('core.items', 'core.customer_items', 'planning.routings', 'planning.conversion_profiles', 'inventory.stock', 'inventory.receipts', 'inventory.adjustments')
+    expect($exportable)->toHaveCount(24)->toContain('core.items', 'core.customer_items', 'planning.routings', 'planning.conversion_profiles', 'inventory.stock', 'inventory.receipts', 'inventory.adjustments', 'inventory.documents', 'inventory.reversals')
         ->not->toContain('exchange.import_jobs', 'planning.routing_versions');
 })->group('integration', 'export');
 

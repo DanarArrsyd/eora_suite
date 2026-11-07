@@ -183,6 +183,15 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         ],
         'v1.inventory.adjustments.approve' => [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION'], 404 => ['NOT_FOUND'],
             409 => [...self::POSTING[409], 'INVALID_STATE_TRANSITION']] + self::POSTING,
+        // D-101: any holder of request_correction asks, a second person with approve decides
+        'v1.inventory.reversals.store' => self::TENANT_WRITE + self::MASTER_403 + [
+            400 => ['IDEMPOTENCY_KEY_REQUIRED'], 404 => ['NOT_FOUND'],
+            409 => ['IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_IN_PROGRESS', 'INVALID_STATE_TRANSITION', 'REVERSAL_PENDING'], 422 => ['VALIDATION_FAILED'],
+        ],
+        'v1.inventory.reversals.approve' => [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION'], 404 => ['NOT_FOUND'],
+            409 => [...self::POSTING[409], 'INVALID_STATE_TRANSITION', 'REVERSAL_BLOCKED_BY_DOWNSTREAM']] + self::POSTING,
+        'v1.inventory.reversals.reject' => self::TENANT_WRITE + [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION'], 404 => ['NOT_FOUND'],
+            409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.inventory.adjustments.reject' => self::TENANT_WRITE + [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION'], 404 => ['NOT_FOUND'],
             409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.exchange.exports.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
@@ -192,10 +201,10 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
 
     /** Posting routes (doc 24 §5.3): the Idempotency-Key header and the posted document, 201 first time, 200 on replay. */
     private const array POSTINGS = ['v1.inventory.receipts.store', 'v1.inventory.incoming-releases.store', 'v1.inventory.transfers.store', 'v1.inventory.lot-splits.store',
-        'v1.inventory.adjustments.approve'];
+        'v1.inventory.adjustments.approve', 'v1.inventory.reversals.approve'];
 
     /** Requests decided by a second person (D-060): the Idempotency-Key header and the submitted request, 201 first time, 200 on replay. */
-    private const array REQUESTS = ['v1.inventory.adjustments.store'];
+    private const array REQUESTS = ['v1.inventory.adjustments.store', 'v1.inventory.reversals.store'];
 
     /** Laravel-shaped error components Scramble registers; replaced by the problem responses above. */
     private const array INFERRED_COMPONENTS = ['ValidationException', 'AuthenticationException', 'NotFoundHttpException', 'AuthorizationException', 'AccessDeniedHttpException'];

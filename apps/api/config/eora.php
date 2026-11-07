@@ -29,8 +29,11 @@ use App\Modules\Core\Queries\UomsQuery;
 use App\Modules\Core\Queries\WarehousesQuery;
 use App\Modules\Core\Queries\WorkCentersQuery;
 use App\Modules\Inventory\Queries\AdjustmentsQuery;
+use App\Modules\Inventory\Queries\DocumentsQuery;
 use App\Modules\Inventory\Queries\LotsQuery;
+use App\Modules\Inventory\Queries\MovementsQuery;
 use App\Modules\Inventory\Queries\ReceiptsQuery;
+use App\Modules\Inventory\Queries\ReversalsQuery;
 use App\Modules\Inventory\Queries\StockQuery;
 use App\Modules\Planning\Import\BomRoutingMapsTemplate;
 use App\Modules\Planning\Import\BomsTemplate;
@@ -109,6 +112,9 @@ return [
         'inventory.receipts' => ReceiptsQuery::class,
         'inventory.adjustments' => AdjustmentsQuery::class,
         'inventory.lots' => LotsQuery::class,
+        'inventory.documents' => DocumentsQuery::class,
+        'inventory.movements' => MovementsQuery::class,
+        'inventory.reversals' => ReversalsQuery::class,
         'exchange.import_jobs' => ImportJobsQuery::class,
         'exchange.export_jobs' => ExportJobsQuery::class,
     ],

@@ -341,7 +341,15 @@ export const NAV_MODULES: readonly NavModule[] = [
             badge: 'approvals',
             phase: 'later',
           },
-          { id: 'reversals', label: 'Reversals', icon: RotateCcw, release: 'R1', phase: 'later' },
+          {
+            id: 'reversals',
+            label: 'Reversals',
+            icon: RotateCcw,
+            release: 'R1',
+            // requesters (request_correction), approvers and auditors read it (D-101)
+            permission: ['inventory.reversal.view', 'inventory.reversal.request_correction', 'inventory.reversal.approve'],
+            phase: 'later',
+          },
           { id: 'period-close', label: 'Period Close', icon: Lock, release: 'R1', phase: 'later' },
         ],
       },

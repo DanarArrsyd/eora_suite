@@ -120,6 +120,14 @@ final class InventoryPostingService
      */
     private function checkLegs(EoraPostgresConnection $db, PostingCommand $command): void
     {
+        // a reversal is built here from the document it reverses; the database checks it negates every leg exactly once
+        if ($command->docType === 'REVERSAL') {
+            foreach ($command->legs as $leg) {
+                $leg->reversesMovementId !== null || throw new DomainProblem(422, 'INVALID_LEGS', 'Invalid legs', 'A reversal leg names the leg it reverses.');
+            }
+
+            return;
+        }
         $types = [];
         $ids = array_values(array_unique(array_map(static fn (PostingLeg $l) => $l->locationId, $command->legs)));
         foreach ($db->select('select id, location_type from locations where id = any(?::uuid[])', ['{'.implode(',', $ids).'}']) as $row) {
@@ -248,6 +256,58 @@ final class InventoryPostingService
     }
 
     /**
+     * Requests the reversal of a posted document (doc 04 row 13, D-060, D-101): every leg negated with its own code, for
+     * the production day it is asked on, with the reason. Nothing moves until a second person approves it. A reversal is
+     * never reversed; a document is reversed once (a pending request blocks another).
+     *
+     * @return array{documentId: string, replayed: bool}
+     */
+    public function submitReversal(EoraPostgresConnection $db, string $documentId, string $key, string $reason): array
+    {
+        $hash = hash('sha256', json_encode(['REVERSAL', $documentId, $reason], JSON_THROW_ON_ERROR));
+        $previous = $this->requested($db, $key, 'REVERSAL', $hash);
+        if ($previous !== null) {
+            return ['documentId' => $previous, 'replayed' => true];
+        }
+        $original = $db->selectOne('select id, plant_id, doc_type, status, doc_no from inventory_documents where id = ? for share', [$documentId])
+            ?? throw new DomainProblem(404, 'NOT_FOUND', 'Not found');
+        if ($original->doc_type === 'REVERSAL' || $original->status !== 'POSTED') {
+            throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Not reversible',
+                $original->doc_type === 'REVERSAL' ? 'A reversal is not reversed. Post the corrected document instead.' : 'Only a posted document is reversed, once.');
+        }
+        if ($db->selectOne("select 1 as pending from inventory_documents where reverses_document_id = ? and status <> 'REJECTED'", [$documentId]) !== null) {
+            throw new DomainProblem(409, 'REVERSAL_PENDING', 'Reversal already requested', "A reversal of {$original->doc_no} is already waiting for approval.");
+        }
+        $legs = array_map(static fn (stdClass $m) => [
+            'movementCode' => $m->movement_code, 'locationId' => $m->location_id, 'itemId' => $m->item_id, 'lotId' => $m->lot_id,
+            'stockStatus' => $m->stock_status, 'qty' => $m->qty, 'reversesMovementId' => $m->id,
+        ], $db->select(
+            'select id, movement_code, location_id, item_id, lot_id, stock_status, trim_scale(-qty_signed)::text as qty from inventory_movements where document_id = ? order by leg_no',
+            [$documentId],
+        ));
+        $plant = (string) $original->plant_id;
+        $day = $this->calendar->resolve($db, $plant, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
+        try {
+            $id = (string) $db->selectOne(
+                "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, requested_by, submitted_at, note, request, reverses_document_id, idempotency_key)
+                 values ((select c.tenant from ctx_api.context() c), ?, 'REVERSAL', 'SUBMITTED', ?, (select c.actor from ctx_api.context() c), now(), ?, ?::jsonb, ?, ?)
+                 returning id",
+                [$plant, $day, $reason, json_encode(['hash' => $hash, 'legs' => $legs], JSON_THROW_ON_ERROR), $documentId, $key],
+            )->id;
+        } catch (QueryException $e) {
+            // the database's one-reversal-per-document index: another request won the race
+            throw $e->getCode() === '23505' && str_contains($e->getMessage(), 'reversal_uq')
+                ? new DomainProblem(409, 'REVERSAL_PENDING', 'Reversal already requested', "A reversal of {$original->doc_no} is already waiting for approval.")
+                : $e;
+        }
+        $this->audit->record($db, 'inventory_document.submitted', 'inventory_document', $id, null,
+            (array) $db->selectOne('select * from inventory_documents where id = ?', [$id]), ['docType' => 'REVERSAL', 'reverses' => $original->doc_no], $plant);
+        $this->outbox->publish($db, 'inventory.request_submitted', 'inventory_document', $id, ['docType' => 'REVERSAL', 'plantId' => $plant]);
+
+        return ['documentId' => $id, 'replayed' => false];
+    }
+
+    /**
      * Holds $key until the caller's transaction ends, then answers with the request already submitted under it (its id),
      * null when the key is new; 409 when the key was used for another request. Callers claim the key this way before
      * checking stock or master data that may have changed since.
@@ -285,15 +345,33 @@ final class InventoryPostingService
         $doc = $this->decidable($db, $requestId) ?? throw new LogicException('An approval decides a submitted request.');
         $request = json_decode((string) $doc->request, true, flags: JSON_THROW_ON_ERROR);
         $command = new PostingCommand((string) $doc->doc_type, (string) $doc->plant_id, $key, array_values(array_map(static fn (array $l) => new PostingLeg(
-            $l['movementCode'], $l['locationId'], $l['itemId'], $l['lotId'], $l['stockStatus'], $l['qty'],
+            $l['movementCode'], $l['locationId'], $l['itemId'], $l['lotId'], $l['stockStatus'], $l['qty'], reversesMovementId: $l['reversesMovementId'] ?? null,
         ), $request['legs'])), effectiveDate: (string) $doc->effective_date, note: $doc->note, requestHash: $hash);
         $this->checkLegs($db, $command);
+        $reversed = $doc->reverses_document_id;
+        if ($reversed !== null) {
+            // the reversed document is held until the reversal commits; it must still be posted (not reversed meanwhile)
+            $original = $db->selectOne('select status from inventory_documents where id = ? for update', [$reversed]);
+            if ($original?->status !== 'POSTED') {
+                throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Already reversed', 'The document is no longer posted, so it cannot be reversed.');
+            }
+        }
         $db->statement("set local statement_timeout = '10s'");
         try {
             $result = $this->write($db, $command, $requestId);
+            if ($reversed !== null) {
+                $db->update("update inventory_documents set status = 'REVERSED' where id = ?", [$reversed]);
+            }
             $db->statement('set constraints all immediate');
         } catch (QueryException $e) {
             throw $this->refusal($e) ?? $e;
+        } catch (DomainProblem $e) {
+            // doc 04 row 13: the stock the document moved has moved on; what came after is reversed first
+            if ($reversed !== null && in_array($e->errorCode, ['INSUFFICIENT_STOCK', 'INSUFFICIENT_AVAILABLE'], true)) {
+                throw new DomainProblem(409, 'REVERSAL_BLOCKED_BY_DOWNSTREAM', 'Stock has moved on',
+                    'The stock this document moved is no longer all there (used, moved or allocated since). Reverse what came after it first.');
+            }
+            throw $e;
         }
 
         return $result;
@@ -322,7 +400,7 @@ final class InventoryPostingService
     private function decidable(EoraPostgresConnection $db, string $requestId, bool $rejecting = false): ?stdClass
     {
         $doc = $db->selectOne(
-            'select id, doc_type, plant_id, status, requested_by, effective_date::text as effective_date, note, request::text as request
+            'select id, doc_type, plant_id, status, requested_by, effective_date::text as effective_date, note, request::text as request, reverses_document_id
                from inventory_documents where id = ? and requested_by is not null for update',
             [$requestId],
         ) ?? throw new DomainProblem(404, 'NOT_FOUND', 'Not found');
