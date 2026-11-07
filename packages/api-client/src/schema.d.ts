@@ -20814,7 +20814,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_IN_PROGRESS, INSUFFICIENT_STOCK, INSUFFICIENT_AVAILABLE, PERIOD_CLOSED, STOCK_BUSY, INVALID_STATE_TRANSITION, REVERSAL_BLOCKED_BY_DOWNSTREAM */
+            /** @description IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_IN_PROGRESS, INSUFFICIENT_STOCK, INSUFFICIENT_AVAILABLE, PERIOD_CLOSED, STOCK_BUSY, INVALID_STATE_TRANSITION, REVERSAL_BLOCKED_BY_DOWNSTREAM, CORRECTION_REQUIRED */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20827,7 +20827,7 @@ export interface operations {
                         /** @enum {integer} */
                         status: 409;
                         /** @enum {string} */
-                        code: "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_IN_PROGRESS" | "INSUFFICIENT_STOCK" | "INSUFFICIENT_AVAILABLE" | "PERIOD_CLOSED" | "STOCK_BUSY" | "INVALID_STATE_TRANSITION" | "REVERSAL_BLOCKED_BY_DOWNSTREAM";
+                        code: "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_IN_PROGRESS" | "INSUFFICIENT_STOCK" | "INSUFFICIENT_AVAILABLE" | "PERIOD_CLOSED" | "STOCK_BUSY" | "INVALID_STATE_TRANSITION" | "REVERSAL_BLOCKED_BY_DOWNSTREAM" | "CORRECTION_REQUIRED";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;

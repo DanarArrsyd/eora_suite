@@ -98,3 +98,8 @@ function rvApprove(object $test, string $id, string $key = 'reverse-approve-0001
 {
     return spa($test)->postJson("/api/v1/inventory/reversals/{$id}/approve", [], ['Idempotency-Key' => $key]);
 }
+
+function rvStatus(array $t, string $id): string
+{
+    return rcRun($t, fn (EoraPostgresConnection $db) => (string) $db->selectOne('select status from inventory_documents where id = ?', [$id])->status);
+}

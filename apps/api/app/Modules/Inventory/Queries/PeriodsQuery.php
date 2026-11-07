@@ -67,7 +67,7 @@ final class PeriodsQuery extends QueryDefinition
     {
         return [
             new Field('id', 'ip.id', Field::UUID, filterable: true),
-            new Field('code', "to_char(ip.period, 'YYYY-MM')", sortable: true),
+            new Field('code', "to_char(ip.period, 'YYYY-MM')", sortable: true, search: 'prefix'),
             new Field('plantId', 'ip.plant_id', Field::UUID, filterable: true),
             new Field('plantCode', 'p.code', sortable: true),
             new Field('status', 'ip.status', Field::ENUM, sortable: true, filterable: true, options: self::STATUSES),
@@ -82,8 +82,11 @@ final class PeriodsQuery extends QueryDefinition
             new Field('reopenReason', 'ip.reopen_reason'),
             new Field('reopenedByName', 'ur.display_name'),
             new Field('reopenedAt', 'ip.reopened_at', Field::INSTANT),
+            // requests of the month and reversal requests of its documents, still undecided (they block a close)
             new Field('pendingRequests', "(select count(*) from inventory_documents d where d.tenant_id = ip.tenant_id and d.plant_id = ip.plant_id and d.status = 'SUBMITTED'
-                and d.effective_date >= ip.period and d.effective_date < (ip.period + interval '1 month'))", Field::INTEGER),
+                and ((d.effective_date >= ip.period and d.effective_date < (ip.period + interval '1 month'))
+                     or exists (select 1 from inventory_documents o where o.tenant_id = d.tenant_id and o.id = d.reverses_document_id
+                                   and o.effective_date >= ip.period and o.effective_date < (ip.period + interval '1 month'))))", Field::INTEGER),
             new Field('version', 'ip.version', Field::INTEGER),
         ];
     }

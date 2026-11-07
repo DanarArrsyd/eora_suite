@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Platform\Database\EoraPostgresConnection;
 use Tests\Support\AccessFixtures;
 use Tests\Support\TenantFixtures;
 
@@ -16,11 +15,6 @@ beforeEach(function () {
     AccessFixtures::roles($this->t);
     $this->f = rcFixture($this->t);
 });
-
-function rvStatus(array $t, string $id): string
-{
-    return rcRun($t, fn (EoraPostgresConnection $db) => (string) $db->selectOne('select status from inventory_documents where id = ?', [$id])->status);
-}
 
 it('reverses a posted receipt once a second person approves, negating every leg with its own code (doc 04 row 13)', function () {
     orgUser($this, $this->t, 'MAT');

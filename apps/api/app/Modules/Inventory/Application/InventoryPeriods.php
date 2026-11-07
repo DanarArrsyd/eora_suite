@@ -43,9 +43,14 @@ final class InventoryPeriods
         if ($row->status !== 'OPEN') {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Already closing', $row->status === 'CLOSED' ? "{$month} is already closed." : "A close of {$month} is already waiting for approval.");
         }
+        // requests of the month, and reversal requests of the month's documents (asked later, still undecided)
         $pending = (int) $db->selectOne(
-            "select count(*) as n from inventory_documents where plant_id = ? and status = 'SUBMITTED' and effective_date >= ?::date and effective_date < (?::date + interval '1 month')",
-            [$plantId, $period, $period],
+            "select count(*) as n from inventory_documents d
+              where d.plant_id = ? and d.status = 'SUBMITTED'
+                and ((d.effective_date >= ?::date and d.effective_date < (?::date + interval '1 month'))
+                     or exists (select 1 from inventory_documents o where o.id = d.reverses_document_id
+                                   and o.effective_date >= ?::date and o.effective_date < (?::date + interval '1 month')))",
+            [$plantId, $period, $period, $period, $period],
         )->n;
         if ($pending > 0) {
             throw new DomainProblem(409, 'PERIOD_HAS_PENDING_REQUESTS', 'Requests still waiting',

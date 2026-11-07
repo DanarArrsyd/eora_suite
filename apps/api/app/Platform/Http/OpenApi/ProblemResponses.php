@@ -189,7 +189,7 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
             409 => ['IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_IN_PROGRESS', 'INVALID_STATE_TRANSITION', 'REVERSAL_PENDING'], 422 => ['VALIDATION_FAILED'],
         ],
         'v1.inventory.reversals.approve' => [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION'], 404 => ['NOT_FOUND'],
-            409 => [...self::POSTING[409], 'INVALID_STATE_TRANSITION', 'REVERSAL_BLOCKED_BY_DOWNSTREAM']] + self::POSTING,
+            409 => [...self::POSTING[409], 'INVALID_STATE_TRANSITION', 'REVERSAL_BLOCKED_BY_DOWNSTREAM', 'CORRECTION_REQUIRED']] + self::POSTING,
         'v1.inventory.reversals.reject' => self::TENANT_WRITE + [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION'], 404 => ['NOT_FOUND'],
             409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         // D-102: periods close and reopen on requests decided by a second person

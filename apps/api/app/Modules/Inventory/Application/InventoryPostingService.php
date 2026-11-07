@@ -361,9 +361,16 @@ final class InventoryPostingService
         $reversed = $doc->reverses_document_id;
         if ($reversed !== null) {
             // the reversed document is held until the reversal commits; it must still be posted (not reversed meanwhile)
-            $original = $db->selectOne('select status from inventory_documents where id = ? for update', [$reversed]);
+            $original = $db->selectOne('select status, plant_id, doc_no, effective_date::text as effective_date from inventory_documents where id = ? for update', [$reversed]);
             if ($original?->status !== 'POSTED') {
                 throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Already reversed', 'The document is no longer posted, so it cannot be reversed.');
+            }
+            // BR-PER-02, D-102: the document's month closed after the request was made: it is corrected only with evidence
+            $closed = $db->selectOne("select 1 as closed from inventory_periods where plant_id = ? and period = date_trunc('month', ?::date)::date and status = 'CLOSED' for share",
+                [$original->plant_id, $original->effective_date]) !== null;
+            if ($closed && $doc->correction_of_document_id === null) {
+                throw new DomainProblem(409, 'CORRECTION_REQUIRED', 'Month closed since the request',
+                    "The month of {$original->doc_no} has been closed since this request. Reject it and request the reversal again with its evidence.");
             }
         }
         $db->statement("set local statement_timeout = '10s'");
@@ -410,7 +417,8 @@ final class InventoryPostingService
     private function decidable(EoraPostgresConnection $db, string $requestId, bool $rejecting = false): ?stdClass
     {
         $doc = $db->selectOne(
-            'select id, doc_type, plant_id, status, requested_by, effective_date::text as effective_date, note, request::text as request, reverses_document_id
+            'select id, doc_type, plant_id, status, requested_by, effective_date::text as effective_date, note, request::text as request, reverses_document_id,
+                    correction_of_document_id
                from inventory_documents where id = ? and requested_by is not null for update',
             [$requestId],
         ) ?? throw new DomainProblem(404, 'NOT_FOUND', 'Not found');

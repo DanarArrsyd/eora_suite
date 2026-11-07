@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Platform\Database\EoraPostgresConnection;
+use App\Platform\Tenancy\TenantContext;
+use App\Platform\Tenancy\TenantTransaction;
 use Tests\Support\AccessFixtures;
 use Tests\Support\TenantFixtures;
 
@@ -127,4 +129,30 @@ it('reopens a closed month only on a CSA request decided by another approver, an
     rtSwitch($this, $this->t, 'AUD');
     spa($this)->getJson('/api/v1/query/inventory.periods')->assertOk()->assertJsonPath('data.0.status', 'OPEN')->assertJsonPath('data.0.reopenedByName', fn ($n) => $n !== null);
     spa($this)->postJson("/api/v1/inventory/periods/{$id}/close")->assertForbidden();
+})->group('integration', 'inventory');
+
+it('keeps a month open while a reversal of its documents waits, and refuses one that was asked before the month closed (BR-PER-02)', function () {
+    $f = $this->f;
+    $mat = orgUser($this, $this->t, 'MAT');
+    $receipt = rcReceive($this, $f, ['effectiveDate' => $f['lastMonth'].'-15'])->assertCreated()->json('data');
+    $plain = rvRequest($this, $receipt['documentId'])->assertCreated()->json('data.documentId');
+
+    $inv = rtSwitch($this, $this->t, 'INV', ['PLANT', $f['plant']]);
+    pdClose($this, $f)->assertStatus(409)->assertJsonPath('code', 'PERIOD_HAS_PENDING_REQUESTS');
+    spa($this)->getJson('/api/v1/query/inventory.periods?q='.$f['lastMonth'])->assertOk()
+        ->assertJsonPath('data.0.code', $f['lastMonth'])->assertJsonPath('data.0.pendingRequests', 1);
+    spa($this)->getJson('/api/v1/query/inventory.periods?q=1999-01')->assertOk()->assertJsonPath('data', []);
+
+    // the month closed anyway (e.g. two people at once): the plain reversal is refused at approval
+    $period = pdPeriod($this->t, $f['plant'], $f['lastMonth'])->id;
+    $closer = rtSwitch($this, $this->t, 'CSA');
+    app(TenantTransaction::class)->run(TenantContext::forTenant($this->t['tenant'], $inv['id']), fn (EoraPostgresConnection $db) => $db->update(
+        "update inventory_periods set status = 'CLOSING', close_requested_by = (select c.actor from ctx_api.context() c), close_requested_at = now() where id = ?", [$period],
+    ));
+    app(TenantTransaction::class)->run(TenantContext::forTenant($this->t['tenant'], $closer['id']), fn (EoraPostgresConnection $db) => $db->update(
+        "update inventory_periods set status = 'CLOSED', closed_by = (select c.actor from ctx_api.context() c), closed_at = now() where id = ?", [$period],
+    ));
+    rvApprove($this, $plain)->assertStatus(409)->assertJsonPath('code', 'CORRECTION_REQUIRED');
+    expect(rvStatus($this->t, $plain))->toBe('SUBMITTED');
+    expect($mat)->not->toBeEmpty();
 })->group('integration', 'inventory');

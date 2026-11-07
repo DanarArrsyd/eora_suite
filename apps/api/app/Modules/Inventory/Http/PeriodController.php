@@ -111,7 +111,8 @@ final class PeriodController
     {
         $id = strtolower($id);
         $row = preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $id) === 1
-            ? $db->selectOne("select {$requesterColumn} as requester from inventory_periods where id = ?", [$id])
+            // locked until the transition commits: a concurrent reject + new request cannot change whose request this is
+            ? $db->selectOne("select {$requesterColumn} as requester from inventory_periods where id = ? for update", [$id])
             : null;
         if ($row === null) {
             throw new DomainProblem(404, 'NOT_FOUND', 'Not found');
