@@ -243,6 +243,17 @@ function PeriodPage({ id }: { id: string }) {
   const actions: Action[] = [];
   const asks: Asking[] = [];
   let waiting: string | null = null;
+  // any open month that has ended, e.g. one reopened long ago, can be asked to close again (the server checks the date)
+  const now = new Date();
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  if (r.status === 'OPEN' && r.code < thisMonth && can('inventory.period_close.post')) {
+    actions.push({
+      label: 'Ask to close month',
+      primary: true,
+      run: () => call(() => api.POST('/inventory/periods/close-requests', { body: { plantId: r.plantId, period: r.code } })),
+      done: `Close of ${month} asked; it waits for a second person`,
+    });
+  }
   if (r.status === 'CLOSING') {
     const mine = meId === r.closeRequestedById;
     waiting = mine ? 'You asked to close this month. Another person closes it or rejects the request.' : null;

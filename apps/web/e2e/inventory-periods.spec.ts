@@ -111,3 +111,32 @@ test('period close: the requester waits and may only withdraw its own request', 
   await expect(page.getByRole('button', { name: 'Close month' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Withdraw close request' })).toBeVisible();
 });
+
+test('period close: an open month that has ended, however old, is asked to close from its own page', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-11-07T09:00:00+07:00'));
+  const OLD = {
+    ...PERIOD,
+    id: ID(3),
+    code: '2024-03',
+    status: 'OPEN',
+    closeRequestedById: null,
+    closeRequestedByName: null,
+    closeRequestedAt: null,
+    reopenedByName: 'CSA two',
+  };
+  await mockApi(page, '/auth/me', ME(['inventory.period_close.view', 'inventory.period_close.post']));
+  await mockApi(page, '/query/inventory.periods?*', page1([OLD]));
+  const calls: unknown[] = [];
+  await page.route('**/api/v1/inventory/periods/close-requests', (route) => {
+    calls.push(route.request().postDataJSON());
+    return route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { id: ID(3), plantId: PLANT.id, period: '2024-03', status: 'CLOSING' } }),
+    });
+  });
+  await page.goto(`/inventory/period-close?period=${ID(3)}`);
+  await page.getByRole('button', { name: 'Ask to close month' }).click();
+  await expect(page.getByText('Close of March 2024 asked; it waits for a second person')).toBeVisible();
+  expect(calls[0]).toEqual({ plantId: PLANT.id, period: '2024-03' });
+});
