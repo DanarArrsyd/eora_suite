@@ -103,7 +103,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const status = rows.isError ? 'error' : rows.isPending ? 'loading' : 'ready';
   const filtersApplied = activeFilterCount(query.filters);
   const hasFilters = filtersApplied > 0 || !!query.search;
-  const createLabel = `New ${config.singular}`;
+  const createLabel = config.createLabel ?? `New ${config.singular}`;
   const createReason = `Your roles do not allow changes to ${perm.label}.`;
 
   const createButton = config.noCreate ? undefined : canCreate ? (

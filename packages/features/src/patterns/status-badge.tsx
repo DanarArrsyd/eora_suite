@@ -44,6 +44,12 @@ export const STATUS_CATALOGUE = {
     VALIDATED: { label: 'Validated', tone: 'success' },
     RETIRED: { label: 'Retired', tone: 'neutral' },
   },
+  /** Monthly inventory period per plant (M3-D8, D-102): closing takes no postings, closed is corrected in the open period. */
+  period: {
+    OPEN: { label: 'Open', tone: 'info' },
+    CLOSING: { label: 'Closing', tone: 'warning' },
+    CLOSED: { label: 'Closed', tone: 'neutral' },
+  },
   /** Delivery Schedule Line (doc 16 §12, D-034). */
   schedule: {
     DRAFT: { label: 'Draft', tone: 'neutral' },

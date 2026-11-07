@@ -75,6 +75,9 @@ final class ReversalsQuery extends QueryDefinition
             new Field('originalCode', 'o.doc_no', sortable: true),
             new Field('originalType', 'o.doc_type', Field::ENUM, filterable: true, options: DocumentsQuery::TYPES),
             new Field('originalDate', 'o.effective_date::text'),
+            // BR-PER-02: a reversal of a document in a closed month is a correction, with its evidence
+            new Field('correction', '(d.correction_of_document_id is not null)', Field::BOOLEAN, filterable: true),
+            new Field('evidence', "d.request ->> 'evidence'"),
             new Field('requestedById', 'd.requested_by', Field::UUID),
             new Field('requestedByName', 'ur.display_name'),
             new Field('submittedAt', 'd.submitted_at', Field::INSTANT, sortable: true),

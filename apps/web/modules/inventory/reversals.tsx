@@ -43,6 +43,8 @@ export type ReversalRow = {
   decidedByName: string | null;
   decidedAt: string | null;
   rejectReason: string | null;
+  correction: boolean;
+  evidence: string | null;
 };
 
 type Leg = {
@@ -142,9 +144,16 @@ export const REVERSALS: MasterResource<ReversalRow> = {
       hint: 'As printed on the document, e.g. RCV-P1-2026-0001.',
     },
     { key: 'reason', label: 'Reason', kind: 'text', required: true, maxLength: 500, hint: 'Why it is wrong, e.g. "Received on the wrong rack".' },
+    {
+      key: 'evidence',
+      label: 'Evidence',
+      kind: 'text',
+      maxLength: 200,
+      hint: 'Required for a document of a closed month (a correction): e.g. the report or count sheet number.',
+    },
   ],
-  blank: { documentNo: '', reason: '' },
-  toForm: () => ({ documentNo: '', reason: '' }),
+  blank: { documentNo: '', reason: '', evidence: '' },
+  toForm: () => ({ documentNo: '', reason: '', evidence: '' }),
   check: async (v): Promise<Record<string, string>> => {
     const problems: Record<string, string> = {};
     if ((v.reason ?? '').trim().length < 3) problems.reason = 'Say why the document is wrong.';
@@ -168,7 +177,7 @@ export const REVERSALS: MasterResource<ReversalRow> = {
     return call(() =>
       api.POST('/inventory/reversals', {
         params: { header: { 'Idempotency-Key': ctx.idempotencyKey } },
-        body: { documentId: found.id, reason: v.reason! },
+        body: { documentId: found.id, reason: v.reason!, evidence: v.evidence || null },
       }),
     );
   },
@@ -282,6 +291,7 @@ function ReversalPage({ id }: { id: string }) {
     { label: 'Plant', value: r.plantCode },
     { label: 'Reason', value: r.reason },
     { label: 'Reversal day', value: r.effectiveDate },
+    ...(r.correction ? [{ label: 'Closed-month correction', value: `Evidence: ${r.evidence ?? '—'}` }] : []),
     ...(r.status === 'REJECTED' ? [{ label: 'Rejected because', value: r.rejectReason ?? '—' }] : []),
   ];
 

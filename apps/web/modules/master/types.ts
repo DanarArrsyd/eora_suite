@@ -81,6 +81,8 @@ export type MasterResource<T extends MasterRow> = {
   appendOnly?: string;
   title: string;
   description: string;
+  /** The create button when it is not "New <singular>" (e.g. "New close request" on a list of periods). */
+  createLabel?: string;
   /** Plural and singular nouns for counts, empty states and buttons. */
   itemLabel: string;
   singular: string;

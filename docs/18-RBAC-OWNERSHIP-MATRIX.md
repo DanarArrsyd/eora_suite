@@ -45,7 +45,7 @@ Legend: **V** view · **C** create/edit draft · **S** submit · **P** post/exec
 | inventory.adjustment | R A | — | R | R | — | — | — | R | — | VCS R | V |
 | inventory.reversal | R A | R | R | R | — | R | R | R | R | R A | V |
 | inventory.period.close | A | — | — | — | — | — | — | — | — | VP | V |
-| inventory.period.reopen | R | — | — | — | — | — | — | — | — | — | V |
+| inventory.period.reopen | R A (D-102: A by another CSA) | — | — | — | — | — | — | — | — | — | V |
 | recon.case | V A | V | V | VC (evidence) | — | V | V | — | — | VCS A | V |
 | core.approval (any) | A | — | — | — | — | — | A(QC) | — | — | A | — |
 | core.users_roles | VCP | — | — | — | — | — | — | — | — | — | V |

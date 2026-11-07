@@ -111,7 +111,7 @@ test('reversals: a correction requester picks a posted document and gives the re
   await page.getByRole('alertdialog', { name: 'Request this reversal' }).getByRole('button', { name: 'Request reversal' }).click();
   await expect(page.getByText('Reversal requested; it waits for a second person to approve it')).toBeVisible();
   expect(calls[0]!.key).toMatch(/^[A-Za-z0-9._:-]{8,}$/);
-  expect(calls[0]!.body).toEqual({ documentId: DOCUMENT.id, reason: 'Damage was on another sheet' });
+  expect(calls[0]!.body).toEqual({ documentId: DOCUMENT.id, reason: 'Damage was on another sheet', evidence: null });
 });
 
 test('reversals: the approver sees the legs that will be undone and approves; a blocked reversal says why', async ({ page }) => {

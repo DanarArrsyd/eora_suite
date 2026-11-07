@@ -58,6 +58,7 @@ const DOMAIN_LABEL: Record<StatusDomain, string> = {
   stock: 'Stock status (DD-01)',
   document: 'Document state (doc 16)',
   version: 'Engineering version (doc 26 §2.4a)',
+  period: 'Inventory period (M3-D8, D-102)',
   schedule: 'Delivery schedule line (D-034)',
   master: 'Master-data record (doc 29)',
   membership: 'Tenant membership (doc 25 §2.6)',

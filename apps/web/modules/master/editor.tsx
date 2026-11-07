@@ -200,7 +200,7 @@ export function MasterEditor<T extends MasterRow>({
     () => (row ? config.toForm(row) : 'timezone' in config.blank && !config.blank.timezone ? { ...config.blank, timezone: tenantZone } : config.blank),
     [row, config, tenantZone],
   );
-  const title = editing ? (config.drawerTitle?.(row) ?? `${row.code}`) : `New ${config.singular}`;
+  const title = editing ? (config.drawerTitle?.(row) ?? `${row.code}`) : (config.createLabel ?? `New ${config.singular}`);
   // a posting asks first; the form waits for the answer and keeps its idempotency key when declined
   const [asking, setAsking] = React.useState<{ question: Confirmation; answer: (yes: boolean) => void } | null>(null);
   const ask = (question: Confirmation) =>

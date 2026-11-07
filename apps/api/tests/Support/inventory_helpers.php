@@ -88,3 +88,18 @@ function adApprove(object $test, string $id, string $key = 'approve-key-0001')
 {
     return spa($test)->postJson("/api/v1/inventory/adjustments/{$id}/approve", [], ['Idempotency-Key' => $key]);
 }
+
+function rvRequest(object $test, string $document, string $key = 'reverse-key-0001', string $reason = 'Wrong rack keyed in')
+{
+    return spa($test)->postJson('/api/v1/inventory/reversals', ['documentId' => $document, 'reason' => $reason], ['Idempotency-Key' => $key]);
+}
+
+function rvApprove(object $test, string $id, string $key = 'reverse-approve-0001')
+{
+    return spa($test)->postJson("/api/v1/inventory/reversals/{$id}/approve", [], ['Idempotency-Key' => $key]);
+}
+
+function rvStatus(array $t, string $id): string
+{
+    return rcRun($t, fn (EoraPostgresConnection $db) => (string) $db->selectOne('select status from inventory_documents where id = ?', [$id])->status);
+}

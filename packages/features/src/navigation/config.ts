@@ -350,7 +350,22 @@ export const NAV_MODULES: readonly NavModule[] = [
             permission: ['inventory.reversal.view', 'inventory.reversal.request_correction', 'inventory.reversal.approve'],
             phase: 'later',
           },
-          { id: 'period-close', label: 'Period Close', icon: Lock, release: 'R1', phase: 'later' },
+          {
+            id: 'period-close',
+            label: 'Period Close',
+            icon: Lock,
+            release: 'R1',
+            // who views, closes or reopens periods (D-102)
+            permission: [
+              'inventory.period_close.view',
+              'inventory.period_close.post',
+              'inventory.period_close.approve',
+              'inventory.period_reopen.view',
+              'inventory.period_reopen.request_correction',
+              'inventory.period_reopen.approve',
+            ],
+            phase: 'later',
+          },
         ],
       },
     ],

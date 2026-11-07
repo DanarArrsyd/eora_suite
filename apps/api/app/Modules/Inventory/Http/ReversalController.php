@@ -35,11 +35,13 @@ final class ReversalController
         $data = $request->validate([
             'documentId' => ['required', 'uuid'],
             'reason' => ['required', 'string', 'min:3', 'max:500'],
+            // BR-PER-02: required when the document is in a closed month (a closed-period correction)
+            'evidence' => ['nullable', 'string', 'max:200'],
         ]);
         $key = $this->key($request);
         $db = $this->db();
         $id = $this->document($db, $data['documentId'], 'inventory.reversal.request_correction', null);
-        $result = $this->postings->submitReversal($db, $id, $key, trim($data['reason']));
+        $result = $this->postings->submitReversal($db, $id, $key, trim($data['reason']), self::optionalText($data['evidence'] ?? null));
 
         return response()->json(['data' => $result + ['status' => 'SUBMITTED']], $result['replayed'] ? 200 : 201);
     }
