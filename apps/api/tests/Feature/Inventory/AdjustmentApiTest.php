@@ -17,19 +17,6 @@ beforeEach(function () {
     $this->f = rcFixture($this->t);
 });
 
-function adRequest(object $test, array $f, array $body = [], string $key = 'adjust-key-0001')
-{
-    return spa($test)->postJson('/api/v1/inventory/adjustments', $body + [
-        'plantId' => $f['plant'], 'itemId' => $f['coil'], 'lotId' => $f['lotId'] ?? null, 'locationId' => $f['rm1'], 'stockStatus' => 'BLOCKED',
-        'direction' => 'MINUS', 'qty' => '3', 'reasonCode' => 'DAMAGE', 'note' => 'Edge of the coil crushed by the forklift',
-    ], ['Idempotency-Key' => $key]);
-}
-
-function adApprove(object $test, string $id, string $key = 'approve-key-0001')
-{
-    return spa($test)->postJson("/api/v1/inventory/adjustments/{$id}/approve", [], ['Idempotency-Key' => $key]);
-}
-
 /** A received coil lot (10 PCS, BLOCKED at RM-01), then signed in as inventory control. */
 function adLot(object $test, array $t, array $f): array
 {

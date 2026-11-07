@@ -69,3 +69,12 @@ Siapkan dulu sebagai `csa`: rak RM kedua di gudang RM plant P1 (Master Data → 
 | 5 | Sebagai `inv`, minta **Add to stock** `5` reason **Found stock** pada baris yang sama; login `csa` → **Reject** dengan alasan "Tidak ada lembar hitung". | Status **Rejected** dengan alasannya; stok tidak berubah. | |
 | 6 | Sebagai `inv`: **New adjustment request** tanpa stock line, Change **Add to stock**, Location `RM-A01`, Item coil, Lot coil, status **Hold**, quantity `5`, reason **Found stock** → kirim; login `csa` → Approve. | Baris baru coil **Hold** 5 KG di `RM-A01` di Stock Overview (stok ditemukan di tempat yang belum tercatat). | |
 | 7 | Login `mat` → menu Inventory. | Adjustments tidak muncul (M3: MAT hanya melihat stok). | |
+
+## 6. Reversal — dua orang (langkah 7, D-060, D-101)
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `mat` → Inventory → **Reversals** → **New reversal request** → buka pilihan **Document**. | Hanya dokumen posted yang belum di-reverse (receipt, release, transfer, split, adjustment), tanpa reversal. | |
+| 2 | Pilih adjustment `ADJ-P1-<tahun>-0001` dari §5, reason "Rusak ternyata di coil lain" → **Request reversal** → konfirmasi. | "Reversal requested …"; baris **Submitted**. Stok belum berubah. Meminta lagi untuk dokumen yang sama → ditolak "already waiting for approval". | |
+| 3 | Login `inv` → Reversals → **Open** → lihat **Legs undone** → **Approve**. | Judul `REV-P1-<tahun>-0001`, status **Posted**; coil di `RM-A02` kembali +50. Di Reversals, adjustment tidak bisa dipilih lagi. | |
+| 4 | Sebagai `mat`, minta reversal **receipt** coil dari §1 (stok sudah di-transfer/split). Login `inv` → **Approve**. | Ditolak: "The stock this document moved is no longer all there … Reverse what came after it first."; permintaan tetap **Submitted**. **Reject** dengan alasan. | |
+| 5 | Login `opr` → menu Inventory. | Reversals tidak muncul (OPR tanpa izin reversal). | |

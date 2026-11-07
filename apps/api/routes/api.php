@@ -7,6 +7,7 @@ use App\Modules\Core\Http\ResourceController;
 use App\Modules\Inventory\Http\AdjustmentController;
 use App\Modules\Inventory\Http\LotSplitController;
 use App\Modules\Inventory\Http\ReceiptController;
+use App\Modules\Inventory\Http\ReversalController;
 use App\Modules\Inventory\Http\TransferController;
 use App\Modules\Planning\Http\BomController;
 use App\Modules\Planning\Http\BomRoutingMapController;
@@ -160,6 +161,9 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('adjustments', [AdjustmentController::class, 'store'])->name('adjustments.store');
         Route::post('adjustments/{adjustment}/approve', [AdjustmentController::class, 'approve'])->name('adjustments.approve');
         Route::post('adjustments/{adjustment}/reject', [AdjustmentController::class, 'reject'])->name('adjustments.reject');
+        Route::post('reversals', [ReversalController::class, 'store'])->name('reversals.store');
+        Route::post('reversals/{reversal}/approve', [ReversalController::class, 'approve'])->name('reversals.approve');
+        Route::post('reversals/{reversal}/reject', [ReversalController::class, 'reject'])->name('reversals.reject');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

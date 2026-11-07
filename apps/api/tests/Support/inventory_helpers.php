@@ -52,3 +52,39 @@ function rcReceive(object $test, array $f, array $body = [], ?string $key = 'rec
         'supplierLotNo' => 'HEAT-778',
     ], $key === null ? [] : ['Idempotency-Key' => $key]);
 }
+
+function trMove(object $test, array $f, array $body = [], string $key = 'transfer-key-0001')
+{
+    return spa($test)->postJson('/api/v1/inventory/transfers', $body + [
+        'plantId' => $f['plant'], 'itemId' => $f['coil'], 'lotId' => $f['lotId'] ?? null, 'stockStatus' => 'BLOCKED',
+        'fromLocationId' => $f['rm1'], 'toLocationId' => $f['rm2'], 'qty' => '4',
+    ], ['Idempotency-Key' => $key]);
+}
+
+/** @return array<string, string> "<location> <status>" => qty of the lot */
+function trStock(object $test, string $lot): array
+{
+    return collect(spa($test)->getJson('/api/v1/query/inventory.stock?filter[lotId]='.$lot)->assertOk()->json('data'))
+        ->mapWithKeys(fn ($r) => [$r['locationCode'].' '.$r['stockStatus'] => $r['qty']])->sortKeys()->all();
+}
+
+function lsSplit(object $test, array $f, array $body = [], string $key = 'split-key-0001')
+{
+    return spa($test)->postJson('/api/v1/inventory/lot-splits', $body + [
+        'plantId' => $f['plant'], 'itemId' => $f['coil'], 'lotId' => $f['lotId'] ?? null, 'stockStatus' => 'BLOCKED',
+        'locationId' => $f['rm1'], 'children' => [['qty' => '3', 'widthMm' => '1219', 'lengthMm' => '2438.5'], ['qty' => '2']],
+    ], ['Idempotency-Key' => $key]);
+}
+
+function adRequest(object $test, array $f, array $body = [], string $key = 'adjust-key-0001')
+{
+    return spa($test)->postJson('/api/v1/inventory/adjustments', $body + [
+        'plantId' => $f['plant'], 'itemId' => $f['coil'], 'lotId' => $f['lotId'] ?? null, 'locationId' => $f['rm1'], 'stockStatus' => 'BLOCKED',
+        'direction' => 'MINUS', 'qty' => '3', 'reasonCode' => 'DAMAGE', 'note' => 'Edge of the coil crushed by the forklift',
+    ], ['Idempotency-Key' => $key]);
+}
+
+function adApprove(object $test, string $id, string $key = 'approve-key-0001')
+{
+    return spa($test)->postJson("/api/v1/inventory/adjustments/{$id}/approve", [], ['Idempotency-Key' => $key]);
+}

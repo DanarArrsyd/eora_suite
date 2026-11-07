@@ -8,6 +8,7 @@ import { Button, Drawer, DrawerContent, InlineAlert, type IsoDate } from '@eora/
 import { formFailure } from '@/modules/admin/errors';
 import { PHYSICAL_LOCATION_TYPES } from './resources';
 import { queryOptions } from './source';
+import { DOCUMENT_TYPES } from './document-types';
 import { PartialSave, type Confirmation, type FieldSpec, type FormValues, type MasterResource, type MasterRow, type OptionSource } from './types';
 
 const PICKERS: Record<
@@ -64,6 +65,13 @@ const PICKERS: Record<
   },
   // lots of lot-tracked items, with their item
   lots: { resource: 'inventory.lots', label: (r) => `${String(r.code)} · ${String(r.itemCode)}` },
+  // posted documents that may still be reversed (D-101): not a reversal, nothing pending or posted against them
+  reversibleDocuments: {
+    resource: 'inventory.documents',
+    label: (r) => `${String(r.code)} · ${DOCUMENT_TYPES[String(r.docType)] ?? String(r.docType)} · ${String(r.effectiveDate)}`,
+    filters: { reversible: ['true'] },
+    sortBy: 'code',
+  },
   // stock on hand per line (item, lot, place, status): what an adjustment corrects
   stockLines: {
     resource: 'inventory.stock',

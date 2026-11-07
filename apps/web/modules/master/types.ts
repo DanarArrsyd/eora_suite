@@ -25,7 +25,8 @@ export type OptionSource =
   | 'locations'
   | 'stockLines'
   | 'physicalLocations'
-  | 'lots';
+  | 'lots'
+  | 'reversibleDocuments';
 
 export type FieldSpec = {
   key: string;
