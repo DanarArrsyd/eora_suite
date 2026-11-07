@@ -78,3 +78,15 @@ Siapkan dulu sebagai `csa`: rak RM kedua di gudang RM plant P1 (Master Data → 
 | 3 | Login `inv` → Reversals → **Open** → lihat **Legs undone** → **Approve**. | Judul `REV-P1-<tahun>-0001`, status **Posted**; coil di `RM-A02` kembali +50. Di Reversals, adjustment tidak bisa dipilih lagi. | |
 | 4 | Sebagai `mat`, minta reversal **receipt** coil dari §1 (stok sudah di-transfer/split). Login `inv` → **Approve**. | Ditolak: "The stock this document moved is no longer all there … Reverse what came after it first."; permintaan tetap **Submitted**. **Reject** dengan alasan. | |
 | 5 | Login `opr` → menu Inventory. | Reversals tidak muncul (OPR tanpa izin reversal). | |
+
+## 7. Tutup dan reopen periode (langkah 8, D-102)
+Persiapan: Tenant Administrator memberi role **CSA** ke satu user lain (mis. `apr@demo-stamping.test`) untuk langkah reopen, karena peminta reopen tidak boleh menyetujui sendiri.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `inv` → Inventory → **Period Close** → **New close request** → buka pilihan **Month**. | Hanya bulan yang sudah lewat (bulan berjalan tidak ada). | |
+| 2 | Plant P1, bulan lalu → **Ask to close** → konfirmasi. | Halaman bulan itu: status **Closing**, "You asked to close this month"; hanya tombol **Withdraw close request**. Penerimaan dengan tanggal bulan itu sekarang ditolak (`PERIOD_CLOSED`). | |
+| 3 | Login `csa` → buka bulan itu → **Reject close** dengan alasan; minta tutup lagi sebagai `inv`; `csa` → **Close month**. | Setelah reject status **Open** lagi; setelah close status **Closed**, "Closed by csa". | |
+| 4 | Sebagai `mat`, minta reversal dokumen bertanggal bulan tertutup tanpa **Evidence**. | Ditolak: "… is in a closed month: give the evidence …". Dengan evidence (mis. `BA-001`) → terkirim; di halaman reversal tertulis "Closed-month correction". Approve oleh `inv` → diposting di bulan berjalan. | |
+| 5 | Login `csa` → bulan tertutup → **Ask to reopen** dengan alasan. Coba **Reopen month** sendiri. | Tombol reopen tidak ada untuk peminta ("You asked to reopen …"). | |
+| 6 | Login user CSA kedua → bulan itu → **Reopen month**. | Status **Open**, "Last reopened by …"; tercatat sebagai kejadian luar biasa. | |

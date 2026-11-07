@@ -32,6 +32,7 @@ use App\Modules\Inventory\Queries\AdjustmentsQuery;
 use App\Modules\Inventory\Queries\DocumentsQuery;
 use App\Modules\Inventory\Queries\LotsQuery;
 use App\Modules\Inventory\Queries\MovementsQuery;
+use App\Modules\Inventory\Queries\PeriodsQuery;
 use App\Modules\Inventory\Queries\ReceiptsQuery;
 use App\Modules\Inventory\Queries\ReversalsQuery;
 use App\Modules\Inventory\Queries\StockQuery;
@@ -115,6 +116,7 @@ return [
         'inventory.documents' => DocumentsQuery::class,
         'inventory.movements' => MovementsQuery::class,
         'inventory.reversals' => ReversalsQuery::class,
+        'inventory.periods' => PeriodsQuery::class,
         'exchange.import_jobs' => ImportJobsQuery::class,
         'exchange.export_jobs' => ExportJobsQuery::class,
     ],

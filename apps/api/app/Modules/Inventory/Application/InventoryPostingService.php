@@ -14,6 +14,7 @@ use App\Platform\Exceptions\DomainProblem;
 use App\Platform\Outbox\OutboxPublisher;
 use DateTimeImmutable;
 use Illuminate\Database\QueryException;
+use Illuminate\Validation\ValidationException;
 use LogicException;
 use stdClass;
 
@@ -262,14 +263,14 @@ final class InventoryPostingService
      *
      * @return array{documentId: string, replayed: bool}
      */
-    public function submitReversal(EoraPostgresConnection $db, string $documentId, string $key, string $reason): array
+    public function submitReversal(EoraPostgresConnection $db, string $documentId, string $key, string $reason, ?string $evidence = null): array
     {
-        $hash = hash('sha256', json_encode(['REVERSAL', $documentId, $reason], JSON_THROW_ON_ERROR));
+        $hash = hash('sha256', json_encode(['REVERSAL', $documentId, $reason, $evidence], JSON_THROW_ON_ERROR));
         $previous = $this->requested($db, $key, 'REVERSAL', $hash);
         if ($previous !== null) {
             return ['documentId' => $previous, 'replayed' => true];
         }
-        $original = $db->selectOne('select id, plant_id, doc_type, status, doc_no from inventory_documents where id = ? for share', [$documentId])
+        $original = $db->selectOne('select id, plant_id, doc_type, status, doc_no, effective_date::text as effective_date from inventory_documents where id = ? for share', [$documentId])
             ?? throw new DomainProblem(404, 'NOT_FOUND', 'Not found');
         if ($original->doc_type === 'REVERSAL' || $original->status !== 'POSTED') {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Not reversible',
@@ -287,12 +288,21 @@ final class InventoryPostingService
         ));
         $plant = (string) $original->plant_id;
         $day = $this->calendar->resolve($db, $plant, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
+        // BR-PER-02, D-102: a document of a closed month is corrected in the open period, as a correction with its evidence
+        $closed = $db->selectOne("select 1 as closed from inventory_periods where plant_id = ? and period = date_trunc('month', ?::date)::date and status = 'CLOSED'",
+            [$plant, $original->effective_date]) !== null;
+        if ($closed && ($evidence === null || trim($evidence) === '')) {
+            throw ValidationException::withMessages(['evidence' => "{$original->doc_no} is in a closed month: give the evidence for this correction (e.g. the report number)."]);
+        }
+        $request = ['hash' => $hash, 'legs' => $legs] + ($closed ? ['evidence' => trim((string) $evidence)] : []);
         try {
             $id = (string) $db->selectOne(
-                "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, requested_by, submitted_at, note, request, reverses_document_id, idempotency_key)
-                 values ((select c.tenant from ctx_api.context() c), ?, 'REVERSAL', 'SUBMITTED', ?, (select c.actor from ctx_api.context() c), now(), ?, ?::jsonb, ?, ?)
+                "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, requested_by, submitted_at, note, request, reverses_document_id,
+                                                  correction_of_document_id, original_effective_date, reason_code, idempotency_key)
+                 values ((select c.tenant from ctx_api.context() c), ?, 'REVERSAL', 'SUBMITTED', ?, (select c.actor from ctx_api.context() c), now(), ?, ?::jsonb, ?, ?, ?::date, ?, ?)
                  returning id",
-                [$plant, $day, $reason, json_encode(['hash' => $hash, 'legs' => $legs], JSON_THROW_ON_ERROR), $documentId, $key],
+                [$plant, $day, $reason, json_encode($request, JSON_THROW_ON_ERROR), $documentId, $closed ? $documentId : null,
+                    $closed ? $original->effective_date : null, $closed ? 'CLOSED_PERIOD' : null, $key],
             )->id;
         } catch (QueryException $e) {
             // the database's one-reversal-per-document index: another request won the race

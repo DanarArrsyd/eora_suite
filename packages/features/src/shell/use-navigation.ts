@@ -34,6 +34,12 @@ const PARTLY_LIVE: Record<string, readonly string[]> = {
     'inventory.reversal.view',
     'inventory.reversal.request_correction',
     'inventory.reversal.approve',
+    'inventory.period_close.view',
+    'inventory.period_close.post',
+    'inventory.period_close.approve',
+    'inventory.period_reopen.view',
+    'inventory.period_reopen.request_correction',
+    'inventory.period_reopen.approve',
   ],
 };
 

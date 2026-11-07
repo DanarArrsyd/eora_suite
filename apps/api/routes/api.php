@@ -6,6 +6,7 @@ use App\Modules\Core\Http\PartnerController;
 use App\Modules\Core\Http\ResourceController;
 use App\Modules\Inventory\Http\AdjustmentController;
 use App\Modules\Inventory\Http\LotSplitController;
+use App\Modules\Inventory\Http\PeriodController;
 use App\Modules\Inventory\Http\ReceiptController;
 use App\Modules\Inventory\Http\ReversalController;
 use App\Modules\Inventory\Http\TransferController;
@@ -164,6 +165,12 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('reversals', [ReversalController::class, 'store'])->name('reversals.store');
         Route::post('reversals/{reversal}/approve', [ReversalController::class, 'approve'])->name('reversals.approve');
         Route::post('reversals/{reversal}/reject', [ReversalController::class, 'reject'])->name('reversals.reject');
+        Route::post('periods/close-requests', [PeriodController::class, 'requestClose'])->name('periods.close-request');
+        Route::post('periods/{period}/close', [PeriodController::class, 'close'])->name('periods.close');
+        Route::post('periods/{period}/close-return', [PeriodController::class, 'returnClose'])->name('periods.close-return');
+        Route::post('periods/{period}/reopen-requests', [PeriodController::class, 'requestReopen'])->name('periods.reopen-request');
+        Route::post('periods/{period}/reopen', [PeriodController::class, 'reopen'])->name('periods.reopen');
+        Route::post('periods/{period}/reopen-return', [PeriodController::class, 'returnReopen'])->name('periods.reopen-return');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php
