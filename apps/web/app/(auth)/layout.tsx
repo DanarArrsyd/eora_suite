@@ -1,3 +1,4 @@
+import { EoraMark } from '@eora/ui';
 import { EoraQueryProvider } from '@eora/features/data';
 
 /**
@@ -9,7 +10,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <EoraQueryProvider>
       <div className="grid min-h-dvh bg-workspace lg:grid-cols-[minmax(360px,38%)_minmax(0,1fr)]">
         <aside className="hidden flex-col justify-between bg-sidebar px-12 py-10 text-on-accent lg:flex">
-          <p className="m-0 text-[15px] font-semibold tracking-tight">EORA Suite</p>
+          <p className="m-0 flex items-center gap-2.5 text-[15px] font-semibold tracking-tight">
+            <EoraMark tone="inverse" className="size-8" />
+            EORA Suite
+          </p>
           <div>
             <p className="m-0 text-[44px] leading-[1.1] font-semibold tracking-tight" aria-label="Plan, produce, trace, deliver.">
               <span className="block">Plan.</span>
@@ -26,7 +30,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </p>
         </aside>
         <div className="flex min-w-0 flex-col">
-          <header className="flex h-14 items-center bg-sidebar px-4 text-[15px] font-semibold text-on-accent lg:hidden">EORA Suite</header>
+          <header className="flex h-14 items-center gap-2 bg-sidebar px-4 text-[15px] font-semibold text-on-accent lg:hidden">
+            <EoraMark tone="inverse" className="size-7" />
+            EORA Suite
+          </header>
           <main id="main" className="flex flex-1 justify-center px-4 py-10 sm:items-center sm:py-16">
             <div className="w-full max-w-[400px]">{children}</div>
           </main>

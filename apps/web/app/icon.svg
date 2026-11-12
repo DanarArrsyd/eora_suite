@@ -1,1 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#3559C7"/><path d="M11 9h10v2.6h-7.2v3.1h6.6v2.6h-6.6v3.1H21V23H11z" fill="#fff"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="EORA">
+  <rect width="64" height="64" rx="14" fill="#172554"/>
+  <g transform="translate(8 8) scale(0.75)">
+    <path d="M8 42 L32 30 L56 42 L32 54 Z" fill="#9DB7FF" fill-opacity="0.55"/>
+    <path d="M8 32 L32 20 L56 32 L32 44 Z" fill="#9DB7FF"/>
+    <path d="M8 22 L32 10 L56 22 L32 34 Z" fill="#FFFFFF"/>
+    <path d="M32 10 L56 22 L32 34 Z" fill="#DCE6FF"/>
+  </g>
+</svg>

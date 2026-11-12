@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { ChevronDown, Menu, PanelLeftClose } from 'lucide-react';
-import { cn, IconButton, NumericBadge, Tooltip } from '@eora/ui';
+import { cn, EoraMark, IconButton, NumericBadge, Tooltip } from '@eora/ui';
 import { itemBadge, itemHref, moduleHref, type BadgeCounts, type NavModule } from '../navigation';
 
 /* ===================== EoraPrimarySidebar — modules only ===================== */
@@ -66,9 +66,7 @@ export function PrimarySidebar({ modules, activeModuleId, badgeFor, onPreview }:
       aria-label="Modules"
       className="relative flex h-full flex-col items-center gap-0.5 overflow-x-hidden overflow-y-auto bg-sidebar py-3 [scrollbar-width:none]"
     >
-      <div role="img" aria-label="EORA Suite" className="mb-3 grid size-9 shrink-0 place-items-center rounded-lg bg-accent text-[15px] font-bold text-white">
-        E
-      </div>
+      <EoraMark tone="inverse" label="EORA Suite" className="mb-3 size-9" />
       <ul className="flex w-full flex-col items-center gap-0.5">{modules.filter((m) => !m.pinBottom).map(renderItem)}</ul>
       <div className="flex-1" />
       <ul className="flex w-full flex-col items-center gap-0.5">{modules.filter((m) => m.pinBottom).map(renderItem)}</ul>

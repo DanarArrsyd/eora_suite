@@ -1,5 +1,6 @@
 export { cn } from './lib/cn';
 export { useReturnFocus } from './lib/return-focus';
+export { EoraMark } from './components/brand';
 export { Button, IconButton, buttonVariants, type ButtonProps, type IconButtonProps } from './components/button';
 export { Input, Textarea } from './components/input';
 export { Select, type SelectOption, type SelectProps } from './components/select';
