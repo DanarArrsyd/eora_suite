@@ -37,6 +37,17 @@ CREATE TABLE IF NOT EXISTS auth.rate_buckets (
   PRIMARY KEY (bucket_key, window_start)
 );
 
+-- platform tunables read by the auth functions; owned by the definer like every auth object (no login role writes it).
+-- identity_creation_cap: new identities per hour, platform-wide. A *_test database (the suite, D-105) gets 5000 so the
+-- growing test suite never trips it; every other database keeps 500 or the value an operator tuned.
+CREATE TABLE IF NOT EXISTS auth.settings (
+  key text PRIMARY KEY CHECK (key IN ('identity_creation_cap')),
+  value integer NOT NULL CHECK (value BETWEEN 1 AND 100000)
+);
+INSERT INTO auth.settings (key, value)
+VALUES ('identity_creation_cap', CASE WHEN pg_catalog.current_database() LIKE '%\_test' THEN 5000 ELSE 500 END)
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value WHERE pg_catalog.current_database() LIKE '%\_test';
+
 -- one invitation record per membership (R-47); usable secret only in SENT (doc 25 §2.10)
 CREATE TABLE IF NOT EXISTS auth.invitations (
   membership_id uuid PRIMARY KEY,
@@ -147,8 +158,9 @@ BEGIN
   IF uid IS NOT NULL THEN
     RETURN uid;
   END IF;
-  -- platform-wide cap on newly created identities (tunable; per-inviter limits live at the HTTP layer)
-  IF NOT auth.take_token('identity_creation', interval '1 hour', 500) THEN
+  -- platform-wide cap on newly created identities (auth.settings; per-inviter limits live at the HTTP layer)
+  IF NOT auth.take_token('identity_creation', interval '1 hour',
+      COALESCE((SELECT s.value FROM auth.settings s WHERE s.key = 'identity_creation_cap'), 500)) THEN
     INSERT INTO public.security_events (id, occurred_at, source, action, detail_code)
     VALUES (pg_catalog.gen_random_uuid(), pg_catalog.now(), source, 'identity.creation_capped', 'CAP_REACHED');
     RETURN NULL;

@@ -192,6 +192,11 @@ jobs:
         run: |
           docker compose exec -T postgres psql -U eora -d postgres -Atc \
             "select datname from pg_database where datname = 'eora_test'" | grep -qx eora_test
+      - name: Identity creation cap stays 500 outside the test database (D-105)
+        run: |
+          cap() { docker compose exec -T postgres psql -U eora -d "$1" -XAtc "select value from auth.settings where key = 'identity_creation_cap'"; }
+          test "$(cap eora)" = 500
+          test "$(cap eora_test)" = 5000
       - name: Backend tests in the one-shot migrate container never touch the dev database
         # The container sets APP_ENV=local and DB_DATABASE=eora; phpunit.xml must force the test config.
         # migrate:fresh would recreate the eora tables, so their OIDs must not change.

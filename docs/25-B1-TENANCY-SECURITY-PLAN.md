@@ -648,7 +648,7 @@ Grantor ⊇ grantee; SoD-06 self-elevation always blocked (no thresholds in earl
 | DB lockout after 10 failures in 15 min | D-B1-06 | enforced (`auth.login_failures`) |
 | Forgot password 3/min per e-mail HMAC + 10/min per IP (uniform 202); 3 requests per identity per hour and 60 reset deliveries/min in the DB | D-B1-21 | enforced |
 | Invitation acceptance / reset 10/min per IP | D-B1-06 family | enforced |
-| Invitations + resends per administrator | doc 25 §2.4 (no value approved) | configurable `EORA_MEMBER_INVITE_PER_HOUR`, off by default; DB caps: identity creation 500/h platform-wide, 5 resends per membership per 24 h |
+| Invitations + resends per administrator | doc 25 §2.4 (no value approved) | configurable `EORA_MEMBER_INVITE_PER_HOUR`, off by default; DB caps: identity creation 500/h platform-wide (`auth.settings`, D-105; test DB 5000), 5 resends per membership per 24 h |
 | API 300/min per session, posting 60/min per user, export/import 10/h per user + 50/h per tenant | doc 05 *proposed defaults* | **not enforced** — no owner approval yet; posting/export endpoints arrive in M3+ |
 
 ## 17. Final decision proposal

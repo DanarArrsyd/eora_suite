@@ -25,13 +25,23 @@ function demoStockRead(string $tenant, string $sql): stdClass
     return app(TenantTransaction::class)->run(TenantContext::forTenant($tenant, TenantProvisioner::SYSTEM_ACTOR), fn (EoraPostgresConnection $db) => $db->selectOne($sql), 'pgsql_provisioner');
 }
 
-it('posts the opening stock as the materials PIC and the inspector, once', function () {
+it('posts the opening stock as the materials PIC and the inspector, once; a load cut off half-way finishes when run again', function () {
+    // one seeded tenant for every scenario: each demo tenant creates 14 identities (the creation cap is platform-wide)
     $code = demoCode();
     $this->artisan('eora:demo:seed', ['--code' => $code, '--password' => DEMO_PASSWORD])->assertSuccessful();
     $tenant = demoState($code)['tenant'];
     $this->artisan('eora:demo:stock', ['--code' => $code])->expectsOutputToContain('Run eora:demo:master')->assertFailed();
     $this->artisan('eora:demo:master', ['--code' => $code])->assertSuccessful();
 
+    // the nut supplier is inactive: the fourth receipt is refused after three were posted
+    $supplier = fn (string $status) => app(TenantTransaction::class)->run(TenantContext::system($tenant),
+        fn (EoraPostgresConnection $db) => $db->update("update suppliers set status = ? where code = 'SUP-NUT'", [$status]), 'pgsql_provisioner');
+    $supplier('INACTIVE');
+    $this->artisan('eora:demo:stock', ['--code' => $code])->expectsOutputToContain('run the command again to finish the load')->assertFailed();
+    expect(demoStockRead($tenant, "select count(*) as n from inventory_documents where doc_type = 'RM_RECEIPT'")->n)->toBe(3);
+
+    // run again: what was posted replays, the rest posts (no double stock)
+    $supplier('ACTIVE');
     $this->artisan('eora:demo:stock', ['--code' => $code])
         ->expectsOutputToContain('Demo stock loaded')
         ->assertSuccessful();
@@ -56,23 +66,4 @@ it('refuses a tenant that was not seeded and any run in production', function ()
     $this->artisan('eora:demo:stock', ['--code' => 'Bad Code'])->assertExitCode(2);
     $this->app['env'] = 'production';
     $this->artisan('eora:demo:stock')->expectsOutputToContain('never loads in production')->assertFailed();
-})->group('integration', 'demo', 'inventory');
-
-it('finishes a load cut off half-way when run again, replaying what was posted (no double stock)', function () {
-    $code = demoCode();
-    $this->artisan('eora:demo:seed', ['--code' => $code, '--password' => DEMO_PASSWORD])->assertSuccessful();
-    $tenant = demoState($code)['tenant'];
-    $this->artisan('eora:demo:master', ['--code' => $code])->assertSuccessful();
-    // the nut supplier is inactive: the fourth receipt is refused after three were posted
-    $supplier = fn (string $status) => app(TenantTransaction::class)->run(TenantContext::system($tenant),
-        fn (EoraPostgresConnection $db) => $db->update("update suppliers set status = ? where code = 'SUP-NUT'", [$status]), 'pgsql_provisioner');
-    $supplier('INACTIVE');
-    $this->artisan('eora:demo:stock', ['--code' => $code])->expectsOutputToContain('run the command again to finish the load')->assertFailed();
-    expect(demoStockRead($tenant, "select count(*) as n from inventory_documents where doc_type = 'RM_RECEIPT'")->n)->toBe(3);
-
-    $supplier('ACTIVE');
-    $this->artisan('eora:demo:stock', ['--code' => $code])->expectsOutputToContain('Demo stock loaded')->assertSuccessful();
-    expect(demoStockRead($tenant, "select count(*) as n, (select trim_scale(sum(qty))::text from stock_balances b join items i on i.id = b.item_id where i.code = 'COIL-SPCC-12') as coil
-                                     from inventory_documents where doc_type = 'RM_RECEIPT'"))->n->toBe(5)->coil->toBe('4300');
-    expect(app(BalanceVerification::class)->verify($tenant))->toBe([]);
 })->group('integration', 'demo', 'inventory');
