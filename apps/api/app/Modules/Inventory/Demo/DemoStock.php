@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
-namespace App\Platform\Demo;
+namespace App\Modules\Inventory\Demo;
 
 use App\Modules\Inventory\Http\ReceiptController;
 use App\Platform\Database\EoraPostgresConnection;
+use App\Platform\Demo\DemoMasterData;
+use App\Platform\Demo\DemoSpec;
 use App\Platform\Security\SecurityHasher;
 use App\Platform\Tenancy\TenantContext;
 use App\Platform\Tenancy\TenantTransaction;
@@ -18,6 +20,8 @@ use RuntimeException;
  * Opening stock for a demo tenant with its sample master data (doc 32 §1, M3 exit): supplier receipts into rack RM-A01
  * of plant P1 through the real receipt endpoint as the materials PIC (`mat@`), then one incoming release as the incoming
  * inspector (`qci@`) — so UAT starts with Blocked and Unrestricted lots, a consumable without lots, and real documents.
+ * Every posting has its own fixed idempotency key: a load cut off half-way is run again and finishes, replaying what was
+ * posted already; a finished load, or a tenant with stock postings of its own, is refused.
  */
 final class DemoStock
 {
@@ -29,6 +33,8 @@ final class DemoStock
         ['NUT-M8', 'SUP-NUT', '5000', 'NUT-LOT-7731'],
         ['OIL-PRESS', 'SUP-NUT', '200', null],
     ];
+
+    private const string RELEASE_KEY = 'demo-stock-release-0';
 
     public function __construct(
         private readonly TenantTransaction $transaction,
@@ -51,8 +57,11 @@ final class DemoStock
         }
         $tenant = (string) $tenant->tenant_id;
         $ids = $this->system($tenant, function (EoraPostgresConnection $db): array {
-            if ($db->selectOne("select 1 as posted from inventory_documents where doc_type = 'RM_RECEIPT' limit 1") !== null) {
-                throw new RuntimeException('This demo tenant has stock postings already; the opening stock loads once.');
+            if ($db->selectOne('select 1 as done from idempotency_records where idempotency_key = ?', [self::RELEASE_KEY]) !== null) {
+                throw new RuntimeException('The opening stock of this demo tenant is loaded already; it loads once.');
+            }
+            if ($db->selectOne("select 1 as other from inventory_documents where idempotency_key not like 'demo-stock-%' limit 1") !== null) {
+                throw new RuntimeException('This demo tenant has stock postings of its own; the opening stock loads only into a tenant without any.');
             }
             $id = static fn (string $sql, string $code) => $db->selectOne($sql, [$code])?->id;
             $plant = $id('select id from plants where code = ?', 'P1');
@@ -90,7 +99,7 @@ final class DemoStock
             'plantId' => $ids['plant'], 'itemId' => (string) $ids['items']['COIL-SPCC-12'], 'lotId' => (string) $coil->lot_id,
             'lines' => [['locationId' => $ids['rack'], 'qty' => (string) $coil->qty]], 'note' => 'Demo: incoming inspection passed',
         ]);
-        $release->headers->set('Idempotency-Key', 'demo-stock-release-0');
+        $release->headers->set('Idempotency-Key', self::RELEASE_KEY);
         $data = $this->as($tenant, $qci, fn () => $this->receipts->release($release)->getData(true)['data']);
         $posted[] = $data['docNo'];
         $progress(sprintf('%s  COIL-SPCC-12 HEAT-A102 released', $data['docNo']));
