@@ -133,6 +133,17 @@ it('refuses the requester as releaser in the database too', function () {
             expect($e->getCode())->toBe($code);
         }
     }
+    // cancelling also needs the planner's permission in the WO's plant, in SQL too
+    $viewer = member($this, $this->t);
+    AccessFixtures::grant($this->t, $viewer['id'], 'FGW');
+    try {
+        asApp($this->t, $viewer['id'], fn (EoraPostgresConnection $db) => $db->update(
+            "update work_orders set status = 'CANCELLED', cancelled_by = ?, cancelled_at = now(), cancel_reason = 'Not mine' where id = ?", [$viewer['id'], $wo['id']],
+        ));
+        $this->fail('a viewer cancelled the work order');
+    } catch (QueryException $e) {
+        expect($e->getCode())->toBe('42501');
+    }
     // nor by first replacing who asked, then releasing: the requester is fixed while the request waits
     $other = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select gen_random_uuid() as id')->id);
     try {

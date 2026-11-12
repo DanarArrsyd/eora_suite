@@ -127,10 +127,16 @@ return new class extends Migration
                 IF NEW.status <> 'DRAFT' THEN
                   RAISE EXCEPTION 'a work order starts as a draft' USING ERRCODE = '23514';
                 END IF;
+                IF NOT public.eora_actor_may('planning.wo.create', NEW.plant_id) THEN
+                  RAISE EXCEPTION 'a work order is drafted by a planner of its plant' USING ERRCODE = '42501';
+                END IF;
                 RETURN NEW;
               END IF;
               IF (NEW.plant_id, NEW.wo_no) IS DISTINCT FROM (OLD.plant_id, OLD.wo_no) THEN
                 RAISE EXCEPTION 'a work order keeps its plant and number' USING ERRCODE = '23514';
+              END IF;
+              IF OLD.status = 'DRAFT' AND NEW.status = 'DRAFT' AND NOT public.eora_actor_may('planning.wo.create', NEW.plant_id) THEN
+                RAISE EXCEPTION 'a draft is edited by a planner of its plant' USING ERRCODE = '42501';
               END IF;
               IF OLD.status <> 'DRAFT' AND (NEW.item_id, NEW.uom_id, NEW.qty, NEW.due_date, NEW.reason_code, NEW.note, NEW.schedule_line_id)
                  IS DISTINCT FROM (OLD.item_id, OLD.uom_id, OLD.qty, OLD.due_date, OLD.reason_code, OLD.note, OLD.schedule_line_id) THEN
@@ -153,8 +159,8 @@ return new class extends Migration
               END IF;
               IF NEW.status IS DISTINCT FROM OLD.status THEN
                 IF OLD.status = 'DRAFT' AND NEW.status = 'SUBMITTED' THEN
-                  IF NEW.submitted_by IS DISTINCT FROM a THEN
-                    RAISE EXCEPTION 'a release is requested by the signed actor' USING ERRCODE = '42501';
+                  IF NEW.submitted_by IS DISTINCT FROM a OR NOT public.eora_actor_may('planning.wo.submit', NEW.plant_id) THEN
+                    RAISE EXCEPTION 'a release is requested by a planner of its plant' USING ERRCODE = '42501';
                   END IF;
                 ELSIF OLD.status = 'SUBMITTED' AND NEW.status = 'DRAFT' THEN
                   -- withdrawn by its requester, or returned by an approver of this plant
@@ -182,8 +188,9 @@ return new class extends Migration
                     RAISE EXCEPTION 'a release snapshots the approved masters of the item in force today' USING ERRCODE = '23514';
                   END IF;
                 ELSIF NEW.status = 'CANCELLED' AND OLD.status IN ('DRAFT', 'SUBMITTED', 'RELEASED') THEN
-                  IF NEW.cancelled_by IS DISTINCT FROM a THEN
-                    RAISE EXCEPTION 'a work order is cancelled by the signed actor' USING ERRCODE = '42501';
+                  IF NEW.cancelled_by IS DISTINCT FROM a
+                     OR NOT public.eora_actor_may(CASE WHEN OLD.status = 'RELEASED' THEN 'planning.wo.post' ELSE 'planning.wo.create' END, NEW.plant_id) THEN
+                    RAISE EXCEPTION 'a work order is cancelled by a planner of its plant' USING ERRCODE = '42501';
                   END IF;
                 ELSE
                   RAISE EXCEPTION 'work order status % cannot become %', OLD.status, NEW.status USING ERRCODE = '23514';
@@ -205,6 +212,12 @@ return new class extends Migration
                    AND l.id = NEW.bom_line_id AND l.line_no = NEW.line_no AND l.component_item_id = NEW.component_item_id AND l.uom_id = NEW.uom_id
                    AND l.gross_qty_per = NEW.gross_qty_per AND l.scrap_allowance = NEW.scrap_allowance
                    AND NEW.required_qty = pg_catalog.round(w.qty * l.gross_qty_per, 6)
+                   -- a conversion profile version, when given, is the line's profile's validated (or retired) one in force today
+                   AND (NEW.conversion_profile_version_id IS NULL OR EXISTS (
+                         SELECT 1 FROM public.conversion_profile_versions v JOIN public.plants p ON p.id = w.plant_id
+                          WHERE v.id = NEW.conversion_profile_version_id AND v.profile_id = l.conversion_profile_id
+                            AND v.status IN ('VALIDATED', 'RETIRED') AND v.effective_from <= (pg_catalog.now() AT TIME ZONE p.timezone)::date
+                            AND (v.effective_to IS NULL OR v.effective_to >= (pg_catalog.now() AT TIME ZONE p.timezone)::date)))
               ) THEN
                 RAISE EXCEPTION 'material lines are written by the release, from its BOM version' USING ERRCODE = '23514';
               END IF;
