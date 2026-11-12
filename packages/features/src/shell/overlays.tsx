@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, CornerDownLeft, Menu, Search, X } from 'lucide-react';
-import { DialogPrimitive, EmptyState, Kbd, NumericBadge, cn } from '@eora/ui';
+import { DialogPrimitive, EmptyState, EoraMark, Kbd, NumericBadge, cn } from '@eora/ui';
 import { buildPageIndex, moduleHref, searchPages, type BadgeCounts, type NavModule } from '../navigation';
 import { ModuleMenu } from './sidebars';
 
@@ -310,9 +310,7 @@ export function MobileNavSheet({ modules, activeModule, counts, badgeFor, pathna
         >
           <div className="flex h-[var(--shell-topbar-h)] shrink-0 items-center justify-between bg-sidebar pr-2 pl-4 text-white">
             <DialogPrimitive.Title className="flex items-center gap-2 font-semibold">
-              <span aria-hidden="true" className="grid size-[30px] place-items-center rounded-lg bg-accent text-[13px] font-bold">
-                E
-              </span>
+              <EoraMark tone="inverse" className="size-[26px]" />
               EORA Suite
             </DialogPrimitive.Title>
             <DialogPrimitive.Close
