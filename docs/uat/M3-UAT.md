@@ -5,23 +5,29 @@
 Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
 
 ## 0. Persiapan
-1. Backend terbaru (bootstrap → migrate → api berurutan otomatis), lalu izin baru M3 ke role tenant:
+1. Kode terbaru dan secret baru (kalau ada):
+   ```bash
+   git checkout main && git pull --ff-only
+   ```
+   ```bash
+   sh scripts/ensure-dev-secrets.sh
+   ```
+2. Backend terbaru (bootstrap → migrate → api berurutan otomatis), lalu izin baru M3 ke role tenant, lalu master data demo (aman diulang; tenant yang sudah termuat dilewati):
    ```bash
    docker compose up -d --build --wait
    ```
    ```bash
    docker compose run --rm --entrypoint php db-migrate artisan eora:tenants:sync
    ```
-   Data demo (tenant baru dari skrip ini, atau tenant demo yang sudah ada tanpa posting stok):
    ```bash
-   docker compose run --rm --entrypoint php db-migrate artisan eora:demo:stock
+   docker compose run --rm --entrypoint php db-migrate artisan eora:demo:master
    ```
-   Stok awal: coil HEAT-A101 2500 KG **Blocked** dan HEAT-A102 1800 KG **Unrestricted** (sudah di-release), sheet 400 **Blocked**, mur 5000 PCS, oli 200 L (tanpa lot) — semua di rak RM-A01. §1–2 tetap bisa dijalankan di atasnya.
-2. Web:
+   **Jangan jalankan `eora:demo:stock` sebelum §1–8.** Skrip ini mulai dari ledger kosong: daftar penerimaan kosong, nomor dokumen pertama `…-0001`, stok Blocked hanya dari §1. `eora:demo:stock` memposting 5 penerimaan dan 1 release sendiri, sehingga nomor dan isi daftar tidak lagi cocok. Perintah itu untuk demo cepat setelah UAT (atau di tenant demo lain): coil HEAT-A101 2500 KG **Blocked** dan HEAT-A102 1800 KG **Unrestricted** (sudah di-release), sheet 400 **Blocked**, mur 5000 PCS, oli 200 L (tanpa lot) — semua di rak RM-A01; ia hanya mau jalan sekali per tenant dan menolak tenant yang sudah punya posting stok lain.
+3. Web:
    ```bash
    npx pnpm@12.10.1 --filter @eora/web dev
    ```
-3. Login pakai password demo. Akun yang dipakai: `mat@demo-stamping.test` (gudang bahan: terima), `qci@demo-stamping.test` (QC incoming: release), `prl@demo-stamping.test` (production leader: split lot), `inv@demo-stamping.test` (inventory control: minta adjustment), `csa@demo-stamping.test` (admin: melihat; menyetujui adjustment).
+4. Login pakai password demo. Akun yang dipakai: `mat@demo-stamping.test` (gudang bahan: terima), `qci@demo-stamping.test` (QC incoming: release), `prl@demo-stamping.test` (production leader: split lot), `inv@demo-stamping.test` (inventory control: minta adjustment), `csa@demo-stamping.test` (admin: melihat; menyetujui adjustment).
 
 ## 1. Penerimaan bahan — RM Receipts (langkah 3, D-062, D-097)
 | # | Langkah | Yang diharapkan | Hasil |
