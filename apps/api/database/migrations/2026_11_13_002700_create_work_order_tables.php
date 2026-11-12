@@ -143,10 +143,16 @@ return new class extends Migration
                 IF NOT public.eora_actor_may('planning.wo.create', NEW.plant_id) THEN
                   RAISE EXCEPTION 'a work order is drafted by a planner of its plant' USING ERRCODE = '42501';
                 END IF;
+                IF NEW.uom_id IS DISTINCT FROM (SELECT i.base_uom_id FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id) THEN
+                  RAISE EXCEPTION 'a work order counts in its item''s base unit' USING ERRCODE = '23514';
+                END IF;
                 RETURN NEW;
               END IF;
               IF (NEW.plant_id, NEW.wo_no) IS DISTINCT FROM (OLD.plant_id, OLD.wo_no) THEN
                 RAISE EXCEPTION 'a work order keeps its plant and number' USING ERRCODE = '23514';
+              END IF;
+              IF NEW.uom_id IS DISTINCT FROM (SELECT i.base_uom_id FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id) THEN
+                RAISE EXCEPTION 'a work order counts in its item''s base unit' USING ERRCODE = '23514';
               END IF;
               IF OLD.status = 'DRAFT' AND NEW.status = 'DRAFT' AND NOT public.eora_actor_may('planning.wo.create', NEW.plant_id) THEN
                 RAISE EXCEPTION 'a draft is edited by a planner of its plant' USING ERRCODE = '42501';

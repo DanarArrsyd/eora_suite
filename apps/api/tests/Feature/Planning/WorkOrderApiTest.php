@@ -134,6 +134,15 @@ it('refuses the requester as releaser in the database too', function () {
             expect($e->getCode())->toBe($code);
         }
     }
+    // a draft keeps its item's base unit, even when edited through SQL
+    try {
+        asApp($this->t, $requester, fn (EoraPostgresConnection $db) => $db->update(
+            "update work_orders set uom_id = (select id from uoms where code = 'KG') where id = ?", [$wo['id']],
+        ));
+        $this->fail('the unit of a work order was changed');
+    } catch (QueryException $e) {
+        expect($e->getCode())->toBe('23514');
+    }
     // cancelling also needs the planner's permission in the WO's plant, in SQL too
     $viewer = member($this, $this->t);
     AccessFixtures::grant($this->t, $viewer['id'], 'FGW');
