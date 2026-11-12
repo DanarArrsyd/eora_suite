@@ -28,6 +28,7 @@ use App\Modules\Core\Queries\UomConversionsQuery;
 use App\Modules\Core\Queries\UomsQuery;
 use App\Modules\Core\Queries\WarehousesQuery;
 use App\Modules\Core\Queries\WorkCentersQuery;
+use App\Modules\Demand\Queries\SalesOrdersQuery;
 use App\Modules\Inventory\Queries\AdjustmentsQuery;
 use App\Modules\Inventory\Queries\DocumentsQuery;
 use App\Modules\Inventory\Queries\LotsQuery;
@@ -112,6 +113,7 @@ return [
         'inventory.stock' => StockQuery::class,
         'inventory.receipts' => ReceiptsQuery::class,
         'inventory.adjustments' => AdjustmentsQuery::class,
+        'demand.sales_orders' => SalesOrdersQuery::class,
         'inventory.lots' => LotsQuery::class,
         'inventory.documents' => DocumentsQuery::class,
         'inventory.movements' => MovementsQuery::class,

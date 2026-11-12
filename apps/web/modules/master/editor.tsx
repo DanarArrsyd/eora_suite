@@ -121,7 +121,7 @@ function FieldControl({ field, today, row }: { field: FieldSpec; today: string; 
         label={field.label}
         hint={field.hint}
         required={field.required}
-        min={field.notBeforeToday ? (today as IsoDate) : undefined}
+        min={(field.minDate ?? (field.notBeforeToday ? today : undefined)) as IsoDate | undefined}
         today={today as IsoDate}
       />
     );
@@ -247,7 +247,7 @@ export function MasterEditor<T extends MasterRow>({
                     ? (config.rowAction?.label ?? 'Save changes')
                     : config.confirm
                       ? config.confirm(config.blank, null).confirmLabel
-                      : `Create ${config.singular}`
+                      : (config.submitLabel ?? `Create ${config.singular}`)
                 }
                 secondary={
                   <Button type="button" onClick={() => onOpenChange(false)}>

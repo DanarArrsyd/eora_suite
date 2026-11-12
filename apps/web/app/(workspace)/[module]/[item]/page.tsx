@@ -6,13 +6,15 @@ import { LoadingState } from '@eora/ui';
 import { PlannedPage } from '@/components/planned-page';
 import { ADMIN_IMPLEMENTED } from '@/modules/admin/implemented';
 import { AdminScreen } from '@/modules/admin/registry';
+import { DEMAND_IMPLEMENTED } from '@/modules/demand/implemented';
+import { DemandScreen } from '@/modules/demand/registry';
 import { DEMAND_MASTER_IMPLEMENTED, MASTER_IMPLEMENTED } from '@/modules/master/implemented';
 import { MasterDataScreen } from '@/modules/master/registry';
 import { INVENTORY_IMPLEMENTED } from '@/modules/inventory/implemented';
 import { InventoryScreen } from '@/modules/inventory/registry';
 import { MATERIALS_IMPLEMENTED } from '@/modules/materials/implemented';
 import { MaterialsScreen } from '@/modules/materials/registry';
-import { PPIC_IMPLEMENTED } from '@/modules/ppic/implemented';
+import { PPIC_IMPLEMENTED, PPIC_LIVE } from '@/modules/ppic/implemented';
 import { PpicScreen } from '@/modules/ppic/registry';
 
 type Params = { module: string; item: string };
@@ -32,7 +34,7 @@ export default async function ItemPage({ params }: { params: Promise<Params> }) 
   const { module, item } = await params;
   const match = matchRoute(NAV_MODULES, `/${module}/${item}`);
   if (!match?.item || !match.group) notFound();
-  if (module === 'ppic' && (PPIC_IMPLEMENTED as readonly string[]).includes(item)) {
+  if (module === 'ppic' && ([...PPIC_IMPLEMENTED, ...PPIC_LIVE] as readonly string[]).includes(item)) {
     // Phase 3 Control Tower screens (client; URL-synced list state needs a Suspense boundary).
     return (
       <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
@@ -56,6 +58,14 @@ export default async function ItemPage({ params }: { params: Promise<Params> }) 
     return (
       <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
         <MasterDataScreen item={item} />
+      </Suspense>
+    );
+  }
+  if (module === 'demand' && (DEMAND_IMPLEMENTED as readonly string[]).includes(item)) {
+    // M4 step 1 Sales Orders on the live API (doc 33 §1.1)
+    return (
+      <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
+        <DemandScreen item={item} />
       </Suspense>
     );
   }

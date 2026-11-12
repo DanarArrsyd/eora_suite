@@ -120,7 +120,7 @@ export const NAV_MODULES: readonly NavModule[] = [
         label: 'Customer Orders',
         items: [
           { id: 'customer-po', label: 'Customer Purchase Orders', icon: FileText, release: 'R1', phase: 'later' },
-          { id: 'sales-orders', label: 'Sales Orders', icon: FileCheck, release: 'R1', phase: 'later' },
+          { id: 'sales-orders', label: 'Sales Orders', icon: FileCheck, release: 'R1', permission: 'demand.sales_order.view', phase: 'later' },
           { id: 'po-revisions', label: 'Order Revisions', icon: RotateCcw, release: 'R1', phase: 'later' },
         ],
       },
@@ -159,7 +159,7 @@ export const NAV_MODULES: readonly NavModule[] = [
         items: [
           { id: 'demand-fulfillment', label: 'Demand & Fulfillment', icon: ListChecks, release: 'R1', phase: 3 },
           { id: 'customer-po', label: 'Customer Purchase Orders', icon: FileText, release: 'R1', phase: 'later' },
-          { id: 'sales-orders', label: 'Sales Orders', icon: FileCheck, release: 'R1', phase: 'later' },
+          { id: 'sales-orders', label: 'Sales Orders', icon: FileCheck, release: 'R1', permission: 'demand.sales_order.view', phase: 'later' },
           { id: 'forecast', label: 'Forecast', icon: TrendingUp, release: 'R2', phase: 'later' },
           { id: 'delivery-schedules', label: 'Delivery Schedules', icon: CalendarCheck, release: 'R1', phase: 'later' },
         ],

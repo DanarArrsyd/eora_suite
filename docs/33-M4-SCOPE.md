@@ -18,6 +18,8 @@
 8. **WO close (D-063, BR-PLN-03):** WO close diblok selama masih ada Material at Production untuk WO itu — harus di-return, dipindah ke WO lain, atau ditutup lewat **exception** (alasan, approver kedua, audit). Layar: tombol Close + exception di detail WO.
 9. **Trace dan penutup:** query traceability shipment → lot FG → WO/run → lot bahan + aktor/waktu (doc 14 #18); seeder demo skenario M4; stack e2e satu pesanan penuh; skrip UAT `docs/uat/M4-UAT.md`; checklist exit.
 
+**Progres:** Langkah 1 (Sales Order: draf → konfirmasi → tambah/batal; customer PO sebagai referensi di SO line, qty = jumlah jadwal, hanya FG lewat customer part mapping aktif, tanggal ≥ hari ini plant, PPC konfirmasi sendiri, tanpa harga, draf dibatalkan bukan dihapus — D-108; migration 002600; layar Demand / PPIC → **Sales Orders**) — PR `feat/m4-step1-sales-orders`.
+
 **Frontend:** layar di atas memakai design system yang disetujui (DataTable, filter, drawer form, konfirmasi posting, ApprovalPanel); label Mock data hilang di layar yang sudah memakai data asli; layar lain tetap Mock data. Tidak ada select/date native (preferensi owner).
 
 **Data demo:** tambah lokasi **Material at Production** per work center (mis. `MAP-PRS200`, `MAP-WLD`) dan schedule SO contoh (OEM-A, BRK-A100) lewat endpoint asli, seperti `eora:demo:stock` di M3.

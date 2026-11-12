@@ -22,6 +22,8 @@ export const STATUS_CATALOGUE = {
   document: {
     DRAFT: { label: 'Draft', tone: 'neutral' },
     SUBMITTED: { label: 'Submitted', tone: 'info' },
+    // a sales order confirmed into firm demand (doc 16 §12, D-107)
+    CONFIRMED: { label: 'Confirmed', tone: 'info' },
     // a request decided against by a second person (D-060, D-100): final, nothing moved
     REJECTED: { label: 'Rejected', tone: 'warning' },
     APPROVED: { label: 'Approved', tone: 'success' },

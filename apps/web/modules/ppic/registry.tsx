@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { SalesOrdersScreen } from '@/modules/demand/sales-orders';
 import { ControlTowerOverview } from './screens/overview';
 import { DailyDeliveryScreen, DeliveryRiskScreen, DemandFulfillmentScreen } from './screens/demand';
 import { ConversionScreen, MaterialAtProductionScreen, RmAvailabilityScreen } from './screens/material';
@@ -28,6 +29,7 @@ export const PPIC_SCREENS: Record<string, React.ComponentType> = {
   'daily-fg': DailyFgScreen,
   'fg-availability': FgAvailabilityScreen,
   'material-variance': MaterialVarianceScreen,
+  'sales-orders': () => <SalesOrdersScreen base="/ppic/sales-orders" />,
 };
 
 export function PpicScreen({ item }: { item: string }) {

@@ -155,6 +155,7 @@ stateDiagram-v2
 | → PartiallyFulfilled / Fulfilled | posted shipment line referencing this schedule line (BR-DEM-09) | outstanding recomputed (BR-DEM-10); allocation consumed by shipment |
 | → Superseded | revision posted with unambiguous or user-confirmed mapping (BR-DEM-11, D-038) | outstanding counts zero; posted shipments keep this line as reference; outstanding re-allocated via `schedule_reallocations`; ambiguous mapping → `REVISION_MAPPING_AMBIGUOUS` exception, line stays active until resolved; pegged WO/MPS/allocation → PPIC notification |
 | → Cancelled | delivered = 0 | allocations released; pegged records notified |
+**Sales Order header (D-108, M4):** `DRAFT → CONFIRMED` (PPC, `demand.sales_order.post`; schedule lines Draft → Firm) or `DRAFT → CANCELLED` (reason; lines and schedule lines Cancelled, customer PO lines freed). A confirmed order only gains lines / schedule lines (born Firm) or cancels a Firm schedule line without allocation or delivery (reason); a line whose schedule lines are all cancelled is cancelled. Firm lines are never edited (BR-DEM-16); revision (Superseded) is M5.
 SO **line** status is derived: `OPEN` (any Firm/PartiallyFulfilled), `FULFILLED` (all active lines Fulfilled), `CANCELLED` (all Cancelled), `CLOSED` (manual short-close with reason and approval, outstanding written off as demand only — no inventory effect).
 
 ## Concurrency notes (all machines)
