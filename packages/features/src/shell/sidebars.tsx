@@ -62,7 +62,10 @@ export function PrimarySidebar({ modules, activeModuleId, badgeFor, onPreview }:
   };
 
   return (
-    <nav aria-label="Modules" className="flex h-full flex-col items-center gap-0.5 overflow-x-hidden overflow-y-auto bg-sidebar py-3 [scrollbar-width:none]">
+    <nav
+      aria-label="Modules"
+      className="relative flex h-full flex-col items-center gap-0.5 overflow-x-hidden overflow-y-auto bg-sidebar py-3 [scrollbar-width:none]"
+    >
       <div role="img" aria-label="EORA Suite" className="mb-3 grid size-9 shrink-0 place-items-center rounded-lg bg-accent text-[15px] font-bold text-white">
         E
       </div>
@@ -146,7 +149,7 @@ export function SecondarySidebar({ module, counts, pathname, onClose, closeLabel
           <PanelLeftClose aria-hidden="true" />
         </IconButton>
       </div>
-      <div className="overflow-y-auto px-2 pt-2 pb-6">
+      <div className="relative min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-6">
         <ModuleMenu module={module} counts={counts} pathname={pathname} />
       </div>
     </nav>

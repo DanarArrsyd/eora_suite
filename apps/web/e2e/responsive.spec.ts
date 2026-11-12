@@ -40,6 +40,23 @@ for (const width of WIDTHS) {
   });
 }
 
+/** The shell fills the viewport and never scrolls as a page: long module menus scroll inside their sidebar. */
+for (const size of [
+  { width: 1440, height: 640 },
+  { width: 1024, height: 600 },
+  { width: 375, height: 640 },
+]) {
+  test(`no page-level vertical overflow on a short screen @${size.width}x${size.height}`, async ({ page }) => {
+    await page.setViewportSize(size);
+    for (const route of ['/ppic', '/master', '/inventory/raw-material']) {
+      await page.goto(route);
+      await expect(page.locator('header').first()).toBeVisible();
+      const overflow = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+      expect(overflow, `${route} vertical overflow`).toBeLessThanOrEqual(0);
+    }
+  });
+}
+
 /** D-028 search presentation per viewport and page context. */
 const SEARCH_CASES: { width: number; route: string; expected: 'full' | 'compact' | 'icon' }[] = [
   { width: 1920, route: '/ppic/control-tower', expected: 'full' },
