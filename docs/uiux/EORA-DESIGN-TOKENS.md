@@ -57,7 +57,7 @@ Font: **Inter** (400/500/600/700), fallback `Arial, system-ui, sans-serif`. Nume
 | Supporting text | 12 px / 16 | 400 |
 | KPI value | 28 px / 34 (24–32) | 600 |
 | Breadcrumb / "View by" label | 12 px uppercase, +0.05 em | 500–600 |
-Monospace (`ui-monospace`) only for location/bin codes and technical IDs where character alignment helps.
+One typeface everywhere (D-104, owner 2026-11-12): codes and technical IDs (documents, lots, items, locations) use **Inter** like all other text, with tabular (equal-width) digits for alignment — no system monospace (its slashed zero read as foreign). The `font-mono` utility maps to Inter + `tabular-nums`.
 
 ## 4. Contrast evaluation (WCAG 2.2, computed 2026-10-08)
 | Pair | Ratio | Result | Action |
