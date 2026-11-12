@@ -247,7 +247,7 @@ export function MasterEditor<T extends MasterRow>({
                     ? (config.rowAction?.label ?? 'Save changes')
                     : config.confirm
                       ? config.confirm(config.blank, null).confirmLabel
-                      : `Create ${config.singular}`
+                      : (config.submitLabel ?? `Create ${config.singular}`)
                 }
                 secondary={
                   <Button type="button" onClick={() => onOpenChange(false)}>

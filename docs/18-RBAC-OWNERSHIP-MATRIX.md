@@ -112,6 +112,8 @@ Rule: no module writes another module's tables; cross-module reads use contracts
 | Permission (resource.action) | CSA | PPC | MAT | PRL | QCI | QCS | FGW | DLV | INV | AUD |
 |---|---|---|---|---|---|---|---|---|---|---|
 | demand.sales_order / schedule | V | VCSP | — | — | — | — | V | V | — | V |
+
+*`demand.sales_order` actions (D-108, M4):* `create` drafts and edits a draft (lines, schedule lines, cancel the draft); `post` confirms and changes a confirmed order (add lines or schedule lines, cancel a firm schedule line); `submit` is not used (no second approver).
 | demand.reallocation (D-038) | V | VCS (P after confirmation) | — | — | — | — | — | — | — | V |
 | demand.exception | V | VCP (resolve) | — | — | — | — | — | V | — | V |
 | planning.mps | V A | VCS (preparer ≠ approver, SoD-07) | V | V | — | — | — | — | — | V |

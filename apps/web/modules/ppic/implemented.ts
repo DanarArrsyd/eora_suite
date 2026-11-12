@@ -14,3 +14,6 @@ export const PPIC_IMPLEMENTED = [
   'fg-availability',
   'material-variance',
 ] as const;
+
+/** PPIC items on the live API (M4 step 1, doc 33 §1.1): Sales Orders, the same screen as Demand → Sales Orders. */
+export const PPIC_LIVE = ['sales-orders'] as const;

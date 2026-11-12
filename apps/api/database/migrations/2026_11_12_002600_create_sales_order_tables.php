@@ -119,7 +119,7 @@ return new class extends Migration
 
             -- lines and schedule lines are written (inserted, replaced, deleted) only while their order is a draft; a
             -- confirmed order changes only through new FIRM rows and the cancel columns (owner, 2026-11-12)
-            CREATE FUNCTION eora_guard_sales_order_child() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            CREATE OR REPLACE FUNCTION eora_guard_sales_order_child() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
             DECLARE
               header_status text;
               row_status text := CASE WHEN TG_OP = 'DELETE' THEN OLD.status ELSE NEW.status END;
@@ -176,7 +176,7 @@ return new class extends Migration
             CREATE TRIGGER guard_lifecycle BEFORE INSERT OR UPDATE OR DELETE ON delivery_schedule_lines FOR EACH ROW EXECUTE FUNCTION eora_guard_sales_order_child();
 
             -- the header: DRAFT → CONFIRMED (by the signed actor) or DRAFT → CANCELLED; customer, plant and number never change
-            CREATE FUNCTION eora_guard_sales_order_header() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            CREATE OR REPLACE FUNCTION eora_guard_sales_order_header() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
             DECLARE
               a uuid := (SELECT c.actor FROM ctx_api.context() c);
             BEGIN

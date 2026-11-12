@@ -83,6 +83,8 @@ export type MasterResource<T extends MasterRow> = {
   description: string;
   /** The create button when it is not "New <singular>" (e.g. "New close request" on a list of periods). */
   createLabel?: string;
+  /** The drawer's submit button when it is not "Create <singular>" (e.g. "Add line" on an order's page). */
+  submitLabel?: string;
   /** Plural and singular nouns for counts, empty states and buttons. */
   itemLabel: string;
   singular: string;
