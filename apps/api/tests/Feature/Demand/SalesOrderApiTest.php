@@ -75,6 +75,10 @@ it('drafts, fills and confirms an order into firm demand; the line quantity is t
     expect($confirmed->json('data.confirmedByName'))->not->toBeNull();
 
     spa($this)->getJson('/api/v1/query/demand.sales_orders?q=po-1001')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.customerPoNos', 'PO-1001');
+    // a reference keyed in lower case is found whatever case is searched
+    $lower = soCreate($this, $f)->assertCreated()->json('data');
+    soWith($this, 'PUT', "/api/v1/demand/sales-orders/{$lower['id']}/lines", ['lines' => [soLine($f, 'po-7007', '1')]], $lower['version'])->assertOk();
+    spa($this)->getJson('/api/v1/query/demand.sales_orders?q=PO-70')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.customerPoNos', 'po-7007');
     spa($this)->getJson("/api/v1/demand/sales-orders/{$id}")->assertOk()->assertHeader('ETag', '"'.$confirmed->json('data.version').'"');
     expect(rcRun($this->t, fn (EoraPostgresConnection $db) => array_column($db->select('select event_type from outbox_events where aggregate_id = ? order by id', [$id]), 'event_type')))
         ->toBe(['demand.changed'])
@@ -108,6 +112,11 @@ it('takes only an active finished customer part of the order\'s customer, today 
     // the same PO number and line of another customer is another PO
     $c = soCreate($this, $f, ['customerId' => $f['oemB']])->assertCreated()->json('data');
     soWith($this, 'PUT', "/api/v1/demand/sales-orders/{$c['id']}/lines", ['lines' => [soLine($f, part: $f['partB'])]], $c['version'])->assertOk();
+    // an item that is no longer finished is not confirmed into demand
+    rcRun($this->t, fn (EoraPostgresConnection $db) => $db->update("update items set item_type = 'SEMI_FINISHED' where code = 'FG-1'"));
+    soWith($this, 'POST', "/api/v1/demand/sales-orders/{$c['id']}/actions/confirm", [], spa($this)->getJson("/api/v1/demand/sales-orders/{$c['id']}")->json('data.version'))
+        ->assertStatus(409)->assertJsonPath('code', 'CUSTOMER_PART_INACTIVE');
+    rcRun($this->t, fn (EoraPostgresConnection $db) => $db->update("update items set item_type = 'FINISHED' where code = 'FG-1'"));
     // an empty draft is not confirmed
     $d = soCreate($this, $f)->assertCreated()->json('data');
     soWith($this, 'POST', "/api/v1/demand/sales-orders/{$d['id']}/actions/confirm", [], $d['version'])->assertStatus(409);

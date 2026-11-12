@@ -173,12 +173,12 @@ final class SalesOrderController
         }
         $stale = $db->selectOne(
             "select l.line_no from sales_order_lines l join customer_items ci on ci.id = l.customer_item_id join items i on i.id = ci.item_id
-              where l.sales_order_id = ? and not (ci.status = 'ACTIVE' and ci.effective_from <= ?::date and (ci.effective_to is null or ci.effective_to >= ?::date) and i.status = 'ACTIVE')
+              where l.sales_order_id = ? and not (ci.status = 'ACTIVE' and ci.effective_from <= ?::date and (ci.effective_to is null or ci.effective_to >= ?::date) and i.status = 'ACTIVE' and i.item_type = 'FINISHED')
               order by l.line_no limit 1",
             [$so->id, $today, $today],
         );
         if ($stale !== null) {
-            throw new DomainProblem(409, 'CUSTOMER_PART_INACTIVE', 'Customer part no longer valid', "The customer part mapping of line {$stale->line_no} is no longer active. Replace the line in the draft.");
+            throw new DomainProblem(409, 'CUSTOMER_PART_INACTIVE', 'Customer part no longer valid', "The customer part mapping of line {$stale->line_no} is no longer active or no longer a finished item. Replace the line in the draft.");
         }
         $before = $this->state($db, 'sales_order_headers', (string) $so->id);
         $actor = $this->actor($db);

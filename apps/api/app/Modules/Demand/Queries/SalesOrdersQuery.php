@@ -80,7 +80,7 @@ final class SalesOrdersQuery extends QueryDefinition
             new Field('customerCode', 'c.code', sortable: true, search: 'prefix', searchSql: 'h.customer_id = any (array(select x.id from customers x where x.code {match}))'),
             new Field('customerName', 'c.name', search: 'contains', searchSql: 'h.customer_id = any (array(select x.id from customers x where x.name {match}))'),
             new Field('customerPoNos', 'agg.po_nos', search: 'prefix',
-                searchSql: "exists (select 1 from sales_order_lines x where x.sales_order_id = h.id and x.status = 'ACTIVE' and x.customer_po_no {match})"),
+                searchSql: "exists (select 1 from sales_order_lines x where x.sales_order_id = h.id and x.status = 'ACTIVE' and upper(x.customer_po_no) {match})"),
             new Field('lineCount', 'agg.line_count', Field::INTEGER),
             new Field('nextDueDate', 'agg.next_due::text'),
             new Field('note', 'h.note'),
