@@ -29,6 +29,7 @@ use App\Modules\Core\Queries\UomsQuery;
 use App\Modules\Core\Queries\WarehousesQuery;
 use App\Modules\Core\Queries\WorkCentersQuery;
 use App\Modules\Demand\Queries\SalesOrdersQuery;
+use App\Modules\Demand\Queries\ScheduleLinesQuery;
 use App\Modules\Inventory\Queries\AdjustmentsQuery;
 use App\Modules\Inventory\Queries\DocumentsQuery;
 use App\Modules\Inventory\Queries\LotsQuery;
@@ -115,6 +116,7 @@ return [
         'inventory.receipts' => ReceiptsQuery::class,
         'inventory.adjustments' => AdjustmentsQuery::class,
         'demand.sales_orders' => SalesOrdersQuery::class,
+        'demand.schedule_lines' => ScheduleLinesQuery::class,
         'planning.work_orders' => WorkOrdersQuery::class,
         'inventory.lots' => LotsQuery::class,
         'inventory.documents' => DocumentsQuery::class,

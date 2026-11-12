@@ -126,6 +126,8 @@ it('checks the draft: finished item, due date from today, a note for Other, a fi
         'schedules' => [['requirementDate' => rtDayFrom($s['today'], 7), 'qty' => '80']]]]], ['If-Match' => '"'.$so['version'].'"'])->assertOk()->json('data');
     $so = spa($this)->postJson("/api/v1/demand/sales-orders/{$so['id']}/actions/confirm", [], ['If-Match' => '"'.$so['version'].'"'])->assertOk()->json('data');
     $schedule = $so['lines'][0]['schedules'][0]['id'];
+    spa($this)->getJson("/api/v1/query/demand.schedule_lines?filter[status]=FIRM&filter[itemId]={$s['item']['id']}")->assertOk()
+        ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $schedule)->assertJsonPath('data.0.code', $so['code'])->assertJsonPath('data.0.qty', '80');
     woCreate($this, $s, ['scheduleLineId' => $s['bom']['id']])->assertStatus(422)->assertJsonValidationErrors(['scheduleLineId']);
     // the WO quantity is free against the delivery it serves (D-109)
     $wo = woCreate($this, $s, ['scheduleLineId' => $schedule, 'qty' => '120', 'reasonCode' => 'URGENT_ORDER'])->assertCreated()
