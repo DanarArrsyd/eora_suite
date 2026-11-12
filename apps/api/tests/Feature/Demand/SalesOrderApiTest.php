@@ -161,6 +161,8 @@ it('keeps orders inside the plant scope and the confirm and edits with their per
     $f = $this->f;
     orgUser($this, $this->t, 'PPC');
     $so = soCreate($this, $f)->assertCreated()->json('data');
+    soWith($this, 'PUT', "/api/v1/demand/sales-orders/{$so['id']}/lines", ['lines' => [soLine($f)]], $so['version'])->assertOk();
+    $so = spa($this)->getJson("/api/v1/demand/sales-orders/{$so['id']}")->json('data');
     soCreate($this, $f, ['plantId' => $f['plant2']])->assertCreated();
 
     // a planner of plant 2 neither sees nor changes the plant 1 order
@@ -168,6 +170,10 @@ it('keeps orders inside the plant scope and the confirm and edits with their per
     spa($this)->getJson("/api/v1/demand/sales-orders/{$so['id']}")->assertNotFound();
     spa($this)->getJson('/api/v1/query/demand.sales_orders')->assertOk()->assertJsonCount(1, 'data');
     soCreate($this, $f)->assertForbidden();
+    // the customer PO line stays unique across plants (BR-DEM-05), but the plant 1 order is not named to this planner
+    $own = soCreate($this, $f, ['plantId' => $f['plant2']])->assertCreated()->json('data');
+    soWith($this, 'PUT', "/api/v1/demand/sales-orders/{$own['id']}/lines", ['lines' => [soLine($f)]], $own['version'])
+        ->assertStatus(422)->assertJsonValidationErrors(['lines.0.customerPoLine' => 'Customer PO PO-1001 line 10 is already on another order.']);
 
     // a viewer (FGW: view only) reads but neither edits nor confirms
     rtSwitch($this, $this->t, 'FGW');

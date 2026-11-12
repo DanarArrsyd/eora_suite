@@ -338,13 +338,17 @@ final class SalesOrderController
         if ($poLine === '') {
             throw ValidationException::withMessages([$at('customerPoLine') => 'Enter the customer PO line.']);
         }
+        // BR-DEM-05 holds across the tenant; the other order is named only to a reader of its plant
         $taken = $db->selectOne(
-            "select h.so_no from sales_order_lines l join sales_order_headers h on h.id = l.sales_order_id
+            "select h.so_no, h.plant_id, p.company_id from sales_order_lines l join sales_order_headers h on h.id = l.sales_order_id join plants p on p.id = h.plant_id
               where l.customer_id = ? and upper(l.customer_po_no) = upper(?) and upper(l.customer_po_line) = upper(?) and l.status = 'ACTIVE' and l.sales_order_id <> ?",
             [$so->customer_id, $poNo, $poLine, $so->id],
         );
         if ($taken !== null) {
-            throw ValidationException::withMessages([$at('customerPoLine') => "Customer PO {$poNo} line {$poLine} is already on {$taken->so_no}."]);
+            $readable = array_filter($this->authorizer->scopes($db, self::VIEW), static fn (Scope $s) => $s->covers(Scope::plant((string) $taken->plant_id, (string) $taken->company_id)));
+            throw ValidationException::withMessages([$at('customerPoLine') => $readable !== []
+                ? "Customer PO {$poNo} line {$poLine} is already on {$taken->so_no}."
+                : "Customer PO {$poNo} line {$poLine} is already on another order."]);
         }
         $unit = (object) ['uom' => $mapping->uom, 'decimals' => $mapping->decimals];
         $schedules = [];
