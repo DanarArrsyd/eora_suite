@@ -49,15 +49,17 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
 | 4 | Release sisa 500. | Baris hilang dari daftar (tidak ada lagi stok Blocked). | |
 
 ## 3. Transfer dalam plant — Stock Overview (langkah 4, D-048, D-098)
-Siapkan dulu sebagai `csa`: rak RM kedua di gudang RM plant P1 (Master Data → Plants & Warehouses → Locations, mis. `RM-A02`).
+Siapkan dulu:
+- sebagai `csa`: rak RM kedua di gudang RM plant P1 (Master Data → Plants & Warehouses → Locations, mis. `RM-A02`);
+- sebagai `mat`: satu penerimaan coil lagi (Materials → RM Receipts, coil SPCC, rak `RM-A01`, quantity `1000`, nomor heat `HEAT-002`) dan **jangan di-release** — §2 sudah me-release semua coil dari §1, dan langkah 1 dan 5 di bawah butuh stok **Blocked**.
 
 | # | Langkah | Yang diharapkan | Hasil |
 |---|---|---|---|
-| 1 | Login `mat` → Inventory → **Stock Overview**. | Stok dari ledger per lokasi, lot dan status: coil Unrestricted dan Blocked dari §1–2, oli. Kolom **Available** = 0 untuk stok Blocked. | |
+| 1 | Login `mat` → Inventory → **Stock Overview**. | Stok dari ledger per lokasi, lot dan status: coil Unrestricted dari §1–2, coil Blocked `HEAT-002` 1000 KG dari persiapan di atas, oli. Kolom **Available** = 0 untuk stok Blocked. | |
 | 2 | **Transfer** pada coil Unrestricted → buka pilihan **To location**. | Hanya rak RM plant P1 (tidak ada lokasi Material at Production, QC, FG). | |
 | 3 | Pilih rak asal yang sama → **Transfer**. | Ditolak sebelum konfirmasi: "Choose another location than the one the stock is in." | |
 | 4 | Pilih `RM-A02`, quantity `800` → **Transfer** → konfirmasi **Transfer**. | Pesan `TRF-P1-<tahun>-0001 transferred`. Rak asal berkurang 800, `RM-A02` 800 KG, status tetap Unrestricted, lot sama. | |
-| 5 | Transfer coil **Blocked** ke `RM-A02`. | Berhasil; di `RM-A02` muncul baris Blocked terpisah (status tidak berubah karena transfer). | |
+| 5 | Transfer coil **Blocked** (`HEAT-002`) ke `RM-A02`. | Berhasil; di `RM-A02` muncul baris Blocked terpisah (status tidak berubah karena transfer). | |
 | 6 | Login `qci` → Inventory → Stock Overview → **Transfer** pada baris mana pun. | Stok terlihat; drawer menjelaskan "Your roles do not allow transfers.", tidak ada form. | |
 
 ## 4. Split lot / remnant — Material Lots (langkah 5, D-099)
