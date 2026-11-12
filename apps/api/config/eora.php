@@ -49,6 +49,7 @@ use App\Modules\Planning\Queries\ItemWeightsQuery;
 use App\Modules\Planning\Queries\ProcessTypesQuery;
 use App\Modules\Planning\Queries\RoutingsQuery;
 use App\Modules\Planning\Queries\RoutingVersionsQuery;
+use App\Modules\Planning\Queries\WorkOrdersQuery;
 use App\Platform\Export\ExportJobsQuery;
 use App\Platform\Import\ImportJobsQuery;
 
@@ -114,6 +115,7 @@ return [
         'inventory.receipts' => ReceiptsQuery::class,
         'inventory.adjustments' => AdjustmentsQuery::class,
         'demand.sales_orders' => SalesOrdersQuery::class,
+        'planning.work_orders' => WorkOrdersQuery::class,
         'inventory.lots' => LotsQuery::class,
         'inventory.documents' => DocumentsQuery::class,
         'inventory.movements' => MovementsQuery::class,
