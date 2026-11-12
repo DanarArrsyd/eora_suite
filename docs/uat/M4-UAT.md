@@ -26,7 +26,7 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
    ```bash
    npx pnpm@12.10.1 --filter @eora/web dev
    ```
-4. Login pakai password demo. Akun: `ppc@demo-stamping.test` (planner: membuat dan mengonfirmasi SO), `fgw@demo-stamping.test` (gudang FG: hanya melihat SO).
+4. Login pakai password demo. Akun: `ppc@demo-stamping.test` (planner: membuat dan mengonfirmasi SO, membuat WO), `csa@demo-stamping.test` (admin: me-release WO; juga menyetujui BOM/routing), `fgw@demo-stamping.test` (gudang FG: hanya melihat SO).
 
 ## 1. Sales Order (langkah 1, D-107, D-108)
 | # | Langkah | Yang diharapkan | Hasil |
@@ -44,3 +44,17 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
 | 11 | **Add line** pada SO yang sudah Confirmed (PO line `20`, 300 PCS). | Line 2 langsung **Firm** (tanpa konfirmasi ulang). | |
 | 12 | SO kedua (masih Draft) → **Cancel draft** dengan alasan. | Status **Cancelled**, tetap ada di daftar; nomornya tidak dipakai ulang. | |
 | 13 | Login `fgw` → Demand → Sales Orders → buka SO pertama. | Bisa melihat; tidak ada tombol Add line, Add delivery, Confirm atau Cancel. | |
+
+## 2. Work Order manual (langkah 2, D-109)
+Persiapan: BOM dan routing BRK-A100 dari data demo masih **Draft**. Sebagai `ppc` ajukan (Master Data → BOMs / Routings → Submit), lalu sebagai `csa` setujui keduanya.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `ppc` → PPIC → **Work Orders** → **New work order**. | Pilihan Item hanya barang jadi; Reason berisi Urgent customer order, No MPS yet, Sample or trial, Replacement of NG output, Other. | |
+| 2 | Plant P1, BRK-A100, quantity `1200`, due date minggu depan, reason **Other**, note kosong → **Create work order**. | Ditolak: "Explain the work order when the reason is Other." | |
+| 3 | Reason **Urgent customer order**, **For delivery**: pengiriman SO dari §1 → **Create work order**. | Halaman `WO-P1-<tahun>-0001`, status **Draft**, "For delivery" menyebut SO, customer dan tanggalnya; quantity WO boleh beda dari quantity pengiriman. | |
+| 4 | **Edit** → quantity `1500` → simpan; lalu **Ask for release** → konfirmasi. | Status **Waiting for release**; "You asked for this release"; tidak ada tombol Release untuk Anda. | |
+| 5 | Login `csa` → buka WO itu → **Return** dengan alasan "Pakai MPS minggu depan". | Kembali **Draft** dengan kotak "Returned for changes" berisi alasannya. | |
+| 6 | Sebagai `ppc` ajukan lagi; login `csa` → **Release**. | Status **Released**; "Copied at release: BOM v1 · routing … v1"; tabel Materials berisi coil dan nut dengan quantity yang dibutuhkan (1500 × per piece). | |
+| 7 | Buat WO untuk item FG lain tanpa BOM/routing approved, ajukan, lalu `csa` → **Release**. | Ditolak di dialog: "The item has no approved BOM version and no approved primary routing version at this plant in force today …". | |
+| 8 | Sebagai `ppc` → WO yang Released → **Cancel work order** dengan alasan. | Status **Cancelled** dengan alasan; nomor tidak dipakai ulang. | |

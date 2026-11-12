@@ -203,7 +203,7 @@ final class WorkOrderController
             [$wo->plant_id, $wo->item_id, $today, $today],
         );
         if ($bom === null || $routing === null) {
-            $missing = implode(' and ', array_filter([$bom === null ? 'an approved BOM version' : null, $routing === null ? 'an approved primary routing version at this plant' : null]));
+            $missing = implode(' and no ', array_filter([$bom === null ? 'approved BOM version' : null, $routing === null ? 'approved primary routing version at this plant' : null]));
             throw new DomainProblem(409, 'WO_MASTER_MISSING', 'Engineering master missing', "The item has no {$missing} in force today ({$today}). Approve it in Master Data first.");
         }
         $weight = $db->selectOne(

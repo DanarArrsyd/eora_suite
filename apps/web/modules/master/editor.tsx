@@ -27,6 +27,21 @@ const PICKERS: Record<
     activeOnly: true,
     filters: { itemType: ['FINISHED', 'SEMI_FINISHED'] },
   },
+  // what a work order makes in M4: finished items (one stock stage, D-107)
+  finishedItems: {
+    resource: 'core.items',
+    label: (r) => `${String(r.code)} · ${String(r.name)} (${String(r.baseUomCode)})`,
+    activeOnly: true,
+    filters: { itemType: ['FINISHED'] },
+  },
+  // firm deliveries a work order may serve (D-109): order, customer, item, date and quantity
+  firmDeliveries: {
+    resource: 'demand.schedule_lines',
+    label: (r) =>
+      `${String(r.code)} · ${String(r.customerCode)} · ${String(r.itemCode)} · ${String(r.requirementDate)} · ${String(r.qty)} ${String(r.uomCode)}`,
+    filters: { status: ['FIRM', 'PARTIALLY_FULFILLED'] },
+    sortBy: 'requirementDate',
+  },
   // what a conversion profile converts from: raw coil or sheets, or Semi-Finished Material (D-080)
   materials: {
     resource: 'core.items',

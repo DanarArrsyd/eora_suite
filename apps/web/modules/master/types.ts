@@ -16,6 +16,8 @@ export type OptionSource =
   | 'uoms'
   | 'items'
   | 'madeItems'
+  | 'finishedItems'
+  | 'firmDeliveries'
   | 'materials'
   | 'customers'
   | 'dies'

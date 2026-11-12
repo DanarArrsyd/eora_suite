@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { SalesOrdersScreen } from '@/modules/demand/sales-orders';
+import { WorkOrdersScreen } from './work-orders';
 import { ControlTowerOverview } from './screens/overview';
 import { DailyDeliveryScreen, DeliveryRiskScreen, DemandFulfillmentScreen } from './screens/demand';
 import { ConversionScreen, MaterialAtProductionScreen, RmAvailabilityScreen } from './screens/material';
@@ -30,6 +31,7 @@ export const PPIC_SCREENS: Record<string, React.ComponentType> = {
   'fg-availability': FgAvailabilityScreen,
   'material-variance': MaterialVarianceScreen,
   'sales-orders': () => <SalesOrdersScreen base="/ppic/sales-orders" />,
+  'work-orders': () => <WorkOrdersScreen base="/ppic/work-orders" />,
 };
 
 export function PpicScreen({ item }: { item: string }) {
