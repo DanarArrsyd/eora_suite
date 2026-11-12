@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Platform\Calendar\BusinessCalendar;
 use App\Platform\Database\EoraPostgresConnection;
 use Illuminate\Database\QueryException;
 use Tests\Support\AccessFixtures;
@@ -238,4 +239,18 @@ it('keeps work orders inside the plant scope', function () {
     spa($this)->getJson("/api/v1/planning/work-orders/{$wo['id']}")->assertNotFound();
     spa($this)->getJson('/api/v1/query/planning.work_orders')->assertOk()->assertJsonCount(0, 'data');
     woCreate($this, $s)->assertForbidden();
+})->group('integration', 'planning');
+
+it('reads the plant calendar date in the database exactly as the business calendar does (time zone of the calendar in force)', function () {
+    woFixture($this, $this->t);
+    $plant = $this->t['plants'][1];
+    // the plant's own time zone differs from the tenant calendar in force (Asia/Jakarta): the calendar's zone decides
+    foreach (['Pacific/Kiritimati', 'Pacific/Pago_Pago', 'Asia/Jakarta'] as $zone) {
+        AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->update('update plants set timezone = ? where id = ?', [$zone, $plant]));
+        $both = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => [
+            (string) $db->selectOne('select eora_plant_calendar_date(?)::text as d', [$plant])->d,
+            app(BusinessCalendar::class)->resolve($db, $plant, new DateTimeImmutable)->calendarDate,
+        ]);
+        expect($both[0])->toBe($both[1]);
+    }
 })->group('integration', 'planning');

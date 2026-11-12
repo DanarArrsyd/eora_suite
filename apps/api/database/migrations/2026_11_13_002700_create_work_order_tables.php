@@ -116,6 +116,19 @@ return new class extends Migration
             REVOKE ALL ON FUNCTION eora_actor_may(text, uuid) FROM PUBLIC;
             GRANT EXECUTE ON FUNCTION eora_actor_may(text, uuid) TO eora_app;
 
+            -- the plant's calendar date now, as BusinessCalendar::resolve() reads it (ADR-0012): the calendar version in force on
+            -- the plant's local date (plant override before the tenant default), then that calendar's time zone
+            CREATE OR REPLACE FUNCTION eora_plant_calendar_date(plant uuid) RETURNS date LANGUAGE sql STABLE SET search_path = '' AS $fn$
+              SELECT (pg_catalog.now() AT TIME ZONE COALESCE(
+                       (SELECT b.timezone FROM public.business_calendars b
+                         WHERE (b.plant_id = p.id OR b.plant_id IS NULL) AND b.effective_from <= (pg_catalog.now() AT TIME ZONE p.timezone)::date
+                         ORDER BY (b.plant_id IS NULL), b.effective_from DESC LIMIT 1),
+                       p.timezone))::date
+                FROM public.plants p WHERE p.id = plant
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_plant_calendar_date(uuid) FROM PUBLIC;
+            GRANT EXECUTE ON FUNCTION eora_plant_calendar_date(uuid) TO eora_app;
+
             -- DRAFT ⇄ SUBMITTED → RELEASED by a second person; DRAFT/SUBMITTED/RELEASED → CANCELLED; nothing of what the WO
             -- asks for changes once it left the draft, and the release snapshot is written once
             CREATE OR REPLACE FUNCTION eora_guard_work_order() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
@@ -175,7 +188,7 @@ return new class extends Migration
                     RAISE EXCEPTION 'a work order is released by an approver of its plant' USING ERRCODE = '42501';
                   END IF;
                   -- BR-PLN-01: the snapshot is the approved BOM and primary routing (and validated net weight) in force today at the plant
-                  SELECT (pg_catalog.now() AT TIME ZONE p.timezone)::date INTO day FROM public.plants p WHERE p.id = NEW.plant_id;
+                  day := public.eora_plant_calendar_date(NEW.plant_id);
                   IF NOT EXISTS (SELECT 1 FROM public.bom_versions b WHERE b.id = NEW.bom_version_id AND b.item_id = NEW.item_id
                                    AND b.status IN ('APPROVED', 'SUPERSEDED') AND b.effective_from <= day AND (b.effective_to IS NULL OR b.effective_to >= day))
                      OR NOT EXISTS (SELECT 1 FROM public.routing_versions v JOIN public.routings r ON r.tenant_id = v.tenant_id AND r.id = v.routing_id
@@ -214,10 +227,10 @@ return new class extends Migration
                    AND NEW.required_qty = pg_catalog.round(w.qty * l.gross_qty_per, 6)
                    -- a conversion profile version, when given, is the line's profile's validated (or retired) one in force today
                    AND (NEW.conversion_profile_version_id IS NULL OR EXISTS (
-                         SELECT 1 FROM public.conversion_profile_versions v JOIN public.plants p ON p.id = w.plant_id
+                         SELECT 1 FROM public.conversion_profile_versions v
                           WHERE v.id = NEW.conversion_profile_version_id AND v.profile_id = l.conversion_profile_id
-                            AND v.status IN ('VALIDATED', 'RETIRED') AND v.effective_from <= (pg_catalog.now() AT TIME ZONE p.timezone)::date
-                            AND (v.effective_to IS NULL OR v.effective_to >= (pg_catalog.now() AT TIME ZONE p.timezone)::date)))
+                            AND v.status IN ('VALIDATED', 'RETIRED') AND v.effective_from <= public.eora_plant_calendar_date(w.plant_id)
+                            AND (v.effective_to IS NULL OR v.effective_to >= public.eora_plant_calendar_date(w.plant_id))))
               ) THEN
                 RAISE EXCEPTION 'material lines are written by the release, from its BOM version' USING ERRCODE = '23514';
               END IF;
@@ -281,6 +294,7 @@ return new class extends Migration
             DROP FUNCTION IF EXISTS eora_guard_work_order_material();
             DROP FUNCTION IF EXISTS eora_actor_may(text, uuid);
             DROP FUNCTION IF EXISTS eora_check_work_order_materials();
+            DROP FUNCTION IF EXISTS eora_plant_calendar_date(uuid);
             SQL);
     }
 };
