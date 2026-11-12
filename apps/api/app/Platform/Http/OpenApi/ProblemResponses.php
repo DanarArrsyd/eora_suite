@@ -177,6 +177,16 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.inventory.transfers.store' => self::POSTING,
         'v1.inventory.lot-splits.store' => self::POSTING,
         // D-060, D-100: an adjustment is requested, then approved (posted) or rejected by a second person
+        // Sales Orders (doc 33 §1.1, D-107): drafts and confirmed orders edited with If-Match
+        'v1.demand.sales-orders.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.demand.sales-orders.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
+        'v1.demand.sales-orders.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.demand.sales-orders.lines' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.demand.sales-orders.confirm' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION', 'REQUIREMENT_DATE_PAST', 'CUSTOMER_PART_INACTIVE']],
+        'v1.demand.sales-orders.cancel' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.demand.sales-orders.lines.store' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.demand.sales-orders.schedule-lines.store' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.demand.sales-orders.schedule-lines.cancel' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION', 'SCHEDULE_LINE_ALLOCATED']],
         'v1.inventory.adjustments.store' => self::TENANT_WRITE + self::MASTER_403 + [
             400 => ['IDEMPOTENCY_KEY_REQUIRED'], 409 => ['IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_IN_PROGRESS', 'NO_ADJUSTMENT_LOCATION'],
             422 => ['VALIDATION_FAILED', 'INVALID_LEGS'],

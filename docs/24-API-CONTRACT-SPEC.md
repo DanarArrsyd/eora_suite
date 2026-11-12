@@ -80,7 +80,7 @@ Offset (`total`) for master data and small lists; **cursor/keyset** for ledgers,
 | 401 | `UNAUTHENTICATED`, `SESSION_EXPIRED` |
 | 403 | `FORBIDDEN`, `SCOPE_FORBIDDEN`, `SOD_VIOLATION`, `STEP_UP_REQUIRED` |
 | 404 | `NOT_FOUND` (also for other tenants' ids — no existence disclosure) |
-| 409 | `INSUFFICIENT_STOCK`, `INSUFFICIENT_AVAILABLE`, `PERIOD_CLOSED`, `IDEMPOTENCY_KEY_REUSED`, `INVALID_STATE_TRANSITION`, `REVERSAL_BLOCKED_BY_DOWNSTREAM`, `BLANKET_EXCEEDED`, `REVISION_MAPPING_AMBIGUOUS`; M3 postings also `IDEMPOTENCY_IN_PROGRESS` (same key still being written), `STOCK_BUSY` (lock timeout on a balance, retry), `NO_SUPPLIER_LOCATION` |
+| 409 | `INSUFFICIENT_STOCK`, `INSUFFICIENT_AVAILABLE`, `PERIOD_CLOSED`, `IDEMPOTENCY_KEY_REUSED`, `INVALID_STATE_TRANSITION`, `REVERSAL_BLOCKED_BY_DOWNSTREAM`, `BLANKET_EXCEEDED`, `REVISION_MAPPING_AMBIGUOUS`; M3 postings also `IDEMPOTENCY_IN_PROGRESS` (same key still being written), `STOCK_BUSY` (lock timeout on a balance, retry), `NO_SUPPLIER_LOCATION`; M4 Sales Orders also `REQUIREMENT_DATE_PAST` (confirm with a delivery date before the plant's today), `CUSTOMER_PART_INACTIVE` (a line's customer part mapping ended), `SCHEDULE_LINE_ALLOCATED` (cancel of a schedule line with FG allocated) |
 | 412 | `VERSION_CONFLICT` |
 | 428 | `PRECONDITION_REQUIRED` (edit without `If-Match`, M2) |
 | 422 | `VALIDATION_FAILED`, `FILTER_NOT_ALLOWED`, `UOM_MISMATCH`, `MEASUREMENT_REQUIRED`; M3 postings also `INVALID_LEGS`, `INVALID_EFFECTIVE_DATE`, `POSTING_REFUSED` (a ledger check refused it) |

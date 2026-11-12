@@ -4,6 +4,7 @@ use App\Modules\Core\Http\OrgController;
 use App\Modules\Core\Http\PartController;
 use App\Modules\Core\Http\PartnerController;
 use App\Modules\Core\Http\ResourceController;
+use App\Modules\Demand\Http\SalesOrderController;
 use App\Modules\Inventory\Http\AdjustmentController;
 use App\Modules\Inventory\Http\LotSplitController;
 use App\Modules\Inventory\Http\PeriodController;
@@ -151,6 +152,19 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('conversion-profile-versions/{version}/actions/reopen', [ConversionProfileController::class, 'reopen'])->name('conversion-profile-versions.reopen');
         Route::post('conversion-profile-versions/{version}/actions/validate', [ConversionProfileController::class, 'validate'])->name('conversion-profile-versions.validate');
         Route::post('conversion-profile-versions/{version}/actions/retire', [ConversionProfileController::class, 'retire'])->name('conversion-profile-versions.retire');
+    });
+
+    // Sales Orders (doc 33 §1.1, D-107): drafts edited by PPC, confirmed into FIRM schedule lines; changes after that add or cancel
+    Route::prefix('demand')->name('demand.')->middleware('tenant')->group(function (): void {
+        Route::post('sales-orders', [SalesOrderController::class, 'store'])->name('sales-orders.store');
+        Route::get('sales-orders/{order}', [SalesOrderController::class, 'show'])->name('sales-orders.show');
+        Route::patch('sales-orders/{order}', [SalesOrderController::class, 'updateNote'])->name('sales-orders.update');
+        Route::put('sales-orders/{order}/lines', [SalesOrderController::class, 'putLines'])->name('sales-orders.lines');
+        Route::post('sales-orders/{order}/actions/confirm', [SalesOrderController::class, 'confirm'])->name('sales-orders.confirm');
+        Route::post('sales-orders/{order}/actions/cancel', [SalesOrderController::class, 'cancel'])->name('sales-orders.cancel');
+        Route::post('sales-orders/{order}/lines', [SalesOrderController::class, 'addLine'])->name('sales-orders.lines.store');
+        Route::post('sales-orders/{order}/schedule-lines', [SalesOrderController::class, 'addSchedule'])->name('sales-orders.schedule-lines.store');
+        Route::post('sales-orders/{order}/schedule-lines/{schedule}/actions/cancel', [SalesOrderController::class, 'cancelSchedule'])->name('sales-orders.schedule-lines.cancel');
     });
 
     // Inventory postings (doc 32 §1.3, ADR-0014): one tenant transaction, retried on deadlock (the posting is idempotent)
