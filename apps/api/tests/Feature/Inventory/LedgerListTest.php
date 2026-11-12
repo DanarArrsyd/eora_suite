@@ -58,6 +58,13 @@ it('reads a ledger page and an item filter through the ledger indexes under RLS 
             new PostingLeg('RCPT_SUPPLIER', $f['rm1'], $f['oil'], null, 'UNRESTRICTED', '1'),
         ])));
     }
+    // the bulk postings' outbox events are this test's own: other tests claim the due events in batches
+    $owner = DB::connection('pgsql_owner');
+    $owner->transaction(function () use ($owner) {
+        $owner->statement('alter table outbox_events no force row level security');
+        $owner->delete('delete from outbox_events where tenant_id = ?', [$this->t['tenant']]);
+        $owner->statement('alter table outbox_events force row level security');
+    });
     orgUser($this, $this->t, 'MAT');
     rcReceive($this, $f)->assertCreated();
     foreach (['inventory_movements', 'inventory_documents', 'items', 'locations', 'plants'] as $table) {
