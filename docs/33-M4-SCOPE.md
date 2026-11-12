@@ -1,0 +1,61 @@
+# 33 — M4 Scope: Alur tipis end-to-end (B4/B6/B7 tipis, WO manual) — lembar persetujuan
+
+**Status:** **DRAF — menunggu persetujuan owner.** Belum ada kode M4 sebelum lembar ini disetujui (D-054).
+**Basis:** doc 27 M-01 dan doc 11 (M4 = B4, B6, B7 tipis + WO manual G-MPS-6: *PO/SO → WO → issue → produksi → QC → FG → kirim*), doc 04 matrix posting baris 2, 3, 5, 6, 8–11 dan §Movement codes (D-084), ADR-0002/0003/0014, doc 14, doc 15 (BR-DEM, BR-ISS, BR-CON, BR-OUT, BR-QC, BR-FG, BR-PLN-03), doc 17, doc 18 §2, D-034 (SO line = satu identitas demand), D-043 (Firm Available), D-044 (kalender, production date), D-049 (penomoran), D-059 (Option M default, S per item), D-060 (orang kedua untuk aksi sensitif), D-063 (WO close), D-064 (quarantine opsional), D-086 (cek ketersediaan M4). M3 selesai (D-106).
+**Tujuan M4:** Anda bisa menjalankan **satu pesanan customer dari awal sampai terkirim** di data asli: SO dengan jadwal kirim → WO → bahan dikeluarkan ke produksi → hasil produksi diposting (konsumsi terukur, good/NG/scrap) → QC memutuskan → FG diterima gudang → dialokasikan, di-pick dan dikirim — lalu **melacak balik** dari pengiriman ke lot FG, WO dan lot bahan baku. Perencanaan (MPS/MRP), rekonsiliasi dan indikator variance tetap M5.
+
+**Jawaban owner 2026-11-12 (dasar draf ini):** Demand = SO manual saja · satu tahap dulu (RM → FG, Option S per item) · konsumsi wajib terukur · kirim = alokasi + pick + shipment (tanpa POD) · WO dari SO atau bebas · QCI memutuskan, QCS hanya di luar policy · WO close masuk M4.
+
+## 1. Dalam scope
+**Backend (`apps/api`), PR berurutan (setiap langkah: migration + rollback, tes RLS sebagai role non-superuser, OpenAPI, docs, layar + e2e mock)**
+1. **Sales Order (B4 tipis):** SO header (customer, plant, nomor customer PO sebagai referensi) dan SO line (item lewat customer part mapping, qty, UOM). **Schedule line** Firm diisi manual (tanggal butuh, qty, UOM = UOM SO line) — doc 14 #29. Satu customer PO line hanya boleh menunjuk satu SO line (D-034, doc 14 #28). Delivered / outstanding / status line dihitung dari shipment yang posted, bukan diketik (doc 14 #32, #33, #35). Layar: Demand → **Sales Orders** (daftar + detail dengan schedule line).
+2. **Work Order manual:** PPC membuat WO (item FG, qty, tanggal, plant; opsional dikaitkan ke schedule line SO). **Release** WO menyalin (snapshot) versi BOM dan routing yang *approved* dan berlaku; WO tanpa BOM/routing approved tidak bisa di-release. Status Draft → Released → Closed (+ Cancelled sebelum ada posting). Kebutuhan bahan per WO = BOM snapshot × qty (tampil, belum netting). Layar: PPIC → **Work Orders** (daftar + detail).
+3. **Issue bahan ke produksi (baris 3) dan return (baris 6):** MAT mengeluarkan lot UNRESTRICTED dari gudang RM ke lokasi **Material at Production** milik work center WO (`MAT_ISSUE`), tanpa konsumsi (BR-ISS-01). Opsional: alokasi lot ke WO dulu (baris 2, `stock_allocations` dari M3). Return terukur ke gudang RM (`MAT_RETURN`). Layar: Materials → **Material Issue**, **Material Return**; Inventory → **Material at Production** (saldo per WC/WO, data asli).
+4. **Posting produksi (baris 5 + 8):** PRL/OPR membuka **run** untuk WO di work center; posting produksi satu dokumen: **konsumsi terukur** per lot input (sisa ditimbang/dihitung → konsumsi = ada − sisa; ADR-0003), output **Good** (→ `QC_AREA`/`PENDING_QC` bila item wajib inspeksi), **NG Reworkable** (→ `NG_AREA`/`REWORK`), **NG Rejected** (→ `NG_AREA`/`REJECTED`), **scrap** kg (→ `SCRAP_YARD`); lot output dibuat; genealogy lot input → lot output (BR-OUT-01); konsumsi > yang ada → 409 (BR-CON-03, doc 14 #26). Guard over-report (BR-OUT-07). Layar: Production → **Production Posting** (+ daftar run per WO).
+5. **QC disposition (baris 9):** QCI memeriksa output `PENDING_QC` dan memutuskan sebagian-sebagian: release (`QC_RELEASED`), hold, rework, reject (doc 14 #6, #20). Inspektur ≠ pelapor output (SoD-01). **QCS (orang kedua) hanya untuk keputusan di luar policy:** REJECTED → released, dan release dari HOLD. Layar: Quality → **Pending Quality / Inspection**.
+6. **FG receipt (baris 10):** FGW menerima qty `QC_RELEASED` ke bin FG (`UNRESTRICTED`); tanpa receipt, stok FG tidak berubah (doc 14 #7). Firm Available = FG UNRESTRICTED − alokasi (D-043). Layar: Warehouse → **FG Receipt**.
+7. **Pengiriman (baris 2 + 11):** alokasi FG ke schedule line (on-hand tetap, available turun — doc 14 #25, #33); **pick** FG → `STAGING`; **shipment** `STAGING` → `V_CUSTOMER`, alokasi terpakai, delivered schedule line naik (doc 14 #32). Over-shipment melebihi outstanding diblok (BR-FG-03; toleransi 0 sampai ada konfigurasi tenant). Shipment salah dikoreksi lewat reversal yang di-approve (doc 14 #35, #42). Layar: Delivery → **Allocation & Pick**, **Shipments**.
+8. **WO close (D-063, BR-PLN-03):** WO close diblok selama masih ada Material at Production untuk WO itu — harus di-return, dipindah ke WO lain, atau ditutup lewat **exception** (alasan, approver kedua, audit). Layar: tombol Close + exception di detail WO.
+9. **Trace dan penutup:** query traceability shipment → lot FG → WO/run → lot bahan + aktor/waktu (doc 14 #18); seeder demo skenario M4; stack e2e satu pesanan penuh; skrip UAT `docs/uat/M4-UAT.md`; checklist exit.
+
+**Frontend:** layar di atas memakai design system yang disetujui (DataTable, filter, drawer form, konfirmasi posting, ApprovalPanel); label Mock data hilang di layar yang sudah memakai data asli; layar lain tetap Mock data. Tidak ada select/date native (preferensi owner).
+
+**Data demo:** tambah lokasi **Material at Production** per work center (mis. `MAP-PRS200`, `MAP-WLD`) dan schedule SO contoh (OEM-A, BRK-A100) lewat endpoint asli, seperti `eora:demo:stock` di M3.
+
+## 2. Di luar scope M4
+- Revisi customer PO (D-038), blanket/kanban (D-039), forecast + consumption (D-040), import jadwal, demand exception dan reallocation → **M5** bersama MPS/MRP (B5).
+- WO tahap Semi-Finished berantai (Option M, D-059) → **M5**; M4 memakai Option S per item untuk routing in-line demo.
+- Konsumsi by-difference, case `UNMEASURED_CONSUMPTION`, indikator GYV/PvS/UMV, variance dan rekonsiliasi (doc 14 #2–#5, #21, #23, #24; B8) → **M5**.
+- POD / surat jalan PDF (O-010 sebelum fitur PDF), lokasi quarantine Quality (D-064, opsional) → **M7** (atau saat tenant meminta).
+- Custody dua langkah (issue → transit → diterima PRL), transfer antar plant (M3-D6), stock count (R2), Control Tower data asli (B9, M5), offline PWA posting.
+
+## 3. Keputusan — usulan untuk disetujui
+| ID | Keputusan | Usulan | Kenapa |
+|---|---|---|---|
+| M4-D1 | Permission | Pakai doc 18 §2 apa adanya (`demand.sales_order`, `planning.wo`, `materials.issue`, `materials.return`, `production.run`, `production.posting`, `quality.inspection`, `quality.disposition_release`, `warehouse.fg_receipt`, `delivery.shipment`); resource baru hanya bila doc 18 belum punya: `planning.wo_close_exception` (PPC = R, CSA/INV = A, AUD = V). | D-060a: doc 18 jadi template default. |
+| M4-D2 | Issue satu langkah | `MAT_ISSUE` langsung RM → Material at Production (tanpa `CUSTODY_TRANSIT` / penerimaan PRL). | Thin flow; custody dua langkah menambah dokumen tanpa mengubah saldo akhir. |
+| M4-D3 | Lokasi Material at Production | Satu lokasi `MAT_AT_PROD` per work center (master Locations); saldo per WO dibedakan lewat referensi WO di leg, bukan lokasi per WO. | Satu rak fisik per WC; WO hanya referensi. |
+| M4-D4 | Run | Satu run = satu WO di satu work center pada satu production date/shift (D-044); posting bisa beberapa kali per run; run ditutup oleh PRL. | Laporan produksi harian/shift tanpa membuat dokumen per operasi. |
+| M4-D5 | Titik posting output | Output diposting **sekali per WO di operasi terakhir sebelum inspeksi** (routing in-line, Option S); operasi lain hanya informasi. | Satu tahap stok di M4 (jawaban owner). |
+| M4-D6 | Item tanpa inspeksi | Item `Inspection required = NO`: output Good langsung `UNRESTRICTED` di lokasi QC area, lalu FG receipt seperti biasa. | Matrix baris 8; satu jalur FG receipt. |
+| M4-D7 | Nomor dokumen dan lot | Nomor resmi per tenant/plant/jenis/tahun (D-049): `SO-`, `WO-`, `ISS-`, `RTN-`, `PRD-`, `QCD-`, `FGR-`, `PCK-`, `SHP-`; lot output `<item>-<YYMMDD>-NN` atau pola lot internal M3 (`L<YYMM>-NNNN`) — **pilih saat persetujuan**. | Konsisten dengan M3; nomor lot FG muncul di label dan trace. |
+| M4-D8 | Pegging WO ↔ SO | Opsional, satu WO ke paling banyak satu schedule line; tidak mengubah demand (D-034). | Jawaban owner: dari SO atau bebas. |
+| M4-D9 | Over-shipment | Toleransi 0 % sampai konfigurasi tenant ada (BR-FG-03). | Tidak mengarang toleransi. |
+| M4-D10 | Navigasi | Layar §1 dari R2/Mock → R1 data asli; Material at Production tetap tanpa kata WIP (CLAUDE.md). | Sama seperti M3-D10. |
+
+## 4. Acceptance (exit M4)
+1. Posting-matrix baris 2, 3, 5, 6, 8, 9, 10, 11 hijau dengan dokumennya (exit B3 yang ditunda M3-D2): kode movement benar, konservasi (BR-INV-03), tidak pernah negatif (BR-INV-04), satu leg konsumsi per lot input per posting (BR-OUT-01), genealogy input → output.
+2. Doc 14 hijau: #1 (issue ≠ konsumsi), #6 (QC sebagian), #7 (FG butuh receipt), #10 (issue paralel), #18 (trace end-to-end), #19 (single deduction, tanpa indikator), #20 (kategori NG), #25 (alokasi), #26 (konsumsi negatif ditolak), #28 (satu identitas), #29 (schedule line lengkap), #32 (pengiriman sebagian), #33 (alokasi ≠ fulfilment), #35 (reversal shipment).
+3. SoD: pelapor output ≠ inspektur (SoD-01); exception WO close dan reversal dengan orang kedua (D-060), juga lewat SQL.
+4. WO close diblok sesuai D-063; snapshot BOM/routing tidak berubah walau master berubah setelah release.
+5. Konkurensi + idempotency semua endpoint posting baru (replay sama, payload beda → 409); periode dan kalender seperti M3.
+6. Isolasi tenant + scope plant semua tabel baru (RLS, composite FK); OpenAPI tanpa drift; migrate round-trip; saldo = ledger (BR-INV-11) setelah skenario penuh.
+7. Gate frontend doc 22 §4 + stack e2e M4 (SO → WO → issue → produksi → QC → FG → pick → kirim → trace).
+8. Dokumen ter-update (docs 04, 13, 15, 17, 18, 24) dan owner menjalankan `docs/uat/M4-UAT.md`.
+
+## 5. Cara kerja
+- Branch per langkah (`feat/m4-…`), PR berurutan mengikuti §1; CI hijau + review Codex bersih sebelum merge; tanpa auto-merge.
+- Setiap langkah: tanya dulu bila ada aturan bisnis yang belum diputuskan; tidak mengisi keputusan bisnis sendiri.
+- Berhenti dan lapor bila ada temuan keamanan atau keputusan baru.
+
+**Pilihan owner:** ☐ Setuju scope M4 · ☐ Keputusan M4-D1..D10 sesuai usulan (M4-D7: pola lot ☐ `<item>-<YYMMDD>-NN` ☐ `L<YYMM>-NNNN`) · ☐ Ubah: …
