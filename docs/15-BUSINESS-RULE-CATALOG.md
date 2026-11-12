@@ -94,7 +94,7 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 | ID | Rule | Owner | Enforce | Source | Test |
 |---|---|---|---|---|---|
 | BR-OUT-01 | Input material deducted once (consume leg); outputs are produce legs; no category adds back or re-deducts input. | Production/Inventory | SVC | D-011 | #19 |
-| BR-OUT-02 | Good Output → `QC_AREA/PENDING_QC` when inspection required, else `UNRESTRICTED` at next process. | Production | SVC | D-014 | #6 |
+| BR-OUT-02 | Good Output → `QC_AREA/PENDING_QC` when inspection required; else a finished item → `QC_AREA/QC_RELEASED` (no disposition, then FG Receipt, BR-FG-01) and a Semi-Finished item → `UNRESTRICTED` at the next process. | Production | SVC | D-014, D-107 | #6 |
 | BR-OUT-03 | NG Reworkable → `NG_AREA/REWORK`; NG Rejected → `NG_AREA/REJECTED`; both in pcs of the produced item. | Production | SVC | D-011 | #20 |
 | BR-OUT-04 | Process Scrap posted in measured kg to scrap item per material grade with reason code. | Production | SVC | D-011 | #21 |
 | BR-OUT-05 | Reusable Remnant = lot split to child lot with measured qty and dimensions; conserves quantity. | Production/Materials | SVC | DD-04 | #22 |
