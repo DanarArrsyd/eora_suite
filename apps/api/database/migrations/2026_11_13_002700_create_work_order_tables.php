@@ -159,6 +159,25 @@ return new class extends Migration
             REVOKE ALL ON FUNCTION eora_guard_work_order() FROM PUBLIC;
             CREATE TRIGGER guard_lifecycle BEFORE INSERT OR UPDATE ON work_orders FOR EACH ROW EXECUTE FUNCTION eora_guard_work_order();
 
+            -- the material lines are written once, by the release itself (same transaction: released_at = now()), as the
+            -- snapshotted BOM version's lines × the WO quantity; nothing is added to a released snapshot afterwards
+            CREATE OR REPLACE FUNCTION eora_guard_work_order_material() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM public.work_orders w JOIN public.bom_lines l ON l.tenant_id = w.tenant_id AND l.bom_version_id = w.bom_version_id
+                 WHERE w.tenant_id = NEW.tenant_id AND w.id = NEW.work_order_id AND w.status = 'RELEASED' AND w.released_at = pg_catalog.now()
+                   AND l.id = NEW.bom_line_id AND l.line_no = NEW.line_no AND l.component_item_id = NEW.component_item_id AND l.uom_id = NEW.uom_id
+                   AND l.gross_qty_per = NEW.gross_qty_per AND l.scrap_allowance = NEW.scrap_allowance
+                   AND NEW.required_qty = pg_catalog.round(w.qty * l.gross_qty_per, 6)
+              ) THEN
+                RAISE EXCEPTION 'material lines are written by the release, from its BOM version' USING ERRCODE = '23514';
+              END IF;
+              RETURN NEW;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_guard_work_order_material() FROM PUBLIC;
+            CREATE TRIGGER guard_snapshot BEFORE INSERT ON work_order_materials FOR EACH ROW EXECUTE FUNCTION eora_guard_work_order_material();
+
             DO $do$
             DECLARE t text;
             BEGIN
@@ -194,6 +213,7 @@ return new class extends Migration
             DROP TABLE work_order_materials;
             DROP TABLE work_orders;
             DROP FUNCTION IF EXISTS eora_guard_work_order();
+            DROP FUNCTION IF EXISTS eora_guard_work_order_material();
             SQL);
     }
 };

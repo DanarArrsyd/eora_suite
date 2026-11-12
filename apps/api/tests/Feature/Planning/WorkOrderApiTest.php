@@ -173,6 +173,17 @@ it('refuses release without an approved BOM and routing, and cancels drafts and 
     woAct($this, $wo['id'], 'cancel', $released['version'], ['reason' => 'Customer cancelled the urgent order'])->assertOk()
         ->assertJsonPath('data.status', 'CANCELLED')->assertJsonPath('data.cancelReason', 'Customer cancelled the urgent order');
     woAct($this, $wo['id'], 'cancel', $released['version'] + 1, ['reason' => 'Again'])->assertStatus(409);
+    // the material snapshot gets no line after its release, not even through SQL
+    try {
+        AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->insert(
+            'insert into work_order_materials (tenant_id, work_order_id, line_no, bom_line_id, component_item_id, uom_id, gross_qty_per, scrap_allowance, required_qty)
+             select tenant_id, work_order_id, 99, bom_line_id, component_item_id, uom_id, gross_qty_per, scrap_allowance, 999 from work_order_materials where work_order_id = ? limit 1',
+            [$wo['id']],
+        ));
+        $this->fail('a material line was added to a released snapshot');
+    } catch (QueryException $e) {
+        expect($e->getCode())->toBe('23514');
+    }
 })->group('integration', 'planning');
 
 it('keeps work orders inside the plant scope', function () {

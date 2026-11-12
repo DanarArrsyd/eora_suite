@@ -2471,7 +2471,7 @@ export interface paths {
         put?: never;
         /**
          * SUBMITTED → RELEASED by a second person (If-Match): snapshots the approved BOM and primary routing versions in
-         *     force today at the plant (409 WO_MASTER_MISSING without them), the validated net weight and conversion profile
+         *     force today at the plant (409 WO_MASTER_MISSING without them), the validated (or retired but still in force that day, D-080) net weight and conversion profile
          *     versions when there are, and writes the material lines (quantity × BOM gross quantity per piece)
          */
         post: operations["v1.planning.work-orders.release"];
