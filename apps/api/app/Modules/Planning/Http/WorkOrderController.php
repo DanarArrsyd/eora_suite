@@ -180,7 +180,7 @@ final class WorkOrderController
 
     /**
      * SUBMITTED → RELEASED by a second person (If-Match): snapshots the approved BOM and primary routing versions in
-     * force today at the plant (409 WO_MASTER_MISSING without them), the validated net weight and conversion profile
+     * force today at the plant (409 WO_MASTER_MISSING without them), the validated (or retired but still in force that day, D-080) net weight and conversion profile
      * versions when there are, and writes the material lines (quantity × BOM gross quantity per piece).
      */
     public function release(Request $request, string $order): JsonResponse
@@ -207,7 +207,7 @@ final class WorkOrderController
             throw new DomainProblem(409, 'WO_MASTER_MISSING', 'Engineering master missing', "The item has no {$missing} in force today ({$today}). Approve it in Master Data first.");
         }
         $weight = $db->selectOne(
-            "select id from item_weights where item_id = ? and status = 'VALIDATED' and effective_from <= ?::date and (effective_to is null or effective_to >= ?::date)
+            "select id from item_weights where item_id = ? and status in ('VALIDATED', 'RETIRED') and effective_from <= ?::date and (effective_to is null or effective_to >= ?::date)
               order by effective_from desc limit 1",
             [$wo->item_id, $today, $today],
         );
@@ -220,7 +220,7 @@ final class WorkOrderController
         $db->insert(
             "insert into work_order_materials (tenant_id, work_order_id, line_no, bom_line_id, component_item_id, uom_id, gross_qty_per, scrap_allowance, required_qty, conversion_profile_version_id)
              select l.tenant_id, ?, l.line_no, l.id, l.component_item_id, l.uom_id, l.gross_qty_per, l.scrap_allowance, round(?::numeric * l.gross_qty_per, 6),
-                    (select v.id from conversion_profile_versions v where v.profile_id = l.conversion_profile_id and v.status = 'VALIDATED'
+                    (select v.id from conversion_profile_versions v where v.profile_id = l.conversion_profile_id and v.status in ('VALIDATED', 'RETIRED')
                         and v.effective_from <= ?::date and (v.effective_to is null or v.effective_to >= ?::date) order by v.effective_from desc limit 1)
                from bom_lines l where l.bom_version_id = ? order by l.line_no",
             [$wo->id, (string) $wo->qty, $today, $today, $bom->id],

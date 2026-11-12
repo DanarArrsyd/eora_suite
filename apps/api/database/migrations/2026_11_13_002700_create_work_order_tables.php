@@ -123,6 +123,14 @@ return new class extends Migration
                  IS DISTINCT FROM (OLD.bom_version_id, OLD.routing_version_id, OLD.item_weight_id, OLD.released_by, OLD.released_at) THEN
                 RAISE EXCEPTION 'a release snapshot is history' USING ERRCODE = '23514';
               END IF;
+              -- who asked for the release changes only by asking (DRAFT → SUBMITTED) or by the request going back to draft
+              IF NOT ((OLD.status = 'DRAFT' AND NEW.status = 'SUBMITTED') OR (OLD.status = 'SUBMITTED' AND NEW.status = 'DRAFT'))
+                 AND (NEW.submitted_by, NEW.submitted_at) IS DISTINCT FROM (OLD.submitted_by, OLD.submitted_at) THEN
+                RAISE EXCEPTION 'the release request keeps its requester' USING ERRCODE = '23514';
+              END IF;
+              IF OLD.status = 'SUBMITTED' AND NEW.status = 'DRAFT' AND (NEW.submitted_by IS NOT NULL OR NEW.submitted_at IS NOT NULL) THEN
+                RAISE EXCEPTION 'a draft has no release request' USING ERRCODE = '23514';
+              END IF;
               IF OLD.status IN ('CANCELLED', 'CLOSED') THEN
                 RAISE EXCEPTION 'a cancelled or closed work order is history' USING ERRCODE = '23514';
               END IF;

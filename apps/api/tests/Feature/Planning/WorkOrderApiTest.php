@@ -110,6 +110,14 @@ it('refuses the requester as releaser in the database too', function () {
     } catch (QueryException $e) {
         expect($e->getCode())->toBe('42501');
     }
+    // nor by first replacing who asked, then releasing: the requester is fixed while the request waits
+    $other = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select gen_random_uuid() as id')->id);
+    try {
+        asApp($this->t, $requester, fn (EoraPostgresConnection $db) => $db->update('update work_orders set submitted_by = ? where id = ?', [$other, $wo['id']]));
+        $this->fail('the requester was replaced while the request waited');
+    } catch (QueryException $e) {
+        expect($e->getCode())->toBe('23514');
+    }
     expect($sent['status'])->toBe('SUBMITTED');
 })->group('integration', 'planning');
 
