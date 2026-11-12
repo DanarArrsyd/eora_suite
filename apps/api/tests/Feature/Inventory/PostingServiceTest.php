@@ -79,11 +79,20 @@ function pstTransfer(array $f, string $qty, string $key): PostingCommand
 }
 
 /** @return array<string, string> location id => on-hand of the fixture lot */
+/** Unrestricted balance of the test lot per location, keyed and sorted by location id (rows come back in no fixed order). */
 function pstBalances(array $t, array $f): array
 {
-    return pstRun($t, fn (EoraPostgresConnection $db) => array_column(array_map(fn ($r) => (array) $r, $db->select(
+    return pstSorted(pstRun($t, fn (EoraPostgresConnection $db) => array_column(array_map(fn ($r) => (array) $r, $db->select(
         "select location_id::text as l, trim_scale(qty)::text as q from stock_balances where lot_id = ? and stock_status = 'UNRESTRICTED'", [$f['lot']],
-    )), 'q', 'l'));
+    )), 'q', 'l')));
+}
+
+/** The same order for an expected location => quantity map. */
+function pstSorted(array $balances): array
+{
+    ksort($balances, SORT_STRING);
+
+    return $balances;
 }
 
 it('posts a receipt with its official number, dates, legs, balance, period, audit and outbox (ADR-0014, D-049)', function () {
@@ -124,7 +133,7 @@ it('never makes stock negative and writes nothing of a refused posting (BR-INV-0
     } catch (DomainProblem $e) {
         expect($e->errorCode)->toBe('INSUFFICIENT_STOCK')->and($e->status)->toBe(409)->and($e->detail)->toBe('Only 6 is on hand there; the posting needs 7.');
     }
-    expect(pstBalances($this->t, $f))->toBe([$f['rm1'] => '6', $f['rm2'] => '4']);
+    expect(pstBalances($this->t, $f))->toBe(pstSorted([$f['rm1'] => '6', $f['rm2'] => '4']));
     expect(pstRun($this->t, fn (EoraPostgresConnection $db) => $db->selectOne("select count(*) as n from inventory_documents where idempotency_key = 'transfer-too-much'")))->n->toBe(0);
 })->group('integration', 'inventory');
 
@@ -215,7 +224,7 @@ it('serializes postings on one balance: the second waits for the first and never
     });
     // after the first committed, the second sees what is left
     expect(fn () => pstPost($this->t, pstTransfer($f, '5', 'transfer-race-3'), connection: 'pgsql_second'))->toThrow(DomainProblem::class, 'Insufficient stock');
-    expect(pstBalances($this->t, $f))->toBe([$f['rm1'] => '2', $f['rm2'] => '8']);
+    expect(pstBalances($this->t, $f))->toBe(pstSorted([$f['rm1'] => '2', $f['rm2'] => '8']));
 })->group('integration', 'inventory');
 
 it('reruns a transaction after a deadlock when asked to (ADR-0014 §3)', function () {
@@ -272,5 +281,5 @@ it('checks what each leg means: codes per document, sign and place, and status o
         new PostingLeg('INCOMING_RELEASE', $f['rm2'], $f['item'], $f['lot'], 'UNRESTRICTED', '3'),
     ]));
     expect($release->docNo)->toStartWith('REL-P1-');
-    expect(pstBalances($this->t, $f))->toBe([$f['rm1'] => '10', $f['rm2'] => '3']);
+    expect(pstBalances($this->t, $f))->toBe(pstSorted([$f['rm1'] => '10', $f['rm2'] => '3']));
 })->group('integration', 'inventory');
