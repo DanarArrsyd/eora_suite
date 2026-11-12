@@ -205,6 +205,12 @@ it('checks the draft: finished item, due date from today, a note for Other, a fi
     } catch (QueryException $e) {
         expect($e->getCode())->toBe('23514');
     }
+    // a delivery cancelled while its WO waits for release: the request still goes back to draft, where the peg is changed
+    $pegged = woAct($this, $wo['id'], 'submit', $wo['version'])->assertOk()->json('data');
+    spa($this)->postJson("/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$schedule}/actions/cancel", ['reason' => 'Customer cancelled'],
+        ['If-Match' => '"'.$so['version'].'"'])->assertOk();
+    $wo = woAct($this, $wo['id'], 'withdraw', $pegged['version'])->assertOk()->assertJsonPath('data.status', 'DRAFT')->json('data');
+    woAct($this, $wo['id'], 'submit', $wo['version'])->assertStatus(422)->assertJsonValidationErrors(['scheduleLineId']);
     $edited = spa($this)->patchJson("/api/v1/planning/work-orders/{$wo['id']}", ['qty' => '150', 'scheduleLineId' => null], ['If-Match' => '"'.$wo['version'].'"'])
         ->assertOk()->assertJsonPath('data.qty', '150')->assertJsonPath('data.salesOrderCode', null)->json('data');
 

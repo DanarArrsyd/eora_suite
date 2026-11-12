@@ -146,7 +146,7 @@ return new class extends Migration
                 IF NEW.uom_id IS DISTINCT FROM (SELECT i.base_uom_id FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id) THEN
                   RAISE EXCEPTION 'a work order counts in its item''s base unit' USING ERRCODE = '23514';
                 END IF;
-                IF NEW.schedule_line_id IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.status IN ('DRAFT', 'SUBMITTED')) AND NOT EXISTS (
+                IF NEW.schedule_line_id IS NOT NULL AND NOT EXISTS (
                      SELECT 1 FROM public.delivery_schedule_lines sl JOIN public.sales_order_lines l ON l.tenant_id = sl.tenant_id AND l.id = sl.so_line_id
                       WHERE sl.tenant_id = NEW.tenant_id AND sl.id = NEW.schedule_line_id AND sl.plant_id = NEW.plant_id AND l.item_id = NEW.item_id
                         AND sl.status IN ('FIRM', 'PARTIALLY_FULFILLED')) THEN
@@ -160,7 +160,12 @@ return new class extends Migration
               IF NEW.uom_id IS DISTINCT FROM (SELECT i.base_uom_id FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id) THEN
                 RAISE EXCEPTION 'a work order counts in its item''s base unit' USING ERRCODE = '23514';
               END IF;
-              IF NEW.schedule_line_id IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.status IN ('DRAFT', 'SUBMITTED')) AND NOT EXISTS (
+              -- the peg is checked when it is set or the item changes on a draft, and when the release is asked; going back to
+              -- draft after the delivery was cancelled stays possible, so the planner can change it
+              IF NEW.schedule_line_id IS NOT NULL
+                 AND ((OLD.status = 'DRAFT' AND NEW.status = 'DRAFT' AND (NEW.schedule_line_id, NEW.item_id) IS DISTINCT FROM (OLD.schedule_line_id, OLD.item_id))
+                      OR (OLD.status = 'DRAFT' AND NEW.status = 'SUBMITTED'))
+                 AND NOT EXISTS (
                    SELECT 1 FROM public.delivery_schedule_lines sl JOIN public.sales_order_lines l ON l.tenant_id = sl.tenant_id AND l.id = sl.so_line_id
                     WHERE sl.tenant_id = NEW.tenant_id AND sl.id = NEW.schedule_line_id AND sl.plant_id = NEW.plant_id AND l.item_id = NEW.item_id
                       AND sl.status IN ('FIRM', 'PARTIALLY_FULFILLED')) THEN
