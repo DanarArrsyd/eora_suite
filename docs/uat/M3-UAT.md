@@ -4,6 +4,8 @@
 
 Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
 
+**Hasil 2026-11-12 (owner, stack `eora`):** §1–8 OK — "Oke sih untuk 1-8 nya" (D-106, M3 ditutup). Temuan di luar skrip: halaman ikut ter-scroll ke area kosong di bawah menu → diperbaiki PR #63, #64.
+
 ## 0. Persiapan
 1. Kode terbaru dan secret baru (kalau ada):
    ```bash
