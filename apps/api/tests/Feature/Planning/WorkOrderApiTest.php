@@ -152,6 +152,13 @@ it('refuses the requester as releaser in the database too', function () {
             expect($e->getCode())->toBe('23514');
         }
     }
+    // nor a release snapshot written outside the release
+    try {
+        asApp($this->t, $requester, fn (EoraPostgresConnection $db) => $db->update('update work_orders set bom_version_id = ? where id = ?', [$s['bom']['id'], $wo['id']]));
+        $this->fail('a snapshot was written outside the release');
+    } catch (QueryException $e) {
+        expect($e->getCode())->toBe('23514');
+    }
     // cancelling also needs the planner's permission in the WO's plant, in SQL too
     $viewer = member($this, $this->t);
     AccessFixtures::grant($this->t, $viewer['id'], 'FGW');

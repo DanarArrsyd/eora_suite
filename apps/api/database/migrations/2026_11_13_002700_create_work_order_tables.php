@@ -208,6 +208,17 @@ return new class extends Migration
                  IS DISTINCT FROM (OLD.bom_version_id, OLD.routing_version_id, OLD.item_weight_id, OLD.released_by, OLD.released_at) THEN
                 RAISE EXCEPTION 'a release snapshot is history' USING ERRCODE = '23514';
               END IF;
+              -- the release snapshot is written only by the release itself (SUBMITTED → RELEASED), and the return reason only on the
+              -- way back to draft or when asking again
+              IF NOT (OLD.status = 'SUBMITTED' AND NEW.status = 'RELEASED')
+                 AND (NEW.bom_version_id, NEW.routing_version_id, NEW.item_weight_id, NEW.released_by, NEW.released_at)
+                     IS DISTINCT FROM (OLD.bom_version_id, OLD.routing_version_id, OLD.item_weight_id, OLD.released_by, OLD.released_at) THEN
+                RAISE EXCEPTION 'a release snapshot is written by the release only' USING ERRCODE = '23514';
+              END IF;
+              IF NOT ((OLD.status = 'SUBMITTED' AND NEW.status = 'DRAFT') OR (OLD.status = 'DRAFT' AND NEW.status = 'SUBMITTED'))
+                 AND NEW.return_reason IS DISTINCT FROM OLD.return_reason THEN
+                RAISE EXCEPTION 'a return reason is written when a request goes back to draft' USING ERRCODE = '23514';
+              END IF;
               -- who asked for the release changes only by asking (DRAFT → SUBMITTED) or by the request going back to draft
               IF NOT ((OLD.status = 'DRAFT' AND NEW.status = 'SUBMITTED') OR (OLD.status = 'SUBMITTED' AND NEW.status = 'DRAFT'))
                  AND (NEW.submitted_by, NEW.submitted_at) IS DISTINCT FROM (OLD.submitted_by, OLD.submitted_at) THEN
