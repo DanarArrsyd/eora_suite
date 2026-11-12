@@ -110,6 +110,29 @@ it('refuses the requester as releaser in the database too', function () {
     } catch (QueryException $e) {
         expect($e->getCode())->toBe('42501');
     }
+    // nor by a second planner without the approve permission, an approver of another plant, or with a draft BOM
+    $release = fn (string $actor, string $bom) => asApp($this->t, $actor, fn (EoraPostgresConnection $db) => $db->update(
+        "update work_orders set status = 'RELEASED', released_by = ?, released_at = now(), bom_version_id = ?, routing_version_id = ? where id = ?",
+        [$actor, $bom, $s['rv']['id'], $wo['id']],
+    ));
+    $planner = member($this, $this->t);
+    AccessFixtures::grant($this->t, $planner['id'], 'PPC');
+    $farApprover = member($this, $this->t);
+    AccessFixtures::grant($this->t, $farApprover['id'], 'CSA', ['PLANT', $this->t['plants'][1]]);
+    $approver = member($this, $this->t);
+    AccessFixtures::grant($this->t, $approver['id'], 'CSA');
+    $draftBom = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
+        'insert into bom_versions (tenant_id, item_id, version_no, effective_from, prepared_by) values (?, ?, 99, ?, ?) returning id',
+        [$this->t['tenant'], $s['item']['id'], $s['today'], $requester],
+    )->id);
+    foreach ([[$planner['id'], $s['bom']['id'], '42501'], [$farApprover['id'], $s['bom']['id'], '42501'], [$approver['id'], $draftBom, '23514']] as [$actor, $bom, $code]) {
+        try {
+            $release($actor, $bom);
+            $this->fail("released by {$actor} with {$bom}");
+        } catch (QueryException $e) {
+            expect($e->getCode())->toBe($code);
+        }
+    }
     // nor by first replacing who asked, then releasing: the requester is fixed while the request waits
     $other = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select gen_random_uuid() as id')->id);
     try {

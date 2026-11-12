@@ -100,11 +100,28 @@ return new class extends Migration
               FOREIGN KEY (tenant_id, conversion_profile_version_id) REFERENCES conversion_profile_versions (tenant_id, id)
             );
 
+            -- does the signed actor hold $perm, through an active membership and a role in force, in a scope covering $plant?
+            -- (the same reading as Authorizer::authorize; RLS keeps it inside the tenant)
+            CREATE OR REPLACE FUNCTION eora_actor_may(perm text, plant uuid) RETURNS boolean LANGUAGE sql STABLE SET search_path = '' AS $fn$
+              SELECT EXISTS (
+                SELECT 1 FROM public.role_assignments ra
+                  JOIN public.memberships m ON m.tenant_id = ra.tenant_id AND m.id = ra.membership_id AND m.status = 'ACTIVE'
+                   AND m.user_id = (SELECT c.actor FROM ctx_api.context() c)
+                  JOIN public.role_permissions rp ON rp.tenant_id = ra.tenant_id AND rp.role_id = ra.role_id AND rp.permission_code = perm
+                  JOIN public.plants p ON p.tenant_id = ra.tenant_id AND p.id = plant
+                 WHERE ra.revoked_at IS NULL AND ra.valid_from <= pg_catalog.now() AND (ra.valid_until IS NULL OR ra.valid_until > pg_catalog.now())
+                   AND (ra.scope_type = 'TENANT' OR (ra.scope_type = 'COMPANY' AND ra.company_id = p.company_id) OR (ra.scope_type = 'PLANT' AND ra.plant_id = p.id))
+              )
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_actor_may(text, uuid) FROM PUBLIC;
+            GRANT EXECUTE ON FUNCTION eora_actor_may(text, uuid) TO eora_app;
+
             -- DRAFT ⇄ SUBMITTED → RELEASED by a second person; DRAFT/SUBMITTED/RELEASED → CANCELLED; nothing of what the WO
             -- asks for changes once it left the draft, and the release snapshot is written once
             CREATE OR REPLACE FUNCTION eora_guard_work_order() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
             DECLARE
               a uuid := (SELECT c.actor FROM ctx_api.context() c);
+              day date;
             BEGIN
               IF TG_OP = 'INSERT' THEN
                 IF NEW.status <> 'DRAFT' THEN
@@ -140,10 +157,29 @@ return new class extends Migration
                     RAISE EXCEPTION 'a release is requested by the signed actor' USING ERRCODE = '42501';
                   END IF;
                 ELSIF OLD.status = 'SUBMITTED' AND NEW.status = 'DRAFT' THEN
-                  NULL; -- withdrawn by the requester or returned with a reason by an approver (service checks who)
+                  -- withdrawn by its requester, or returned by an approver of this plant
+                  IF a IS DISTINCT FROM OLD.submitted_by AND NOT public.eora_actor_may('planning.wo.approve', NEW.plant_id) THEN
+                    RAISE EXCEPTION 'a release request is returned by an approver of its plant' USING ERRCODE = '42501';
+                  END IF;
                 ELSIF OLD.status = 'SUBMITTED' AND NEW.status = 'RELEASED' THEN
                   IF NEW.released_by IS DISTINCT FROM a OR a = OLD.submitted_by THEN
                     RAISE EXCEPTION 'a work order is released by a second person' USING ERRCODE = '42501';
+                  END IF;
+                  IF NOT public.eora_actor_may('planning.wo.approve', NEW.plant_id) THEN
+                    RAISE EXCEPTION 'a work order is released by an approver of its plant' USING ERRCODE = '42501';
+                  END IF;
+                  -- BR-PLN-01: the snapshot is the approved BOM and primary routing (and validated net weight) in force today at the plant
+                  SELECT (pg_catalog.now() AT TIME ZONE p.timezone)::date INTO day FROM public.plants p WHERE p.id = NEW.plant_id;
+                  IF NOT EXISTS (SELECT 1 FROM public.bom_versions b WHERE b.id = NEW.bom_version_id AND b.item_id = NEW.item_id
+                                   AND b.status IN ('APPROVED', 'SUPERSEDED') AND b.effective_from <= day AND (b.effective_to IS NULL OR b.effective_to >= day))
+                     OR NOT EXISTS (SELECT 1 FROM public.routing_versions v JOIN public.routings r ON r.tenant_id = v.tenant_id AND r.id = v.routing_id
+                                     WHERE v.id = NEW.routing_version_id AND r.plant_id = NEW.plant_id AND r.item_id = NEW.item_id
+                                       AND r.routing_kind = 'PRIMARY' AND r.status = 'ACTIVE' AND v.status IN ('APPROVED', 'SUPERSEDED')
+                                       AND v.effective_from <= day AND (v.effective_to IS NULL OR v.effective_to >= day))
+                     OR (NEW.item_weight_id IS NOT NULL AND NOT EXISTS (
+                           SELECT 1 FROM public.item_weights w WHERE w.id = NEW.item_weight_id AND w.item_id = NEW.item_id
+                              AND w.status IN ('VALIDATED', 'RETIRED') AND w.effective_from <= day AND (w.effective_to IS NULL OR w.effective_to >= day))) THEN
+                    RAISE EXCEPTION 'a release snapshots the approved masters of the item in force today' USING ERRCODE = '23514';
                   END IF;
                 ELSIF NEW.status = 'CANCELLED' AND OLD.status IN ('DRAFT', 'SUBMITTED', 'RELEASED') THEN
                   IF NEW.cancelled_by IS DISTINCT FROM a THEN
@@ -214,6 +250,7 @@ return new class extends Migration
             DROP TABLE work_orders;
             DROP FUNCTION IF EXISTS eora_guard_work_order();
             DROP FUNCTION IF EXISTS eora_guard_work_order_material();
+            DROP FUNCTION IF EXISTS eora_actor_may(text, uuid);
             SQL);
     }
 };
