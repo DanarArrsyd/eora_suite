@@ -1,6 +1,6 @@
 # 33 — M4 Scope: Alur tipis end-to-end (B4/B6/B7 tipis, WO manual) — lembar persetujuan
 
-**Status:** **DRAF — menunggu persetujuan owner.** Belum ada kode M4 sebelum lembar ini disetujui (D-054).
+**Status:** **DISETUJUI 2026-11-12 (D-107)** — owner: "Setuju semua" (scope §1–§5 dan keputusan M4-D1..D10 sesuai usulan; M4-D7 pola lot `L<YYMM>-NNNN`). Implementasi di branch `feat/m4-…`, PR berurutan mengikuti §1.
 **Basis:** doc 27 M-01 dan doc 11 (M4 = B4, B6, B7 tipis + WO manual G-MPS-6: *PO/SO → WO → issue → produksi → QC → FG → kirim*), doc 04 matrix posting baris 2, 3, 5, 6, 8–11 dan §Movement codes (D-084), ADR-0002/0003/0014, doc 14, doc 15 (BR-DEM, BR-ISS, BR-CON, BR-OUT, BR-QC, BR-FG, BR-PLN-03), doc 17, doc 18 §2, D-034 (SO line = satu identitas demand), D-043 (Firm Available), D-044 (kalender, production date), D-049 (penomoran), D-059 (Option M default, S per item), D-060 (orang kedua untuk aksi sensitif), D-063 (WO close), D-064 (quarantine opsional), D-086 (cek ketersediaan M4). M3 selesai (D-106).
 **Tujuan M4:** Anda bisa menjalankan **satu pesanan customer dari awal sampai terkirim** di data asli: SO dengan jadwal kirim → WO → bahan dikeluarkan ke produksi → hasil produksi diposting (konsumsi terukur, good/NG/scrap) → QC memutuskan → FG diterima gudang → dialokasikan, di-pick dan dikirim — lalu **melacak balik** dari pengiriman ke lot FG, WO dan lot bahan baku. Perencanaan (MPS/MRP), rekonsiliasi dan indikator variance tetap M5.
 
@@ -29,7 +29,7 @@
 - POD / surat jalan PDF (O-010 sebelum fitur PDF), lokasi quarantine Quality (D-064, opsional) → **M7** (atau saat tenant meminta).
 - Custody dua langkah (issue → transit → diterima PRL), transfer antar plant (M3-D6), stock count (R2), Control Tower data asli (B9, M5), offline PWA posting.
 
-## 3. Keputusan — usulan untuk disetujui
+## 3. Keputusan (disetujui sesuai usulan, D-107)
 | ID | Keputusan | Usulan | Kenapa |
 |---|---|---|---|
 | M4-D1 | Permission | Pakai doc 18 §2 apa adanya (`demand.sales_order`, `planning.wo`, `materials.issue`, `materials.return`, `production.run`, `production.posting`, `quality.inspection`, `quality.disposition_release`, `warehouse.fg_receipt`, `delivery.shipment`); resource baru hanya bila doc 18 belum punya: `planning.wo_close_exception` (PPC = R, CSA/INV = A, AUD = V). | D-060a: doc 18 jadi template default. |
@@ -38,7 +38,7 @@
 | M4-D4 | Run | Satu run = satu WO di satu work center pada satu production date/shift (D-044); posting bisa beberapa kali per run; run ditutup oleh PRL. | Laporan produksi harian/shift tanpa membuat dokumen per operasi. |
 | M4-D5 | Titik posting output | Output diposting **sekali per WO di operasi terakhir sebelum inspeksi** (routing in-line, Option S); operasi lain hanya informasi. | Satu tahap stok di M4 (jawaban owner). |
 | M4-D6 | Item tanpa inspeksi | Item `Inspection required = NO`: output Good langsung `UNRESTRICTED` di lokasi QC area, lalu FG receipt seperti biasa. | Matrix baris 8; satu jalur FG receipt. |
-| M4-D7 | Nomor dokumen dan lot | Nomor resmi per tenant/plant/jenis/tahun (D-049): `SO-`, `WO-`, `ISS-`, `RTN-`, `PRD-`, `QCD-`, `FGR-`, `PCK-`, `SHP-`; lot output `<item>-<YYMMDD>-NN` atau pola lot internal M3 (`L<YYMM>-NNNN`) — **pilih saat persetujuan**. | Konsisten dengan M3; nomor lot FG muncul di label dan trace. |
+| M4-D7 | Nomor dokumen dan lot | Nomor resmi per tenant/plant/jenis/tahun (D-049): `SO-`, `WO-`, `ISS-`, `RTN-`, `PRD-`, `QCD-`, `FGR-`, `PCK-`, `SHP-`; lot output memakai pola lot internal M3 `L<YYMM>-NNNN` (dipilih owner 2026-11-12). | Konsisten dengan M3; nomor lot FG muncul di label dan trace. |
 | M4-D8 | Pegging WO ↔ SO | Opsional, satu WO ke paling banyak satu schedule line; tidak mengubah demand (D-034). | Jawaban owner: dari SO atau bebas. |
 | M4-D9 | Over-shipment | Toleransi 0 % sampai konfigurasi tenant ada (BR-FG-03). | Tidak mengarang toleransi. |
 | M4-D10 | Navigasi | Layar §1 dari R2/Mock → R1 data asli; Material at Production tetap tanpa kata WIP (CLAUDE.md). | Sama seperti M3-D10. |
@@ -58,4 +58,4 @@
 - Setiap langkah: tanya dulu bila ada aturan bisnis yang belum diputuskan; tidak mengisi keputusan bisnis sendiri.
 - Berhenti dan lapor bila ada temuan keamanan atau keputusan baru.
 
-**Pilihan owner:** ☐ Setuju scope M4 · ☐ Keputusan M4-D1..D10 sesuai usulan (M4-D7: pola lot ☐ `<item>-<YYMMDD>-NN` ☐ `L<YYMM>-NNNN`) · ☐ Ubah: …
+**Pilihan owner:** ☑ Setuju scope M4 · ☑ Keputusan M4-D1..D10 sesuai usulan (M4-D7: pola lot ☑ `L<YYMM>-NNNN`) (2026-11-12)
