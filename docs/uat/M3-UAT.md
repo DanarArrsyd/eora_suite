@@ -90,3 +90,14 @@ Persiapan: Tenant Administrator memberi role **CSA** ke satu user lain (mis. `ap
 | 4 | Sebagai `mat`, minta reversal dokumen bertanggal bulan tertutup tanpa **Evidence**. | Ditolak: "… is in a closed month: give the evidence …". Dengan evidence (mis. `BA-001`) → terkirim; di halaman reversal tertulis "Closed-month correction". Approve oleh `inv` → diposting di bulan berjalan. | |
 | 5 | Login `csa` → bulan tertutup → **Ask to reopen** dengan alasan. Coba **Reopen month** sendiri. | Tombol reopen tidak ada untuk peminta ("You asked to reopen …"). | |
 | 6 | Login user CSA kedua → bulan itu → **Reopen month**. | Status **Open**, "Last reopened by …"; tercatat sebagai kejadian luar biasa. | |
+
+## 8. Movement Ledger dan cek saldo (langkah 9, D-103)
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `inv` → Inventory → **Movement Ledger**. | Semua pergerakan stok dari §1–7, terbaru di atas: penerimaan `+`, transfer `−`/`+`, split, adjustment, reversal bertanda "(reversal)". Tanpa label Mock data, tanpa tombol New. | |
+| 2 | Filter **Item** = coil, **Movement** = Transfer → **Apply**. | Hanya baris transfer coil. | |
+| 3 | Cari nomor dokumen (mis. `rcv-p1`). | Hanya baris dokumen itu. | |
+| 4 | **View** pada satu baris. | Detail saja, dengan keterangan "The ledger is never edited …"; tidak ada form. | |
+| 5 | **Export** → Excel. | File berisi baris yang sama dengan filter aktif (kolom Document, Movement, Item, Lot, Location, Quantity …). | |
+| 6 | Inventory → Stock Overview → filter **Item type** = Raw material. | Hanya stok bahan baku. | |
+| 7 | (Operator, di server) `docker compose run --rm --entrypoint php scheduler artisan eora:inventory:verify-balances` | "… tenant(s) checked; 0 with differences." | |

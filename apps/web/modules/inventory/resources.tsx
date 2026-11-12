@@ -1,6 +1,7 @@
 import { api, call } from '@eora/features/auth';
 import type { Option } from '@eora/features/data';
 import { DomainStatusBadge, STATUS_CATALOGUE, type FilterField } from '@eora/features/patterns';
+import { ITEM_TYPES as ITEM_TYPE_OPTIONS } from '@/modules/master/part-resources';
 import { PHYSICAL_LOCATION_TYPES, PLANT_FILTER } from '@/modules/master/resources';
 import { queryOptions } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
@@ -50,6 +51,7 @@ const FILTERS: FilterField[] = [
     label: 'Item',
     loadOptions: (_deps, signal) => queryOptions('core.items', (r) => `${String(r.code)} · ${String(r.name)}`, {}, signal),
   },
+  { key: 'itemType', type: 'multiselect', source: 'static', label: 'Item type', options: ITEM_TYPE_OPTIONS },
   { key: 'stockStatus', type: 'multiselect', source: 'static', label: 'Status', options: STATUS_OPTIONS },
   { key: 'locationType', type: 'multiselect', source: 'static', label: 'Location kind', options: PHYSICAL_LOCATION_TYPES },
 ];
