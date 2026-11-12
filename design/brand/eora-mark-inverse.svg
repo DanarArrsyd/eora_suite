@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="EORA">
+  <path d="M8 42 L32 30 L56 42 L32 54 Z" fill="#9DB7FF" fill-opacity="0.55"/>
+  <path d="M8 32 L32 20 L56 32 L32 44 Z" fill="#9DB7FF"/>
+  <path d="M8 22 L32 10 L56 22 L32 34 Z" fill="#FFFFFF"/>
+  <path d="M32 10 L56 22 L32 34 Z" fill="#DCE6FF"/>
+</svg>
