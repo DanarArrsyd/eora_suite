@@ -48,7 +48,7 @@ for (const size of [
 ]) {
   test(`no page-level vertical overflow on a short screen @${size.width}x${size.height}`, async ({ page }) => {
     await page.setViewportSize(size);
-    for (const route of ['/ppic', '/master', '/inventory/raw-material']) {
+    for (const route of ['/ppic', '/master', '/inventory/raw-material', '/ppic/demand-fulfillment']) {
       await page.goto(route);
       await expect(page.locator('header').first()).toBeVisible();
       const overflow = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);

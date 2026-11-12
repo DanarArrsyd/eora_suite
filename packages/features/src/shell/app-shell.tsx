@@ -95,7 +95,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <MobileNavSheet modules={nav.modules} activeModule={nav.match?.module} counts={nav.counts} badgeFor={nav.badgeFor} pathname={nav.pathname} />
             }
           />
-          <main id="main" tabIndex={-1} className="min-h-0 flex-1 overflow-auto focus:outline-none">
+          {/* relative: absolutely positioned descendants (sr-only labels) stay inside this scroll area, never stretch the page */}
+          <main id="main" tabIndex={-1} className="relative min-h-0 flex-1 overflow-auto focus:outline-none">
             {children}
           </main>
         </div>
