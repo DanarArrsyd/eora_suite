@@ -11,6 +11,8 @@
  */
 @theme inline {
   --font-sans: var(--font-inter), Arial, system-ui, sans-serif;
+  /* D-104 (owner): one typeface everywhere — codes and IDs use Inter too, with even-width digits (no system monospace) */
+  --font-mono: var(--font-inter), Arial, system-ui, sans-serif;
 
   --color-workspace: var(--color-bg-workspace);
   --color-surface: var(--color-bg-surface);
@@ -74,6 +76,10 @@
     font-size: 14px;
     line-height: 20px;
     -webkit-font-smoothing: antialiased;
+  }
+  /* codes and IDs: same Inter, digits of equal width so numbers line up in tables (D-104) */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
   }
   :focus-visible {
     outline: 2px solid var(--color-focus-ring);

@@ -32,7 +32,7 @@ it('reverses a posted receipt once a second person approves, negating every leg 
     rvApprove($this, $id)->assertOk()->assertJsonPath('data.replayed', true)->assertJsonPath('data.documentId', $posted['documentId']);
     expect(trStock($this, $receipt['lotId']))->toBe([])
         ->and(rvStatus($this->t, $receipt['documentId']))->toBe('REVERSED');
-    $legs = collect(spa($this)->getJson("/api/v1/query/inventory.movements?filter[documentId]={$id}")->assertOk()->json('data'));
+    $legs = collect(spa($this)->getJson("/api/v1/query/inventory.movements?sort=legNo&filter[documentId]={$id}")->assertOk()->json('data'));
     expect($legs->pluck('movementCode')->unique()->values()->all())->toBe(['RCPT_SUPPLIER'])
         ->and($legs->pluck('qty')->all())->toBe(['10', '-10'])
         ->and($legs->every(fn ($l) => $l['reversesMovementId'] !== null))->toBeTrue();

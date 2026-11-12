@@ -323,7 +323,7 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Ledger',
         items: [
-          { id: 'movements', label: 'Movement Ledger', icon: BookOpen, release: 'R1', phase: 'later' },
+          { id: 'movements', label: 'Movement Ledger', icon: BookOpen, release: 'R1', permission: 'inventory.stock.view', phase: 'later' },
           { id: 'allocations', label: 'Allocations', icon: Bookmark, release: 'R1', phase: 'later' },
         ],
       },

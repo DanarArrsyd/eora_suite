@@ -83,7 +83,7 @@ const UOM_CLASSES = opts([
   ['VOLUME', 'Volume'],
 ]);
 /** Semi-Finished Material: an intermediate stage item with its own stock (D-059), never "WIP". */
-const ITEM_TYPES = opts([
+export const ITEM_TYPES = opts([
   ['RAW', 'Raw material'],
   ['SEMI_FINISHED', 'Semi-Finished Material'],
   ['FINISHED', 'Finished good'],
