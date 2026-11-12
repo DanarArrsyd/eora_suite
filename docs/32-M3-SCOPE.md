@@ -62,7 +62,7 @@
 
 **Pilihan owner:** ☑ Setuju scope M3 · ☑ Keputusan M3-D1..D10 sesuai usulan (2026-10-29)
 
-## 6. Checklist exit M3 (status 2026-11-12, penutup)
+## 6. Checklist exit M3 (status 2026-11-12, **M3 ditutup — D-106**)
 Status per butir §4. **Hijau** = ada bukti otomatis di CI; **OPEN** = belum terbukti, M3 belum boleh ditutup karena butir itu.
 
 | §4 | Butir | Status | Bukti / yang kurang |
@@ -75,6 +75,6 @@ Status per butir §4. **Hijau** = ada bukti otomatis di CI; **OPEN** = belum ter
 | 6 | Rebuild proyeksi + EXPLAIN | Hijau | `LedgerListTest` (saldo = ledger setelah semua jenis posting; selisih dilaporkan, diaudit, perintah gagal; halaman ledger dan filter item lewat index di bawah RLS), `eora:inventory:verify-balances` terjadwal; daftar stok lewat `stock_balances_item_idx`. |
 | 7 | Isolasi, OpenAPI, migrate round-trip | Hijau | RLS `tenant_isolation` di semua tabel ledger (`LedgerSchemaTest`, tes scope plant per endpoint dan daftar), CI drift OpenAPI, migrate:refresh di CI; rollback 002400/002500 dicoba lokal. |
 | 8 | Gate frontend + stack e2e M3 | Hijau setelah PR penutup | lint, typecheck, unit, e2e mock + axe per layar M3; stack e2e `m3-ledger.spec.ts` (stok awal demo → transfer → split → adjustment dua orang → reversal dua orang → saldo dan ledger cocok). |
-| 9 | Dokumen + UAT owner | Dokumen hijau · **UAT OPEN** | docs 04, 13 (D-096..D-104), 15, 17, 18, 24, 32, ADR-0014 diperbarui. Skrip `docs/uat/M3-UAT.md` §0–8 belum dijalankan owner. |
+| 9 | Dokumen + UAT owner | Hijau | docs 04, 13 (D-096..D-106), 15, 17, 18, 24, 32, ADR-0014 diperbarui. Owner menjalankan `docs/uat/M3-UAT.md` §1–8 di stack `eora` (2026-11-12): "Oke sih untuk 1-8 nya" (D-106). Temuan selama UAT: halaman ikut ter-scroll ke area kosong di bawah menu → diperbaiki PR #63, #64. |
 
-**Status exit M3:** butir 1–8 hijau setelah PR penutup; butir 9 menunggu owner menjalankan `docs/uat/M3-UAT.md` (atau keputusan owner lain, dicatat apa adanya seperti D-095).
+**Status exit M3:** **ditutup 2026-11-12 (D-106)** — butir 1–9 hijau. M4 butuh persetujuan scope sendiri (doc 27 M-01, D-054).
