@@ -138,8 +138,9 @@ it('never holds a negative or a virtual balance, nor a movement of zero or with 
     expect($leg(3, 'RCPT_SUPPLIER', 0.5))->toThrow(QueryException::class, 'a quantity has at most the decimals of its unit');
     // an entered unit converts through this item's conversion in force that day: 10 KG = 5 PCS at 0.5 PCS/KG
     $conversion = ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
-        "insert into uom_conversions (tenant_id, item_id, from_uom_id, to_uom_id, factor, effective_from) values (?, ?, (select id from uoms where code = 'KG'), ?, 0.5, current_date) returning id",
-        [$this->t['tenant'], $f['item'], $f['pcs']],
+        // in force from the tenant's today (not the database's UTC current_date, a day behind at 00:00–07:00 WIB)
+        "insert into uom_conversions (tenant_id, item_id, from_uom_id, to_uom_id, factor, effective_from) values (?, ?, (select id from uoms where code = 'KG'), ?, 0.5, ?::date) returning id",
+        [$this->t['tenant'], $f['item'], $f['pcs'], rtDay($this->t)],
     )->id);
     $receipt = fn (float $qty, string $day) => fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f, $conversion, $qty, $day) {
         $doc = (string) $db->selectOne(
