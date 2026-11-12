@@ -6,6 +6,7 @@ use App\Modules\Inventory\Application\BalanceVerification;
 use App\Modules\Inventory\Application\InventoryPostingService;
 use App\Modules\Inventory\Contracts\PostingCommand;
 use App\Modules\Inventory\Contracts\PostingLeg;
+use App\Modules\Inventory\Queries\MovementsQuery;
 use App\Platform\Database\EoraPostgresConnection;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,9 @@ it('lists the ledger newest first with the stock side, filters and search, insid
     spa($this)->getJson('/api/v1/query/inventory.movements?q=oil')->assertOk()->assertJsonCount(2, 'data');
     spa($this)->getJson('/api/v1/query/inventory.movements?q='.strtolower(substr($receipt['docNo'], 0, 6)))->assertOk()->assertJsonCount(4, 'data');
     spa($this)->getJson('/api/v1/query/inventory.movements?sort=itemCode')->assertStatus(422);
+    // the export carries the screen's columns, the posting time first (D-092)
+    expect(array_map(fn ($c) => $c->header, app(MovementsQuery::class)->exportColumns()))
+        ->toContain('Posted', 'Document', 'Movement', 'Item', 'Lot', 'Location', 'Status', 'Quantity', 'Posted by');
 
     rtSwitch($this, $this->t, 'INV', ['PLANT', $f['plant2']]);
     spa($this)->getJson('/api/v1/query/inventory.movements')->assertOk()->assertJsonPath('data', []);

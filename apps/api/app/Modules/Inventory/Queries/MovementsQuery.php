@@ -114,6 +114,7 @@ final class MovementsQuery extends QueryDefinition
     public function exportColumns(): array
     {
         return [
+            new ExportColumn('Posted', 'postedAt', ExportColumn::INSTANT),
             new ExportColumn('Document', 'code'),
             new ExportColumn('Type', 'docType', labels: DocumentsQuery::TYPE_LABELS),
             new ExportColumn('Leg', 'legNo', ExportColumn::INTEGER),
