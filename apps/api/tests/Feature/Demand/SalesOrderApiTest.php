@@ -70,7 +70,7 @@ it('drafts, fills and confirms an order into firm demand; the line quantity is t
         ->assertJsonPath('data.lines.0.schedules.0.status', 'DRAFT')->assertJsonPath('data.lines.1.qty', '40')->assertJsonPath('data.lineCount', 2);
 
     $confirmed = soWith($this, 'POST', "/api/v1/demand/sales-orders/{$id}/actions/confirm", [], $filled->json('data.version'))
-        ->assertOk()->assertJsonPath('data.status', 'CONFIRMED')->assertJsonPath('data.lines.0.schedules.0.status', 'FIRM')
+        ->assertOk()->assertJsonPath('data.plantToday', $f['today'])->assertJsonPath('data.status', 'CONFIRMED')->assertJsonPath('data.lines.0.schedules.0.status', 'FIRM')
         ->assertJsonPath('data.lines.0.schedules.0.outstandingQty', '250')->assertJsonPath('data.nextDueDate', date('Y-m-d', strtotime($f['today'].' +3 days')));
     expect($confirmed->json('data.confirmedByName'))->not->toBeNull();
 
@@ -123,6 +123,9 @@ it('cancels firm schedule lines with a reason and the line with its last one; re
 
     soWith($this, 'PUT', "{$uri}/lines", ['lines' => [soLine($f)]], $v)->assertStatus(409);
     soWith($this, 'POST', "{$uri}/actions/cancel", ['reason' => 'No longer needed'], $v)->assertStatus(409);
+    // the order's own customer PO line, in other letter case, is not a second demand (BR-DEM-05, doc 14 #28)
+    soWith($this, 'POST', "{$uri}/lines", soLine($f, 'po-1001', '10', [['+7', '60']]), $v)
+        ->assertStatus(422)->assertJsonValidationErrors(['customerPoLine' => 'This customer PO line is already on this order.']);
 
     $added = soWith($this, 'POST', "{$uri}/lines", soLine($f, 'PO-1002', '10', [['+7', '60']]), $v)
         ->assertOk()->assertJsonPath('data.lines.1.lineNo', 2)->assertJsonPath('data.lines.1.schedules.0.status', 'FIRM');
@@ -203,7 +206,7 @@ it('refuses in the database what the lifecycle forbids: editing a firm line, del
     $refused("update sales_order_headers set status = 'DRAFT' where id = ?", [$so['id']], '23514');
     $refused(
         'insert into sales_order_lines (tenant_id, sales_order_id, customer_id, plant_id, line_no, customer_item_id, item_id, uom_id, customer_po_no, customer_po_line)
-         select tenant_id, sales_order_id, customer_id, plant_id, 9, customer_item_id, item_id, uom_id, customer_po_no, customer_po_line from sales_order_lines where sales_order_id = ?',
+         select tenant_id, sales_order_id, customer_id, plant_id, 9, customer_item_id, item_id, uom_id, lower(customer_po_no), customer_po_line from sales_order_lines where sales_order_id = ?',
         [$so['id']], '23505',
     );
 })->group('integration', 'demand');

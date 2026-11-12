@@ -134,7 +134,7 @@ final class SalesOrderController
         $lines = [];
         $seen = [];
         foreach ($data['lines'] as $i => $line) {
-            $lines[] = $this->checkedLine($db, $so, $line, "lines.{$i}", $today);
+            $lines[] = $this->checkedLine($db, $so, $line, "lines.{$i}", $today, true);
             $pair = mb_strtoupper(trim($line['customerPoNo'])).'|'.mb_strtoupper(trim($line['customerPoLine']));
             if (isset($seen[$pair])) {
                 throw ValidationException::withMessages(["lines.{$i}.customerPoLine" => 'This customer PO line is already on this order.']);
@@ -231,7 +231,7 @@ final class SalesOrderController
         $db = $this->db();
         $so = $this->writable($db, $order, ['CONFIRMED']);
         $this->authorizer->authorize($db, self::POST, $this->plantScope($db, (string) $so->plant_id));
-        $line = $this->checkedLine($db, $so, $data, '', $this->today($db, (string) $so->plant_id));
+        $line = $this->checkedLine($db, $so, $data, '', $this->today($db, (string) $so->plant_id), false);
         $this->bump($db, $so, $expected);
         $next = (int) $db->selectOne('select coalesce(max(line_no), 0) + 1 as n from sales_order_lines where sales_order_id = ?', [$so->id])->n;
         $lineId = $this->insertLine($db, $so, $next, $line, 'FIRM');
@@ -313,7 +313,7 @@ final class SalesOrderController
      * @param  array<string, mixed>  $line
      * @return array{mapping: stdClass, poNo: string, poLine: string, schedules: list<array{date: string, qty: string}>}
      */
-    private function checkedLine(EoraPostgresConnection $db, stdClass $so, array $line, string $path, string $today): array
+    private function checkedLine(EoraPostgresConnection $db, stdClass $so, array $line, string $path, string $today, bool $replacing): array
     {
         $at = static fn (string $field) => $path === '' ? $field : "{$path}.{$field}";
         $mapping = $db->selectOne(
@@ -338,12 +338,17 @@ final class SalesOrderController
         if ($poLine === '') {
             throw ValidationException::withMessages([$at('customerPoLine') => 'Enter the customer PO line.']);
         }
-        // BR-DEM-05 holds across the tenant; the other order is named only to a reader of its plant
+        // BR-DEM-05 holds across the tenant, without case; the other order is named only to a reader of its plant. A draft's
+        // own lines are being replaced, so they do not count; a line added to a confirmed order meets its siblings too.
         $taken = $db->selectOne(
-            "select h.so_no, h.plant_id, p.company_id from sales_order_lines l join sales_order_headers h on h.id = l.sales_order_id join plants p on p.id = h.plant_id
-              where l.customer_id = ? and upper(l.customer_po_no) = upper(?) and upper(l.customer_po_line) = upper(?) and l.status = 'ACTIVE' and l.sales_order_id <> ?",
-            [$so->customer_id, $poNo, $poLine, $so->id],
+            "select h.id, h.so_no, h.plant_id, p.company_id from sales_order_lines l join sales_order_headers h on h.id = l.sales_order_id join plants p on p.id = h.plant_id
+              where l.customer_id = ? and upper(l.customer_po_no) = upper(?) and upper(l.customer_po_line) = upper(?) and l.status = 'ACTIVE'
+                and (not ?::boolean or l.sales_order_id <> ?)",
+            [$so->customer_id, $poNo, $poLine, $replacing, $so->id],
         );
+        if ($taken !== null && (string) $taken->id === (string) $so->id) {
+            throw ValidationException::withMessages([$at('customerPoLine') => 'This customer PO line is already on this order.']);
+        }
         if ($taken !== null) {
             $readable = array_filter($this->authorizer->scopes($db, self::VIEW), static fn (Scope $s) => $s->covers(Scope::plant((string) $taken->plant_id, (string) $taken->company_id)));
             throw ValidationException::withMessages([$at('customerPoLine') => $readable !== []
@@ -536,6 +541,9 @@ final class SalesOrderController
                 'schedules' => $list,
             ];
         }, $lines);
+
+        // the first day a delivery may be planned: today at the order's plant (the server checks the same date)
+        $row['plantToday'] = $this->today($db, (string) $row['plantId']);
 
         return Concurrency::withVersion(response()->json(['data' => $row], $status), (int) $row['version']);
     }

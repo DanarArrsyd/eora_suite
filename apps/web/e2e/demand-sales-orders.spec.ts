@@ -39,6 +39,7 @@ const ORDER = {
   cancelledByName: null,
   cancelReason: null,
   lines: [] as unknown[],
+  plantToday: '2026-11-12',
 };
 const LINE = {
   id: ID(10),

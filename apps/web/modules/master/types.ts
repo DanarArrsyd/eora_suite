@@ -47,6 +47,8 @@ export type FieldSpec = {
   codePattern?: { pattern: RegExp; message: string };
   /** Date fields: no day before today (tenant calendar). */
   notBeforeToday?: boolean;
+  /** Date fields: no day before this one (e.g. today at the record's plant); wins over `notBeforeToday`. */
+  minDate?: string;
   maxLength?: number;
   /** For number fields: allowed decimals (0 = whole numbers). */
   decimals?: number;

@@ -76,8 +76,8 @@ return new class extends Migration
               FOREIGN KEY (tenant_id, item_id) REFERENCES items (tenant_id, id),
               FOREIGN KEY (tenant_id, uom_id) REFERENCES uoms (tenant_id, id)
             );
-            -- BR-DEM-05: a customer PO line maps to exactly one active SO line
-            CREATE UNIQUE INDEX sales_order_lines_customer_po_uq ON sales_order_lines (tenant_id, customer_id, customer_po_no, customer_po_line)
+            -- BR-DEM-05: a customer PO line maps to exactly one active SO line (PO number and line compared without case)
+            CREATE UNIQUE INDEX sales_order_lines_customer_po_uq ON sales_order_lines (tenant_id, customer_id, upper(customer_po_no), upper(customer_po_line))
               WHERE status = 'ACTIVE';
             CREATE INDEX sales_order_lines_item_idx ON sales_order_lines (tenant_id, item_id);
 

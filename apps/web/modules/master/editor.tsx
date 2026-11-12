@@ -121,7 +121,7 @@ function FieldControl({ field, today, row }: { field: FieldSpec; today: string; 
         label={field.label}
         hint={field.hint}
         required={field.required}
-        min={field.notBeforeToday ? (today as IsoDate) : undefined}
+        min={(field.minDate ?? (field.notBeforeToday ? today : undefined)) as IsoDate | undefined}
         today={today as IsoDate}
       />
     );

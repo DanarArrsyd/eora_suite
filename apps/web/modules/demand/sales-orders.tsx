@@ -77,7 +77,7 @@ type Line = {
   schedules: Schedule[];
 };
 
-type SalesOrder = SalesOrderRow & { lines: Line[] };
+type SalesOrder = SalesOrderRow & { lines: Line[]; plantToday: string };
 
 const STATUS_OPTIONS: Option[] = [
   { value: 'DRAFT', label: 'Draft' },
@@ -289,7 +289,7 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
       maxLength: 20,
       hint: 'One customer PO line belongs to one sales order line.',
     },
-    { key: 'requirementDate', label: 'First delivery date', kind: 'date', required: true, notBeforeToday: true },
+    { key: 'requirementDate', label: 'First delivery date', kind: 'date', required: true, minDate: o.plantToday },
     {
       key: 'qty',
       label: 'Quantity',
@@ -301,7 +301,7 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
     },
   ];
   const deliveryFields: MasterResource<SalesOrderRow>['fields'] = [
-    { key: 'requirementDate', label: 'Delivery date', kind: 'date', required: true, notBeforeToday: true },
+    { key: 'requirementDate', label: 'Delivery date', kind: 'date', required: true, minDate: o.plantToday },
     { key: 'qty', label: 'Quantity', kind: 'number', required: true, decimals: 6, positive: true, hint: 'In the item’s base unit.' },
   ];
 
