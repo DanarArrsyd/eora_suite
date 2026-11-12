@@ -24,14 +24,14 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 | BR-INV-08 | Reservation/allocation never changes on-hand; Available = UNRESTRICTED on-hand − active allocations. | Inventory | SVC | D-014 | allocation test |
 | BR-INV-09 | Only `UNRESTRICTED` stock can be allocated, issued or shipped. | Inventory | SVC | D-014 | #6, #7 |
 | BR-INV-10 | Quantities `NUMERIC(20,6)`; discrete items enforce integer scale; UOM and conversion version mandatory. | Inventory | DB | doc 04 | unit tests |
-| BR-INV-11 | Projection equals Σ ledger; nightly reconciliation alerts on difference. | Inventory | job | ADR-0002 | rebuild test |
+| BR-INV-11 | Projection equals Σ ledger; nightly reconciliation alerts on difference. | Inventory | job (`eora:inventory:verify-balances`, nightly 02:30, D-103) | ADR-0002 | `LedgerListTest` rebuild + mismatch tests |
 
 ## Periods (PER)
 | ID | Rule | Owner | Enforce | Source | Test |
 |---|---|---|---|---|---|
 | BR-PER-01 | `effective_date` must be in an OPEN period for the plant. | Inventory | SVC | D-015 | #17 |
-| BR-PER-02 | Closed-period correction posts in current open period with `correction_of_document_id`, original date, reason, evidence, maker-checker. | Inventory + Core approval | SVC + POL | D-015 | #17 |
-| BR-PER-03 | Period reopen requires Company Super Admin request + independent approver; logged as exceptional event. | Core | POL | D-015 | reopen test |
+| BR-PER-02 | Closed-period correction posts in current open period with `correction_of_document_id`, original date, reason, evidence, maker-checker. In M3 a reversal of a document in a CLOSED month (D-102). | Inventory + Core approval | SVC + POL | D-015, D-102 | #17, `PeriodApiTest` |
+| BR-PER-03 | Period reopen requires Company Super Admin request + independent approver; logged as exceptional event. Approver = another holder of `inventory.period_reopen.approve` (CSA template, D-102). | Core | POL | D-015, D-102 | reopen test (`PeriodApiTest`) |
 | BR-PER-04 | Postings record `transaction_ts` (UTC), `production_date`, `shift_id` and `shift_date` derived from the plant calendar (tenant default → plant override) and the production-day cut-off; production date is never assumed equal to the calendar date (D-044, doc 04 §Time model). | Production/Inventory | SVC | DD-08, D-044 | shift cutoff test, #62 |
 
 ## Demand (DEM)

@@ -12,6 +12,11 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
    ```bash
    docker compose run --rm --entrypoint php db-migrate artisan eora:tenants:sync
    ```
+   Data demo (tenant baru dari skrip ini, atau tenant demo yang sudah ada tanpa posting stok):
+   ```bash
+   docker compose run --rm --entrypoint php db-migrate artisan eora:demo:stock
+   ```
+   Stok awal: coil HEAT-A101 2500 KG **Blocked** dan HEAT-A102 1800 KG **Unrestricted** (sudah di-release), sheet 400 **Blocked**, mur 5000 PCS, oli 200 L (tanpa lot) — semua di rak RM-A01. §1–2 tetap bisa dijalankan di atasnya.
 2. Web:
    ```bash
    npx pnpm@12.10.1 --filter @eora/web dev
