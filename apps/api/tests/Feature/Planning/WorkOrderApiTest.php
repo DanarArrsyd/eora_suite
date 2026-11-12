@@ -143,6 +143,15 @@ it('refuses the requester as releaser in the database too', function () {
     } catch (QueryException $e) {
         expect($e->getCode())->toBe('23514');
     }
+    // nor a fractional quantity of a whole-piece item, a past due date, or Other without a note — through SQL either
+    foreach (['qty = 2.5', 'due_date = due_date - 3650', "reason_code = 'OTHER', note = null"] as $change) {
+        try {
+            asApp($this->t, $requester, fn (EoraPostgresConnection $db) => $db->update("update work_orders set status = 'DRAFT', submitted_by = null, submitted_at = null, {$change} where id = ?", [$wo['id']]));
+            $this->fail("accepted: {$change}");
+        } catch (QueryException $e) {
+            expect($e->getCode())->toBe('23514');
+        }
+    }
     // cancelling also needs the planner's permission in the WO's plant, in SQL too
     $viewer = member($this, $this->t);
     AccessFixtures::grant($this->t, $viewer['id'], 'FGW');

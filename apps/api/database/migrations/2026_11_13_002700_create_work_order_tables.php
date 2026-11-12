@@ -129,6 +129,26 @@ return new class extends Migration
             REVOKE ALL ON FUNCTION eora_plant_calendar_date(uuid) FROM PUBLIC;
             GRANT EXECUTE ON FUNCTION eora_plant_calendar_date(uuid) TO eora_app;
 
+            -- what a draft must be (as WorkOrderController::checked()): an active finished item counted in its base unit with that
+            -- unit's decimals, a due date from the plant's today, a note when the reason is OTHER
+            CREATE OR REPLACE FUNCTION eora_check_work_order_draft(w public.work_orders) RETURNS void LANGUAGE plpgsql SET search_path = '' AS $fn$
+            BEGIN
+              IF NOT EXISTS (SELECT 1 FROM public.items i JOIN public.uoms u ON u.tenant_id = i.tenant_id AND u.id = i.base_uom_id
+                              WHERE i.tenant_id = w.tenant_id AND i.id = w.item_id AND i.item_type = 'FINISHED' AND i.status = 'ACTIVE'
+                                AND u.id = w.uom_id AND pg_catalog.scale(pg_catalog.trim_scale(w.qty)) <= u.decimals) THEN
+                RAISE EXCEPTION 'a work order makes an active finished item, counted in its base unit and decimals' USING ERRCODE = '23514';
+              END IF;
+              IF w.due_date < public.eora_plant_calendar_date(w.plant_id) THEN
+                RAISE EXCEPTION 'a work order is due today or later' USING ERRCODE = '23514';
+              END IF;
+              IF w.reason_code = 'OTHER' AND (w.note IS NULL OR pg_catalog.length(w.note) < 3) THEN
+                RAISE EXCEPTION 'a work order outside MPS for another reason explains it' USING ERRCODE = '23514';
+              END IF;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_check_work_order_draft(public.work_orders) FROM PUBLIC;
+            GRANT EXECUTE ON FUNCTION eora_check_work_order_draft(public.work_orders) TO eora_app;
+
             -- DRAFT ⇄ SUBMITTED → RELEASED by a second person; DRAFT/SUBMITTED/RELEASED → CANCELLED; nothing of what the WO
             -- asks for changes once it left the draft, and the release snapshot is written once
             CREATE OR REPLACE FUNCTION eora_guard_work_order() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
@@ -143,6 +163,7 @@ return new class extends Migration
                 IF NOT public.eora_actor_may('planning.wo.create', NEW.plant_id) THEN
                   RAISE EXCEPTION 'a work order is drafted by a planner of its plant' USING ERRCODE = '42501';
                 END IF;
+                PERFORM public.eora_check_work_order_draft(NEW);
                 IF NEW.uom_id IS DISTINCT FROM (SELECT i.base_uom_id FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id) THEN
                   RAISE EXCEPTION 'a work order counts in its item''s base unit' USING ERRCODE = '23514';
                 END IF;
@@ -159,6 +180,11 @@ return new class extends Migration
               END IF;
               IF NEW.uom_id IS DISTINCT FROM (SELECT i.base_uom_id FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id) THEN
                 RAISE EXCEPTION 'a work order counts in its item''s base unit' USING ERRCODE = '23514';
+              END IF;
+              IF NEW.status IN ('DRAFT', 'SUBMITTED') AND OLD.status = 'DRAFT'
+                 AND (NEW.status = 'SUBMITTED' OR (NEW.item_id, NEW.uom_id, NEW.qty, NEW.due_date, NEW.reason_code, NEW.note)
+                      IS DISTINCT FROM (OLD.item_id, OLD.uom_id, OLD.qty, OLD.due_date, OLD.reason_code, OLD.note)) THEN
+                PERFORM public.eora_check_work_order_draft(NEW);
               END IF;
               -- the peg is checked when it is set or the item changes on a draft, and when the release is asked; going back to
               -- draft after the delivery was cancelled stays possible, so the planner can change it
@@ -312,6 +338,8 @@ return new class extends Migration
         }
         DB::unprepared(<<<'SQL'
             DROP TABLE work_order_materials;
+            DROP TRIGGER IF EXISTS guard_lifecycle ON work_orders;
+            DROP FUNCTION IF EXISTS eora_check_work_order_draft(public.work_orders);
             DROP TABLE work_orders;
             DROP FUNCTION IF EXISTS eora_guard_work_order();
             DROP FUNCTION IF EXISTS eora_guard_work_order_material();
