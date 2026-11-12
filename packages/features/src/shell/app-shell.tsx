@@ -75,11 +75,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             navigation badges still come from mock adapters.
           </span>
         </div>
-        <div className="hidden md:block">
+        {/* min-h-0: a grid item never grows past its row; the sidebars scroll inside, the page itself never scrolls */}
+        <div className="hidden min-h-0 md:block">
           <PrimarySidebar modules={nav.modules} activeModuleId={nav.activeModuleId} badgeFor={nav.badgeFor} onPreview={previewModule} />
         </div>
         {!collapsed ? (
-          <div className="hidden xl:block">
+          <div className="hidden min-h-0 xl:block">
             <SecondarySidebar module={nav.menuModule} counts={nav.counts} pathname={nav.pathname} onClose={() => setCollapsed(true)} />
           </div>
         ) : null}
