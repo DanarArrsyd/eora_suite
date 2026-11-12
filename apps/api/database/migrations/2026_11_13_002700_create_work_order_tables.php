@@ -1,0 +1,191 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * M4 step 2 (doc 33 §1.2, D-107, D-109, G-MPS-6, BR-PLN-01, doc 16 §1): manual Work Orders outside MPS. Owner rules of
+ * 2026-11-12: PPC drafts a WO with a fixed planning-exception reason and asks for release; a second person with
+ * `planning.wo.approve` (CSA template; APR starts empty, D-068) releases or returns it, never the requester. Release
+ * snapshots the approved BOM and primary routing versions in force (required) and, per material line, the validated
+ * conversion profile version when there is one (not blocking). Pegging to a schedule line is optional and never changes
+ * demand; the WO quantity is free (D-034).
+ *
+ * The status list carries the later states of doc 16 §1 (runs, hold, completion, close) so later steps add no CHECK change.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        DB::unprepared(<<<'SQL'
+            CREATE TABLE work_orders (
+              tenant_id uuid NOT NULL REFERENCES tenants (id),
+              id uuid NOT NULL DEFAULT uuidv7(),
+              plant_id uuid NOT NULL,
+              wo_no text NOT NULL CHECK (wo_no ~ '^[A-Z0-9][A-Z0-9/_-]{0,39}$'),
+              item_id uuid NOT NULL,
+              uom_id uuid NOT NULL,
+              qty numeric(20, 6) NOT NULL CHECK (qty > 0),
+              due_date date NOT NULL,
+              status text NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'SUBMITTED', 'RELEASED', 'IN_PROGRESS', 'ON_HOLD',
+                'PRODUCTION_COMPLETE', 'CLOSED', 'CANCELLED')),
+              -- G-MPS-6: every M4 WO is outside an approved MPS and says why
+              reason_code text NOT NULL CHECK (reason_code IN ('URGENT_ORDER', 'NO_MPS_YET', 'SAMPLE_TRIAL', 'NG_REPLACEMENT', 'OTHER')),
+              note text CHECK (length(note) BETWEEN 1 AND 500 AND note = btrim(note)),
+              schedule_line_id uuid,
+              -- BR-PLN-01 snapshot, written once at release
+              bom_version_id uuid,
+              routing_version_id uuid,
+              -- the validated net weight of the item when there is one (not blocking, used by reconciliation in M5)
+              item_weight_id uuid,
+              submitted_by uuid,
+              submitted_at timestamptz,
+              released_by uuid,
+              released_at timestamptz,
+              return_reason text CHECK (length(return_reason) BETWEEN 3 AND 500 AND return_reason = btrim(return_reason)),
+              cancelled_by uuid,
+              cancelled_at timestamptz,
+              cancel_reason text CHECK (length(cancel_reason) BETWEEN 3 AND 500 AND cancel_reason = btrim(cancel_reason)),
+              created_at timestamptz NOT NULL,
+              created_by uuid NOT NULL,
+              updated_at timestamptz NOT NULL,
+              updated_by uuid NOT NULL,
+              version integer NOT NULL,
+              PRIMARY KEY (id),
+              UNIQUE (tenant_id, id),
+              UNIQUE (tenant_id, plant_id, id),
+              UNIQUE (tenant_id, wo_no),
+              FOREIGN KEY (tenant_id, plant_id) REFERENCES plants (tenant_id, id),
+              FOREIGN KEY (tenant_id, item_id) REFERENCES items (tenant_id, id),
+              FOREIGN KEY (tenant_id, uom_id) REFERENCES uoms (tenant_id, id),
+              FOREIGN KEY (tenant_id, schedule_line_id) REFERENCES delivery_schedule_lines (tenant_id, id),
+              FOREIGN KEY (tenant_id, bom_version_id, item_id) REFERENCES bom_versions (tenant_id, id, item_id),
+              FOREIGN KEY (tenant_id, routing_version_id) REFERENCES routing_versions (tenant_id, id),
+              FOREIGN KEY (tenant_id, item_weight_id) REFERENCES item_weights (tenant_id, id),
+              CHECK ((status IN ('DRAFT', 'SUBMITTED', 'CANCELLED')) OR (bom_version_id IS NOT NULL AND routing_version_id IS NOT NULL
+                     AND released_by IS NOT NULL AND released_at IS NOT NULL)),
+              CHECK ((status = 'SUBMITTED') = (submitted_by IS NOT NULL AND submitted_at IS NOT NULL) OR status NOT IN ('DRAFT', 'SUBMITTED')),
+              CHECK ((status = 'CANCELLED') = (cancelled_by IS NOT NULL AND cancelled_at IS NOT NULL AND cancel_reason IS NOT NULL))
+            );
+            CREATE INDEX work_orders_list_idx ON work_orders (tenant_id, plant_id, created_at DESC);
+            CREATE INDEX work_orders_item_idx ON work_orders (tenant_id, item_id, status);
+            CREATE INDEX work_orders_schedule_idx ON work_orders (tenant_id, schedule_line_id) WHERE schedule_line_id IS NOT NULL;
+
+            -- the material lines of the released WO: its BOM version's lines and the requirement for the WO quantity
+            CREATE TABLE work_order_materials (
+              tenant_id uuid NOT NULL REFERENCES tenants (id),
+              id uuid NOT NULL DEFAULT uuidv7(),
+              work_order_id uuid NOT NULL,
+              line_no integer NOT NULL CHECK (line_no BETWEEN 1 AND 9999),
+              bom_line_id uuid NOT NULL,
+              component_item_id uuid NOT NULL,
+              uom_id uuid NOT NULL,
+              gross_qty_per numeric(18, 6) NOT NULL CHECK (gross_qty_per > 0),
+              scrap_allowance numeric(6, 5) NOT NULL CHECK (scrap_allowance >= 0 AND scrap_allowance < 1),
+              required_qty numeric(20, 6) NOT NULL CHECK (required_qty > 0),
+              conversion_profile_version_id uuid,
+              created_at timestamptz NOT NULL,
+              created_by uuid NOT NULL,
+              updated_at timestamptz NOT NULL,
+              updated_by uuid NOT NULL,
+              version integer NOT NULL,
+              PRIMARY KEY (id),
+              UNIQUE (tenant_id, id),
+              UNIQUE (tenant_id, work_order_id, line_no),
+              FOREIGN KEY (tenant_id, work_order_id) REFERENCES work_orders (tenant_id, id),
+              FOREIGN KEY (tenant_id, bom_line_id) REFERENCES bom_lines (tenant_id, id),
+              FOREIGN KEY (tenant_id, component_item_id) REFERENCES items (tenant_id, id),
+              FOREIGN KEY (tenant_id, uom_id) REFERENCES uoms (tenant_id, id),
+              FOREIGN KEY (tenant_id, conversion_profile_version_id) REFERENCES conversion_profile_versions (tenant_id, id)
+            );
+
+            -- DRAFT ⇄ SUBMITTED → RELEASED by a second person; DRAFT/SUBMITTED/RELEASED → CANCELLED; nothing of what the WO
+            -- asks for changes once it left the draft, and the release snapshot is written once
+            CREATE OR REPLACE FUNCTION eora_guard_work_order() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            DECLARE
+              a uuid := (SELECT c.actor FROM ctx_api.context() c);
+            BEGIN
+              IF TG_OP = 'INSERT' THEN
+                IF NEW.status <> 'DRAFT' THEN
+                  RAISE EXCEPTION 'a work order starts as a draft' USING ERRCODE = '23514';
+                END IF;
+                RETURN NEW;
+              END IF;
+              IF (NEW.plant_id, NEW.wo_no) IS DISTINCT FROM (OLD.plant_id, OLD.wo_no) THEN
+                RAISE EXCEPTION 'a work order keeps its plant and number' USING ERRCODE = '23514';
+              END IF;
+              IF OLD.status <> 'DRAFT' AND (NEW.item_id, NEW.uom_id, NEW.qty, NEW.due_date, NEW.reason_code, NEW.note, NEW.schedule_line_id)
+                 IS DISTINCT FROM (OLD.item_id, OLD.uom_id, OLD.qty, OLD.due_date, OLD.reason_code, OLD.note, OLD.schedule_line_id) THEN
+                RAISE EXCEPTION 'a work order is edited only as a draft' USING ERRCODE = '23514';
+              END IF;
+              IF OLD.bom_version_id IS NOT NULL AND (NEW.bom_version_id, NEW.routing_version_id, NEW.item_weight_id, NEW.released_by, NEW.released_at)
+                 IS DISTINCT FROM (OLD.bom_version_id, OLD.routing_version_id, OLD.item_weight_id, OLD.released_by, OLD.released_at) THEN
+                RAISE EXCEPTION 'a release snapshot is history' USING ERRCODE = '23514';
+              END IF;
+              IF OLD.status IN ('CANCELLED', 'CLOSED') THEN
+                RAISE EXCEPTION 'a cancelled or closed work order is history' USING ERRCODE = '23514';
+              END IF;
+              IF NEW.status IS DISTINCT FROM OLD.status THEN
+                IF OLD.status = 'DRAFT' AND NEW.status = 'SUBMITTED' THEN
+                  IF NEW.submitted_by IS DISTINCT FROM a THEN
+                    RAISE EXCEPTION 'a release is requested by the signed actor' USING ERRCODE = '42501';
+                  END IF;
+                ELSIF OLD.status = 'SUBMITTED' AND NEW.status = 'DRAFT' THEN
+                  NULL; -- withdrawn by the requester or returned with a reason by an approver (service checks who)
+                ELSIF OLD.status = 'SUBMITTED' AND NEW.status = 'RELEASED' THEN
+                  IF NEW.released_by IS DISTINCT FROM a OR a = OLD.submitted_by THEN
+                    RAISE EXCEPTION 'a work order is released by a second person' USING ERRCODE = '42501';
+                  END IF;
+                ELSIF NEW.status = 'CANCELLED' AND OLD.status IN ('DRAFT', 'SUBMITTED', 'RELEASED') THEN
+                  IF NEW.cancelled_by IS DISTINCT FROM a THEN
+                    RAISE EXCEPTION 'a work order is cancelled by the signed actor' USING ERRCODE = '42501';
+                  END IF;
+                ELSE
+                  RAISE EXCEPTION 'work order status % cannot become %', OLD.status, NEW.status USING ERRCODE = '23514';
+                END IF;
+              END IF;
+              RETURN NEW;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_guard_work_order() FROM PUBLIC;
+            CREATE TRIGGER guard_lifecycle BEFORE INSERT OR UPDATE ON work_orders FOR EACH ROW EXECUTE FUNCTION eora_guard_work_order();
+
+            DO $do$
+            DECLARE t text;
+            BEGIN
+              FOREACH t IN ARRAY ARRAY['work_orders', 'work_order_materials'] LOOP
+                EXECUTE format('CREATE TRIGGER stamp_audit BEFORE INSERT OR UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION eora_stamp_audit()', t);
+                EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY, FORCE ROW LEVEL SECURITY', t);
+                EXECUTE format('CREATE POLICY tenant_isolation ON %I TO eora_app USING (tenant_id = (SELECT c.tenant FROM ctx_api.context() c)) WITH CHECK (tenant_id = (SELECT c.tenant FROM ctx_api.context() c))', t);
+                EXECUTE format('GRANT SELECT, INSERT ON %I TO eora_app', t);
+              END LOOP;
+            END
+            $do$;
+            -- work orders are never deleted; their material lines are written once, at release
+            GRANT UPDATE (item_id, uom_id, qty, due_date, status, reason_code, note, schedule_line_id, bom_version_id, routing_version_id, item_weight_id,
+                          submitted_by, submitted_at, released_by, released_at, return_reason, cancelled_by, cancelled_at, cancel_reason) ON work_orders TO eora_app;
+            SQL);
+
+        // the second person who releases a manual WO (G-MPS-6, D-109): the CSA template; APR starts empty (D-068)
+        DB::insert("insert into permissions (code, module, action, sensitive) values ('planning.wo.approve', 'planning', 'approve', true) on conflict (code) do nothing");
+        DB::insert("insert into role_template_permissions (template_code, permission_code) values ('CSA', 'planning.wo.approve') on conflict do nothing");
+    }
+
+    public function down(): void
+    {
+        DB::delete("delete from role_template_permissions where permission_code = 'planning.wo.approve'");
+        try {
+            DB::transaction(fn () => DB::delete("delete from permissions where code = 'planning.wo.approve'"));
+        } catch (QueryException $e) {
+            if ($e->getCode() !== '23503') {
+                throw $e;
+            }
+        }
+        DB::unprepared(<<<'SQL'
+            DROP TABLE work_order_materials;
+            DROP TABLE work_orders;
+            DROP FUNCTION IF EXISTS eora_guard_work_order();
+            SQL);
+    }
+};
