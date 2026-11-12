@@ -195,6 +195,16 @@ it('checks the draft: finished item, due date from today, a note for Other, a fi
     // the WO quantity is free against the delivery it serves (D-109)
     $wo = woCreate($this, $s, ['scheduleLineId' => $schedule, 'qty' => '120', 'reasonCode' => 'URGENT_ORDER'])->assertCreated()
         ->assertJsonPath('data.salesOrderCode', $so['code'])->assertJsonPath('data.scheduleQty', '80')->json('data');
+    // the delivery a WO serves is of its own item, even when the item is changed through SQL
+    $planner = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select created_by from work_orders where id = ?', [$wo['id']])->created_by);
+    try {
+        asApp($this->t, $planner, fn (EoraPostgresConnection $db) => $db->update(
+            'update work_orders set item_id = ?, uom_id = (select base_uom_id from items where id = ?) where id = ?', [$s['coil']['id'], $s['coil']['id'], $wo['id']],
+        ));
+        $this->fail('a work order serves a delivery of another item');
+    } catch (QueryException $e) {
+        expect($e->getCode())->toBe('23514');
+    }
     $edited = spa($this)->patchJson("/api/v1/planning/work-orders/{$wo['id']}", ['qty' => '150', 'scheduleLineId' => null], ['If-Match' => '"'.$wo['version'].'"'])
         ->assertOk()->assertJsonPath('data.qty', '150')->assertJsonPath('data.salesOrderCode', null)->json('data');
 

@@ -146,6 +146,12 @@ return new class extends Migration
                 IF NEW.uom_id IS DISTINCT FROM (SELECT i.base_uom_id FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id) THEN
                   RAISE EXCEPTION 'a work order counts in its item''s base unit' USING ERRCODE = '23514';
                 END IF;
+                IF NEW.schedule_line_id IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.status IN ('DRAFT', 'SUBMITTED')) AND NOT EXISTS (
+                     SELECT 1 FROM public.delivery_schedule_lines sl JOIN public.sales_order_lines l ON l.tenant_id = sl.tenant_id AND l.id = sl.so_line_id
+                      WHERE sl.tenant_id = NEW.tenant_id AND sl.id = NEW.schedule_line_id AND sl.plant_id = NEW.plant_id AND l.item_id = NEW.item_id
+                        AND sl.status IN ('FIRM', 'PARTIALLY_FULFILLED')) THEN
+                  RAISE EXCEPTION 'a work order serves a firm delivery of its item at its plant' USING ERRCODE = '23514';
+                END IF;
                 RETURN NEW;
               END IF;
               IF (NEW.plant_id, NEW.wo_no) IS DISTINCT FROM (OLD.plant_id, OLD.wo_no) THEN
@@ -153,6 +159,12 @@ return new class extends Migration
               END IF;
               IF NEW.uom_id IS DISTINCT FROM (SELECT i.base_uom_id FROM public.items i WHERE i.tenant_id = NEW.tenant_id AND i.id = NEW.item_id) THEN
                 RAISE EXCEPTION 'a work order counts in its item''s base unit' USING ERRCODE = '23514';
+              END IF;
+              IF NEW.schedule_line_id IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.status IN ('DRAFT', 'SUBMITTED')) AND NOT EXISTS (
+                   SELECT 1 FROM public.delivery_schedule_lines sl JOIN public.sales_order_lines l ON l.tenant_id = sl.tenant_id AND l.id = sl.so_line_id
+                    WHERE sl.tenant_id = NEW.tenant_id AND sl.id = NEW.schedule_line_id AND sl.plant_id = NEW.plant_id AND l.item_id = NEW.item_id
+                      AND sl.status IN ('FIRM', 'PARTIALLY_FULFILLED')) THEN
+                RAISE EXCEPTION 'a work order serves a firm delivery of its item at its plant' USING ERRCODE = '23514';
               END IF;
               IF OLD.status = 'DRAFT' AND NEW.status = 'DRAFT' AND NOT public.eora_actor_may('planning.wo.create', NEW.plant_id) THEN
                 RAISE EXCEPTION 'a draft is edited by a planner of its plant' USING ERRCODE = '42501';
