@@ -225,6 +225,8 @@ final class WorkOrderController
                from bom_lines l where l.bom_version_id = ? order by l.line_no",
             [$wo->id, (string) $wo->qty, $today, $today, $bom->id],
         );
+        // the deferred database checks (every BOM line in the snapshot) run now, before the answer
+        $db->statement('set constraints all immediate');
         $this->outbox->publish($db, 'wo.released', 'work_order', (string) $wo->id, ['plantId' => $wo->plant_id, 'itemId' => $wo->item_id]);
 
         return $this->respondOrder($db, (string) $wo->id);

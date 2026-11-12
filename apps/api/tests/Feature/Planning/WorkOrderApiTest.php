@@ -144,6 +144,17 @@ it('refuses the requester as releaser in the database too', function () {
     } catch (QueryException $e) {
         expect($e->getCode())->toBe('42501');
     }
+    // an approver who releases through SQL without writing the material lines is refused at commit
+    try {
+        asApp($this->t, $approver['id'], fn (EoraPostgresConnection $db) => $db->update(
+            "update work_orders set status = 'RELEASED', released_by = ?, released_at = now(), bom_version_id = ?, routing_version_id = ? where id = ?",
+            [$approver['id'], $s['bom']['id'], $s['rv']['id'], $wo['id']],
+        ));
+        $this->fail('released without its material lines');
+    } catch (QueryException|PDOException $e) {
+        // the deferred check fires at commit
+        expect((string) $e->getCode())->toBe('23514');
+    }
     // nor by first replacing who asked, then releasing: the requester is fixed while the request waits
     $other = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select gen_random_uuid() as id')->id);
     try {

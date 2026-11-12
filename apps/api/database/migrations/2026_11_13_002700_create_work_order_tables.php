@@ -227,6 +227,22 @@ return new class extends Migration
             REVOKE ALL ON FUNCTION eora_guard_work_order_material() FROM PUBLIC;
             CREATE TRIGGER guard_snapshot BEFORE INSERT ON work_order_materials FOR EACH ROW EXECUTE FUNCTION eora_guard_work_order_material();
 
+            -- a released WO carries every line of its BOM version: checked at commit (the release writes the lines after the status)
+            CREATE OR REPLACE FUNCTION eora_check_work_order_materials() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            BEGIN
+              IF NEW.status = 'RELEASED' AND OLD.status IS DISTINCT FROM 'RELEASED' AND
+                 (SELECT pg_catalog.count(*) FROM public.work_order_materials m WHERE m.tenant_id = NEW.tenant_id AND m.work_order_id = NEW.id)
+                 IS DISTINCT FROM
+                 (SELECT pg_catalog.count(*) FROM public.bom_lines l WHERE l.tenant_id = NEW.tenant_id AND l.bom_version_id = NEW.bom_version_id) THEN
+                RAISE EXCEPTION 'a released work order carries every line of its BOM version' USING ERRCODE = '23514';
+              END IF;
+              RETURN NULL;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_check_work_order_materials() FROM PUBLIC;
+            CREATE CONSTRAINT TRIGGER check_materials AFTER UPDATE ON work_orders DEFERRABLE INITIALLY DEFERRED
+              FOR EACH ROW EXECUTE FUNCTION eora_check_work_order_materials();
+
             DO $do$
             DECLARE t text;
             BEGIN
@@ -264,6 +280,7 @@ return new class extends Migration
             DROP FUNCTION IF EXISTS eora_guard_work_order();
             DROP FUNCTION IF EXISTS eora_guard_work_order_material();
             DROP FUNCTION IF EXISTS eora_actor_may(text, uuid);
+            DROP FUNCTION IF EXISTS eora_check_work_order_materials();
             SQL);
     }
 };
