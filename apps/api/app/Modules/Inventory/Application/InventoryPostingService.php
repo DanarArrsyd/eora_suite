@@ -54,6 +54,8 @@ final class InventoryPostingService
         'MAT_ISSUE' => ['ISSUE_TO_PROD'],
         // M4 step 4 (D-111): measured consumption and output of a run, in one document
         'PRODUCTION_POSTING' => ['CONSUME', 'OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT', 'OUTPUT_SCRAP'],
+        // M4 step 5 (D-113): quality disposition of a lot waiting at the QC area
+        'QC_DISPOSITION' => ['QC_RELEASE', 'QC_HOLD', 'QC_REWORK', 'QC_REJECT'],
     ];
 
     /** Asked by one role and received by another with what was measured (D-110): a return, asked by production. */
@@ -64,6 +66,8 @@ final class InventoryPostingService
     /** Requests decided by a second person, with the codes of their legs; reversals follow in M3 step 7. */
     private const array REQUEST_CODES = [
         'STOCK_ADJUSTMENT' => ['ADJ_PLUS', 'ADJ_MINUS'],
+        // D-113: a release out of policy (from HOLD, or REJECTED back to released), asked by the inspector, decided by QCS
+        'QC_DISPOSITION' => ['QC_RELEASE'],
     ];
 
     private const array PREFIX = [
@@ -180,6 +184,9 @@ final class InventoryPostingService
                         && $type === ((($command->docType === 'MAT_ISSUE') === $out) ? 'RM_WAREHOUSE' : 'MAT_AT_PROD'))
                     || $refuse('An issue moves UNRESTRICTED material of its work order from a raw-material location to Material at Production; a return moves it back.'),
                 // doc 04 rows 5 and 8: consumption leaves Material at Production for V_CONSUMED, output comes from V_PRODUCED
+                // doc 04 row 9: out of what waits for a decision (or a rejected quantity), into the QC or NG area
+                'QC_DISPOSITION' => ($leg->woId === null && ($out ? in_array($type, ['QC_AREA', 'NG_AREA'], true) : in_array($type, ['QC_AREA', 'NG_AREA'], true)))
+                    || $refuse('A disposition moves a lot between the QC area and the NG area.'),
                 'PRODUCTION_POSTING' => ($leg->movementCode === 'CONSUME'
                         ? ($out ? $type === 'MAT_AT_PROD' && $leg->woId !== null && $leg->measurementMethod !== null : $type === 'V_CONSUMED' && $leg->woId === null)
                         : ($out ? $type === 'V_PRODUCED' : ! str_starts_with($type, 'V_')) && $leg->woId === null)
@@ -193,7 +200,7 @@ final class InventoryPostingService
             if ($command->docType === 'MAT_TRANSFER') {
                 $places[$line][$out ? 'from' : 'to'][$leg->locationId] = true;
             }
-            if ($command->docType === 'PRODUCTION_POSTING') {
+            if (in_array($command->docType, ['PRODUCTION_POSTING', 'QC_DISPOSITION'], true)) {
                 // consumption and output change place and status by design (ADR-0004); the database checks each category
                 continue;
             }

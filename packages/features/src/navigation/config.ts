@@ -297,8 +297,15 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Inspection',
         items: [
-          { id: 'pending-qc', label: 'Pending QC Queue', icon: Hourglass, release: 'R1', badge: 'qc', phase: 'later' },
-          { id: 'inspection-lots', label: 'Inspection Lots', icon: ClipboardCheck, release: 'R1', phase: 'later' },
+          { id: 'pending-qc', label: 'Pending QC Queue', icon: Hourglass, release: 'R1', badge: 'qc', permission: 'quality.inspection.view', phase: 4 },
+          {
+            id: 'inspection-lots',
+            label: 'Dispositions',
+            icon: ClipboardCheck,
+            release: 'R1',
+            permission: ['quality.inspection.view', 'quality.disposition_release.approve'],
+            phase: 4,
+          },
           { id: 'hold-lots', label: 'Hold Lots', icon: CirclePause, release: 'R2', phase: 'later' },
         ],
       },
