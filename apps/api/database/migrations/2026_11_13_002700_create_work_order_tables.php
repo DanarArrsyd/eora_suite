@@ -200,6 +200,12 @@ return new class extends Migration
               IF OLD.status = 'DRAFT' AND NEW.status = 'DRAFT' AND NOT public.eora_actor_may('planning.wo.create', NEW.plant_id) THEN
                 RAISE EXCEPTION 'a draft is edited by a planner of its plant' USING ERRCODE = '42501';
               END IF;
+              -- asking for the release changes nothing of the draft: edits are made as a draft, by a planner allowed to edit
+              IF OLD.status = 'DRAFT' AND NEW.status = 'SUBMITTED'
+                 AND (NEW.item_id, NEW.uom_id, NEW.qty, NEW.due_date, NEW.reason_code, NEW.note, NEW.schedule_line_id)
+                     IS DISTINCT FROM (OLD.item_id, OLD.uom_id, OLD.qty, OLD.due_date, OLD.reason_code, OLD.note, OLD.schedule_line_id) THEN
+                RAISE EXCEPTION 'a release request carries no edits of the draft' USING ERRCODE = '23514';
+              END IF;
               IF OLD.status <> 'DRAFT' AND (NEW.item_id, NEW.uom_id, NEW.qty, NEW.due_date, NEW.reason_code, NEW.note, NEW.schedule_line_id)
                  IS DISTINCT FROM (OLD.item_id, OLD.uom_id, OLD.qty, OLD.due_date, OLD.reason_code, OLD.note, OLD.schedule_line_id) THEN
                 RAISE EXCEPTION 'a work order is edited only as a draft' USING ERRCODE = '23514';

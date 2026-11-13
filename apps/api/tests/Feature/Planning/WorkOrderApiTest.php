@@ -189,6 +189,20 @@ it('refuses the requester as releaser in the database too', function () {
     } catch (QueryException $e) {
         expect($e->getCode())->toBe('23514');
     }
+    // asking for the release changes nothing of the draft, even in one SQL update (edits need the planner's edit permission)
+    asApp($this->t, $requester, fn (EoraPostgresConnection $db) => $db->update(
+        "update work_orders set status = 'DRAFT', submitted_by = null, submitted_at = null where id = ?", [$wo['id']],
+    ));
+    foreach (['qty = qty + 1', 'due_date = due_date + 1', "reason_code = 'SAMPLE_TRIAL'"] as $change) {
+        try {
+            asApp($this->t, $requester, fn (EoraPostgresConnection $db) => $db->update(
+                "update work_orders set status = 'SUBMITTED', submitted_by = ?, submitted_at = now(), {$change} where id = ?", [$requester, $wo['id']],
+            ));
+            $this->fail("submitted with an edit: {$change}");
+        } catch (QueryException $e) {
+            expect($e->getCode())->toBe('23514');
+        }
+    }
     expect($sent['status'])->toBe('SUBMITTED');
 })->group('integration', 'planning');
 
