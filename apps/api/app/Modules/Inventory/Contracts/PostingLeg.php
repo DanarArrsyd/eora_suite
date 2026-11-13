@@ -24,6 +24,8 @@ final readonly class PostingLeg
         public ?string $enteredUomId = null,
         public ?string $uomConversionId = null,
         public ?string $reversesMovementId = null,
+        /** The work order whose material this leg moves (issue, return, their reversals; M4-D3). */
+        public ?string $woId = null,
     ) {
         if (! is_numeric($qty) || preg_match('/^-?\d{1,14}(\.\d{1,6})?$/', $qty) !== 1 || bccomp($qty, '0', 6) === 0) {
             throw new InvalidArgumentException('A leg quantity is a non-zero decimal with at most 6 decimals.');

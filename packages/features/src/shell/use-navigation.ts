@@ -27,7 +27,7 @@ const LIVE_MODULES = new Set(['master', 'admin', 'materials', 'inventory']);
  */
 const PARTLY_LIVE: Record<string, readonly string[]> = {
   demand: ['demand.sales_order.view'],
-  materials: ['materials.receipt.view', 'materials.incoming_release.view', 'production.lot_split.view'],
+  materials: ['materials.receipt.view', 'materials.incoming_release.view', 'production.lot_split.view', 'materials.issue.view', 'materials.return.view'],
   inventory: [
     'inventory.stock.view',
     'inventory.adjustment.view',

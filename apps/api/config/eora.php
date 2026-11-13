@@ -33,6 +33,9 @@ use App\Modules\Demand\Queries\ScheduleLinesQuery;
 use App\Modules\Inventory\Queries\AdjustmentsQuery;
 use App\Modules\Inventory\Queries\DocumentsQuery;
 use App\Modules\Inventory\Queries\LotsQuery;
+use App\Modules\Inventory\Queries\MaterialAtProductionQuery;
+use App\Modules\Inventory\Queries\MaterialIssuesQuery;
+use App\Modules\Inventory\Queries\MaterialReturnsQuery;
 use App\Modules\Inventory\Queries\MovementsQuery;
 use App\Modules\Inventory\Queries\PeriodsQuery;
 use App\Modules\Inventory\Queries\ReceiptsQuery;
@@ -123,6 +126,9 @@ return [
         'inventory.movements' => MovementsQuery::class,
         'inventory.reversals' => ReversalsQuery::class,
         'inventory.periods' => PeriodsQuery::class,
+        'materials.issues' => MaterialIssuesQuery::class,
+        'materials.returns' => MaterialReturnsQuery::class,
+        'inventory.material_at_production' => MaterialAtProductionQuery::class,
         'exchange.import_jobs' => ImportJobsQuery::class,
         'exchange.export_jobs' => ExportJobsQuery::class,
     ],

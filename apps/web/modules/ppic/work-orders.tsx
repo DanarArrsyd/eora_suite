@@ -69,6 +69,9 @@ type Material = {
   grossQtyPer: string;
   requiredQty: string;
   conversionProfileVersion: number | null;
+  /** D-110: issued so far (less reversals) and still at the work centers (less returns). */
+  issuedQty: string;
+  atProductionQty: string;
 };
 
 type WorkOrder = WorkOrderRow & { materials: Material[]; plantToday: string };
@@ -216,6 +219,7 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
   const canSubmit = permissions.includes('planning.wo.submit');
   const canPost = permissions.includes('planning.wo.post');
   const canApprove = permissions.includes('planning.wo.approve');
+  const canIssue = permissions.includes('materials.issue.post') && permissions.includes('materials.issue.create');
   const router = useRouter();
   const client = useQueryClient();
   const [notice, setNotice] = React.useState<string | null>(null);
@@ -341,6 +345,8 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
     { id: 'itemCode', header: 'Material', lead: true, cell: (m) => <span className="font-mono">{m.itemCode}</span>, sub: (m) => m.itemName },
     { id: 'grossQtyPer', header: 'Per piece', numeric: true, cell: (m) => `${m.grossQtyPer} ${m.uomCode}` },
     { id: 'requiredQty', header: 'Required', numeric: true, critical: true, cell: (m) => `${m.requiredQty} ${m.uomCode}` },
+    { id: 'issuedQty', header: 'Issued', numeric: true, cell: (m) => `${m.issuedQty} ${m.uomCode}` },
+    { id: 'atProductionQty', header: 'At production', numeric: true, cell: (m) => `${m.atProductionQty} ${m.uomCode}` },
     { id: 'conversionProfileVersion', header: 'Conversion profile', cell: (m) => (m.conversionProfileVersion ? `v${m.conversionProfileVersion}` : '—') },
   ];
   const status = o.status === 'SUBMITTED' || o.status === 'RELEASED' || o.status === 'CANCELLED' ? o.status : 'DRAFT';
@@ -379,6 +385,11 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
                 Release
               </Button>
             </>
+          ) : null}
+          {o.status === 'RELEASED' && canIssue ? (
+            <Button variant="primary" onClick={() => router.push(`/materials/material-issue?wo=${o.id}`)}>
+              Issue material
+            </Button>
           ) : null}
           {((o.status === 'DRAFT' || o.status === 'SUBMITTED') && canCreate) || (o.status === 'RELEASED' && canPost) ? (
             <Button variant="ghost" onClick={() => setAsk('cancel')}>

@@ -50,6 +50,13 @@ final class InventoryPostingService
         'INCOMING_RELEASE' => ['INCOMING_RELEASE'],
         'MAT_TRANSFER' => ['TRANSFER_LOC'],
         'LOT_SPLIT' => ['LOT_SPLIT_OUT', 'LOT_SPLIT_IN'],
+        // M4 step 3 (D-110): material issue to a released work order
+        'MAT_ISSUE' => ['ISSUE_TO_PROD'],
+    ];
+
+    /** Asked by one role and received by another with what was measured (D-110): a return, asked by production. */
+    private const array RECEIVED = [
+        'MAT_RETURN' => ['RETURN_FROM_PROD'],
     ];
 
     /** Requests decided by a second person, with the codes of their legs; reversals follow in M3 step 7. */
@@ -59,7 +66,7 @@ final class InventoryPostingService
 
     private const array PREFIX = [
         'RM_RECEIPT' => 'RCV', 'INCOMING_RELEASE' => 'REL', 'MAT_ISSUE' => 'ISS', 'CUSTODY_ACCEPT' => 'CUS', 'MAT_TRANSFER' => 'TRF',
-        'MAT_RETURN' => 'RET', 'LOT_SPLIT' => 'SPL', 'PRODUCTION_POSTING' => 'PRD', 'QC_DISPOSITION' => 'QCD', 'FG_RECEIPT' => 'FGR',
+        'MAT_RETURN' => 'RTN', 'LOT_SPLIT' => 'SPL', 'PRODUCTION_POSTING' => 'PRD', 'QC_DISPOSITION' => 'QCD', 'FG_RECEIPT' => 'FGR',
         'PICK' => 'PCK', 'SHIPMENT' => 'SHP', 'SCRAP_DISPOSITION' => 'SCR', 'REWORK_POSTING' => 'RWK', 'STOCK_ADJUSTMENT' => 'ADJ', 'REVERSAL' => 'REV',
     ];
 
@@ -147,11 +154,14 @@ final class InventoryPostingService
         foreach ($command->legs as $leg) {
             $type = $types[$leg->locationId] ?? throw new DomainProblem(422, 'UNKNOWN_LOCATION', 'Unknown location', 'A leg names a location that does not exist.');
             $out = str_starts_with($leg->qty, '-');
-            if (! in_array($leg->movementCode, (self::DIRECT + self::REQUEST_CODES)[$command->docType], true)) {
+            if (! in_array($leg->movementCode, (self::DIRECT + self::REQUEST_CODES + self::RECEIVED)[$command->docType], true)) {
                 $refuse("A {$command->docType} does not post {$leg->movementCode}.");
             }
             if ($leg->reversesMovementId !== null) {
                 $refuse('Only a reversal reverses a leg.');
+            }
+            if ($leg->woId !== null && ! in_array($command->docType, ['MAT_ISSUE', 'MAT_RETURN'], true)) {
+                $refuse("A {$command->docType} does not name a work order.");
             }
             match ($command->docType) {
                 // BR-ISS-06, D-062: an item that needs its incoming release is received BLOCKED, any other UNRESTRICTED
@@ -163,6 +173,10 @@ final class InventoryPostingService
                 // doc 04 row 12: ADJ_PLUS comes from the adjustment location into stock, ADJ_MINUS goes back to it
                 'STOCK_ADJUSTMENT' => (($leg->movementCode === 'ADJ_PLUS') === $out ? $type === 'V_ADJUSTMENT' : ! str_starts_with($type, 'V_'))
                     || $refuse('An adjustment moves stock between the plant\'s adjustment location and one physical location.'),
+                // doc 04 rows 3 and 6: an issue moves UNRESTRICTED raw material to Material at Production, a return back
+                'MAT_ISSUE', 'MAT_RETURN' => ($leg->stockStatus === 'UNRESTRICTED' && $leg->woId !== null
+                        && $type === ((($command->docType === 'MAT_ISSUE') === $out) ? 'RM_WAREHOUSE' : 'MAT_AT_PROD'))
+                    || $refuse('An issue moves UNRESTRICTED material of its work order from a raw-material location to Material at Production; a return moves it back.'),
                 default => ! str_starts_with($type, 'V_') || $refuse('A transfer or split moves between physical locations.'),
             };
             if ($command->docType === 'LOT_SPLIT' && $leg->lotId === null) {
@@ -281,9 +295,9 @@ final class InventoryPostingService
         }
         $legs = array_map(static fn (stdClass $m) => [
             'movementCode' => $m->movement_code, 'locationId' => $m->location_id, 'itemId' => $m->item_id, 'lotId' => $m->lot_id,
-            'stockStatus' => $m->stock_status, 'qty' => $m->qty, 'reversesMovementId' => $m->id,
+            'stockStatus' => $m->stock_status, 'qty' => $m->qty, 'reversesMovementId' => $m->id, 'woId' => $m->wo_id,
         ], $db->select(
-            'select id, movement_code, location_id, item_id, lot_id, stock_status, trim_scale(-qty_signed)::text as qty from inventory_movements where document_id = ? order by leg_no',
+            'select id, movement_code, location_id, item_id, lot_id, stock_status, trim_scale(-qty_signed)::text as qty, wo_id from inventory_movements where document_id = ? order by leg_no',
             [$documentId],
         ));
         $plant = (string) $original->plant_id;
@@ -354,9 +368,13 @@ final class InventoryPostingService
             return $previous;
         }
         $doc = $this->decidable($db, $requestId) ?? throw new LogicException('An approval decides a submitted request.');
+        if (isset(self::RECEIVED[$doc->doc_type])) {
+            throw new LogicException('A return is received with what was measured, not approved.');
+        }
         $request = json_decode((string) $doc->request, true, flags: JSON_THROW_ON_ERROR);
         $command = new PostingCommand((string) $doc->doc_type, (string) $doc->plant_id, $key, array_values(array_map(static fn (array $l) => new PostingLeg(
             $l['movementCode'], $l['locationId'], $l['itemId'], $l['lotId'], $l['stockStatus'], $l['qty'], reversesMovementId: $l['reversesMovementId'] ?? null,
+            woId: $l['woId'] ?? null,
         ), $request['legs'])), effectiveDate: (string) $doc->effective_date, note: $doc->note, requestHash: $hash);
         $this->checkLegs($db, $command);
         $reversed = $doc->reverses_document_id;
@@ -419,7 +437,7 @@ final class InventoryPostingService
     {
         $doc = $db->selectOne(
             'select id, doc_type, plant_id, status, requested_by, effective_date::text as effective_date, note, request::text as request, reverses_document_id,
-                    correction_of_document_id
+                    correction_of_document_id, source_id
                from inventory_documents where id = ? and requested_by is not null for update',
             [$requestId],
         ) ?? throw new DomainProblem(404, 'NOT_FOUND', 'Not found');
@@ -434,6 +452,114 @@ final class InventoryPostingService
         }
 
         return $doc;
+    }
+
+    /**
+     * Asks for a return (D-110, doc 04 row 6): production names the work order, its work center's Material at Production
+     * location, the item, lot and quantity. Nothing moves until materials receives it. A retry under the same key answers
+     * with the same request; the key used for another request is refused (409).
+     *
+     * @return array{documentId: string, replayed: bool}
+     */
+    public function requestReturn(EoraPostgresConnection $db, string $plantId, string $key, string $woId, string $locationId, string $itemId, ?string $lotId, string $qty, ?string $note): array
+    {
+        $hash = self::returnHash($plantId, $woId, $locationId, $itemId, $lotId, $qty, $note);
+        $previous = $this->requested($db, $key, 'MAT_RETURN', $hash);
+        if ($previous !== null) {
+            return ['documentId' => $previous, 'replayed' => true];
+        }
+        $day = $this->calendar->resolve($db, $plantId, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
+        $request = ['hash' => $hash, 'asked' => ['locationId' => $locationId, 'itemId' => $itemId, 'lotId' => $lotId, 'qty' => $qty]];
+        $id = (string) $db->selectOne(
+            "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, requested_by, submitted_at, note, request, source_type, source_id, idempotency_key)
+             values ((select c.tenant from ctx_api.context() c), ?, 'MAT_RETURN', 'SUBMITTED', ?, (select c.actor from ctx_api.context() c), now(), ?, ?::jsonb, 'work_order', ?, ?)
+             returning id",
+            [$plantId, $day, $note, json_encode($request, JSON_THROW_ON_ERROR), $woId, $key],
+        )->id;
+        $this->audit->record($db, 'inventory_document.submitted', 'inventory_document', $id, null,
+            (array) $db->selectOne('select * from inventory_documents where id = ?', [$id]), ['docType' => 'MAT_RETURN'], $plantId);
+        $this->outbox->publish($db, 'materials.return_requested', 'inventory_document', $id, ['docType' => 'MAT_RETURN', 'plantId' => $plantId, 'workOrderId' => $woId]);
+
+        return ['documentId' => $id, 'replayed' => false];
+    }
+
+    /**
+     * Receives a return as measured (D-110, BR-ISS-05): out of the asked Material at Production location, into the chosen
+     * raw-material location, with the weighed or counted quantity (which may differ from the asked one; both are kept).
+     * Received by someone other than who asked; retried under the same key, it answers as it posted.
+     */
+    public function receiveReturn(EoraPostgresConnection $db, string $requestId, string $key, string $toLocationId, string $qty): PostingResult
+    {
+        $hash = self::receiveHash($requestId, $toLocationId, $qty);
+        $previous = $this->claim($db, $key, $hash);
+        if ($previous !== null) {
+            return $previous;
+        }
+        $doc = $this->decidable($db, $requestId) ?? throw new LogicException('A receipt decides a submitted return.');
+        if ($doc->doc_type !== 'MAT_RETURN') {
+            throw new DomainProblem(404, 'NOT_FOUND', 'Not found');
+        }
+        $asked = json_decode((string) $doc->request, true, flags: JSON_THROW_ON_ERROR)['asked'];
+        $wo = (string) $doc->source_id;
+        $command = new PostingCommand('MAT_RETURN', (string) $doc->plant_id, $key, [
+            new PostingLeg('RETURN_FROM_PROD', $asked['locationId'], $asked['itemId'], $asked['lotId'], 'UNRESTRICTED', '-'.$qty, woId: $wo),
+            new PostingLeg('RETURN_FROM_PROD', $toLocationId, $asked['itemId'], $asked['lotId'], 'UNRESTRICTED', $qty, woId: $wo),
+        ], effectiveDate: (string) $doc->effective_date, note: $doc->note, requestHash: $hash);
+        $this->checkLegs($db, $command);
+        $db->statement("set local statement_timeout = '10s'");
+        try {
+            $result = $this->write($db, $command, $requestId);
+            $db->statement('set constraints all immediate');
+        } catch (QueryException $e) {
+            throw $this->refusal($e) ?? $e;
+        }
+
+        return $result;
+    }
+
+    /** The hash a return request is replayed by: callers claim the key with it before checking anything that may change. */
+    public static function returnHash(string $plantId, string $woId, string $locationId, string $itemId, ?string $lotId, string $qty, ?string $note): string
+    {
+        return hash('sha256', json_encode(['MAT_RETURN', $plantId, $woId, $locationId, $itemId, $lotId, $qty, $note], JSON_THROW_ON_ERROR));
+    }
+
+    /** The hash a return receipt is replayed by (see returnHash()). */
+    public static function receiveHash(string $requestId, string $toLocationId, string $qty): string
+    {
+        return hash('sha256', json_encode(['receive', $requestId, $toLocationId, $qty], JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * M4-D3, BR-ISS-02: a work order never takes from Material at Production more than it has there (per work center, item,
+     * lot and status), while the balance rows are locked; a reversal of an issue whose material has been returned or used
+     * meets this as INSUFFICIENT_STOCK (REVERSAL_BLOCKED_BY_DOWNSTREAM).
+     *
+     * @param  array<string, stdClass>  $items
+     */
+    private function requireWorkOrderStock(EoraPostgresConnection $db, PostingCommand $command, array $items): void
+    {
+        $out = [];
+        foreach ($command->legs as $leg) {
+            if ($leg->woId !== null) {
+                $k = implode('|', [$leg->woId, $leg->locationId, $leg->itemId, $leg->lotId ?? '', $leg->stockStatus]);
+                $out[$k] = bcadd($out[$k] ?? '0', self::num($leg->qty), 6);
+            }
+        }
+        foreach ($out as $k => $delta) {
+            if (bccomp($delta, '0', 6) >= 0) {
+                continue;
+            }
+            [$wo, $location, $item, $lot, $status] = explode('|', $k);
+            $there = $db->selectOne(
+                'select coalesce(sum(m.qty_signed), 0)::text as q, (select location_type from locations where id = ?) as type
+                   from inventory_movements m where m.wo_id = ? and m.location_id = ? and m.item_id = ? and m.lot_id is not distinct from ?::uuid and m.stock_status = ? and m.uom_id = ?',
+                [$location, $wo, $location, $item, $lot === '' ? null : $lot, $status, $items[$item]->base_uom_id],
+            );
+            if ($there->type === 'MAT_AT_PROD' && bccomp(bcadd(self::num((string) $there->q), $delta, 6), '0', 6) < 0) {
+                throw new DomainProblem(409, 'INSUFFICIENT_STOCK', 'Not at the work center',
+                    sprintf('This work order has only %s of it at the work center; the posting needs %s.', $this->plain(self::num((string) $there->q)), $this->plain(bcmul($delta, '-1', 6))));
+            }
+        }
     }
 
     private function lockKey(EoraPostgresConnection $db, string $key): void
@@ -515,6 +641,7 @@ final class InventoryPostingService
             }
         }
         $balances = $this->lockBalances($db, $deltas);
+        $this->requireWorkOrderStock($db, $command, $items);
 
         $plantCode = (string) $db->selectOne('select code from plants where id = ?', [$command->plantId])->code;
         $year = (int) substr($effective, 0, 4);
@@ -545,10 +672,10 @@ final class InventoryPostingService
         foreach ($command->legs as $i => $leg) {
             $db->insert(
                 'insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, reverses_movement_id, plant_id, location_id, item_id, lot_id,
-                                                  stock_status, uom_id, qty_signed, entered_qty, entered_uom_id, uom_conversion_id)
-                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                                                  stock_status, uom_id, qty_signed, entered_qty, entered_uom_id, uom_conversion_id, wo_id)
+                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [$documentId, $i + 1, $leg->movementCode, $leg->reversesMovementId, $command->plantId, $leg->locationId, $leg->itemId, $leg->lotId,
-                    $leg->stockStatus, $items[$leg->itemId]->base_uom_id, $leg->qty, $leg->enteredQty, $leg->enteredUomId, $leg->uomConversionId],
+                    $leg->stockStatus, $items[$leg->itemId]->base_uom_id, $leg->qty, $leg->enteredQty, $leg->enteredUomId, $leg->uomConversionId, $leg->woId],
             );
         }
         foreach ($command->genealogy as $g) {

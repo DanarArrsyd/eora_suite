@@ -361,14 +361,29 @@ final class WorkOrderController
             'grossQtyPer' => (string) $m->gross_qty_per,
             'requiredQty' => (string) $m->required_qty,
             'conversionProfileVersion' => $m->cp_version === null ? null : (int) $m->cp_version,
+            // D-110: issued so far (issues less their reversals) and what is still at the work centers (less returns)
+            'issuedQty' => (string) $m->issued_qty,
+            'atProductionQty' => (string) $m->at_production_qty,
         ], $db->select(
-            'select m.line_no, m.component_item_id, i.code as item_code, i.name as item_name, u.code as uom_code, trim_scale(m.gross_qty_per)::text as gross_qty_per,
-                    trim_scale(m.required_qty)::text as required_qty, v.version_no as cp_version
+            "select m.line_no, m.component_item_id, i.code as item_code, i.name as item_name, u.code as uom_code, trim_scale(m.gross_qty_per)::text as gross_qty_per,
+                    trim_scale(m.required_qty)::text as required_qty, v.version_no as cp_version,
+                    trim_scale(coalesce(f.issued, 0))::text as issued_qty, trim_scale(coalesce(f.at_production, 0))::text as at_production_qty
                from work_order_materials m join items i on i.id = m.component_item_id join uoms u on u.id = m.uom_id
                left join conversion_profile_versions v on v.id = m.conversion_profile_version_id
-              where m.work_order_id = ? order by m.line_no',
+               left join lateral (select sum(g.qty_signed) filter (where g.movement_code = 'ISSUE_TO_PROD') as issued, sum(g.qty_signed) as at_production
+                                    from inventory_movements g join locations gl on gl.id = g.location_id and gl.location_type = 'MAT_AT_PROD'
+                                   where g.wo_id = m.work_order_id and g.item_id = m.component_item_id) f on true
+              where m.work_order_id = ? order by m.line_no",
             [$id],
         ));
+        // D-110: the work centers of the released routing, where its material is issued (first operation first)
+        $row['workCenters'] = array_map(static fn (stdClass $w) => ['id' => (string) $w->id, 'code' => (string) $w->code, 'name' => (string) $w->name, 'opSeq' => (int) $w->op_seq],
+            $db->select(
+                'select wc.id, wc.code, wc.name, min(o.op_seq) as op_seq from work_orders w
+                   join routing_operations o on o.routing_version_id = w.routing_version_id join work_centers wc on wc.id = o.work_center_id
+                  where w.id = ? group by wc.id, wc.code, wc.name order by min(o.op_seq)',
+                [$id],
+            ));
         $row['plantToday'] = $this->today($db, (string) $row['plantId']);
 
         return Concurrency::withVersion(response()->json(['data' => $row], $status), (int) $row['version']);

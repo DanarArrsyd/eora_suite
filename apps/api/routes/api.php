@@ -7,6 +7,7 @@ use App\Modules\Core\Http\ResourceController;
 use App\Modules\Demand\Http\SalesOrderController;
 use App\Modules\Inventory\Http\AdjustmentController;
 use App\Modules\Inventory\Http\LotSplitController;
+use App\Modules\Inventory\Http\MaterialFlowController;
 use App\Modules\Inventory\Http\PeriodController;
 use App\Modules\Inventory\Http\ReceiptController;
 use App\Modules\Inventory\Http\ReversalController;
@@ -187,6 +188,10 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('adjustments', [AdjustmentController::class, 'store'])->name('adjustments.store');
         Route::post('adjustments/{adjustment}/approve', [AdjustmentController::class, 'approve'])->name('adjustments.approve');
         Route::post('adjustments/{adjustment}/reject', [AdjustmentController::class, 'reject'])->name('adjustments.reject');
+        Route::post('material-issues', [MaterialFlowController::class, 'issue'])->name('material-issues.store');
+        Route::post('material-returns', [MaterialFlowController::class, 'requestReturn'])->name('material-returns.store');
+        Route::post('material-returns/{return}/receive', [MaterialFlowController::class, 'receive'])->name('material-returns.receive');
+        Route::post('material-returns/{return}/refuse', [MaterialFlowController::class, 'refuse'])->name('material-returns.refuse');
         Route::post('reversals', [ReversalController::class, 'store'])->name('reversals.store');
         Route::post('reversals/{reversal}/approve', [ReversalController::class, 'approve'])->name('reversals.approve');
         Route::post('reversals/{reversal}/reject', [ReversalController::class, 'reject'])->name('reversals.reject');
