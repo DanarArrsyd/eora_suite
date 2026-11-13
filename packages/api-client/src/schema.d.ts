@@ -21038,6 +21038,7 @@ export interface operations {
                         qty: string;
                         /** @enum {string|null} */
                         reasonCode?: "DIMENSION" | "VISUAL" | "BURR" | "CRACK" | "MATERIAL" | "OTHER" | null;
+                        /** @description an outcome's note: 3 to 500 characters, or none */
                         note?: string | null;
                     }[];
                     /** Format: uuid */

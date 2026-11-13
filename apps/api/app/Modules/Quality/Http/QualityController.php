@@ -60,7 +60,8 @@ final class QualityController
             'lines.*.outcome' => ['required', Rule::in(QualityController::OUTCOMES)],
             'lines.*.qty' => ['required', 'string', 'regex:'.ReceiptController::QTY],
             'lines.*.reasonCode' => ['nullable', Rule::in(QualityController::REASONS)],
-            'lines.*.note' => ['nullable', 'string', 'max:500'],
+            // an outcome's note: 3 to 500 characters, or none
+            'lines.*.note' => ['nullable', 'string', 'min:3', 'max:500'],
             'ngLocationId' => ['nullable', 'uuid'],
             'note' => ['nullable', 'string', 'max:500'],
         ]);

@@ -40538,6 +40538,8 @@
                                                         "string",
                                                         "null"
                                                     ],
+                                                    "description": "an outcome's note: 3 to 500 characters, or none",
+                                                    "minLength": 3,
                                                     "maxLength": 500
                                                 }
                                             },

@@ -66,6 +66,9 @@ test('pending QC: the inspector releases, holds and rejects parts of a lot; the 
   await page.getByRole('button', { name: 'Post decision' }).click();
   await expect(page.getByText('Hold: choose the reason.')).toBeVisible();
   await choose(page, page.getByRole('combobox', { name: 'Hold reason' }), 'Dimension out of tolerance');
+  await page.getByRole('textbox', { name: 'Hold note' }).fill('OK');
+  await page.getByRole('button', { name: 'Post decision' }).click();
+  await expect(page.getByText('Hold: write a note of at least 3 characters, or leave it empty.')).toBeVisible();
   await page.getByRole('textbox', { name: 'Hold note' }).fill('Hole 0.2 mm off');
   await page.getByRole('textbox', { name: 'Reject (PCS)' }).fill('40');
   await choose(page, page.getByRole('combobox', { name: 'Reject reason' }), 'Crack');

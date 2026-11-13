@@ -60,6 +60,7 @@ it('releases, holds, reworks and rejects parts of a lot; the rest keeps waiting 
     // a hold, rework or reject gives its reason; Other explains it; never more than waits
     qcDispose($this, $f['pending'], [['outcome' => 'HOLD', 'qty' => '1']], 'qc-dispose-0009')->assertStatus(422)->assertJsonValidationErrors(['lines.0.reasonCode']);
     qcDispose($this, $f['pending'], [['outcome' => 'REJECT', 'qty' => '1', 'reasonCode' => 'OTHER']], 'qc-dispose-0008')->assertStatus(422)->assertJsonValidationErrors(['lines.0.note']);
+    qcDispose($this, $f['pending'], [['outcome' => 'RELEASE', 'qty' => '1', 'note' => 'OK']], 'qc-dispose-0006')->assertStatus(422)->assertJsonValidationErrors(['lines.0.note']);
     qcDispose($this, $f['pending'], [['outcome' => 'RELEASE', 'qty' => '91']], 'qc-dispose-0007')->assertStatus(409)->assertJsonPath('code', 'INSUFFICIENT_STOCK');
 
     $posted = qcDispose($this, $f['pending'], $lines)->assertCreated()->assertJsonPath('data.docNo', "QCD-P1-{$year}-0001")->json('data');

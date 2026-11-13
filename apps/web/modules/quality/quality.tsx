@@ -300,6 +300,7 @@ function LotPage({ id }: { id: string }) {
       if (precision) return `${label}: ${precision}`;
       if (o !== 'RELEASE' && !d.reasonCode) return `${label}: choose the reason.`;
       if (d.reasonCode === 'OTHER' && d.note.trim().length < 3) return `${label}: explain it when the reason is Other.`;
+      if (d.note.trim() !== '' && d.note.trim().length < 3) return `${label}: write a note of at least 3 characters, or leave it empty.`;
       total += scaled(d.qty);
     }
     if (total > scaled(r.qty)) return `Only ${r.qty} ${r.uomCode} waits here.`;
