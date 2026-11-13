@@ -84,6 +84,11 @@ it('issues a released WO\'s materials to a work center of its routing without co
     // over-issue is allowed (a whole coil): 60 KG against 50 required (D-110)
     $issued = mfIssue($this, $f)->assertCreated()->assertJsonPath('data.docNo', "ISS-P1-{$year}-0001")->json('data');
     mfIssue($this, $f)->assertOk()->assertJsonPath('data.replayed', true)->assertJsonPath('data.documentId', $issued['documentId']);
+    // a retry replays even after the work center's location was deactivated; a new issue there is refused
+    AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->update("update locations set status = 'INACTIVE' where code = 'MAP-PRS-01'"));
+    mfIssue($this, $f)->assertOk()->assertJsonPath('data.documentId', $issued['documentId']);
+    mfIssue($this, $f, [], 'mf-issue-0010')->assertStatus(422)->assertJsonValidationErrors(['workCenterId']);
+    AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->update("update locations set status = 'ACTIVE' where code = 'MAP-PRS-01'"));
     expect(mfCoil($this->t, $f))->toBe(['MAP-PRS-01' => '60', 'RM-01' => '20']);
     // the stock list shows material at a work center with its work center, not a warehouse (BR-INV-01)
     $rows = collect(spa($this)->getJson('/api/v1/query/inventory.stock?filter[itemId]='.$f['coil']['id'])->assertOk()->json('data'))->keyBy('locationCode');

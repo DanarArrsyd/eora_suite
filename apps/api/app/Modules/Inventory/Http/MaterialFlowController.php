@@ -57,6 +57,7 @@ final class MaterialFlowController
         $wo = $this->workOrder($db, $data['workOrderId']);
         $plant = $this->plant($db, (string) $wo->plant_id, 'materials.issue.post');
         $this->plant($db, $plant, 'materials.issue.create');
+        // resolved whatever its state, so a retry replays even after the location was deactivated (checked active below)
         $production = $this->productionLocation($db, $wo, $data['workCenterId']);
         $legs = [];
         $seen = [];
@@ -84,6 +85,9 @@ final class MaterialFlowController
         if ($status !== 'RELEASED') {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Work order not released', "Material is issued to a released work order; {$wo->wo_no} is ".strtolower($status).'.');
         }
+        // a new issue goes only to an active location, held until the posting commits so it is not deactivated in between
+        $db->selectOne("select 1 as ok from locations where id = ? and status = 'ACTIVE' for share", [$production])
+            ?? throw ValidationException::withMessages(['workCenterId' => 'The Material at Production location of this work center is inactive. Choose another work center or reactivate it.']);
         $materials = [];
         foreach ($db->select('select distinct component_item_id from work_order_materials where work_order_id = ?', [$wo->id]) as $row) {
             $materials[(string) $row->component_item_id] = true;
@@ -130,7 +134,7 @@ final class MaterialFlowController
         $item = strtolower($data['itemId']);
         $lot = isset($data['lotId']) ? strtolower($data['lotId']) : null;
         $note = self::optionalText($data['note'] ?? null);
-        $production = $this->productionLocation($db, $wo, $data['workCenterId'], issuing: false);
+        $production = $this->productionLocation($db, $wo, $data['workCenterId']);
         $previous = $this->postings->requested($db, $key, 'MAT_RETURN',
             InventoryPostingService::returnHash($plant, (string) $wo->id, $production, $item, $lot, (string) $data['qty'], $note));
         if ($previous !== null) {
@@ -199,15 +203,15 @@ final class MaterialFlowController
     }
 
     /**
-     * D-110: the Material at Production location of a work center of the WO's routing (M4-D3: one per work center); an
-     * issue needs it active and holds it until the posting commits.
+     * D-110: the Material at Production location of a work center of the WO's routing (M4-D3: one per work center), active
+     * or not; a new issue checks it is active after its key is claimed.
      */
-    private function productionLocation(EoraPostgresConnection $db, stdClass $wo, string $workCenterId, bool $issuing = true): string
+    private function productionLocation(EoraPostgresConnection $db, stdClass $wo, string $workCenterId): string
     {
         $row = $db->selectOne(
             "select l.id from locations l
-              where l.plant_id = ? and l.location_type = 'MAT_AT_PROD' and l.work_center_id = ?".($issuing ? " and l.status = 'ACTIVE'" : '').'
-                and exists (select 1 from routing_operations o where o.routing_version_id = ?::uuid and o.work_center_id = l.work_center_id)'.($issuing ? ' for share of l' : ''),
+              where l.plant_id = ? and l.location_type = 'MAT_AT_PROD' and l.work_center_id = ?
+                and exists (select 1 from routing_operations o where o.routing_version_id = ?::uuid and o.work_center_id = l.work_center_id)",
             [$wo->plant_id, strtolower($workCenterId), $wo->routing_version_id],
         );
 
