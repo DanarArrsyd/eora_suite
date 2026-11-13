@@ -19,6 +19,7 @@ use App\Modules\Planning\Http\ItemWeightController;
 use App\Modules\Planning\Http\RoutingController;
 use App\Modules\Planning\Http\WorkOrderController;
 use App\Modules\Production\Http\ProductionController;
+use App\Modules\Quality\Http\QualityController;
 use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
 use App\Platform\Auth\Http\AuthController;
@@ -211,6 +212,14 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('runs/{run}/actions/close', [ProductionController::class, 'close'])->name('runs.close');
         Route::post('runs/{run}/actions/cancel', [ProductionController::class, 'cancel'])->name('runs.cancel');
         Route::post('postings', [ProductionController::class, 'post'])->name('postings.store');
+    });
+
+    // Quality → disposition (doc 33 §1.5, D-113): one tenant transaction, retried on deadlock (postings are idempotent)
+    Route::prefix('quality')->name('quality.')->middleware(['tenant:retry'])->group(function (): void {
+        Route::post('dispositions', [QualityController::class, 'dispose'])->name('dispositions.store');
+        Route::post('release-requests', [QualityController::class, 'requestRelease'])->name('release-requests.store');
+        Route::post('release-requests/{release}/approve', [QualityController::class, 'approve'])->name('release-requests.approve');
+        Route::post('release-requests/{release}/reject', [QualityController::class, 'reject'])->name('release-requests.reject');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

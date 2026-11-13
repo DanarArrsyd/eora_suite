@@ -14,11 +14,11 @@ use App\Platform\Query\QueryDefinition;
  */
 final class DocumentsQuery extends QueryDefinition
 {
-    public const array TYPES = ['RM_RECEIPT', 'INCOMING_RELEASE', 'MAT_TRANSFER', 'LOT_SPLIT', 'MAT_ISSUE', 'MAT_RETURN', 'PRODUCTION_POSTING', 'STOCK_ADJUSTMENT', 'REVERSAL'];
+    public const array TYPES = ['RM_RECEIPT', 'INCOMING_RELEASE', 'MAT_TRANSFER', 'LOT_SPLIT', 'MAT_ISSUE', 'MAT_RETURN', 'PRODUCTION_POSTING', 'QC_DISPOSITION', 'STOCK_ADJUSTMENT', 'REVERSAL'];
 
     public const array TYPE_LABELS = [
         'RM_RECEIPT' => 'Receipt', 'INCOMING_RELEASE' => 'Incoming release', 'MAT_TRANSFER' => 'Transfer', 'LOT_SPLIT' => 'Lot split',
-        'MAT_ISSUE' => 'Material issue', 'MAT_RETURN' => 'Material return', 'PRODUCTION_POSTING' => 'Production posting', 'STOCK_ADJUSTMENT' => 'Adjustment', 'REVERSAL' => 'Reversal',
+        'MAT_ISSUE' => 'Material issue', 'MAT_RETURN' => 'Material return', 'PRODUCTION_POSTING' => 'Production posting', 'QC_DISPOSITION' => 'QC disposition', 'STOCK_ADJUSTMENT' => 'Adjustment', 'REVERSAL' => 'Reversal',
     ];
 
     public function resource(): string

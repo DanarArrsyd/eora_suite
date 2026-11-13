@@ -55,6 +55,10 @@ export const MOVEMENT_CODES: Record<string, string> = {
   OUTPUT_NG_REWORK: 'Output NG rework',
   OUTPUT_NG_REJECT: 'Output NG reject',
   OUTPUT_SCRAP: 'Process scrap',
+  QC_RELEASE: 'QC release',
+  QC_HOLD: 'QC hold',
+  QC_REWORK: 'QC rework',
+  QC_REJECT: 'QC reject',
 };
 const options = (labels: Record<string, string>): Option[] => Object.entries(labels).map(([value, label]) => ({ value, label }));
 const movement = (r: MovementRow) => `${MOVEMENT_CODES[r.movementCode] ?? r.movementCode}${r.reversesMovementId ? ' (reversal)' : ''}`;

@@ -215,7 +215,9 @@ function ReversalPage({ id }: { id: string }) {
   const me = useMe();
   const permissions = me.data?.permissions ?? [];
   const canView = READ.some((p) => permissions.includes(p));
-  const canApprove = permissions.includes('inventory.reversal.approve');
+  // D-113: a quality supervisor decides the reversal of a QC disposition, the inventory approver everything else
+  const approves = (type: string | undefined) =>
+    permissions.includes(type === 'QC_DISPOSITION' ? 'quality.disposition_release.approve' : 'inventory.reversal.approve');
   const router = useRouter();
   const client = useQueryClient();
   const [notice, setNotice] = React.useState<string | null>(null);
@@ -388,7 +390,7 @@ function ReversalPage({ id }: { id: string }) {
             approvedAt: r.decidedAt,
           }}
           // the approver decides only with the legs in front of them (what the reversal undoes)
-          can={{ view: true, create: false, submit: false, approve: canApprove && !mine && legs.isSuccess }}
+          can={{ view: true, create: false, submit: false, approve: approves(r.originalType) && !mine && legs.isSuccess }}
           approvedNote={`Posted as ${r.code ?? 'a reversal'}. ${r.originalCode} is now reversed; post the corrected document if one is needed.`}
           rejectNote="Nothing changes in stock. The requester sees the reason and can request again."
           act={async () => {
