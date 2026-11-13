@@ -195,6 +195,8 @@ type WorkOrder = {
     requiredQty: string;
     issuedQty: string;
     atProductionQty: string;
+    /** The unit issued, at-production and issue quantities are in: the material's base unit (the ledger posts in it). */
+    baseUomCode: string;
   }[];
   workCenters: { id: string; code: string; name: string; opSeq: number }[];
 };
@@ -423,11 +425,11 @@ function IssuePage({ initialWo }: { initialWo: string }) {
                         </div>
                         <div className="flex gap-1">
                           <dt className="text-ink-2">Issued</dt>
-                          <dd className="m-0 text-ink">{`${m.issuedQty} ${m.uomCode}`}</dd>
+                          <dd className="m-0 text-ink">{`${m.issuedQty} ${m.baseUomCode}`}</dd>
                         </div>
                         <div className="flex gap-1">
                           <dt className="text-ink-2">At production</dt>
-                          <dd className="m-0 text-ink">{`${m.atProductionQty} ${m.uomCode}`}</dd>
+                          <dd className="m-0 text-ink">{`${m.atProductionQty} ${m.baseUomCode}`}</dd>
                         </div>
                       </dl>
                     </div>
@@ -446,11 +448,11 @@ function IssuePage({ initialWo }: { initialWo: string }) {
                             />
                           )}
                         </Field>
-                        <Field label={`Quantity (${m.uomCode})`}>
+                        <Field label={`Quantity (${m.baseUomCode})`}>
                           {(control) => (
                             <Input
                               {...control}
-                              aria-label={`${m.itemCode} quantity ${i + 1} (${m.uomCode})`}
+                              aria-label={`${m.itemCode} quantity ${i + 1} (${m.baseUomCode})`}
                               inputMode="decimal"
                               value={l.qty}
                               onChange={(e) => setLine(m.itemId, i, { qty: e.target.value.trim() })}

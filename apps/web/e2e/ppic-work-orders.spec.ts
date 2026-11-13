@@ -66,6 +66,9 @@ const MATERIALS = [
     grossQtyPer: '0.32',
     requiredQty: '384',
     conversionProfileVersion: 1,
+    issuedQty: '0',
+    atProductionQty: '0',
+    baseUomCode: 'KG',
   },
   {
     lineNo: 20,
@@ -76,6 +79,9 @@ const MATERIALS = [
     grossQtyPer: '2',
     requiredQty: '2400',
     conversionProfileVersion: null,
+    issuedQty: '0',
+    atProductionQty: '0',
+    baseUomCode: 'PCS',
   },
 ];
 

@@ -169,12 +169,28 @@ return new class extends Migration
             CREATE CONSTRAINT TRIGGER check_material_document AFTER INSERT OR UPDATE ON inventory_documents DEFERRABLE INITIALLY DEFERRED
               FOR EACH ROW WHEN (NEW.doc_type IN ('MAT_ISSUE', 'MAT_RETURN')) EXECUTE FUNCTION eora_check_material_document();
 
+            -- doc 16: a released work order is cancelled only while no issue is posted for it (a reversed issue no longer counts)
+            CREATE OR REPLACE FUNCTION eora_guard_work_order_issues() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            BEGIN
+              IF EXISTS (SELECT 1 FROM public.inventory_documents d WHERE d.tenant_id = NEW.tenant_id AND d.doc_type = 'MAT_ISSUE'
+                           AND d.status = 'POSTED' AND d.source_id = NEW.id) THEN
+                RAISE EXCEPTION 'a work order with posted material issues is not cancelled' USING ERRCODE = '23514';
+              END IF;
+              RETURN NEW;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_guard_work_order_issues() FROM PUBLIC;
+            CREATE TRIGGER guard_issues BEFORE UPDATE OF status ON work_orders FOR EACH ROW
+              WHEN (NEW.status = 'CANCELLED' AND OLD.status IS DISTINCT FROM 'CANCELLED') EXECUTE FUNCTION eora_guard_work_order_issues();
+
             SQL);
     }
 
     public function down(): void
     {
         DB::unprepared(<<<'SQL'
+            DROP TRIGGER IF EXISTS guard_issues ON work_orders;
+            DROP FUNCTION IF EXISTS eora_guard_work_order_issues();
             DROP TRIGGER IF EXISTS check_material_document ON inventory_documents;
             DROP FUNCTION IF EXISTS eora_check_material_document();
             DROP TRIGGER IF EXISTS guard_material_document ON inventory_documents;

@@ -72,6 +72,8 @@ type Material = {
   /** D-110: issued so far (less reversals) and still at the work centers (less returns). */
   issuedQty: string;
   atProductionQty: string;
+  /** The unit issued and at-production quantities are in (the material's base unit; the ledger posts in it). */
+  baseUomCode: string;
 };
 
 type WorkOrder = WorkOrderRow & { materials: Material[]; plantToday: string };
@@ -345,8 +347,8 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
     { id: 'itemCode', header: 'Material', lead: true, cell: (m) => <span className="font-mono">{m.itemCode}</span>, sub: (m) => m.itemName },
     { id: 'grossQtyPer', header: 'Per piece', numeric: true, cell: (m) => `${m.grossQtyPer} ${m.uomCode}` },
     { id: 'requiredQty', header: 'Required', numeric: true, critical: true, cell: (m) => `${m.requiredQty} ${m.uomCode}` },
-    { id: 'issuedQty', header: 'Issued', numeric: true, cell: (m) => `${m.issuedQty} ${m.uomCode}` },
-    { id: 'atProductionQty', header: 'At production', numeric: true, cell: (m) => `${m.atProductionQty} ${m.uomCode}` },
+    { id: 'issuedQty', header: 'Issued', numeric: true, cell: (m) => `${m.issuedQty} ${m.baseUomCode}` },
+    { id: 'atProductionQty', header: 'At production', numeric: true, cell: (m) => `${m.atProductionQty} ${m.baseUomCode}` },
     { id: 'conversionProfileVersion', header: 'Conversion profile', cell: (m) => (m.conversionProfileVersion ? `v${m.conversionProfileVersion}` : '—') },
   ];
   const status = o.status === 'SUBMITTED' || o.status === 'RELEASED' || o.status === 'CANCELLED' ? o.status : 'DRAFT';

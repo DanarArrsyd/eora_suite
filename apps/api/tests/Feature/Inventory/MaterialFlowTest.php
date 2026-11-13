@@ -109,9 +109,12 @@ it('issues a released WO\'s materials to a work center of its routing without co
         ->assertStatus(409)->assertJsonPath('code', 'INSUFFICIENT_STOCK');
     // the WO's page shows what was issued and what is still at the work center
     rtSwitch($this, $this->t, 'PPC');
-    $materials = spa($this)->getJson("/api/v1/planning/work-orders/{$f['wo']['id']}")->assertOk()->json('data.materials');
-    expect(array_map(fn ($m) => [$m['itemCode'], $m['requiredQty'], $m['issuedQty'], $m['atProductionQty']], $materials))
-        ->toBe([['COIL-9', '50', '60', '60'], ['NUT-9', '200', '200', '200']]);
+    $wo = spa($this)->getJson("/api/v1/planning/work-orders/{$f['wo']['id']}")->assertOk()->json('data');
+    $materials = $wo['materials'];
+    // doc 16: a released WO with posted issues is not cancelled
+    woAct($this, $f['wo']['id'], 'cancel', $wo['version'], ['reason' => 'Order dropped'])->assertStatus(409)->assertJsonPath('code', 'INVALID_STATE_TRANSITION');
+    expect(array_map(fn ($m) => [$m['itemCode'], $m['requiredQty'], $m['issuedQty'], $m['atProductionQty'], $m['baseUomCode']], $materials))
+        ->toBe([['COIL-9', '50', '60', '60', 'KG'], ['NUT-9', '200', '200', '200', 'PCS']]);
 
     // production asks for a return; nothing moves until materials receives it
     $prl = rtSwitch($this, $this->t, 'PRL');
@@ -156,6 +159,16 @@ it('reverses an issue only while its material is still at the work center (doc 0
     $return = spa($this)->postJson("/api/v1/inventory/material-returns/{$asked}/receive", ['toLocationId' => $f['rack'], 'qty' => '10'], ['Idempotency-Key' => 'mf-receive-0001'])
         ->assertCreated()->json('data.documentId');
 
+    // doc 16: the WO is not cancelled while an issue is posted for it, straight as SQL either (the API in the first test)
+    try {
+        asApp($this->t, (string) $f['mat']['id'], fn (EoraPostgresConnection $db) => $db->update(
+            "update work_orders set status = 'CANCELLED', cancelled_by = ?, cancelled_at = now(), cancel_reason = 'Order dropped' where id = ?", [$f['mat']['id'], $f['wo']['id']],
+        ));
+        $this->fail('a work order with a posted issue was cancelled');
+    } catch (QueryException $e) {
+        expect($e->getCode())->toBe('23514');
+    }
+
     rtSwitch($this, $this->t, 'INV');
     $rvIssue = rvRequest($this, $issue)->assertCreated()->json('data.documentId');
     rtSwitch($this, $this->t, 'CSA');
@@ -170,6 +183,10 @@ it('reverses an issue only while its material is still at the work center (doc 0
     expect(mfCoil($this->t, $f))->toBe(['MAP-PRS-01' => '10', 'RM-01' => '70']);
     rvApprove($this, $rvIssue, 'reverse-approve-0002')->assertCreated();
     expect(mfCoil($this->t, $f))->toBe(['RM-01' => '80']);
+    // its issue reversed, the WO's cancellation is no longer refused for it (the trigger lets it through to its own checks)
+    expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
+        "select count(*) as n from inventory_documents where doc_type = 'MAT_ISSUE' and status = 'POSTED' and source_id = ?", [$f['wo']['id']],
+    )->n))->toBe(0);
     expect($prl)->toBeArray();
 })->group('integration', 'inventory');
 
@@ -230,3 +247,12 @@ it('keeps each work order\'s material apart at a shared work center, in the data
     }), 'a return request changed after it was asked');
     expect(mfCoil($this->t, $f))->toBe(['MAP-PRS-01' => '15', 'RM-01' => '65']);
 })->group('integration', 'inventory');
+
+it('keeps the request hash of a posting without a work order as it was before legs named one (ADR-0014)', function () {
+    $leg = new PostingLeg('TRANSFER_LOC', 'a', 'b', null, 'UNRESTRICTED', '4');
+    $before = ['TRANSFER_LOC', 'a', 'b', null, 'UNRESTRICTED', '4', null, null, null, null];
+    expect($leg->hashShape())->toBe($before)
+        ->and((new PostingLeg('ISSUE_TO_PROD', 'a', 'b', null, 'UNRESTRICTED', '4', woId: 'w'))->hashShape())->toBe(['ISSUE_TO_PROD', ...array_slice($before, 1), 'w']);
+    $command = new PostingCommand('MAT_TRANSFER', 'p', 'transfer-key-0001', [$leg]);
+    expect($command->hash())->toBe(hash('sha256', json_encode(['MAT_TRANSFER', 'p', null, null, null, null, [$before], []], JSON_THROW_ON_ERROR)));
+})->group('inventory');

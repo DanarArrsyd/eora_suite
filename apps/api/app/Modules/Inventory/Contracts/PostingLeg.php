@@ -31,4 +31,20 @@ final readonly class PostingLeg
             throw new InvalidArgumentException('A leg quantity is a non-zero decimal with at most 6 decimals.');
         }
     }
+
+    /**
+     * The leg as it enters a posting's request hash. A leg without a work order keeps the shape it had before `woId`
+     * existed, so a retry of a posting made then still replays under its key (ADR-0014).
+     *
+     * @return list<mixed>
+     */
+    public function hashShape(): array
+    {
+        $values = get_object_vars($this);
+        if ($values['woId'] === null) {
+            unset($values['woId']);
+        }
+
+        return array_values($values);
+    }
 }

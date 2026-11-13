@@ -243,6 +243,11 @@ final class WorkOrderController
         $db = $this->db();
         $wo = $this->writable($db, $order, ['DRAFT', 'SUBMITTED', 'RELEASED']);
         $this->authorizer->authorize($db, $wo->status === 'RELEASED' ? self::POST : self::CREATE, $this->plantScope($db, (string) $wo->plant_id));
+        // doc 16: a released WO is cancelled only while no issue is posted for it (the database refuses it too)
+        if ($db->selectOne("select 1 as posted from inventory_documents where doc_type = 'MAT_ISSUE' and status = 'POSTED' and source_id = ?", [$wo->id]) !== null) {
+            throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Material issued',
+                "Material is issued to {$wo->wo_no}. Return it and reverse its issues before cancelling the work order.");
+        }
         $this->transition($db, $wo, $expected, "status = 'CANCELLED', cancelled_by = ?, cancelled_at = now(), cancel_reason = ?", [$this->actor($db), trim($data['reason'])], 'work_order.cancelled');
         $this->outbox->publish($db, 'wo.cancelled', 'work_order', (string) $wo->id, ['plantId' => $wo->plant_id]);
 
@@ -361,14 +366,17 @@ final class WorkOrderController
             'grossQtyPer' => (string) $m->gross_qty_per,
             'requiredQty' => (string) $m->required_qty,
             'conversionProfileVersion' => $m->cp_version === null ? null : (int) $m->cp_version,
-            // D-110: issued so far (issues less their reversals) and what is still at the work centers (less returns)
+            // D-110: issued so far (issues less their reversals) and what is still at the work centers (less returns), in the
+            // material's base unit — the unit the ledger posts in, which may differ from the BOM line's unit
             'issuedQty' => (string) $m->issued_qty,
             'atProductionQty' => (string) $m->at_production_qty,
+            'baseUomCode' => (string) $m->base_uom_code,
         ], $db->select(
             "select m.line_no, m.component_item_id, i.code as item_code, i.name as item_name, u.code as uom_code, trim_scale(m.gross_qty_per)::text as gross_qty_per,
                     trim_scale(m.required_qty)::text as required_qty, v.version_no as cp_version,
-                    trim_scale(coalesce(f.issued, 0))::text as issued_qty, trim_scale(coalesce(f.at_production, 0))::text as at_production_qty
-               from work_order_materials m join items i on i.id = m.component_item_id join uoms u on u.id = m.uom_id
+                    trim_scale(coalesce(f.issued, 0))::text as issued_qty, trim_scale(coalesce(f.at_production, 0))::text as at_production_qty,
+                    bu.code as base_uom_code
+               from work_order_materials m join items i on i.id = m.component_item_id join uoms u on u.id = m.uom_id join uoms bu on bu.id = i.base_uom_id
                left join conversion_profile_versions v on v.id = m.conversion_profile_version_id
                left join lateral (select sum(g.qty_signed) filter (where g.movement_code = 'ISSUE_TO_PROD') as issued, sum(g.qty_signed) as at_production
                                     from inventory_movements g join locations gl on gl.id = g.location_id and gl.location_type = 'MAT_AT_PROD'
