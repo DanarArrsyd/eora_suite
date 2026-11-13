@@ -232,6 +232,10 @@ php artisan eora:tenant:provision demo-stamping "Demo Stamping" admin@example.te
 ## Demo data for UAT (M1, doc 28 §1)
 - `eora:demo:seed [--code=demo-stamping] [--name="Demo Stamping"] [--password=…]` in the one-shot runner:
   `docker compose run --rm --entrypoint php db-migrate artisan eora:demo:seed`. Refused when `APP_ENV=production`.
+- `eora:demo:uat-account [--code=demo-stamping] --password=<demo password>` adds `uat@<code>.test` holding **every role** of an
+  existing demo tenant (owner, 2026-11-13, D-112) — one account for every module, setting and approval. The second-person
+  rule stays (D-060): it never approves what it requested itself; use a second account (e.g. `csa@`). Idempotent; an existing
+  account keeps its password. Refused when `APP_ENV=production`.
 - Creates a synthetic tenant (company `DEMO`, plant `P1`, production day 07:00, Asia/Jakarta) and one ACTIVE user per role
   template (doc 18 §1): `<role>@<code>.test` (reserved `.test` domain), each with its template's default scope (PLANT
   roles on P1). One shared password (given, or generated and printed once; never stored).

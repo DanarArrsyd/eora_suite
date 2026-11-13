@@ -22,6 +22,11 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
    ```bash
    docker compose run --rm --entrypoint php db-migrate artisan eora:demo:master
    ```
+   Akun serba bisa (semua role, D-112) — sekali saja, pakai password demo Anda:
+   ```bash
+   docker compose run --rm --entrypoint php db-migrate artisan eora:demo:uat-account --password='<password demo>'
+   ```
+   `uat@demo-stamping.test` bisa membuka semua modul, setting dan approval, kecuali meng-approve pengajuannya sendiri (aturan orang kedua, D-060) — approval itu tetap oleh `csa`.
 3. Web:
    ```bash
    npx pnpm@12.10.1 --filter @eora/web dev

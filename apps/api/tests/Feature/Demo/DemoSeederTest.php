@@ -86,3 +86,25 @@ it('refuses a weak demo password and any run in production', function () {
         ->expectsOutputToContain('never runs in production')
         ->assertFailed();
 })->group('integration', 'demo');
+
+it('adds the all-roles UAT account to a demo tenant once; it signs in and holds every role (owner, 2026-11-13)', function () {
+    $code = demoCode();
+    $this->artisan('eora:demo:uat-account', ['--code' => $code, '--password' => DEMO_PASSWORD])->expectsOutputToContain('no demo tenant')->assertFailed();
+    $this->artisan('eora:demo:seed', ['--code' => $code, '--password' => DEMO_PASSWORD])->assertSuccessful();
+
+    $this->artisan('eora:demo:uat-account', ['--code' => $code, '--password' => DEMO_PASSWORD])
+        ->expectsOutputToContain("Created uat@{$code}.test with every role")
+        ->expectsOutputToContain('Approvals still need a second account')
+        ->assertSuccessful();
+    $uat = array_values(array_filter(demoState($code)['members'], fn ($m) => $m->email === "uat@{$code}.test"));
+    expect(array_column($uat, 'role'))->toBe(['APR', 'AUD', 'CSA', 'DLV', 'FGW', 'INV', 'MAD', 'MAT', 'OPR', 'PPC', 'PRL', 'QCI', 'QCS', 'TENANT_ADMIN'])
+        ->and(array_unique(array_column($uat, 'status')))->toBe(['ACTIVE']);
+
+    // a second run changes nothing (the password stays)
+    $this->artisan('eora:demo:uat-account', ['--code' => $code, '--password' => 'another demo passphrase 2026'])
+        ->expectsOutputToContain('its password is unchanged')->assertSuccessful();
+    spa($this)->postJson('/api/v1/auth/login', ['email' => "uat@{$code}.test", 'password' => DEMO_PASSWORD])->assertOk()->assertJsonPath('tenants.0.code', $code);
+    spa($this)->postJson('/api/v1/auth/tenant', ['tenantId' => demoState($code)['tenant']])->assertOk();
+    $permissions = spa($this)->getJson('/api/v1/auth/me')->assertOk()->json('permissions');
+    expect($permissions)->toContain('planning.wo.approve', 'materials.issue.post', 'production.posting.post', 'inventory.reversal.approve', 'core.users_roles.view');
+})->group('integration', 'demo');
