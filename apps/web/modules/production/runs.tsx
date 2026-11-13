@@ -564,7 +564,7 @@ function RunPage({ id }: { id: string }) {
       actions={
         <div className="flex flex-wrap gap-2">
           {r.status === 'OPEN' && canRun && r.postings > 0 ? <Button onClick={() => setAsk('close')}>Close run</Button> : null}
-          {r.status === 'OPEN' && canRun && r.postings === 0 && (postings.data ?? []).length === 0 ? (
+          {r.status === 'OPEN' && canRun && r.postings === 0 ? (
             <Button variant="ghost" onClick={() => setAsk('cancel')}>
               Cancel run
             </Button>
@@ -860,7 +860,7 @@ function RunPage({ id }: { id: string }) {
         open={ask === 'cancel'}
         onOpenChange={(v) => (v ? undefined : setAsk(null))}
         title="Cancel this run"
-        description="It has no posting. It stays in the list as Cancelled with your reason."
+        description="It has no posting that stands (none, or all reversed). It stays in the list as Cancelled with your reason."
         confirmLabel="Cancel run"
         tone="danger"
         reason={{ label: 'Reason', minLength: 3 }}

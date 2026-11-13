@@ -217,3 +217,18 @@ it('refuses in the database what breaks the production rules', function () {
         'a run changes what it was opened for');
     expect(prStock($this->t, $f['coil']['id']))->toBe(['MAP-PRS-01 / UNRESTRICTED' => '60', 'RM-01 / UNRESTRICTED' => '20']);
 })->group('integration', 'production');
+
+it('cancels a run whose only posting was reversed (it made nothing that stands)', function () {
+    $f = prFixture($this, $this->t);
+    $run = prOpen($this, $f)->assertCreated()->json('data');
+    $posted = prPost($this, $f, $run['id'])->assertCreated()->json('data.documentId');
+    rtSwitch($this, $this->t, 'INV');
+    $rv = rvRequest($this, $posted)->assertCreated()->json('data.documentId');
+    rtSwitch($this, $this->t, 'CSA');
+    rvApprove($this, $rv)->assertCreated();
+    signIn($this, $f['prl'], $this->t);
+    $version = spa($this)->getJson("/api/v1/production/runs/{$run['id']}")->assertOk()->assertJsonPath('data.postings', 0)->json('data.version');
+    spa($this)->postJson("/api/v1/production/runs/{$run['id']}/actions/close", [], ['If-Match' => '"'.$version.'"'])->assertStatus(409);
+    spa($this)->postJson("/api/v1/production/runs/{$run['id']}/actions/cancel", ['reason' => 'Posted against the wrong run'], ['If-Match' => '"'.$version.'"'])
+        ->assertOk()->assertJsonPath('data.status', 'CANCELLED');
+})->group('integration', 'production');

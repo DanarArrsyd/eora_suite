@@ -126,7 +126,9 @@ return new class extends Migration
                 IF NEW.cancelled_by IS DISTINCT FROM a OR NOT public.eora_actor_may('production.run.post', NEW.plant_id) THEN
                   RAISE EXCEPTION 'a run is cancelled by a production leader of its plant' USING ERRCODE = '42501';
                 END IF;
-                IF EXISTS (SELECT 1 FROM public.inventory_documents d WHERE d.tenant_id = NEW.tenant_id AND d.doc_type = 'PRODUCTION_POSTING' AND d.source_id = NEW.id) THEN
+                -- reversed postings made nothing that stands: a run with only those is cancelled
+                IF EXISTS (SELECT 1 FROM public.inventory_documents d WHERE d.tenant_id = NEW.tenant_id AND d.doc_type = 'PRODUCTION_POSTING' AND d.source_id = NEW.id
+                             AND d.status = 'POSTED') THEN
                   RAISE EXCEPTION 'a run with postings is closed, not cancelled' USING ERRCODE = '23514';
                 END IF;
               END IF;

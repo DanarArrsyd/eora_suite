@@ -146,7 +146,8 @@ final class ProductionController
         $expected = Concurrency::expectedVersion($request);
         $db = $this->db();
         $r = $this->openRun($db, $run);
-        if ($db->selectOne("select 1 as ok from inventory_documents where doc_type = 'PRODUCTION_POSTING' and source_id = ?", [$r->id]) !== null) {
+        // a run whose postings were all reversed is cancelled too (it made nothing that stands)
+        if ($db->selectOne("select 1 as ok from inventory_documents where doc_type = 'PRODUCTION_POSTING' and source_id = ? and status = 'POSTED'", [$r->id]) !== null) {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Run has postings', 'A run with production postings is closed, not cancelled.');
         }
         $this->transition($db, $r, $expected, "status = 'CANCELLED', cancelled_by = (select c.actor from ctx_api.context() c), cancelled_at = now(), cancel_reason = ?",
