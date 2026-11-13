@@ -261,3 +261,25 @@ it('keeps the request hash of a posting without a work order as it was before le
     $command = new PostingCommand('MAT_TRANSFER', 'p', 'transfer-key-0001', [$leg]);
     expect($command->hash())->toBe(hash('sha256', json_encode(['MAT_TRANSFER', 'p', null, null, null, null, [$before], []], JSON_THROW_ON_ERROR)));
 })->group('inventory');
+
+it('splits a lot at a work center for its work order, keeping that work order on every lot (doc 14 #22)', function () {
+    $f = mfFixture($this, $this->t);
+    mfIssue($this, $f, ['lines' => [['itemId' => $f['coil']['id'], 'lotId' => $f['lot'], 'fromLocationId' => $f['rack'], 'qty' => '30']]])->assertCreated();
+    $map = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => (string) $db->selectOne("select id from locations where code = 'MAP-PRS-01'")->id);
+    rtSwitch($this, $this->t, 'PRL');
+    $split = fn (array $body, string $key) => spa($this)->postJson('/api/v1/inventory/lot-splits', $body + [
+        'plantId' => $f['plant'], 'itemId' => $f['coil']['id'], 'lotId' => $f['lot'], 'stockStatus' => 'UNRESTRICTED', 'locationId' => $map,
+        'children' => [['qty' => '5', 'widthMm' => '120']],
+    ], ['Idempotency-Key' => $key]);
+    // whose material is split must be said at a work center, and only there
+    $split([], 'mf-split-0001')->assertStatus(422)->assertJsonValidationErrors(['workOrderId']);
+    $split(['workOrderId' => $f['wo']['id'], 'locationId' => $f['rack']], 'mf-split-0002')->assertStatus(422)->assertJsonValidationErrors(['workOrderId']);
+    // no more than the work order has there
+    $split(['workOrderId' => $f['wo']['id'], 'children' => [['qty' => '31']]], 'mf-split-0003')->assertStatus(409)->assertJsonPath('code', 'INSUFFICIENT_STOCK');
+    $child = $split(['workOrderId' => $f['wo']['id']], 'mf-split-0004')->assertCreated()->json('data.children.0');
+    $split(['workOrderId' => $f['wo']['id']], 'mf-split-0004')->assertOk()->assertJsonPath('data.children.0.lotId', $child['lotId']);
+    $rows = collect(spa($this)->getJson("/api/v1/query/inventory.material_at_production?filter[workOrderId]={$f['wo']['id']}")->assertOk()->json('data'))->keyBy('lotNo');
+    expect($rows)->toHaveCount(2)
+        ->and($rows[$child['lotNo']]['qty'])->toBe('5')
+        ->and($rows->first(fn ($r) => $r['lotId'] === $f['lot'])['qty'])->toBe('25');
+})->group('integration', 'inventory');

@@ -358,14 +358,22 @@ export const MATERIAL_LOTS: MasterResource<LotLineRow> = {
     { id: 'qty', header: 'On hand', numeric: true, critical: true, cell: (r) => `${r.qty} ${r.uomCode}` },
   ],
   fields: [
+    {
+      key: 'atProductionLineId',
+      label: 'Work order (at a work center)',
+      kind: 'select',
+      options: 'materialAtProduction',
+      optionFilter: (row) => ({ locationId: (row as LotLineRow).locationId, lotId: (row as LotLineRow).lotId }),
+      hint: 'Only for material at a work center: whose material is split. Its child lots stay with that work order.',
+    },
     { key: 'qty', label: 'Child lot quantity', kind: 'number', required: true, decimals: 6, positive: true, hint: 'Measured. The parent lot keeps the rest.' },
     mm('widthMm', 'Width (mm)'),
     mm('lengthMm', 'Length (mm)'),
     mm('thicknessMm', 'Thickness (mm)'),
     { key: 'note', label: 'Note', kind: 'text', maxLength: 500 },
   ],
-  blank: { qty: '', widthMm: '', lengthMm: '', thicknessMm: '', note: '' },
-  toForm: () => ({ qty: '', widthMm: '', lengthMm: '', thicknessMm: '', note: '' }),
+  blank: { atProductionLineId: '', qty: '', widthMm: '', lengthMm: '', thicknessMm: '', note: '' },
+  toForm: () => ({ atProductionLineId: '', qty: '', widthMm: '', lengthMm: '', thicknessMm: '', note: '' }),
   facts: (r) => [
     { label: 'Item', value: `${r.itemCode} · ${r.itemName}` },
     { label: 'Lot', value: `${r.lotNo}${r.supplierLotNo ? ` (supplier ${r.supplierLotNo})` : ''}` },
@@ -377,6 +385,14 @@ export const MATERIAL_LOTS: MasterResource<LotLineRow> = {
   check: async (v, r): Promise<Record<string, string>> => {
     const error = r && v.qty ? unitPrecisionError(v.qty, r.uomCode, r.uomDecimals) : undefined;
     if (error) return { qty: error };
+    // material at a work center belongs to a work order (M4-D3): split no more than that order has there
+    if (r?.workCenterCode) {
+      const line = v.atProductionLineId ? await workOrderLine(v.atProductionLineId) : undefined;
+      if (!line) return { atProductionLineId: 'Material at a work center belongs to a work order: choose whose material is split.' };
+      if (v.qty && Number(v.qty) > Number(line.qty)) return { qty: `${line.workOrderCode} has ${line.qty} ${r.uomCode} of this lot here.` };
+      return {};
+    }
+    if (v.atProductionLineId) return { atProductionLineId: 'Only material at a work center belongs to a work order. Leave it empty.' };
     if (r && v.qty && Number(v.qty) > Number(splittable(r))) {
       return {
         qty:
@@ -398,11 +414,13 @@ export const MATERIAL_LOTS: MasterResource<LotLineRow> = {
     return d.replayed ? `${d.docNo} was already posted; no new lot was made` : `${d.docNo} split off lot ${children}`;
   },
   create: () => Promise.reject(new Error('Splits start from a lot line.')),
-  update: (r, v, ctx) =>
-    call(() =>
+  update: async (r, v, ctx) => {
+    const workOrderId = r.workCenterCode && v.atProductionLineId ? ((await workOrderLine(v.atProductionLineId))?.workOrderId ?? null) : null;
+    return call(() =>
       api.POST('/inventory/lot-splits', {
         params: idempotent(ctx.idempotencyKey),
         body: {
+          workOrderId,
           plantId: r.plantId,
           itemId: r.itemId,
           lotId: r.lotId,
@@ -412,5 +430,13 @@ export const MATERIAL_LOTS: MasterResource<LotLineRow> = {
           note: v.note || null,
         },
       }),
-    ),
+    );
+  },
 };
+
+/** A Material at Production line (work order, work center, lot) by its id. */
+async function workOrderLine(id: string): Promise<{ workOrderId: string; workOrderCode: string; qty: string } | undefined> {
+  return (
+    await queryAll<{ workOrderId: string; workOrderCode: string; qty: string }>('inventory.material_at_production', { id }, undefined, 'workOrderCode')
+  )[0];
+}

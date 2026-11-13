@@ -48,6 +48,8 @@ final class LotSplitController
             'lotId' => ['required', 'uuid'],
             'stockStatus' => ['required', Rule::in(StockQuery::STATUSES)],
             'locationId' => ['required', 'uuid'],
+            // material at a work center belongs to a work order (M4-D3): which WO's material is split
+            'workOrderId' => ['nullable', 'uuid'],
             'children' => ['required', 'array', 'min:1', 'max:10'],
             'children.*.qty' => ['required', 'string', 'regex:'.ReceiptController::QTY],
             'children.*.widthMm' => ['nullable', 'string', 'regex:'.self::MM],
@@ -62,11 +64,13 @@ final class LotSplitController
         $parent = strtolower($data['lotId']);
         $location = strtolower($data['locationId']);
         $note = self::optionalText($data['note'] ?? null);
+        $wo = isset($data['workOrderId']) ? strtolower($data['workOrderId']) : null;
         $children = array_map(static fn (array $c) => ['qty' => $c['qty']] + array_filter(
             array_intersect_key($c, array_flip(self::DIMENSIONS)),
             static fn ($v) => $v !== null,
         ), array_values($data['children']));
-        $hash = hash('sha256', json_encode(['LOT_SPLIT', $plant, $item, $parent, $data['stockStatus'], $location, $children, $note], JSON_THROW_ON_ERROR));
+        // without a work order the request hashes as it did before splits could name one (ADR-0014 replays)
+        $hash = hash('sha256', json_encode(['LOT_SPLIT', $plant, $item, $parent, $data['stockStatus'], $location, $children, $note, ...($wo === null ? [] : [$wo])], JSON_THROW_ON_ERROR));
 
         // a retried request answers with what it posted, whatever master data changed since; a concurrent one waits
         $previous = $this->postings->claim($db, $key, $hash);
@@ -87,10 +91,16 @@ final class LotSplitController
         $db->selectOne("select pg_advisory_xact_lock(hashtextextended('lot-split:' || ?, 0))", [$parent]);
         $lot = $db->selectOne('select lot_no, supplier_lot_no, properties::text as properties, (select count(*) from lots c where c.parent_lot_id = l.id) as children from lots l where l.id = ? and l.item_id = ?', [$parent, $item])
             ?? throw ValidationException::withMessages(['lotId' => 'Unknown lot of this item.']);
-        $db->selectOne("select 1 from locations where id = ? and plant_id = ? and location_type not like 'V\\_%'", [$location, $plant])
+        $place = $db->selectOne("select location_type from locations where id = ? and plant_id = ? and location_type not like 'V\\_%'", [$location, $plant])
             ?? throw ValidationException::withMessages(['locationId' => 'Choose a location of this plant that holds stock.']);
+        if ($place->location_type === 'MAT_AT_PROD' && $wo === null) {
+            throw ValidationException::withMessages(['workOrderId' => 'Material at a work center belongs to a work order: choose whose material is split.']);
+        }
+        if ($place->location_type !== 'MAT_AT_PROD' && $wo !== null) {
+            throw ValidationException::withMessages(['workOrderId' => 'Only material at a work center belongs to a work order. Leave it empty.']);
+        }
 
-        $legs = [new PostingLeg('LOT_SPLIT_OUT', $location, $item, $parent, $data['stockStatus'], '-'.$total)];
+        $legs = [new PostingLeg('LOT_SPLIT_OUT', $location, $item, $parent, $data['stockStatus'], '-'.$total, woId: $wo)];
         $genealogy = [];
         foreach ($children as $i => $child) {
             $lotNo = sprintf('%s-%02d', $lot->lot_no, (int) $lot->children + $i + 1);
@@ -103,7 +113,7 @@ final class LotSplitController
                  values ((select c.tenant from ctx_api.context() c), ?, ?, ?, 'SPLIT', ?, ?::jsonb) returning id",
                 [$item, $lotNo, $lot->supplier_lot_no, $parent, json_encode((object) $properties, JSON_THROW_ON_ERROR)],
             )->id;
-            $legs[] = new PostingLeg('LOT_SPLIT_IN', $location, $item, $id, $data['stockStatus'], $child['qty']);
+            $legs[] = new PostingLeg('LOT_SPLIT_IN', $location, $item, $id, $data['stockStatus'], $child['qty'], woId: $wo);
             $genealogy[] = new GenealogyLink($parent, $id, $child['qty'], (string) $unit->base_uom_id, $child['qty'], (string) $unit->base_uom_id);
         }
 

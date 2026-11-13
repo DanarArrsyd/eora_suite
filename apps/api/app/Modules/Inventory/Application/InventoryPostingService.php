@@ -160,7 +160,7 @@ final class InventoryPostingService
             if ($leg->reversesMovementId !== null) {
                 $refuse('Only a reversal reverses a leg.');
             }
-            if ($leg->woId !== null && ! in_array($command->docType, ['MAT_ISSUE', 'MAT_RETURN'], true)) {
+            if ($leg->woId !== null && ! in_array($command->docType, ['MAT_ISSUE', 'MAT_RETURN', 'LOT_SPLIT'], true)) {
                 $refuse("A {$command->docType} does not name a work order.");
             }
             match ($command->docType) {

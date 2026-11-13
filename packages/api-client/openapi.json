@@ -22479,6 +22479,14 @@
                                         "type": "string",
                                         "format": "uuid"
                                     },
+                                    "workOrderId": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "uuid",
+                                        "description": "material at a work center belongs to a work order (M4-D3): which WO's material is split"
+                                    },
                                     "children": {
                                         "type": "array",
                                         "items": {

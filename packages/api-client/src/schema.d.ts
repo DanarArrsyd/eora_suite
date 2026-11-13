@@ -12966,6 +12966,11 @@ export interface operations {
                     stockStatus: "UNRESTRICTED" | "PENDING_QC" | "QC_RELEASED" | "HOLD" | "REWORK" | "REJECTED" | "BLOCKED";
                     /** Format: uuid */
                     locationId: string;
+                    /**
+                     * Format: uuid
+                     * @description material at a work center belongs to a work order (M4-D3): which WO's material is split
+                     */
+                    workOrderId?: string | null;
                     children: {
                         qty: string;
                         widthMm?: string | null;
