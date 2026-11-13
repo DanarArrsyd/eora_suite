@@ -88,7 +88,6 @@ return new class extends Migration
             CREATE OR REPLACE FUNCTION eora_check_qc_disposition() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
             DECLARE
               approved boolean := NEW.requested_by IS NOT NULL;
-              inspector uuid := coalesce(NEW.requested_by, NEW.posted_by);
             BEGIN
               -- checked once, as posted (marking it reversed later moves nothing)
               IF TG_OP = 'UPDATE' AND OLD.status = 'POSTED' THEN
@@ -133,11 +132,13 @@ return new class extends Migration
               THEN
                 RAISE EXCEPTION 'a disposition decides one lot waiting for quality into its outcome''s place and status' USING ERRCODE = '23514';
               END IF;
-              -- SoD-01, BR-QC-03: who reported the lot's output does not decide its quality
-              IF EXISTS (SELECT 1 FROM public.inventory_movements m JOIN public.inventory_movements o ON o.tenant_id = m.tenant_id AND o.lot_id = m.lot_id
+              -- SoD-01, BR-QC-03: who reported the lot's output (asked or approved, or posted) does not decide its quality;
+              -- output without a lot shares one balance per item, so any lotless output of that item in the plant counts
+              IF EXISTS (SELECT 1 FROM public.inventory_movements m JOIN public.inventory_movements o ON o.tenant_id = m.tenant_id AND o.item_id = m.item_id
+                           AND (o.lot_id = m.lot_id OR (m.lot_id IS NULL AND o.lot_id IS NULL))
                            AND o.movement_code IN ('OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT') AND o.qty_signed > 0
-                           JOIN public.inventory_documents od ON od.tenant_id = o.tenant_id AND od.id = o.document_id
-                          WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id AND m.lot_id IS NOT NULL AND od.posted_by = inspector) THEN
+                           JOIN public.inventory_documents od ON od.tenant_id = o.tenant_id AND od.id = o.document_id AND od.plant_id = NEW.plant_id
+                          WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id AND od.posted_by IN (NEW.requested_by, NEW.posted_by)) THEN
                 RAISE EXCEPTION 'who reported the output does not decide its quality' USING ERRCODE = '42501';
               END IF;
               RETURN NULL;

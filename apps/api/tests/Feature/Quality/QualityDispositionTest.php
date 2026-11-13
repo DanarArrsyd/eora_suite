@@ -141,4 +141,43 @@ it('refuses the output reporter and out-of-policy shortcuts, in the database too
     ], 'qc-direct-0003'), 'a hold without its reason');
     $refused(fn () => $post((string) $f['mat']['id'], $release('PENDING_QC'), 'qc-direct-0004'), 'released by materials');
     expect(prStock($this->t, $f['item']['id'])['QC-01 / PENDING_QC'])->toBe('85');
+
+    // the approver is held to SoD-01 too: a supervisor who reported the output does not release it
+    $hold = ($f['line'])('QC_AREA', 'HOLD');
+    $asked = spa($this)->postJson('/api/v1/quality/release-requests', ['stockLineId' => $hold, 'qty' => '5', 'reason' => 'Customer accepted the deviation'],
+        ['Idempotency-Key' => 'qc-ask-0003'])->assertCreated()->json('data.documentId');
+    AccessFixtures::grant($this->t, $f['prl']['id'], 'QCS');
+    signIn($this, $f['prl'], $this->t);
+    spa($this)->postJson("/api/v1/quality/release-requests/{$asked}/approve", [], ['Idempotency-Key' => 'qc-approve-0003'])
+        ->assertStatus(403)->assertJsonPath('code', 'SOD_VIOLATION');
+    $refused(fn () => asApp($this->t, (string) $f['prl']['id'], fn (EoraPostgresConnection $db) => app(InventoryPostingService::class)->approve($db, $asked, 'qc-approve-0004')),
+        'a release approved by the output reporter');
+    expect(prStock($this->t, $f['item']['id'])['QC-01 / HOLD'])->toBe('5');
+})->group('integration', 'quality');
+
+it('holds the output reporter to SoD-01 when the output has no lot (item not lot-controlled)', function () {
+    $f = prFixture($this, $this->t);
+    AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->update('update items set inspection_required = true, lot_controlled = false where id = ?', [$f['item']['id']]));
+    $run = prOpen($this, $f)->assertCreated()->json('data');
+    prPost($this, $f, $run['id'])->assertCreated()->assertJsonPath('data.lotId', null);
+    $pending = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
+        "select b.id from stock_balances b join locations l on l.id = b.location_id where b.item_id = ? and l.location_type = 'QC_AREA' and b.stock_status = 'PENDING_QC' and b.lot_id is null",
+        [$f['item']['id']],
+    )->id);
+
+    AccessFixtures::grant($this->t, $f['prl']['id'], 'QCI');
+    signIn($this, $f['prl'], $this->t);
+    qcDispose($this, $pending, [['outcome' => 'RELEASE', 'qty' => '1']])->assertStatus(403)->assertJsonPath('code', 'SOD_VIOLATION');
+    try {
+        asApp($this->t, (string) $f['prl']['id'], fn (EoraPostgresConnection $db) => app(InventoryPostingService::class)->post($db, new PostingCommand('QC_DISPOSITION', $f['plant'], 'qc-lotless-0001', [
+            new PostingLeg('QC_RELEASE', (string) $db->selectOne("select id from locations where code = 'QC-01'")->id, $f['item']['id'], null, 'PENDING_QC', '-1'),
+            new PostingLeg('QC_RELEASE', (string) $db->selectOne("select id from locations where code = 'QC-01'")->id, $f['item']['id'], null, 'QC_RELEASED', '1'),
+        ])));
+        $this->fail('posted: a lotless release by the output reporter');
+    } catch (DomainProblem $e) {
+        expect($e->errorCode)->toBe('POSTING_REFUSED')->and($e->detail)->toContain('who reported the output');
+    }
+
+    rtSwitch($this, $this->t, 'QCI');
+    qcDispose($this, $pending, [['outcome' => 'RELEASE', 'qty' => '90']], 'qc-dispose-0002')->assertCreated();
 })->group('integration', 'quality');

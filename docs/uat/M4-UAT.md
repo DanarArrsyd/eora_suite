@@ -107,7 +107,7 @@ Persiapan: §4 langkah 5 sudah memposting output BRK-A100 (950 **Pending QC** di
 | 3 | Release 900, Hold 20 tanpa reason → **Post decision**. | Ditolak: "Hold: choose the reason." | |
 | 4 | Hold reason **Dimension out of tolerance**, note "Hole 0.2 mm off"; Reject 10 reason **Crack** → **Post decision** → konfirmasi. | Pesan "QCD-P1-<tahun>-0001 posted"; sisa 20 PCS tetap Pending QC. | |
 | 5 | Inventory → Stock Overview → BRK-A100. | QC area: QC released 900, Hold 20, Pending QC 20; NG area Rejected bertambah 10. | |
-| 6 | Bila output §4 diposting dengan akun `uat` (punya semua peran): login `uat` → coba putuskan lot itu. | Ditolak (SoD-01): "You reported this lot’s output; another inspector decides its quality." — pelapor output tidak memutuskan kualitasnya. | |
+| 6 | Bila output §4 diposting dengan akun `uat` (punya semua peran): login `uat` → coba putuskan lot itu. | Ditolak (SoD-01): "You reported this lot’s output; another person decides its quality." — pelapor output tidak memutuskan kualitasnya. | |
 | 7 | `qci` → buka baris **Hold** 20. | Hanya **Reject** yang bisa diputuskan; kartu **Ask a release out of policy**. | |
 | 8 | Release 20, Reason "Customer accepted the deviation" → **Ask release** → konfirmasi. | Pesan "Release asked; it waits for a second person"; stok Hold tetap 20. | |
 | 9 | `qci` → Quality → **Dispositions** → buka request itu. | Status **Submitted**; tidak ada tombol Approve untuk yang meminta. | |

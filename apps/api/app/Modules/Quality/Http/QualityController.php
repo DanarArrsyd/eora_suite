@@ -161,8 +161,14 @@ final class QualityController
     {
         $key = $this->key($request);
         $db = $this->db();
+        $id = $this->releaseRequest($db, $release);
+        // SoD-01 for the approver too: who reported the lot's output does not release it
+        $this->requireNotReporter($db, $db->selectOne(
+            "select request -> 'legs' -> 0 ->> 'lotId' as lot_id, request -> 'legs' -> 0 ->> 'itemId' as item_id, plant_id from inventory_documents where id = ?",
+            [$id],
+        ) ?? throw new DomainProblem(404, 'NOT_FOUND', 'Not found'));
 
-        return $this->posted($this->postings->approve($db, $this->releaseRequest($db, $release), $key));
+        return $this->posted($this->postings->approve($db, $id, $key));
     }
 
     /** Reject a release out of policy with the reason; nothing moves. 204, also when it was already rejected. */
@@ -206,20 +212,22 @@ final class QualityController
         return $line;
     }
 
-    /** SoD-01, BR-QC-03: who reported this lot's output does not decide its quality (the database refuses it too). */
+    /**
+     * SoD-01, BR-QC-03: who reported this lot's output does not decide its quality (the database refuses it too). Output
+     * without a lot (item not lot-controlled) shares one balance per item: whoever reported any output of that item in the
+     * plant without a lot does not decide it.
+     */
     private function requireNotReporter(EoraPostgresConnection $db, stdClass $line): void
     {
-        if ($line->lot_id === null) {
-            return;
-        }
         $reporter = $db->selectOne(
             "select 1 as ok from inventory_movements m join inventory_documents d on d.id = m.document_id
-              where m.lot_id = ? and m.movement_code in ('OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT') and m.qty_signed > 0
+              where m.movement_code in ('OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT') and m.qty_signed > 0
+                and (m.lot_id = ?::uuid or (?::uuid is null and m.lot_id is null and m.item_id = ? and d.plant_id = ?))
                 and d.posted_by = (select c.actor from ctx_api.context() c) limit 1",
-            [$line->lot_id],
+            [$line->lot_id, $line->lot_id, $line->item_id, $line->plant_id],
         );
         if ($reporter !== null) {
-            throw new DomainProblem(403, 'SOD_VIOLATION', 'Second person required', 'You reported this lot’s output; another inspector decides its quality.');
+            throw new DomainProblem(403, 'SOD_VIOLATION', 'Second person required', 'You reported this lot’s output; another person decides its quality.');
         }
     }
 
