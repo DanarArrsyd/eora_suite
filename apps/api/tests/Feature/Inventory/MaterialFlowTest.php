@@ -283,3 +283,25 @@ it('splits a lot at a work center for its work order, keeping that work order on
         ->and($rows[$child['lotNo']]['qty'])->toBe('5')
         ->and($rows->first(fn ($r) => $r['lotId'] === $f['lot'])['qty'])->toBe('25');
 })->group('integration', 'inventory');
+
+it('adjusts material at a work center for its work order, within what that order has there (doc 04 row 12)', function () {
+    $f = mfFixture($this, $this->t);
+    mfIssue($this, $f, ['lines' => [['itemId' => $f['coil']['id'], 'lotId' => $f['lot'], 'fromLocationId' => $f['rack'], 'qty' => '30']]])->assertCreated();
+    $map = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => (string) $db->selectOne("select id from locations where code = 'MAP-PRS-01'")->id);
+    // material at a work center leaves by a return, not a transfer (M4-D3)
+    $map2 = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => (string) $db->selectOne("select id from locations where code = 'MAP-WLD-01'")->id);
+    spa($this)->postJson('/api/v1/inventory/transfers', ['plantId' => $f['plant'], 'itemId' => $f['coil']['id'], 'lotId' => $f['lot'], 'stockStatus' => 'UNRESTRICTED',
+        'fromLocationId' => $map, 'toLocationId' => $map2, 'qty' => '1'], ['Idempotency-Key' => 'mf-transfer-0001'])->assertStatus(422)->assertJsonValidationErrors(['fromLocationId']);
+    rtSwitch($this, $this->t, 'INV');
+    $ask = fn (array $body, string $key) => spa($this)->postJson('/api/v1/inventory/adjustments', $body + [
+        'plantId' => $f['plant'], 'itemId' => $f['coil']['id'], 'lotId' => $f['lot'], 'locationId' => $map, 'stockStatus' => 'UNRESTRICTED',
+        'direction' => 'MINUS', 'qty' => '2', 'reasonCode' => 'COUNT_CORRECTION', 'note' => 'Weighed at the press',
+    ], ['Idempotency-Key' => $key]);
+    $ask([], 'mf-adjust-0001')->assertStatus(422)->assertJsonValidationErrors(['workOrderId']);
+    $ask(['workOrderId' => $f['wo']['id'], 'qty' => '31'], 'mf-adjust-0002')->assertStatus(422)->assertJsonValidationErrors(['qty']);
+    $id = $ask(['workOrderId' => $f['wo']['id']], 'mf-adjust-0003')->assertCreated()->json('data.documentId');
+    spa($this)->getJson("/api/v1/query/inventory.adjustments?filter[id]={$id}")->assertOk()->assertJsonPath('data.0.workOrderCode', $f['wo']['code']);
+    rtSwitch($this, $this->t, 'CSA');
+    adApprove($this, $id)->assertCreated();
+    expect(spa($this)->getJson("/api/v1/query/inventory.material_at_production?filter[workOrderId]={$f['wo']['id']}")->assertOk()->json('data.0.qty'))->toBe('28');
+})->group('integration', 'inventory');

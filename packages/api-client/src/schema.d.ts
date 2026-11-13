@@ -3169,6 +3169,11 @@ export interface operations {
                     /** @enum {string} */
                     reasonCode: "COUNT_CORRECTION" | "DAMAGE" | "FOUND" | "OTHER";
                     note?: string | null;
+                    /**
+                     * Format: uuid
+                     * @description material at a work center belongs to a work order (M4-D3): whose material is corrected
+                     */
+                    workOrderId?: string | null;
                 };
             };
         };

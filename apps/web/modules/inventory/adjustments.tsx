@@ -40,6 +40,7 @@ export type AdjustmentRow = {
   itemName: string;
   lotNo: string | null;
   locationCode: string;
+  workOrderCode: string | null;
   stockStatus: StockStatus;
   qty: string;
   uomCode: string;
@@ -55,6 +56,7 @@ type StockLine = {
   id: string;
   plantId: string;
   locationId: string;
+  locationType: string;
   itemId: string;
   lotId: string | null;
   stockStatus: StockStatus;
@@ -91,7 +93,18 @@ async function stockLine(id: string): Promise<StockLine | undefined> {
 type Submitted = { data: { documentId: string; replayed: boolean } };
 
 const STOCK_STATUS_OPTIONS: Option[] = Object.entries(STATUS_CATALOGUE.stock).map(([value, e]) => ({ value, label: e.label }));
-const BLANK = { stockLineId: '', locationId: '', itemId: '', lotId: '', stockStatus: 'UNRESTRICTED', direction: 'MINUS', qty: '', reasonCode: '', note: '' };
+const BLANK = {
+  stockLineId: '',
+  atProductionLineId: '',
+  locationId: '',
+  itemId: '',
+  lotId: '',
+  stockStatus: 'UNRESTRICTED',
+  direction: 'MINUS',
+  qty: '',
+  reasonCode: '',
+  note: '',
+};
 
 type Target = {
   plantId: string;
@@ -103,7 +116,28 @@ type Target = {
   uomDecimals: number;
   /** On hand on a chosen stock line; null for a new line (nothing recorded there). */
   onHand: string | null;
+  /** At a work center (M4-D3): the work order whose material is corrected. */
+  workOrderId: string | null;
 };
+
+/** Material at a work center belongs to a work order: the chosen Material at Production line of that place, item and lot. */
+async function workOrderOf(
+  v: Record<string, string>,
+  place: { locationId: string; itemId: string; lotId: string | null },
+): Promise<{ workOrderId: string; qty: string } | { field: string; message: string }> {
+  const [line] = v.atProductionLineId
+    ? await queryAll<{ workOrderId: string; locationId: string; itemId: string; lotId: string | null; qty: string }>(
+        'inventory.material_at_production',
+        { id: v.atProductionLineId },
+        undefined,
+        'workOrderCode',
+      )
+    : [];
+  if (!line || line.locationId !== place.locationId || line.itemId !== place.itemId || (line.lotId ?? null) !== place.lotId) {
+    return { field: 'atProductionLineId', message: 'Material at a work center belongs to a work order: choose its line for this place, item and lot.' };
+  }
+  return { workOrderId: line.workOrderId, qty: line.qty };
+}
 
 /**
  * What the request corrects: a chosen stock line, or — to add found stock where none is recorded — a location, item,
@@ -113,12 +147,17 @@ async function resolveTarget(v: Record<string, string>): Promise<Target | { fiel
   if (v.stockLineId) {
     const line = await stockLine(v.stockLineId);
     if (!line) return { field: 'stockLineId', message: 'That stock line is no longer there. Choose it again.' };
-    return { ...line, onHand: line.qty };
+    if (line.locationType === 'MAT_AT_PROD') {
+      const wo = await workOrderOf(v, line);
+      if ('field' in wo) return wo;
+      return { ...line, onHand: wo.qty, workOrderId: wo.workOrderId };
+    }
+    return { ...line, onHand: line.qty, workOrderId: null };
   }
   if (v.direction !== 'PLUS') return { field: 'stockLineId', message: 'Choose the stock line to remove from.' };
   if (!v.locationId) return { field: 'locationId', message: 'Choose a stock line, or the location where the stock was found.' };
   if (!v.itemId) return { field: 'itemId', message: 'Choose the item that was found.' };
-  const [location] = await queryAll<{ id: string; plantId: string }>('core.locations', { id: v.locationId });
+  const [location] = await queryAll<{ id: string; plantId: string; locationType: string }>('core.locations', { id: v.locationId });
   const [item] = await queryAll<{ id: string; lotControlled: boolean; baseUomCode: string; baseUomDecimals: number }>('core.items', { id: v.itemId });
   if (!location) return { field: 'locationId', message: 'That location is no longer there. Choose it again.' };
   if (!item) return { field: 'itemId', message: 'That item is no longer there. Choose it again.' };
@@ -130,7 +169,11 @@ async function resolveTarget(v: Record<string, string>): Promise<Target | { fiel
   } else if (v.lotId) {
     return { field: 'lotId', message: 'This item is not tracked by lot. Leave the lot empty.' };
   }
+  if (location.locationType === 'MAT_AT_PROD') {
+    return { field: 'locationId', message: 'Material at a work center is corrected from its stock line, with its work order.' };
+  }
   return {
+    workOrderId: null,
     plantId: location.plantId,
     locationId: location.id,
     itemId: item.id,
@@ -199,6 +242,13 @@ export const ADJUSTMENTS: MasterResource<AdjustmentRow & { code: string }> = {
       options: 'stockLines',
       hint: 'Item, lot, place and status to correct, with what is on hand now. Leave it empty to add found stock where none is recorded.',
     },
+    {
+      key: 'atProductionLineId',
+      label: 'Work order (at a work center)',
+      kind: 'select',
+      options: 'materialAtProduction',
+      hint: 'Only for a stock line at a work center: whose material is corrected.',
+    },
     // found stock where no line is recorded (D-100): its place, item and lot, added only
     { key: 'locationId', label: 'Location (new line)', kind: 'select', options: 'physicalLocations', hint: 'Only when no stock line is chosen.' },
     { key: 'itemId', label: 'Item (new line)', kind: 'select', options: 'items' },
@@ -249,6 +299,7 @@ export const ADJUSTMENTS: MasterResource<AdjustmentRow & { code: string }> = {
           qty: v.qty!,
           reasonCode: v.reasonCode as 'COUNT_CORRECTION' | 'DAMAGE' | 'FOUND' | 'OTHER',
           note: v.note || null,
+          workOrderId: target.workOrderId,
         },
       }),
     );
@@ -330,6 +381,7 @@ function AdjustmentPage({ id }: { id: string }) {
     { label: 'Item', value: `${r.itemCode} · ${r.itemName}` },
     { label: 'Lot', value: r.lotNo ?? 'No lot' },
     { label: 'Location', value: `${r.locationCode} · ${r.plantCode}` },
+    ...(r.workOrderCode ? [{ label: 'Work order', value: r.workOrderCode }] : []),
     { label: 'Stock status', value: <DomainStatusBadge domain="stock" status={r.stockStatus} /> },
     { label: 'Change', value: <span className="font-semibold tabular-nums">{signed(r)}</span> },
     { label: 'Reason', value: reason(r.reasonCode) },

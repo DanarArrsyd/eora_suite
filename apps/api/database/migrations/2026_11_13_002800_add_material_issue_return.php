@@ -47,12 +47,14 @@ return new class extends Migration
               IF loc.location_type = 'MAT_AT_PROD' AND NEW.wo_id IS NULL THEN
                 RAISE EXCEPTION 'stock at Material at Production belongs to a work order' USING ERRCODE = '23514';
               END IF;
-              -- a lot split at a work center keeps its work order on the parent and every child (doc 14 #22, remnants)
-              IF d.doc_type = 'LOT_SPLIT' AND NEW.wo_id IS NOT NULL THEN
+              -- a lot split at a work center keeps its work order on the parent and every child (doc 14 #22, remnants); an
+              -- adjustment there corrects one work order's material (its other leg is the virtual adjustment location)
+              IF d.doc_type IN ('LOT_SPLIT', 'STOCK_ADJUSTMENT') AND NEW.wo_id IS NOT NULL THEN
                 IF loc.location_type IS DISTINCT FROM 'MAT_AT_PROD' OR EXISTS (
                      SELECT 1 FROM public.inventory_movements m WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.document_id
-                        AND m.wo_id IS DISTINCT FROM NEW.wo_id) THEN
-                  RAISE EXCEPTION 'a lot split at a work center keeps one work order on all its lots' USING ERRCODE = '23514';
+                        AND m.wo_id IS NOT NULL AND m.wo_id IS DISTINCT FROM NEW.wo_id) OR (d.doc_type = 'LOT_SPLIT' AND EXISTS (
+                     SELECT 1 FROM public.inventory_movements m WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.document_id AND m.wo_id IS NULL)) THEN
+                  RAISE EXCEPTION 'a split or adjustment at a work center keeps one work order' USING ERRCODE = '23514';
                 END IF;
                 RETURN NEW;
               END IF;

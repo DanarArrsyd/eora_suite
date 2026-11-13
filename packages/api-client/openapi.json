@@ -1166,6 +1166,14 @@
                                             "null"
                                         ],
                                         "maxLength": 500
+                                    },
+                                    "workOrderId": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "uuid",
+                                        "description": "material at a work center belongs to a work order (M4-D3): whose material is corrected"
                                     }
                                 },
                                 "required": [

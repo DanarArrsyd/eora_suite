@@ -45,6 +45,7 @@ final class AdjustmentsQuery extends QueryDefinition
                  join locations l on l.tenant_id = d.tenant_id and l.id = (x.leg ->> 'locationId')::uuid
                  join plants p on p.tenant_id = d.tenant_id and p.id = d.plant_id and d.doc_type = 'STOCK_ADJUSTMENT'
                  left join lots lt on lt.tenant_id = d.tenant_id and lt.id = (x.leg ->> 'lotId')::uuid
+                 left join work_orders w on w.tenant_id = d.tenant_id and w.id = (x.leg ->> 'woId')::uuid
                  left join users ur on ur.id = d.requested_by
                  left join users ud on ud.id = d.decided_by";
     }
@@ -91,6 +92,9 @@ final class AdjustmentsQuery extends QueryDefinition
             new Field('lotNo', 'lt.lot_no'),
             new Field('locationId', 'l.id', Field::UUID),
             new Field('locationCode', 'l.code'),
+            // at a work center: whose material is corrected (M4-D3)
+            new Field('workOrderId', "(x.leg ->> 'woId')::uuid", Field::UUID),
+            new Field('workOrderCode', 'w.wo_no'),
             new Field('stockStatus', "x.leg ->> 'stockStatus'", Field::ENUM, options: StockQuery::STATUSES),
             new Field('qty', "trim_scale(abs((x.leg ->> 'qty')::numeric))::text"),
             new Field('uomCode', 'u.code'),
@@ -121,6 +125,7 @@ final class AdjustmentsQuery extends QueryDefinition
             new ExportColumn('Item name', 'itemName'),
             new ExportColumn('Lot', 'lotNo'),
             new ExportColumn('Location', 'locationCode'),
+            new ExportColumn('Work order', 'workOrderCode'),
             new ExportColumn('Stock status', 'stockStatus', labels: StockQuery::STATUS_LABELS),
             new ExportColumn('Direction', 'direction'),
             new ExportColumn('Quantity', 'qty', ExportColumn::DECIMAL),

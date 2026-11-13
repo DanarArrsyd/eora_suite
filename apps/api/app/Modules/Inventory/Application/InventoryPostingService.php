@@ -160,7 +160,7 @@ final class InventoryPostingService
             if ($leg->reversesMovementId !== null) {
                 $refuse('Only a reversal reverses a leg.');
             }
-            if ($leg->woId !== null && ! in_array($command->docType, ['MAT_ISSUE', 'MAT_RETURN', 'LOT_SPLIT'], true)) {
+            if ($leg->woId !== null && ! in_array($command->docType, ['MAT_ISSUE', 'MAT_RETURN', 'LOT_SPLIT', 'STOCK_ADJUSTMENT'], true)) {
                 $refuse("A {$command->docType} does not name a work order.");
             }
             match ($command->docType) {
@@ -255,7 +255,7 @@ final class InventoryPostingService
         $day = $this->calendar->resolve($db, $command->plantId, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
         $request = ['hash' => $command->hash(), 'legs' => array_map(static fn (PostingLeg $l) => [
             'movementCode' => $l->movementCode, 'locationId' => $l->locationId, 'itemId' => $l->itemId, 'lotId' => $l->lotId,
-            'stockStatus' => $l->stockStatus, 'qty' => $l->qty,
+            'stockStatus' => $l->stockStatus, 'qty' => $l->qty, 'woId' => $l->woId,
         ], $command->legs)];
         $id = (string) $db->selectOne(
             "insert into inventory_documents (tenant_id, plant_id, doc_type, status, effective_date, requested_by, submitted_at, reason_code, note, request, idempotency_key)
