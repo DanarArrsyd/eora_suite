@@ -70,6 +70,10 @@ final class TransferController
         // locked until the posting commits, so the location cannot be deactivated in between
         $target = $db->selectOne("select location_type from locations where id = ? and plant_id = ? and status = 'ACTIVE' for share", [$to, $plant])
             ?? throw ValidationException::withMessages(['toLocationId' => 'Choose an active location of this plant.']);
+        // M4-D3: material at a work center belongs to a work order; it leaves by a return (and a new issue), not a transfer
+        if ($source->location_type === 'MAT_AT_PROD') {
+            throw ValidationException::withMessages(['fromLocationId' => 'Material at a work center belongs to a work order: return it, then issue it where it is needed.']);
+        }
         if ($target->location_type !== $source->location_type) {
             throw ValidationException::withMessages(['toLocationId' => 'A transfer stays between locations of the same kind. Issue to production, returns, QC and finished-goods receipt have their own documents.']);
         }

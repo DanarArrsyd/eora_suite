@@ -107,7 +107,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const createReason = `Your roles do not allow changes to ${perm.label}.`;
 
   const createButton = config.noCreate ? undefined : canCreate ? (
-    <Button variant="primary" onClick={() => setEditor({ open: true, row: null })}>
+    <Button variant="primary" onClick={() => (config.createHref ? router.push(config.createHref) : setEditor({ open: true, row: null }))}>
       <Plus aria-hidden="true" className="size-4" />
       {createLabel}
     </Button>

@@ -243,9 +243,9 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Issue & Return',
         items: [
-          { id: 'material-issue', label: 'Material Issue', icon: ArrowRightLeft, release: 'R1', phase: 'later' },
+          { id: 'material-issue', label: 'Material Issue', icon: ArrowRightLeft, release: 'R1', permission: 'materials.issue.view', phase: 'later' },
           { id: 'custody-acceptance', label: 'Custody Acceptance', icon: Hand, release: 'R2', badge: 'tasks', phase: 'later' },
-          { id: 'material-return', label: 'Material Return', icon: Undo2, release: 'R1', phase: 'later' },
+          { id: 'material-return', label: 'Material Return', icon: Undo2, release: 'R1', permission: 'materials.return.view', phase: 'later' },
           { id: 'substitution', label: 'Substitution Requests', icon: Replace, release: 'R2', phase: 'later' },
         ],
       },
@@ -324,7 +324,14 @@ export const NAV_MODULES: readonly NavModule[] = [
           { id: 'raw-material', label: 'Raw Material', icon: Cylinder, release: 'R1', phase: 'later', topbarContext: 'warehouse' },
           { id: 'semi-finished', label: 'Semi-Finished Material', icon: Component, release: 'R1', phase: 'later' },
           { id: 'finished-goods', label: 'Finished Goods', icon: PackageCheck, release: 'R1', phase: 'later' },
-          { id: 'material-at-production', label: 'Material at Production', icon: PackageOpen, release: 'R1', phase: 'later' },
+          {
+            id: 'material-at-production',
+            label: 'Material at Production',
+            icon: PackageOpen,
+            release: 'R1',
+            permission: ['inventory.stock.view', 'materials.issue.view', 'materials.return.view'],
+            phase: 'later',
+          },
         ],
       },
       {

@@ -78,10 +78,10 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 | ID | Rule | Owner | Enforce | Source | Test |
 |---|---|---|---|---|---|
 | BR-ISS-01 | Issue is a transfer `RM_WAREHOUSE → MAT_AT_PROD(work center)`; consumption remains zero until posted. | Materials → Inventory | SVC | D-013 | #1 |
-| BR-ISS-02 | Material at Production is keyed by work center + lot; WO linkage is an allocation, not a location. | Inventory | DB/SVC | D-013 | multi-WO test |
+| BR-ISS-02 | Material at Production is keyed by work center + lot; WO linkage is an allocation, not a location. *(M4, D-110: every ledger leg at Material at Production names its WO; a WO never takes more of a lot from a work center than it has there — DB.)* | Inventory | DB/SVC | D-013, D-110 | multi-WO test |
 | BR-ISS-03 | When tenant enables two-step custody, issue lands in `CUSTODY_TRANSIT`; Production acceptance moves it to `MAT_AT_PROD`; partial acceptance creates a discrepancy case. | Materials/Production | SVC | D-013 | custody test |
 | BR-ISS-04 | Only lots with status `UNRESTRICTED` and approved spec can be issued; substitution requires approved substitution record (scope: item, customer, WO). | Materials | SVC + POL | doc 01 | #9 |
-| BR-ISS-05 | Return `MAT_AT_PROD → RM_WAREHOUSE` requires measured quantity (weight/count). | Materials | SVC | D-010 | return test |
+| BR-ISS-05 | Return `MAT_AT_PROD → RM_WAREHOUSE` requires measured quantity (weight/count). *(M4, D-110: asked by production, received by materials with the measured quantity — asked and received both kept — or refused with a reason.)* | Materials | SVC + DB | D-010, D-110 | return test |
 | BR-ISS-06 | RM receipt for items requiring incoming release posts as `BLOCKED` until released manually; full incoming inspection is out of V1 *(D-062)*. | Materials/Quality | SVC | D-062 | — |
 
 ## Consumption (CON)

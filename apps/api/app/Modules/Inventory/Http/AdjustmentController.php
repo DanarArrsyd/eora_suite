@@ -50,6 +50,8 @@ final class AdjustmentController
             'qty' => ['required', 'string', 'regex:'.ReceiptController::QTY],
             'reasonCode' => ['required', Rule::in(AdjustmentController::REASONS)],
             'note' => ['nullable', 'string', 'max:500'],
+            // material at a work center belongs to a work order (M4-D3): whose material is corrected
+            'workOrderId' => ['nullable', 'uuid'],
         ]);
         $key = $this->key($request);
         $db = $this->db();
@@ -61,7 +63,10 @@ final class AdjustmentController
         if ($data['reasonCode'] === 'OTHER' && mb_strlen((string) $note) < 3) {
             throw ValidationException::withMessages(['note' => 'Explain the adjustment when the reason is Other.']);
         }
-        $hash = hash('sha256', json_encode([$plant, $item, $lot, $location, $data['stockStatus'], $data['direction'], $data['qty'], $data['reasonCode'], $note], JSON_THROW_ON_ERROR));
+        $wo = isset($data['workOrderId']) ? strtolower($data['workOrderId']) : null;
+        // without a work order the request hashes as it did before adjustments could name one (ADR-0014 replays)
+        $hash = hash('sha256', json_encode([$plant, $item, $lot, $location, $data['stockStatus'], $data['direction'], $data['qty'], $data['reasonCode'], $note,
+            ...($wo === null ? [] : [$wo])], JSON_THROW_ON_ERROR));
         // a retried request answers with the request it submitted, whatever the stock or master data did since
         $previous = $this->postings->requested($db, $key, 'STOCK_ADJUSTMENT', $hash);
         if ($previous !== null) {
@@ -77,16 +82,33 @@ final class AdjustmentController
         if (! (bool) $unit->lot_controlled && $lot !== null) {
             throw ValidationException::withMessages(['lotId' => 'This item is not tracked by lot. Leave the lot empty.']);
         }
-        $db->selectOne("select 1 as ok from locations where id = ? and plant_id = ? and location_type not like 'V\\_%'", [$location, $plant])
+        $place = $db->selectOne("select location_type from locations where id = ? and plant_id = ? and location_type not like 'V\\_%'", [$location, $plant])
             ?? throw ValidationException::withMessages(['locationId' => 'Choose a location of this plant that holds stock.']);
+        if ($place->location_type === 'MAT_AT_PROD' && ($wo === null || $db->selectOne('select 1 as ok from work_orders where id = ? and plant_id = ?', [$wo, $plant]) === null)) {
+            throw ValidationException::withMessages(['workOrderId' => 'Material at a work center belongs to a work order: choose whose material is corrected.']);
+        }
+        // M4: material at a work center is UNRESTRICTED (issued, returned and counted per work order only in that status)
+        if ($place->location_type === 'MAT_AT_PROD' && $data['stockStatus'] !== 'UNRESTRICTED') {
+            throw ValidationException::withMessages(['stockStatus' => 'Material at a work center is corrected as UNRESTRICTED stock.']);
+        }
+        if ($place->location_type !== 'MAT_AT_PROD' && $wo !== null) {
+            throw ValidationException::withMessages(['workOrderId' => 'Only material at a work center belongs to a work order. Leave it empty.']);
+        }
         $virtual = (string) ($db->selectOne("select id from locations where plant_id = ? and location_type = 'V_ADJUSTMENT'", [$plant])
             ?? throw new DomainProblem(409, 'NO_ADJUSTMENT_LOCATION', 'No adjustment location', 'This plant has no adjustment location.'))->id;
         if ($data['direction'] === 'MINUS') {
             // checked again at approval; asked now so a request for stock that is not there is not left to the approver
-            $onHand = (string) ($db->selectOne(
-                'select trim_scale(qty)::text as q from stock_balances where location_id = ? and item_id = ? and lot_id is not distinct from ?::uuid and stock_status = ?',
-                [$location, $item, $lot, $data['stockStatus']],
-            )->q ?? '0');
+            $onHand = (string) ($wo === null
+                ? $db->selectOne(
+                    'select trim_scale(qty)::text as q from stock_balances where location_id = ? and item_id = ? and lot_id is not distinct from ?::uuid and stock_status = ?',
+                    [$location, $item, $lot, $data['stockStatus']],
+                )?->q
+                // at a work center: what this work order has there
+                : $db->selectOne(
+                    'select trim_scale(coalesce(sum(qty_signed), 0))::text as q from inventory_movements
+                      where wo_id = ? and location_id = ? and item_id = ? and lot_id is not distinct from ?::uuid and stock_status = ?',
+                    [$wo, $location, $item, $lot, $data['stockStatus']],
+                )->q) ?: '0';
             $qty = (string) $data['qty'];
             if (! is_numeric($onHand) || ! is_numeric($qty) || bccomp($onHand, $qty, 6) < 0) {
                 throw ValidationException::withMessages(['qty' => "Only {$onHand} {$unit->uom} is on hand there."]);
@@ -95,8 +117,8 @@ final class AdjustmentController
 
         [$code, $from, $to] = $data['direction'] === 'PLUS' ? ['ADJ_PLUS', $virtual, $location] : ['ADJ_MINUS', $location, $virtual];
         $result = $this->postings->submit($db, new PostingCommand('STOCK_ADJUSTMENT', $plant, $key, [
-            new PostingLeg($code, $from, $item, $lot, $data['stockStatus'], '-'.$data['qty']),
-            new PostingLeg($code, $to, $item, $lot, $data['stockStatus'], $data['qty']),
+            new PostingLeg($code, $from, $item, $lot, $data['stockStatus'], '-'.$data['qty'], woId: $from === $location ? $wo : null),
+            new PostingLeg($code, $to, $item, $lot, $data['stockStatus'], $data['qty'], woId: $to === $location ? $wo : null),
         ], note: $note, requestHash: $hash), $data['reasonCode']);
 
         return response()->json(['data' => $result + ['status' => 'SUBMITTED']], $result['replayed'] ? 200 : 201);

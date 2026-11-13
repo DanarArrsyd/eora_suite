@@ -45,7 +45,7 @@ final readonly class PostingCommand
     public function hash(): string
     {
         return $this->requestHash ?? hash('sha256', json_encode([$this->docType, $this->plantId, $this->effectiveDate, $this->note, $this->sourceType, $this->sourceId,
-            array_map(static fn (PostingLeg $l) => array_values(get_object_vars($l)), $this->legs),
+            array_map(static fn (PostingLeg $l) => $l->hashShape(), $this->legs),
             array_map(static fn (GenealogyLink $g) => array_values(get_object_vars($g)), $this->genealogy)], JSON_THROW_ON_ERROR));
     }
 }

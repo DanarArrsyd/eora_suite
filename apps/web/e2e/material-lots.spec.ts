@@ -87,6 +87,8 @@ test('material lots: lot-tracked stock with its parent; Split posts one child lo
   await expect(page.getByText('SPL-P1-2026-0001 split off lot L2611-0001-02')).toBeVisible();
   expect(calls[0]!.key).toMatch(/^[A-Za-z0-9._:-]{8,}$/);
   expect(calls[0]!.body).toEqual({
+    // warehouse stock belongs to no work order (only material at a work center does, M4-D3)
+    workOrderId: null,
     plantId: LOT.plantId,
     itemId: LOT.itemId,
     lotId: LOT.lotId,

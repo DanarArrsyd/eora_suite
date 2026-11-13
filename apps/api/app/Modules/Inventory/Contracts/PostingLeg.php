@@ -24,9 +24,27 @@ final readonly class PostingLeg
         public ?string $enteredUomId = null,
         public ?string $uomConversionId = null,
         public ?string $reversesMovementId = null,
+        /** The work order whose material this leg moves (issue, return, their reversals; M4-D3). */
+        public ?string $woId = null,
     ) {
         if (! is_numeric($qty) || preg_match('/^-?\d{1,14}(\.\d{1,6})?$/', $qty) !== 1 || bccomp($qty, '0', 6) === 0) {
             throw new InvalidArgumentException('A leg quantity is a non-zero decimal with at most 6 decimals.');
         }
+    }
+
+    /**
+     * The leg as it enters a posting's request hash. A leg without a work order keeps the shape it had before `woId`
+     * existed, so a retry of a posting made then still replays under its key (ADR-0014).
+     *
+     * @return list<mixed>
+     */
+    public function hashShape(): array
+    {
+        $values = get_object_vars($this);
+        if ($values['woId'] === null) {
+            unset($values['woId']);
+        }
+
+        return array_values($values);
     }
 }

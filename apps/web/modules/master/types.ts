@@ -27,7 +27,9 @@ export type OptionSource =
   | 'locations'
   | 'stockLines'
   | 'physicalLocations'
-  | 'lots';
+  | 'lots'
+  | 'materialAtProduction'
+  | 'workOrders';
 
 export type FieldSpec = {
   key: string;
@@ -87,6 +89,8 @@ export type MasterResource<T extends MasterRow> = {
   description: string;
   /** The create button when it is not "New <singular>" (e.g. "New close request" on a list of periods). */
   createLabel?: string;
+  /** The create button opens this page instead of the drawer (a record with several lines, e.g. a material issue). */
+  createHref?: string;
   /** The drawer's submit button when it is not "Create <singular>" (e.g. "Add line" on an order's page). */
   submitLabel?: string;
   /** Plural and singular nouns for counts, empty states and buttons. */

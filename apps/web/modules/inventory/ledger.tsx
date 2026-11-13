@@ -39,7 +39,7 @@ export type MovementRow = {
   postedByName: string | null;
 };
 
-/** D-084 movement codes posted in M3, by their screen names. */
+/** D-084 movement codes posted so far (M3, M4 step 3), by their screen names. */
 export const MOVEMENT_CODES: Record<string, string> = {
   RCPT_SUPPLIER: 'Supplier receipt',
   INCOMING_RELEASE: 'Incoming release',
@@ -48,6 +48,8 @@ export const MOVEMENT_CODES: Record<string, string> = {
   LOT_SPLIT_IN: 'Split in',
   ADJ_PLUS: 'Adjustment plus',
   ADJ_MINUS: 'Adjustment minus',
+  ISSUE_TO_PROD: 'Issue to production',
+  RETURN_FROM_PROD: 'Return from production',
 };
 const options = (labels: Record<string, string>): Option[] => Object.entries(labels).map(([value, label]) => ({ value, label }));
 const movement = (r: MovementRow) => `${MOVEMENT_CODES[r.movementCode] ?? r.movementCode}${r.reversesMovementId ? ' (reversal)' : ''}`;

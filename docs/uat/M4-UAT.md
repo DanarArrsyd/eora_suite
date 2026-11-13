@@ -26,7 +26,7 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
    ```bash
    npx pnpm@12.10.1 --filter @eora/web dev
    ```
-4. Login pakai password demo. Akun: `ppc@demo-stamping.test` (planner: membuat dan mengonfirmasi SO, membuat WO), `csa@demo-stamping.test` (admin: me-release WO; juga menyetujui BOM/routing), `fgw@demo-stamping.test` (gudang FG: hanya melihat SO).
+4. Login pakai password demo. Akun: `ppc@demo-stamping.test` (planner: membuat dan mengonfirmasi SO, membuat WO), `csa@demo-stamping.test` (admin: me-release WO; juga menyetujui BOM/routing dan reversal), `fgw@demo-stamping.test` (gudang FG: hanya melihat SO), `mat@demo-stamping.test` (gudang bahan: terima, issue, terima return), `prl@demo-stamping.test` (production leader: minta return), `inv@demo-stamping.test` (inventory control: minta reversal).
 
 ## 1. Sales Order (langkah 1, D-107, D-108)
 | # | Langkah | Yang diharapkan | Hasil |
@@ -58,3 +58,21 @@ Persiapan: BOM dan routing BRK-A100 dari data demo masih **Draft**. Sebagai `ppc
 | 6 | Sebagai `ppc` ajukan lagi; login `csa` → **Release**. | Status **Released**; "Copied at release: BOM v1 · routing … v1"; tabel Materials berisi coil dan nut dengan quantity yang dibutuhkan (1500 × per piece). | |
 | 7 | Buat WO untuk item FG lain tanpa BOM/routing approved, ajukan, lalu `csa` → **Release**. | Ditolak di dialog: "The item has no approved BOM version and no approved primary routing version at this plant in force today …". | |
 | 8 | Sebagai `ppc` → WO yang Released → **Cancel work order** dengan alasan. | Status **Cancelled** dengan alasan; nomor tidak dipakai ulang. | |
+
+## 3. Issue dan return bahan (langkah 3, D-110)
+Persiapan: WO dari §2 langkah 6 masih **Released** (jangan pakai WO yang dibatalkan di §2 langkah 8). Sebagai `mat` terima coil dan nut BRK-A100 lewat Materials → **RM Receipts** (coil yang wajib incoming release di-release dulu oleh `qci`).
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `mat` → Materials → **Material Issue** → **Issue material**. | Halaman Issue material; pilihan Released work order hanya WO yang Released. | |
+| 2 | Pilih WO itu. | To work center terisi work center operasi pertama routing; tabel Materials berisi coil dan nut dengan Required, Issued 0, At production 0. | |
+| 3 | **Add … lot** pada coil → pilih rak dan lot, quantity lebih dari yang tersedia → **Issue material**. | Ditolak di halaman: "only … is available at …". | |
+| 4 | Quantity lebih besar dari Required tapi masih tersedia (mis. satu coil utuh), tambah satu baris nut → **Issue material** → konfirmasi. | Pesan "ISS-P1-<tahun>-0001 issued to <work center>"; over-issue diterima. | |
+| 5 | Inventory → **Material at Production**. | Coil dan nut per work center, WO dan lot dengan quantity yang di-issue; tanpa kata WIP. Stock Overview: rak RM berkurang, lokasi MAP-… bertambah. | |
+| 6 | PPIC → Work Orders → buka WO itu. | Kolom Issued dan At production terisi; tombol **Issue material** ada untuk `mat`. | |
+| 7 | Login `prl` → Materials → **Material Return** → **Ask for a return** → pilih baris coil dari Material at Production, quantity lebih dari yang ada. | Ditolak: "… has … of it at …". | |
+| 8 | Quantity `15`, note "Sisa coil" → **Ask for return** → konfirmasi. | Status **Submitted** (menunggu diterima); stok belum berubah. Tidak ada tombol Receive untuk `prl`. | |
+| 9 | Login `mat` → buka return itu → **Receive** → rak RM, quantity `14.5` → **Receive** → konfirmasi. | Nomor `RTN-P1-<tahun>-0001`; Asked 15, Received 14.5 ke rak itu, Difference −0.5. Material at Production coil berkurang 14.5. | |
+| 10 | `prl` minta return kedua; `mat` → **Refuse** dengan alasan. | Status **Rejected** dengan alasan; stok tidak berubah. | |
+| 11 | Login `inv` → Inventory → **Reversals** → minta reversal atas dokumen ISS dari langkah 4; login `csa` → setujui. | Ditolak: material sudah sebagian dikembalikan — reverse return-nya dulu (REVERSAL_BLOCKED_BY_DOWNSTREAM). Tolak permintaan itu dengan alasan. | |
+

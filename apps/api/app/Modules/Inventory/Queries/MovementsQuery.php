@@ -16,12 +16,13 @@ use App\Platform\Query\QueryDefinition;
  */
 final class MovementsQuery extends QueryDefinition
 {
-    /** D-084 codes posted in M3 (doc 04 §Movement codes). */
-    public const array CODES = ['RCPT_SUPPLIER', 'INCOMING_RELEASE', 'TRANSFER_LOC', 'LOT_SPLIT_OUT', 'LOT_SPLIT_IN', 'ADJ_PLUS', 'ADJ_MINUS'];
+    /** D-084 codes posted in M3 and M4 so far (doc 04 §Movement codes). */
+    public const array CODES = ['RCPT_SUPPLIER', 'INCOMING_RELEASE', 'TRANSFER_LOC', 'LOT_SPLIT_OUT', 'LOT_SPLIT_IN', 'ADJ_PLUS', 'ADJ_MINUS', 'ISSUE_TO_PROD', 'RETURN_FROM_PROD'];
 
     public const array CODE_LABELS = [
         'RCPT_SUPPLIER' => 'Supplier receipt', 'INCOMING_RELEASE' => 'Incoming release', 'TRANSFER_LOC' => 'Transfer', 'LOT_SPLIT_OUT' => 'Split out',
-        'LOT_SPLIT_IN' => 'Split in', 'ADJ_PLUS' => 'Adjustment plus', 'ADJ_MINUS' => 'Adjustment minus',
+        'LOT_SPLIT_IN' => 'Split in', 'ADJ_PLUS' => 'Adjustment plus', 'ADJ_MINUS' => 'Adjustment minus', 'ISSUE_TO_PROD' => 'Issue to production',
+        'RETURN_FROM_PROD' => 'Return from production',
     ];
 
     public function resource(): string

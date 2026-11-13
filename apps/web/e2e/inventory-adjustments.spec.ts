@@ -106,6 +106,8 @@ test('adjustments: inventory control requests one stock line with a reason; noth
     qty: '15',
     reasonCode: 'DAMAGE',
     note: 'Sheet edge bent by forklift',
+    // warehouse stock belongs to no work order (only material at a work center does, M4-D3)
+    workOrderId: null,
   });
 });
 
@@ -214,5 +216,6 @@ test('adjustments: found stock where none is recorded is added by naming locatio
     qty: '40',
     reasonCode: 'FOUND',
     note: null,
+    workOrderId: null,
   });
 });
