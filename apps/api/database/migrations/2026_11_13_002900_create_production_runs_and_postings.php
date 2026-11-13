@@ -163,6 +163,8 @@ return new class extends Migration
             ALTER TABLE inventory_documents ADD CONSTRAINT inventory_documents_corrects_fk FOREIGN KEY (tenant_id, corrects_document_id) REFERENCES inventory_documents (tenant_id, id);
             CREATE UNIQUE INDEX inventory_documents_regular_production_uq ON inventory_documents (tenant_id, source_id, production_date, shift_id) NULLS NOT DISTINCT
               WHERE doc_type = 'PRODUCTION_POSTING' AND corrects_document_id IS NULL;
+            -- a reversed posting is replaced once: corrections never add postings beyond the one they replace
+            CREATE UNIQUE INDEX inventory_documents_correction_uq ON inventory_documents (tenant_id, corrects_document_id) WHERE corrects_document_id IS NOT NULL;
 
             -- who posts production, for which run, and what a correction replaces
             CREATE OR REPLACE FUNCTION eora_guard_production_document() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
@@ -308,6 +310,7 @@ return new class extends Migration
             DROP FUNCTION IF EXISTS eora_check_production_posting();
             DROP TRIGGER IF EXISTS guard_production ON inventory_documents;
             DROP FUNCTION IF EXISTS eora_guard_production_document();
+            DROP INDEX IF EXISTS inventory_documents_correction_uq;
             DROP INDEX IF EXISTS inventory_documents_regular_production_uq;
             ALTER TABLE inventory_documents DROP CONSTRAINT IF EXISTS inventory_documents_corrects_fk;
             ALTER TABLE inventory_documents DROP COLUMN IF EXISTS corrects_document_id;

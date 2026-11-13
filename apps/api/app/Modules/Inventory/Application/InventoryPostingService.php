@@ -835,6 +835,9 @@ final class InventoryPostingService
     private function refusal(QueryException $e): ?DomainProblem
     {
         $state = (string) $e->getCode();
+        if ($state === '23505' && str_contains($e->getMessage(), 'correction_uq')) {
+            return new DomainProblem(409, 'PRODUCTION_ALREADY_POSTED', 'Already corrected', 'This reversed posting already has its correction. Reverse that correction to post another.');
+        }
         if ($state === '23505' && str_contains($e->getMessage(), 'regular_production_uq')) {
             return new DomainProblem(409, 'PRODUCTION_ALREADY_POSTED', 'Already posted for this shift',
                 'This run already has its regular posting for this production date and shift. Reverse it and post a correction instead.');

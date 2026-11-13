@@ -153,6 +153,10 @@ it('cancels a run without postings, and corrects a reversed posting with a new o
     prPost($this, $f, $run['id'], ['correctsPostingId' => $posted['documentId'], 'goodQty' => '92', 'ngReworkQty' => '3'], 'pr-post-0003')
         ->assertCreated();
     expect(prStock($this->t, $f['item']['id']))->toBe(['NG-01 / REJECTED' => '3', 'NG-01 / REWORK' => '3', 'QC-01 / QC_RELEASED' => '92']);
+    // a reversed posting is corrected once (a second correction would be a second regular posting in disguise)
+    prPost($this, $f, $run['id'], ['correctsPostingId' => $posted['documentId'], 'consumptions' => [['itemId' => $f['coil']['id'], 'lotId' => $f['lot'], 'method' => 'WEIGHED_CONSUMED', 'qty' => '1', 'evidence' => 'S-01']],
+        'goodQty' => '1', 'ngReworkQty' => null, 'ngRejectQty' => null, 'scrap' => []], 'pr-post-0004')
+        ->assertStatus(409)->assertJsonPath('code', 'PRODUCTION_ALREADY_POSTED');
     spa($this)->getJson("/api/v1/query/production.postings?filter[runId]={$run['id']}&sort=postedAt")->assertOk()->assertJsonPath('data.1.correctsCode', $posted['docNo']);
 })->group('integration', 'production');
 
