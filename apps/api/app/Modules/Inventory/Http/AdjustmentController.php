@@ -87,6 +87,10 @@ final class AdjustmentController
         if ($place->location_type === 'MAT_AT_PROD' && ($wo === null || $db->selectOne('select 1 as ok from work_orders where id = ? and plant_id = ?', [$wo, $plant]) === null)) {
             throw ValidationException::withMessages(['workOrderId' => 'Material at a work center belongs to a work order: choose whose material is corrected.']);
         }
+        // M4: material at a work center is UNRESTRICTED (issued, returned and counted per work order only in that status)
+        if ($place->location_type === 'MAT_AT_PROD' && $data['stockStatus'] !== 'UNRESTRICTED') {
+            throw ValidationException::withMessages(['stockStatus' => 'Material at a work center is corrected as UNRESTRICTED stock.']);
+        }
         if ($place->location_type !== 'MAT_AT_PROD' && $wo !== null) {
             throw ValidationException::withMessages(['workOrderId' => 'Only material at a work center belongs to a work order. Leave it empty.']);
         }

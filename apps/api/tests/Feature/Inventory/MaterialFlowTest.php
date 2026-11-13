@@ -298,6 +298,7 @@ it('adjusts material at a work center for its work order, within what that order
         'direction' => 'MINUS', 'qty' => '2', 'reasonCode' => 'COUNT_CORRECTION', 'note' => 'Weighed at the press',
     ], ['Idempotency-Key' => $key]);
     $ask([], 'mf-adjust-0001')->assertStatus(422)->assertJsonValidationErrors(['workOrderId']);
+    $ask(['workOrderId' => $f['wo']['id'], 'direction' => 'PLUS', 'stockStatus' => 'BLOCKED'], 'mf-adjust-0005')->assertStatus(422)->assertJsonValidationErrors(['stockStatus']);
     $ask(['workOrderId' => $f['wo']['id'], 'qty' => '31'], 'mf-adjust-0002')->assertStatus(422)->assertJsonValidationErrors(['qty']);
     $id = $ask(['workOrderId' => $f['wo']['id']], 'mf-adjust-0003')->assertCreated()->json('data.documentId');
     // found material at a work center is added for the chosen WO, whatever that order has recorded there

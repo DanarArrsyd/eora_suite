@@ -150,6 +150,7 @@ async function resolveTarget(v: Record<string, string>): Promise<Target | { fiel
     const line = await stockLine(v.stockLineId);
     if (!line) return { field: 'stockLineId', message: 'That stock line is no longer there. Choose it again.' };
     if (line.locationType === 'MAT_AT_PROD') {
+      if (line.stockStatus !== 'UNRESTRICTED') return { field: 'stockLineId', message: 'Material at a work center is corrected as UNRESTRICTED stock.' };
       const wo = await workOrderOf(v, line);
       if ('field' in wo) return wo;
       return { ...line, onHand: wo.qty, workOrderId: wo.workOrderId };
@@ -174,6 +175,8 @@ async function resolveTarget(v: Record<string, string>): Promise<Target | { fiel
   // found at a work center: it belongs to the chosen work order, whatever that order has recorded there
   let workOrderId: string | null = null;
   if (location.locationType === 'MAT_AT_PROD') {
+    if ((v.stockStatus || 'UNRESTRICTED') !== 'UNRESTRICTED')
+      return { field: 'stockStatus', message: 'Material at a work center is corrected as UNRESTRICTED stock.' };
     const wo = await workOrderOf(v, { plantId: location.plantId, locationId: location.id, itemId: item.id, lotId });
     if ('field' in wo) return wo;
     workOrderId = wo.workOrderId;
