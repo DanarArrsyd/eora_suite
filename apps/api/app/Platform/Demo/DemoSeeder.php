@@ -113,13 +113,53 @@ final class DemoSeeder
     }
 
     /**
+     * The all-roles UAT account `uat@<code>.test` (owner, 2026-11-13): one active user holding every role of the demo
+     * tenant at its default scope, so one person can walk through every module, setting and approval. The second-person
+     * rule stays (D-060): it never approves what it requested itself; a second account (e.g. csa@) does. Added to an
+     * existing demo tenant, idempotent; an account that is already active keeps its password.
+     *
+     * @return array{created: bool, roles: list<string>, email: string}
+     */
+    public function addUatAccount(DemoSpec $spec, string $password): array
+    {
+        $existing = DB::connection('pgsql_provisioner')->selectOne(
+            'select tenant_id, status from prov_api.provision_lookup(?, ?)',
+            [$spec->code, $this->hasher->hash($spec->code."\n".$spec->email('tenant-admin'))],
+        );
+        if ($existing === null || $existing->status === 'STARTED') {
+            throw new RuntimeException("There is no demo tenant {$spec->code}. Seed it first with eora:demo:seed.");
+        }
+        $tenant = (string) $existing->tenant_id;
+        $plant = (string) $this->inTenant($tenant, fn (EoraPostgresConnection $db) => $db->selectOne("select id from plants where code = 'P1'")->id);
+        /** @var list<stdClass> $roles */
+        $roles = $this->inTenant($tenant, fn (EoraPostgresConnection $db) => $db->select(
+            "select r.id, r.code, r.name, coalesce(t.default_scope_type, 'TENANT') as scope
+               from roles r left join role_templates t on t.code = r.template_code order by r.code",
+        ));
+        $email = $spec->email('uat');
+        $membership = null;
+        $created = false;
+        foreach ($roles as $role) {
+            $member = $this->ensureMember($spec, $tenant, $plant, $role, $email);
+            $membership = $member['membership'];
+        }
+        $status = $this->inTenant($tenant, fn (EoraPostgresConnection $db) => $db->selectOne('select status from memberships where id = ?', [$membership])->status ?? null);
+        if ($status === 'INVITED') {
+            $this->ensureActive($tenant, (string) $membership, false, $this->passwords->hash($password));
+            $created = true;
+        }
+
+        return ['created' => $created, 'roles' => array_map(static fn (stdClass $r): string => (string) $r->code, $roles), 'email' => $email];
+    }
+
+    /**
      * Membership and role assignment for one role template, created only when missing.
      *
      * @return array{membership: string, dispatched: bool, role: string, name: string, email: string, scope: string}
      */
-    private function ensureMember(DemoSpec $spec, string $tenant, string $plant, stdClass $role): array
+    private function ensureMember(DemoSpec $spec, string $tenant, string $plant, stdClass $role, ?string $email = null): array
     {
-        $email = $spec->email(strtolower((string) $role->code));
+        $email ??= $spec->email(strtolower((string) $role->code));
         $user = DB::connection('pgsql_auth')->selectOne('select auth_api.invite_identity(?) as id', [$email])->id
             ?? throw new RuntimeException('Identity creation is capped right now. Run the demo seeder again later with the same --password; it continues where it stopped.');
         $scope = (string) $role->scope;
