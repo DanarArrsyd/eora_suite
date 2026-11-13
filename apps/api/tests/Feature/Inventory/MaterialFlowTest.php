@@ -300,6 +300,8 @@ it('adjusts material at a work center for its work order, within what that order
     $ask([], 'mf-adjust-0001')->assertStatus(422)->assertJsonValidationErrors(['workOrderId']);
     $ask(['workOrderId' => $f['wo']['id'], 'qty' => '31'], 'mf-adjust-0002')->assertStatus(422)->assertJsonValidationErrors(['qty']);
     $id = $ask(['workOrderId' => $f['wo']['id']], 'mf-adjust-0003')->assertCreated()->json('data.documentId');
+    // found material at a work center is added for the chosen WO, whatever that order has recorded there
+    $ask(['workOrderId' => $f['wo']['id'], 'direction' => 'PLUS', 'itemId' => $f['nut']['id'], 'lotId' => null, 'reasonCode' => 'FOUND'], 'mf-adjust-0004')->assertCreated();
     spa($this)->getJson("/api/v1/query/inventory.adjustments?filter[id]={$id}")->assertOk()->assertJsonPath('data.0.workOrderCode', $f['wo']['code']);
     rtSwitch($this, $this->t, 'CSA');
     adApprove($this, $id)->assertCreated();

@@ -86,6 +86,12 @@ const PICKERS: Record<
       `${String(r.itemCode)} · ${r.lotNo ? String(r.lotNo) : 'no lot'} · ${String(r.plantCode)} / ${String(r.locationCode)} · ${STATUS_CATALOGUE.stock[r.stockStatus as keyof typeof STATUS_CATALOGUE.stock]?.label ?? String(r.stockStatus)} · ${String(r.qty)} ${String(r.uomCode)}`,
     sortBy: 'itemCode',
   },
+  // work orders material at a work center can belong to (M4-D3): released or in production
+  workOrders: {
+    resource: 'planning.work_orders',
+    label: (r) => `${String(r.code)} · ${String(r.itemCode)} · ${String(r.qty)} ${String(r.uomCode)}`,
+    filters: { status: ['RELEASED', 'IN_PROGRESS', 'ON_HOLD', 'PRODUCTION_COMPLETE'] },
+  },
   // material a work order has at a work center (D-110): what production asks to return
   materialAtProduction: {
     resource: 'inventory.material_at_production',

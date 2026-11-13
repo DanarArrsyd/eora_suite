@@ -95,7 +95,7 @@ type Submitted = { data: { documentId: string; replayed: boolean } };
 const STOCK_STATUS_OPTIONS: Option[] = Object.entries(STATUS_CATALOGUE.stock).map(([value, e]) => ({ value, label: e.label }));
 const BLANK = {
   stockLineId: '',
-  atProductionLineId: '',
+  workOrderId: '',
   locationId: '',
   itemId: '',
   lotId: '',
@@ -120,23 +120,25 @@ type Target = {
   workOrderId: string | null;
 };
 
-/** Material at a work center belongs to a work order: the chosen Material at Production line of that place, item and lot. */
+/**
+ * Material at a work center belongs to a work order (M4-D3): the chosen work order of the plant, and what it has of this
+ * item and lot there (zero when nothing is recorded, e.g. material found after its balance ran out).
+ */
 async function workOrderOf(
   v: Record<string, string>,
-  place: { locationId: string; itemId: string; lotId: string | null },
+  place: { plantId: string; locationId: string; itemId: string; lotId: string | null },
 ): Promise<{ workOrderId: string; qty: string } | { field: string; message: string }> {
-  const [line] = v.atProductionLineId
-    ? await queryAll<{ workOrderId: string; locationId: string; itemId: string; lotId: string | null; qty: string }>(
-        'inventory.material_at_production',
-        { id: v.atProductionLineId },
-        undefined,
-        'workOrderCode',
-      )
-    : [];
-  if (!line || line.locationId !== place.locationId || line.itemId !== place.itemId || (line.lotId ?? null) !== place.lotId) {
-    return { field: 'atProductionLineId', message: 'Material at a work center belongs to a work order: choose its line for this place, item and lot.' };
+  const [wo] = v.workOrderId ? await queryAll<{ id: string; plantId: string }>('planning.work_orders', { id: v.workOrderId }) : [];
+  if (!wo || wo.plantId !== place.plantId) {
+    return { field: 'workOrderId', message: 'Material at a work center belongs to a work order: choose whose material is corrected.' };
   }
-  return { workOrderId: line.workOrderId, qty: line.qty };
+  const lines = await queryAll<{ lotId: string | null; qty: string }>(
+    'inventory.material_at_production',
+    { workOrderId: wo.id, locationId: place.locationId, itemId: place.itemId },
+    undefined,
+    'workOrderCode',
+  );
+  return { workOrderId: wo.id, qty: lines.find((l) => (l.lotId ?? null) === place.lotId)?.qty ?? '0' };
 }
 
 /**
@@ -169,11 +171,15 @@ async function resolveTarget(v: Record<string, string>): Promise<Target | { fiel
   } else if (v.lotId) {
     return { field: 'lotId', message: 'This item is not tracked by lot. Leave the lot empty.' };
   }
+  // found at a work center: it belongs to the chosen work order, whatever that order has recorded there
+  let workOrderId: string | null = null;
   if (location.locationType === 'MAT_AT_PROD') {
-    return { field: 'locationId', message: 'Material at a work center is corrected from its stock line, with its work order.' };
+    const wo = await workOrderOf(v, { plantId: location.plantId, locationId: location.id, itemId: item.id, lotId });
+    if ('field' in wo) return wo;
+    workOrderId = wo.workOrderId;
   }
   return {
-    workOrderId: null,
+    workOrderId,
     plantId: location.plantId,
     locationId: location.id,
     itemId: item.id,
@@ -243,11 +249,11 @@ export const ADJUSTMENTS: MasterResource<AdjustmentRow & { code: string }> = {
       hint: 'Item, lot, place and status to correct, with what is on hand now. Leave it empty to add found stock where none is recorded.',
     },
     {
-      key: 'atProductionLineId',
+      key: 'workOrderId',
       label: 'Work order (at a work center)',
       kind: 'select',
-      options: 'materialAtProduction',
-      hint: 'Only for a stock line at a work center: whose material is corrected.',
+      options: 'workOrders',
+      hint: 'Only for stock at a work center: whose material is corrected, also when nothing is recorded there yet.',
     },
     // found stock where no line is recorded (D-100): its place, item and lot, added only
     { key: 'locationId', label: 'Location (new line)', kind: 'select', options: 'physicalLocations', hint: 'Only when no stock line is chosen.' },
