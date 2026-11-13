@@ -80,6 +80,10 @@ type DispositionRow = {
   requestedByName: string | null;
   decidedByName: string | null;
   rejectReason: string | null;
+  reversalId: string | null;
+  reversalReason: string | null;
+  reversalRequestedById: string | null;
+  reversalRequestedByName: string | null;
   at: string;
 };
 
@@ -512,6 +516,8 @@ function DispositionPage({ id }: { id: string }) {
   const client = useQueryClient();
   const [notice, setNotice] = React.useState<string | null>(null);
   const key = React.useRef(`qcr-approve-${id}-${crypto.randomUUID()}`);
+  // one key per attempt for the reversal decision (D-113: a quality supervisor decides it)
+  const reverseKey = React.useRef(`qcrv-${crypto.randomUUID()}`);
   const row = useQuery({
     queryKey: ['master', 'quality.dispositions', 'one', id],
     queryFn: async ({ signal }) =>
@@ -556,6 +562,7 @@ function DispositionPage({ id }: { id: string }) {
     ...(Number(r.rejectQty) > 0 ? [{ label: 'Reject', value: `${r.rejectQty} ${r.uomCode}` }] : []),
     { label: r.outOfPolicy ? 'Reason' : 'Note', value: r.note ?? '—' },
     ...(r.status === 'REJECTED' ? [{ label: 'Rejected because', value: r.rejectReason ?? '—' }] : []),
+    ...(r.reversalId ? [{ label: 'Reversal asked', value: `${r.reversalReason ?? '—'} (${r.reversalRequestedByName ?? 'unknown'})` }] : []),
   ];
   return (
     <EnterprisePage
@@ -602,32 +609,58 @@ function DispositionPage({ id }: { id: string }) {
             </dl>
           </CardContent>
         </Card>
-        {r.outOfPolicy ? (
-          <ApprovalPanel
-            label="Release"
-            record={{
-              status: r.status === 'POSTED' || r.status === 'REVERSED' ? 'APPROVED' : r.status,
-              preparedByName: r.requestedByName,
-              approvedByName: r.decidedByName,
-              approvedAt: r.status === 'SUBMITTED' ? null : r.at,
-            }}
-            can={{ view: true, create: false, submit: false, approve: canApprove && !mine }}
-            approvedNote={`Posted as ${r.docNo ?? 'a disposition'}. A posted release is corrected by its reversal.`}
-            rejectNote="Nothing moves. The inspector sees the reason."
-            act={async () => {
-              const posted = await call(() =>
-                api.POST('/quality/release-requests/{release}/approve', { params: { path: { release: id }, header: { 'Idempotency-Key': key.current } } }),
-              );
-              key.current = `qcr-approve-${id}-${crypto.randomUUID()}`;
-              return posted;
-            }}
-            reject={(why) => call(() => api.POST('/quality/release-requests/{release}/reject', { params: { path: { release: id } }, body: { reason: why } }))}
-            onDone={(message) => {
-              setNotice(message.replace(/approved$/, 'approved and posted'));
-              void client.invalidateQueries({ queryKey: ['master'] });
-            }}
-          />
-        ) : null}
+        <div className="flex flex-col gap-4">
+          {r.outOfPolicy ? (
+            <ApprovalPanel
+              label="Release"
+              record={{
+                status: r.status === 'POSTED' || r.status === 'REVERSED' ? 'APPROVED' : r.status,
+                preparedByName: r.requestedByName,
+                approvedByName: r.decidedByName,
+                approvedAt: r.status === 'SUBMITTED' ? null : r.at,
+              }}
+              can={{ view: true, create: false, submit: false, approve: canApprove && !mine }}
+              approvedNote={`Posted as ${r.docNo ?? 'a disposition'}. A posted release is corrected by its reversal.`}
+              rejectNote="Nothing moves. The inspector sees the reason."
+              act={async () => {
+                const posted = await call(() =>
+                  api.POST('/quality/release-requests/{release}/approve', { params: { path: { release: id }, header: { 'Idempotency-Key': key.current } } }),
+                );
+                key.current = `qcr-approve-${id}-${crypto.randomUUID()}`;
+                return posted;
+              }}
+              reject={(why) => call(() => api.POST('/quality/release-requests/{release}/reject', { params: { path: { release: id } }, body: { reason: why } }))}
+              onDone={(message) => {
+                setNotice(message.replace(/approved$/, 'approved and posted'));
+                void client.invalidateQueries({ queryKey: ['master'] });
+              }}
+            />
+          ) : null}
+          {r.reversalId ? (
+            <ApprovalPanel
+              label="Reversal"
+              record={{ status: 'SUBMITTED', preparedByName: r.reversalRequestedByName, approvedByName: null, approvedAt: null }}
+              can={{ view: true, create: false, submit: false, approve: canApprove && me.data?.user.id !== r.reversalRequestedById }}
+              approvedNote="Reversed: the stock is back where it was before this disposition."
+              rejectNote="Nothing moves; the disposition stays posted. Who asked sees the reason."
+              act={async () => {
+                const reversal = r.reversalId!;
+                const posted = await call(() =>
+                  api.POST('/inventory/reversals/{reversal}/approve', { params: { path: { reversal }, header: { 'Idempotency-Key': reverseKey.current } } }),
+                );
+                reverseKey.current = `qcrv-${crypto.randomUUID()}`;
+                return posted;
+              }}
+              reject={(why) =>
+                call(() => api.POST('/inventory/reversals/{reversal}/reject', { params: { path: { reversal: r.reversalId! } }, body: { reason: why } }))
+              }
+              onDone={(message) => {
+                setNotice(message.replace(/approved$/, 'approved: the disposition is reversed'));
+                void client.invalidateQueries({ queryKey: ['master'] });
+              }}
+            />
+          ) : null}
+        </div>
       </div>
     </EnterprisePage>
   );

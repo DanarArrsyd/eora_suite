@@ -43,11 +43,20 @@ return new class extends Migration
               CHECK (reason_code IN ('SKELETON', 'SETUP', 'EDGE_TRIM', 'DEFECT', 'DIMENSION', 'VISUAL', 'BURR', 'CRACK', 'MATERIAL', 'OTHER'));
 
             -- who decides: the inspector posts in-policy dispositions and asks for out-of-policy ones; a second person with
-            -- the release approval decides those (never who asked); nobody disposes of a lot whose output they reported
+            -- the release approval decides those (never who asked) and the reversal of any disposition
             CREATE OR REPLACE FUNCTION eora_guard_qc_document() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
             DECLARE
               a uuid := (SELECT c.actor FROM ctx_api.context() c);
             BEGIN
+              -- D-113: the reversal of a disposition is decided by a quality supervisor, not by the inventory approver
+              IF NEW.doc_type = 'REVERSAL' THEN
+                IF TG_OP = 'UPDATE' AND OLD.status = 'SUBMITTED' AND NEW.status IS DISTINCT FROM OLD.status
+                   AND EXISTS (SELECT 1 FROM public.inventory_documents o WHERE o.tenant_id = NEW.tenant_id AND o.id = NEW.reverses_document_id AND o.doc_type = 'QC_DISPOSITION')
+                   AND NOT public.eora_actor_may('quality.disposition_release.approve', NEW.plant_id) THEN
+                  RAISE EXCEPTION 'the reversal of a disposition is decided by a quality supervisor of its plant' USING ERRCODE = '42501';
+                END IF;
+                RETURN NEW;
+              END IF;
               IF NEW.doc_type <> 'QC_DISPOSITION' THEN
                 RETURN NEW;
               END IF;

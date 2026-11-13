@@ -181,3 +181,31 @@ it('holds the output reporter to SoD-01 when the output has no lot (item not lot
     rtSwitch($this, $this->t, 'QCI');
     qcDispose($this, $pending, [['outcome' => 'RELEASE', 'qty' => '90']], 'qc-dispose-0002')->assertCreated();
 })->group('integration', 'quality');
+
+it('lets only a quality supervisor decide the reversal of a disposition (D-113)', function () {
+    $f = qcFixture($this, $this->t);
+    $hold = qcDispose($this, $f['pending'], [['outcome' => 'HOLD', 'qty' => '10', 'reasonCode' => 'VISUAL']])->assertCreated()->json('data.documentId');
+    rtSwitch($this, $this->t, 'INV', ['PLANT', $f['plant']]);
+    $undo = spa($this)->postJson('/api/v1/inventory/reversals', ['documentId' => $hold, 'reason' => 'Held the wrong quantity'], ['Idempotency-Key' => 'qc-reverse-0001'])
+        ->assertCreated()->json('data.documentId');
+
+    // the inventory approver no longer decides it, through the API or straight in the database
+    $csa = rtSwitch($this, $this->t, 'CSA');
+    spa($this)->postJson("/api/v1/inventory/reversals/{$undo}/approve", [], ['Idempotency-Key' => 'qc-reverse-0002'])->assertForbidden();
+    spa($this)->postJson("/api/v1/inventory/reversals/{$undo}/reject", ['reason' => 'Not for me'])->assertForbidden();
+    try {
+        asApp($this->t, (string) $csa['id'], fn (EoraPostgresConnection $db) => app(InventoryPostingService::class)->approve($db, $undo, 'qc-reverse-0003'));
+        $this->fail('posted: a disposition reversal approved by the inventory approver');
+    } catch (DomainProblem $e) {
+        expect($e->detail)->toContain('decided by a quality supervisor');
+    }
+
+    // the quality supervisor sees it on the disposition and decides it
+    rtSwitch($this, $this->t, 'QCS');
+    spa($this)->getJson("/api/v1/query/quality.dispositions?filter[id]={$hold}")->assertOk()
+        ->assertJsonPath('data.0.reversalId', $undo)->assertJsonPath('data.0.reversalReason', 'Held the wrong quantity');
+    spa($this)->postJson("/api/v1/inventory/reversals/{$undo}/approve", [], ['Idempotency-Key' => 'qc-reverse-0004'])->assertCreated();
+    expect(prStock($this->t, $f['item']['id']))->toBe(['NG-01 / REJECTED' => '3', 'NG-01 / REWORK' => '5', 'QC-01 / PENDING_QC' => '90']);
+    spa($this)->getJson("/api/v1/query/quality.dispositions?filter[id]={$hold}")->assertOk()
+        ->assertJsonPath('data.0.status', 'REVERSED')->assertJsonPath('data.0.reversalId', null);
+})->group('integration', 'quality');

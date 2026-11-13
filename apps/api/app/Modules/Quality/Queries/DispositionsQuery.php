@@ -55,7 +55,10 @@ final class DispositionsQuery extends QueryDefinition
                  join uoms u on u.tenant_id = i.tenant_id and u.id = i.base_uom_id
                  left join lots lt on lt.tenant_id = d.tenant_id and lt.id = x.lot_id
                  left join users ur on ur.id = d.requested_by
-                 left join users ud on ud.id = coalesce(d.decided_by, d.posted_by)";
+                 left join users ud on ud.id = coalesce(d.decided_by, d.posted_by)
+                 left join lateral (select r.id, r.note, r.requested_by from inventory_documents r
+                                     where r.tenant_id = d.tenant_id and r.reverses_document_id = d.id and r.status = 'SUBMITTED' limit 1) rv on true
+                 left join users urv on urv.id = rv.requested_by";
     }
 
     public function filterFrom(): string
@@ -105,6 +108,11 @@ final class DispositionsQuery extends QueryDefinition
             new Field('decidedByName', 'ud.display_name'),
             new Field('rejectReason', 'd.reject_reason'),
             new Field('at', 'coalesce(d.posted_at, d.submitted_at)', Field::INSTANT, sortable: true),
+            // a reversal of this disposition waiting for a quality supervisor (D-113)
+            new Field('reversalId', 'rv.id', Field::UUID),
+            new Field('reversalReason', 'rv.note'),
+            new Field('reversalRequestedById', 'rv.requested_by', Field::UUID),
+            new Field('reversalRequestedByName', 'urv.display_name'),
             new Field('version', 'd.version', Field::INTEGER),
         ];
     }

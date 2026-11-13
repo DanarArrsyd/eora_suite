@@ -113,4 +113,5 @@ Persiapan: §4 langkah 5 sudah memposting output BRK-A100 (950 **Pending QC** di
 | 9 | `qci` → Quality → **Dispositions** → buka request itu. | Status **Submitted**; tidak ada tombol Approve untuk yang meminta. | |
 | 10 | Login `qcs` → Dispositions → buka request → **Approve**. | Judul jadi `QCD-P1-<tahun>-0002`, **Posted**; Stock: Hold 0, QC released 920. | |
 | 11 | `qci` minta release 2 dari NG area **Rejected**; `qcs` → **Reject** dengan alasan. | Status **Rejected** dengan alasan; stok Rejected tidak berubah. | |
-
+| 12 | Login `inv` → Inventory → Reversals → minta reversal `QCD-P1-<tahun>-0001`; login `csa` → buka request itu. | Tombol Approve tidak ada untuk `csa` (QC disposition diputuskan quality). | |
+| 13 | Login `qcs` → Quality → Dispositions → buka `QCD-P1-<tahun>-0001`. | Ada "Reversal asked" + alasan; **Approve** → disposisi jadi **Reversed**, stok kembali seperti sebelum keputusan. | |

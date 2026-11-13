@@ -55,7 +55,7 @@ final class ReversalController
         $key = $this->key($request);
         $db = $this->db();
 
-        return $this->answer($db, $this->postings->approve($db, $this->document($db, $reversal, 'inventory.reversal.approve', 'REVERSAL'), $key));
+        return $this->answer($db, $this->postings->approve($db, $this->document($db, $reversal, $this->approver($db, $reversal), 'REVERSAL'), $key));
     }
 
     /** Reject a submitted reversal with the reason; nothing moves. 204, also when it was already rejected. */
@@ -63,9 +63,23 @@ final class ReversalController
     {
         $data = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
         $db = $this->db();
-        $this->postings->reject($db, $this->document($db, $reversal, 'inventory.reversal.approve', 'REVERSAL'), trim($data['reason']));
+        $this->postings->reject($db, $this->document($db, $reversal, $this->approver($db, $reversal), 'REVERSAL'), trim($data['reason']));
 
         return response()->noContent();
+    }
+
+    /**
+     * Who decides a reversal: a quality supervisor for a QC disposition (D-113: a disposition reversed puts quality
+     * stock back, so quality decides it; the database refuses anyone else too), otherwise the inventory approver.
+     */
+    private function approver(EoraPostgresConnection $db, string $reversal): string
+    {
+        $qc = preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', strtolower($reversal)) === 1 && $db->selectOne(
+            "select 1 as ok from inventory_documents r join inventory_documents o on o.id = r.reverses_document_id where r.id = ? and o.doc_type = 'QC_DISPOSITION'",
+            [strtolower($reversal)],
+        ) !== null;
+
+        return $qc ? 'quality.disposition_release.approve' : 'inventory.reversal.approve';
     }
 
     /** The document, when the actor holds $permission in its plant (404 for anything else). */

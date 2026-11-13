@@ -165,3 +165,54 @@ test('dispositions: the supervisor approves a release asked by the inspector', a
   expect(approvals).toHaveLength(1);
   expect(approvals[0]).toBeTruthy();
 });
+
+test('dispositions: the supervisor decides the reversal of a posted disposition (D-113)', async ({ page }) => {
+  const approvals: string[] = [];
+  const posted = {
+    id: ID(80),
+    code: 'QCD-P1-2026-0001',
+    docNo: 'QCD-P1-2026-0001',
+    version: 1,
+    status: 'POSTED',
+    outOfPolicy: false,
+    plantCode: 'P1',
+    itemCode: 'BRK-A100',
+    itemName: 'Bracket front A100',
+    lotNo: 'L2611-0001',
+    fromStatus: 'PENDING_QC',
+    releasedQty: '0',
+    holdQty: '10',
+    reworkQty: '0',
+    rejectQty: '0',
+    uomCode: 'PCS',
+    note: null,
+    requestedById: null,
+    requestedByName: null,
+    decidedByName: 'Inspector',
+    rejectReason: null,
+    at: '2026-11-13T08:00:00Z',
+    reversalId: ID(81),
+    reversalReason: 'Held the wrong quantity',
+    reversalRequestedById: ID(72),
+    reversalRequestedByName: 'Inventory controller',
+  };
+  let current: Record<string, unknown> = posted;
+  await mockApi(page, '/auth/me', ME(QCS, ID(71)));
+  await page.route('**/api/v1/query/quality.dispositions?*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [current], meta: { ...META, total: 1 } }) }),
+  );
+  await page.route('**/api/v1/inventory/reversals/*/approve', (route) => {
+    approvals.push(route.request().url());
+    current = { ...posted, status: 'REVERSED', reversalId: null };
+    return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ data: { documentId: ID(81), docNo: 'REV-P1-2026-0001' } }) });
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/quality/inspection-lots?request=${ID(80)}`);
+  await expect(page.getByRole('heading', { level: 1, name: 'QCD-P1-2026-0001' })).toBeVisible();
+  await expect(page.getByText('Held the wrong quantity (Inventory controller)')).toBeVisible();
+  await axe(page);
+  await page.getByRole('button', { name: 'Approve' }).click();
+  await expect(page.getByText('Reversed', { exact: true })).toBeVisible();
+  expect(approvals).toEqual([expect.stringContaining(`/inventory/reversals/${ID(81)}/approve`)]);
+});
