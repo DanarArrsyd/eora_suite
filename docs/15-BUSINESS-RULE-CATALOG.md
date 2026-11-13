@@ -102,7 +102,7 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 | BR-OUT-04 | Process Scrap posted in measured kg to scrap item per material grade with reason code. | Production | SVC | D-011 | #21 |
 | BR-OUT-05 | Reusable Remnant = lot split to child lot with measured qty and dimensions; conserves quantity. | Production/Materials | SVC | DD-04 | #22 |
 | BR-OUT-06 | Rework Order consumes `REWORK` pcs and produces Good (→ PENDING_QC) and/or Rejected; genealogy preserved. | Production/Quality | SVC | D-011 | rework test |
-| BR-OUT-07 | Over-reporting guard: if reported pcs exceed `T` by more than tenant guard (default 0%), posting requires supervisor confirmation. | Production | SVC | doc 02 | over-report test |
+| BR-OUT-07 | Over-reporting guard: if reported pcs exceed `T` by more than tenant guard (default 0%), posting requires supervisor confirmation. *(M5 with theoretical output T and the variance indicators — D-111.)* | Production | SVC | doc 02, D-111 | over-report test |
 | BR-OUT-08 | At most one regular Production Posting per (run, production date, shift): unique key `(tenant_id, run_id, production_date, shift_id)` for regular postings; corrections and reversals are exempt and reference the original posting. | Production | DB + SVC | D-058 (D-B2-12) | duplicate-posting test |
 
 ## Quality & FG (QC / FG)

@@ -345,20 +345,21 @@ it('starts adjustments as requests and never takes legs outside their posting (D
          values (?, ?, 'RM_RECEIPT', 'RCV-P1-2026-0889', 'POSTED', current_date, current_date, current_date, now(), ?, 'fixture-other-poster')",
         [$this->t['tenant'], $f['plant'], Str::uuid()->toString()],
     )))->toThrow(QueryException::class, 'a document is posted by the signed actor');
-    // transformation documents wait for their production checks (M4)
+    // transformation documents without their checks yet (scrap disposition, rework) are refused; production postings
+    // have theirs since M4 step 4 (ProductionPostingTest)
     expect(fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f) {
         $doc = (string) $db->selectOne(
             "insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, posted_at, posted_by, idempotency_key)
-             values (?, ?, 'PRODUCTION_POSTING', 'PRD-P1-2026-0001', 'POSTED', current_date, current_date, current_date, now(), ?, 'fixture-production-1') returning id",
+             values (?, ?, 'SCRAP_DISPOSITION', 'SCR-P1-2026-0001', 'POSTED', current_date, current_date, current_date, now(), ?, 'fixture-production-1') returning id",
             [$this->t['tenant'], $f['plant'], $this->t['actor']],
         )->id;
         $db->insert(
             "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, uom_id, qty_signed)
-             values (?, ?, 1, 'OUTPUT_GOOD', ?, ?, ?, ?, 'UNRESTRICTED', ?, 3)",
+             values (?, ?, 1, 'SCRAP_DISPOSAL', ?, ?, ?, ?, 'UNRESTRICTED', ?, 3)",
             [$this->t['tenant'], $doc, $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs']],
         );
         $db->update('update stock_balances set qty = qty + 3 where item_id = ? and location_id = ?', [$f['item'], $f['rm']]);
-    }))->toThrow(PDOException::class, 'a PRODUCTION_POSTING posts with its production checks (M4)');
+    }))->toThrow(PDOException::class, 'a SCRAP_DISPOSITION posts with its production checks (M4)');
     // a receipt without its supplier leg would create stock from nothing (BR-INV-03)
     expect(fn () => ledgerAsApp($this->t, function (EoraPostgresConnection $db) use ($f) {
         $doc = (string) $db->selectOne(

@@ -45,7 +45,7 @@ it('documents every v1 error as problem+json with codes from the doc 24 §5 cata
         // sales orders (M4)
         'REQUIREMENT_DATE_PAST', 'CUSTOMER_PART_INACTIVE', 'SCHEDULE_LINE_ALLOCATED',
         // work orders (M4)
-        'WO_MASTER_MISSING'];
+        'WO_MASTER_MISSING', 'PRODUCTION_ALREADY_POSTED', 'NO_VIRTUAL_LOCATION'];
     $routes = collect(Route::getRoutes()->getRoutes())->map->getName()->filter(fn ($n) => is_string($n) && str_starts_with($n, 'v1.'))->values();
     $declared = array_keys(ProblemResponses::ERRORS);
 

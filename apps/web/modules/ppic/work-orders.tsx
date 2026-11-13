@@ -91,6 +91,7 @@ const STATUS_OPTIONS: Option[] = [
   { value: 'DRAFT', label: 'Draft' },
   { value: 'SUBMITTED', label: 'Waiting for release' },
   { value: 'RELEASED', label: 'Released' },
+  { value: 'IN_PROGRESS', label: 'In production' },
   { value: 'CANCELLED', label: 'Cancelled' },
 ];
 const ifMatch = (version: number) => ({ 'If-Match': `"${version}"` });
@@ -177,7 +178,7 @@ function workOrders(base: string): MasterResource<WorkOrderRow> {
         cell: (r) => (
           <DomainStatusBadge
             domain="document"
-            status={r.status === 'SUBMITTED' ? 'SUBMITTED' : r.status === 'RELEASED' ? 'RELEASED' : r.status === 'CANCELLED' ? 'CANCELLED' : 'DRAFT'}
+            status={r.status === 'SUBMITTED' || r.status === 'RELEASED' || r.status === 'IN_PROGRESS' || r.status === 'CANCELLED' ? r.status : 'DRAFT'}
           />
         ),
       },
@@ -222,6 +223,7 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
   const canPost = permissions.includes('planning.wo.post');
   const canApprove = permissions.includes('planning.wo.approve');
   const canIssue = permissions.includes('materials.issue.post') && permissions.includes('materials.issue.create');
+  const canRun = permissions.includes('production.run.post');
   const router = useRouter();
   const client = useQueryClient();
   const [notice, setNotice] = React.useState<string | null>(null);
@@ -351,7 +353,7 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
     { id: 'atProductionQty', header: 'At production', numeric: true, cell: (m) => `${m.atProductionQty} ${m.baseUomCode}` },
     { id: 'conversionProfileVersion', header: 'Conversion profile', cell: (m) => (m.conversionProfileVersion ? `v${m.conversionProfileVersion}` : '—') },
   ];
-  const status = o.status === 'SUBMITTED' || o.status === 'RELEASED' || o.status === 'CANCELLED' ? o.status : 'DRAFT';
+  const status = o.status === 'SUBMITTED' || o.status === 'RELEASED' || o.status === 'IN_PROGRESS' || o.status === 'CANCELLED' ? o.status : 'DRAFT';
 
   return (
     <EnterprisePage
@@ -363,7 +365,9 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
             ? 'Waiting for release by a second person.'
             : o.status === 'RELEASED'
               ? 'Released: its BOM and routing versions and material lines are fixed on the work order.'
-              : 'Cancelled: kept for the record.'
+              : o.status === 'IN_PROGRESS'
+                ? 'In production: runs post what is consumed and made.'
+                : 'Cancelled: kept for the record.'
       }
       meta={<DomainStatusBadge domain="document" status={status} />}
       actions={
@@ -388,7 +392,10 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
               </Button>
             </>
           ) : null}
-          {o.status === 'RELEASED' && canIssue ? (
+          {(o.status === 'RELEASED' || o.status === 'IN_PROGRESS') && canRun ? (
+            <Button onClick={() => router.push(`/production/runs?wo=${o.id}`)}>Open run</Button>
+          ) : null}
+          {(o.status === 'RELEASED' || o.status === 'IN_PROGRESS') && canIssue ? (
             <Button variant="primary" onClick={() => router.push(`/materials/material-issue?wo=${o.id}`)}>
               Issue material
             </Button>

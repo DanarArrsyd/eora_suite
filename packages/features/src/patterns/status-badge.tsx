@@ -28,6 +28,9 @@ export const STATUS_CATALOGUE = {
     REJECTED: { label: 'Rejected', tone: 'warning' },
     APPROVED: { label: 'Approved', tone: 'success' },
     RELEASED: { label: 'Released', tone: 'info' },
+    // a work order with its first run (D-111); a production run until it is closed
+    IN_PROGRESS: { label: 'In production', tone: 'info' },
+    OPEN: { label: 'Open', tone: 'info' },
     POSTED: { label: 'Posted', tone: 'success' },
     REVERSED: { label: 'Reversed', tone: 'neutral' },
     CANCELLED: { label: 'Cancelled', tone: 'neutral' },

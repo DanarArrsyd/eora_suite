@@ -234,7 +234,7 @@ function IssuePage({ initialWo }: { initialWo: string }) {
     queryFn: ({ signal }) =>
       queryAll<{ id: string; code: string; itemCode: string; qty: string; uomCode: string; dueDate: string }>(
         'planning.work_orders',
-        { status: 'RELEASED' },
+        { status: ['RELEASED', 'IN_PROGRESS'] },
         signal,
       ),
     enabled: canIssue,

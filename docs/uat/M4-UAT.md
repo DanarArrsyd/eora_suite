@@ -76,3 +76,19 @@ Persiapan: WO dari §2 langkah 6 masih **Released** (jangan pakai WO yang dibata
 | 10 | `prl` minta return kedua; `mat` → **Refuse** dengan alasan. | Status **Rejected** dengan alasan; stok tidak berubah. | |
 | 11 | Login `inv` → Inventory → **Reversals** → minta reversal atas dokumen ISS dari langkah 4; login `csa` → setujui. | Ditolak: material sudah sebagian dikembalikan — reverse return-nya dulu (REVERSAL_BLOCKED_BY_DOWNSTREAM). Tolak permintaan itu dengan alasan. | |
 
+## 4. Posting produksi (langkah 4, D-111)
+Persiapan: WO dari §3 sudah punya coil dan nut di work center (Material at Production). Lokasi QC area, NG area dan scrap yard plant P1 ada di Master Data → Locations; item SCRAP-SPCC ada.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `prl` → PPIC → Work Orders → buka WO itu → **Open run**. | Halaman Open run; work center operasi pertama terpilih. | |
+| 2 | **Open run**. | Halaman `RUN-P1-<tahun>-0001`, status **Open**; tabel "Material at the work center" berisi coil dan nut WO itu; WO jadi **In production**. | |
+| 3 | **Post production** tanpa isi apa pun. | Pesan "Enter what was consumed: at least one material line, measured." — tidak ada yang terkirim. | |
+| 4 | **Add consumed material** → coil, "Weighed what is left", Left lebih besar dari yang ada. | Ditolak: "what is left must be less than … here". | |
+| 5 | Left = sisa yang ditimbang (mis. 15), Evidence "Scale S-01"; tambah nut "Counted what is left" 0; Good 950, NG rework 20, NG reject 10; **Add scrap** SCRAP-SPCC 12 KG reason Skeleton → **Post production** → konfirmasi. | Pesan "PRD-P1-<tahun>-0001 posted, output lot L…"; tabel material: coil tinggal 15 KG, nut hilang; Postings: Good 950, NG 30, Scrap 12 KG. | |
+| 6 | Inventory → Stock Overview → BRK-A100. | QC area **Pending QC** 950 (BRK-A100 wajib inspeksi); NG area Rework 20 dan Rejected 10; SCRAP-SPCC 12 KG di scrap yard. | |
+| 7 | Post lagi untuk run yang sama di shift yang sama. | Ditolak: "This run already has its regular posting for this production date and shift…". | |
+| 8 | Login `inv` → Reversals → minta reversal PRD itu; `csa` setujui. Lalu `prl` → run → post lagi dengan **Corrects** = PRD yang di-reverse. | Reversal mengembalikan material ke work center dan menghapus output; posting koreksi diterima dan menyebut posting yang dikoreksi. | |
+| 9 | `prl` → **Close run** → konfirmasi. | Status **Closed**; form posting hilang; sisa coil tetap di work center untuk WO itu. | |
+| 10 | Buka run baru tanpa posting → **Cancel run** dengan alasan. | Status **Cancelled** dengan alasan. | |
+

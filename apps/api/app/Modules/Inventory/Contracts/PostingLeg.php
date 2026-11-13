@@ -13,6 +13,8 @@ use InvalidArgumentException;
  */
 final readonly class PostingLeg
 {
+    private const array PRODUCTION = ['measurementMethod', 'measuredQty', 'measurementEvidence', 'reasonCode', 'reasonNote'];
+
     public function __construct(
         public string $movementCode,
         public string $locationId,
@@ -26,6 +28,13 @@ final readonly class PostingLeg
         public ?string $reversesMovementId = null,
         /** The work order whose material this leg moves (issue, return, their reversals; M4-D3). */
         public ?string $woId = null,
+        /** Consumption (ADR-0003): how it was measured, the measured quantity (remaining or consumed) and its evidence. */
+        public ?string $measurementMethod = null,
+        public ?string $measuredQty = null,
+        public ?string $measurementEvidence = null,
+        /** Process scrap (BR-OUT-04): its reason code and, for OTHER, the note. */
+        public ?string $reasonCode = null,
+        public ?string $reasonNote = null,
     ) {
         if (! is_numeric($qty) || preg_match('/^-?\d{1,14}(\.\d{1,6})?$/', $qty) !== 1 || bccomp($qty, '0', 6) === 0) {
             throw new InvalidArgumentException('A leg quantity is a non-zero decimal with at most 6 decimals.');
@@ -41,10 +50,13 @@ final readonly class PostingLeg
     public function hashShape(): array
     {
         $values = get_object_vars($this);
+        // fields added later enter the hash only when set, by name, so older legs keep their shape
+        $extra = array_filter(array_intersect_key($values, array_flip(self::PRODUCTION)), static fn ($v) => $v !== null);
+        $values = array_diff_key($values, array_flip(self::PRODUCTION));
         if ($values['woId'] === null) {
             unset($values['woId']);
         }
 
-        return array_values($values);
+        return $extra === [] ? array_values($values) : [...array_values($values), $extra];
     }
 }
