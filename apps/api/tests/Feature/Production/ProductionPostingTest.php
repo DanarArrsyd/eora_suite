@@ -131,6 +131,17 @@ it('opens a run, posts measured consumption, output by category and scrap in one
 
     spa($this)->postJson("/api/v1/production/runs/{$run['id']}/actions/close", [], ['If-Match' => '"'.$run['version'].'"'])->assertOk()->assertJsonPath('data.status', 'CLOSED');
     prPost($this, $f, $run['id'], [], 'pr-post-0003')->assertStatus(409)->assertJsonPath('code', 'INVALID_STATE_TRANSITION');
+
+    // a closed run takes only the correction of a reversed posting; the inspection rule may change in between
+    AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->update('update items set inspection_required = true where id = ?', [$f['item']['id']]));
+    rtSwitch($this, $this->t, 'INV');
+    $rv = rvRequest($this, $posted['documentId'], 'pr-reverse-0001')->assertCreated()->json('data.documentId');
+    rtSwitch($this, $this->t, 'CSA');
+    rvApprove($this, $rv, 'pr-reverse-approve-0001')->assertCreated();
+    signIn($this, $f['prl'], $this->t);
+    prPost($this, $f, $run['id'], ['correctsPostingId' => $posted['documentId'], 'consumptions' => [['itemId' => $f['coil']['id'], 'lotId' => $f['lot'], 'method' => 'WEIGHED_CONSUMED', 'qty' => '40', 'evidence' => 'S-01']],
+        'scrap' => []], 'pr-post-0005')->assertCreated();
+    expect(prStock($this->t, $f['item']['id']))->toBe(['NG-01 / REJECTED' => '3', 'NG-01 / REWORK' => '5', 'QC-01 / PENDING_QC' => '90']);
 })->group('integration', 'production');
 
 it('cancels a run without postings, and corrects a reversed posting with a new one (BR-OUT-08)', function () {

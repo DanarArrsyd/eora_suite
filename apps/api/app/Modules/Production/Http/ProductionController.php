@@ -207,12 +207,14 @@ final class ProductionController
             return $this->posted($db, $previous);
         }
 
-        // locked until the posting commits: the run stays open meanwhile
-        if ($db->selectOne('select status from production_runs where id = ? for share', [$r->id])->status !== 'OPEN') {
-            throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Run not open', 'Production is posted to an open run.');
-        }
+        // locked until the posting commits: the run stays as it is meanwhile; a closed run takes only a correction (D-111)
         $plant = (string) $r->plant_id;
         $corrects = isset($data['correctsPostingId']) ? strtolower($data['correctsPostingId']) : null;
+        $runStatus = (string) $db->selectOne('select status from production_runs where id = ? for share', [$r->id])->status;
+        if (! ($runStatus === 'OPEN' || ($runStatus === 'CLOSED' && $corrects !== null))) {
+            throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Run not open',
+                $runStatus === 'CLOSED' ? 'A closed run takes only the correction of a reversed posting.' : 'Production is posted to an open run.');
+        }
         if ($corrects !== null && $db->selectOne("select 1 as ok from inventory_documents where id = ? and doc_type = 'PRODUCTION_POSTING' and source_id = ? and status = 'REVERSED'", [$corrects, $r->id]) === null) {
             throw ValidationException::withMessages(['correctsPostingId' => 'A correction replaces a reversed posting of this run.']);
         }

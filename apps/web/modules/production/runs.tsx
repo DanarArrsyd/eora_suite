@@ -434,6 +434,7 @@ function RunPage({ id }: { id: string }) {
   const scrapItem = (itemId: string) => scrapItems.data?.find((i) => i.id === itemId);
 
   const check = (): string | null => {
+    if (r.status === 'CLOSED' && !corrects) return 'A closed run takes only the correction of a reversed posting: choose it under Corrects.';
     if (consumptions.length === 0) return 'Enter what was consumed: at least one material line, measured.';
     const seen = new Set<string>();
     for (const c of consumptions) {
@@ -615,10 +616,10 @@ function RunPage({ id }: { id: string }) {
               />
             </CardContent>
           </Card>
-          {r.status === 'OPEN' && canPost ? (
+          {(r.status === 'OPEN' || (r.status === 'CLOSED' && reversed.length > 0)) && canPost ? (
             <Card>
               <CardHeader>
-                <CardTitle>Post production</CardTitle>
+                <CardTitle>{r.status === 'CLOSED' ? 'Post a correction' : 'Post production'}</CardTitle>
               </CardHeader>
               <CardContent>
                 <h3 className="m-0 text-[13.5px] font-semibold text-ink">Consumed (measured)</h3>

@@ -184,9 +184,11 @@ return new class extends Migration
               IF NEW.status <> 'POSTED' OR NOT public.eora_actor_may('production.posting.post', NEW.plant_id) THEN
                 RAISE EXCEPTION 'production is posted by a production leader of its plant' USING ERRCODE = '42501';
               END IF;
+              -- an open run takes postings; a closed run only the correction of a reversed posting (D-111)
               IF NEW.source_type IS DISTINCT FROM 'production_run' OR NOT EXISTS (
-                   SELECT 1 FROM public.production_runs r WHERE r.tenant_id = NEW.tenant_id AND r.id = NEW.source_id AND r.plant_id = NEW.plant_id AND r.status = 'OPEN') THEN
-                RAISE EXCEPTION 'production is posted to an open run of its plant' USING ERRCODE = '23514';
+                   SELECT 1 FROM public.production_runs r WHERE r.tenant_id = NEW.tenant_id AND r.id = NEW.source_id AND r.plant_id = NEW.plant_id
+                      AND (r.status = 'OPEN' OR (r.status = 'CLOSED' AND NEW.corrects_document_id IS NOT NULL))) THEN
+                RAISE EXCEPTION 'production is posted to an open run of its plant, or corrected on a closed one' USING ERRCODE = '23514';
               END IF;
               IF NEW.corrects_document_id IS NOT NULL AND NOT EXISTS (
                    SELECT 1 FROM public.inventory_documents o WHERE o.tenant_id = NEW.tenant_id AND o.id = NEW.corrects_document_id
@@ -206,7 +208,8 @@ return new class extends Migration
             DECLARE
               r record;
             BEGIN
-              IF NEW.status NOT IN ('POSTED', 'REVERSED') THEN
+              -- checked as posted, by the rules in force then; marking it reversed later changes nothing it moved
+              IF TG_OP = 'UPDATE' OR NEW.status <> 'POSTED' THEN
                 RETURN NULL;
               END IF;
               SELECT pr.work_order_id, pr.work_center_id, wo.item_id, i.inspection_required INTO r
@@ -261,7 +264,7 @@ return new class extends Migration
                 RAISE EXCEPTION 'a production posting consumes its run''s measured material and makes its work order''s item' USING ERRCODE = '23514';
               END IF;
               -- what is weighed or counted as remaining is what the work order has left of that lot at the work center
-              IF NEW.status = 'POSTED' AND EXISTS (
+              IF EXISTS (
                    SELECT 1 FROM public.inventory_movements m
                     WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id AND m.movement_code = 'CONSUME' AND m.qty_signed < 0
                       AND m.measurement_method IN ('WEIGHED_REMAINING', 'COUNTED_REMAINING')
