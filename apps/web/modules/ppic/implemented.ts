@@ -15,5 +15,5 @@ export const PPIC_IMPLEMENTED = [
   'material-variance',
 ] as const;
 
-/** PPIC items on the live API (M4 step 1, doc 33 §1.1): Sales Orders, the same screen as Demand → Sales Orders. */
-export const PPIC_LIVE = ['sales-orders'] as const;
+/** PPIC items on the live API (M4, doc 33 §1.1–1.2): Sales Orders (same screen as Demand → Sales Orders) and Work Orders. */
+export const PPIC_LIVE = ['sales-orders', 'work-orders'] as const;

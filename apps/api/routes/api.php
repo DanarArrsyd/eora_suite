@@ -16,6 +16,7 @@ use App\Modules\Planning\Http\BomRoutingMapController;
 use App\Modules\Planning\Http\ConversionProfileController;
 use App\Modules\Planning\Http\ItemWeightController;
 use App\Modules\Planning\Http\RoutingController;
+use App\Modules\Planning\Http\WorkOrderController;
 use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
 use App\Platform\Auth\Http\AuthController;
@@ -130,6 +131,16 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('bom-routing-maps/{map}/actions/reject', [BomRoutingMapController::class, 'reject'])->name('bom-routing-maps.reject');
         Route::post('bom-routing-maps/{map}/actions/reopen', [BomRoutingMapController::class, 'reopen'])->name('bom-routing-maps.reopen');
         Route::post('bom-routing-maps/{map}/actions/approve', [BomRoutingMapController::class, 'approve'])->name('bom-routing-maps.approve');
+
+        // Work Orders outside MPS (doc 33 §1.2, D-109, G-MPS-6): drafted by PPC, released by a second person
+        Route::post('work-orders', [WorkOrderController::class, 'store'])->name('work-orders.store');
+        Route::get('work-orders/{order}', [WorkOrderController::class, 'show'])->name('work-orders.show');
+        Route::patch('work-orders/{order}', [WorkOrderController::class, 'updateDraft'])->name('work-orders.update');
+        Route::post('work-orders/{order}/actions/submit', [WorkOrderController::class, 'submit'])->name('work-orders.submit');
+        Route::post('work-orders/{order}/actions/withdraw', [WorkOrderController::class, 'withdraw'])->name('work-orders.withdraw');
+        Route::post('work-orders/{order}/actions/return', [WorkOrderController::class, 'returnToDraft'])->name('work-orders.return');
+        Route::post('work-orders/{order}/actions/release', [WorkOrderController::class, 'release'])->name('work-orders.release');
+        Route::post('work-orders/{order}/actions/cancel', [WorkOrderController::class, 'cancel'])->name('work-orders.cancel');
 
         // Conversion data (doc 29 §1.5, D-080; tenant-wide, master.conversion.*): net weights and conversion profiles
         Route::post('item-weights', [ItemWeightController::class, 'store'])->name('item-weights.store');

@@ -177,6 +177,15 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.inventory.transfers.store' => self::POSTING,
         'v1.inventory.lot-splits.store' => self::POSTING,
         // D-060, D-100: an adjustment is requested, then approved (posted) or rejected by a second person
+        // Work Orders (doc 33 §1.2, D-109): second-person release, If-Match
+        'v1.planning.work-orders.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.planning.work-orders.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
+        'v1.planning.work-orders.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.work-orders.submit' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.work-orders.withdraw' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.work-orders.return' => self::MASTER_EDIT + self::SCOPED_403 + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.work-orders.release' => self::MASTER_EDIT + self::SCOPED_403 + [409 => ['INVALID_STATE_TRANSITION', 'WO_MASTER_MISSING']],
+        'v1.planning.work-orders.cancel' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
         // Sales Orders (doc 33 §1.1, D-107): drafts and confirmed orders edited with If-Match
         'v1.demand.sales-orders.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
         'v1.demand.sales-orders.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],

@@ -22,6 +22,8 @@ stateDiagram-v2
 |---|---|---|---|---|
 | release | PPIC | BOM/routing/CP/SY/NW versions effective; demand link valid | none | `wo.released` → Production, Materials |
 | cancel from Released | PPIC | no posted issue/run for WO | allocations released | `wo.cancelled` |
+| submit / withdraw / return (M4, D-109) | PPIC asks; requester withdraws; approver returns with a reason | Draft ⇄ **Submitted** ("waiting for release"): a manual WO outside MPS waits for a second person | none | `wo.release_requested`, `wo.release_returned` |
+| release (M4, D-109) | approver ≠ requester (`planning.wo.approve`) | approved BOM + primary routing versions in force (`WO_MASTER_MISSING` otherwise); snapshot written once | none | `wo.released` |
 | close | PPIC + (approver if exception) | no open runs; no WO allocation at MAT_AT_PROD; indicators FINAL or case open; no PENDING drafts | none | `wo.closed` |
 
 ## 2. Material Issue (with optional two-step custody)

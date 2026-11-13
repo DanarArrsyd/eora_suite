@@ -27,6 +27,7 @@ Legend: **V** view · **C** create/edit draft · **S** submit · **P** post/exec
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | demand.po | V | VCS P(revise) | V | — | — | — | — | V | V | — | V |
 | planning.wo | V | VCSP | V | V | V(own WC) | V | V | V | V | V | V |
+| planning.wo.approve *(D-109: release of a manual WO by a second person)* | A | — | — | — | — | — | — | — | — | — | — |
 | planning.control_tower | V | V X | V | V | — | V | V | V | V | V | V |
 | materials.issue | V | V | VCSP | V (accept custody P) | — | — | — | — | — | V | V |
 | materials.return | V | V | VP (receive) | VCS | VC | — | — | — | — | V | V |

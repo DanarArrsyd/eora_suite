@@ -43,7 +43,9 @@ it('documents every v1 error as problem+json with codes from the doc 24 §5 cata
         'IDEMPOTENCY_KEY_REQUIRED', 'IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_IN_PROGRESS', 'INSUFFICIENT_STOCK', 'INSUFFICIENT_AVAILABLE', 'PERIOD_CLOSED',
         'STOCK_BUSY', 'NO_SUPPLIER_LOCATION', 'NO_ADJUSTMENT_LOCATION', 'REVERSAL_PENDING', 'REVERSAL_BLOCKED_BY_DOWNSTREAM', 'PERIOD_HAS_PENDING_REQUESTS', 'CORRECTION_REQUIRED', 'INVALID_LEGS', 'INVALID_EFFECTIVE_DATE', 'POSTING_REFUSED',
         // sales orders (M4)
-        'REQUIREMENT_DATE_PAST', 'CUSTOMER_PART_INACTIVE', 'SCHEDULE_LINE_ALLOCATED'];
+        'REQUIREMENT_DATE_PAST', 'CUSTOMER_PART_INACTIVE', 'SCHEDULE_LINE_ALLOCATED',
+        // work orders (M4)
+        'WO_MASTER_MISSING'];
     $routes = collect(Route::getRoutes()->getRoutes())->map->getName()->filter(fn ($n) => is_string($n) && str_starts_with($n, 'v1.'))->values();
     $declared = array_keys(ProblemResponses::ERRORS);
 
