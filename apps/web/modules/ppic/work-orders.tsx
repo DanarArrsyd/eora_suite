@@ -111,7 +111,15 @@ function fields(minDate?: string): MasterResource<WorkOrderRow>['fields'] {
       positive: true,
       hint: 'In the item’s base unit; it may differ from the delivery it serves.',
     },
-    { key: 'dueDate', label: 'Due date', kind: 'date', required: true, ...(minDate ? { minDate } : { notBeforeToday: true }) },
+    {
+      key: 'dueDate',
+      label: 'Due date',
+      kind: 'date',
+      required: true,
+      // the plant's calendar day once the WO exists; on creation the plant is not chosen yet, so the server checks it
+      ...(minDate ? { minDate } : {}),
+      hint: 'Today or later at the plant.',
+    },
     { key: 'reasonCode', label: 'Reason (outside MPS)', kind: 'select', required: true, options: WO_REASONS },
     { key: 'note', label: 'Note', kind: 'text', maxLength: 500, hint: 'Required when the reason is Other.' },
     {
