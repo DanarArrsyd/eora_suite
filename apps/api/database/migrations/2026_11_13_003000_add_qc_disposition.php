@@ -141,13 +141,26 @@ return new class extends Migration
               THEN
                 RAISE EXCEPTION 'a disposition decides one lot waiting for quality into its outcome''s place and status' USING ERRCODE = '23514';
               END IF;
-              -- SoD-01, BR-QC-03: who reported the lot's output (asked or approved, or posted) does not decide its quality;
-              -- output without a lot shares one balance per item, so any lotless output of that item in the plant counts
-              IF EXISTS (SELECT 1 FROM public.inventory_movements m JOIN public.inventory_movements o ON o.tenant_id = m.tenant_id AND o.item_id = m.item_id
-                           AND (o.lot_id = m.lot_id OR (m.lot_id IS NULL AND o.lot_id IS NULL))
-                           AND o.movement_code IN ('OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT') AND o.qty_signed > 0
-                           JOIN public.inventory_documents od ON od.tenant_id = o.tenant_id AND od.id = o.document_id AND od.plant_id = NEW.plant_id
-                          WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id AND od.posted_by IN (NEW.requested_by, NEW.posted_by)) THEN
+              -- SoD-01, BR-QC-03: who reported the lot's output (asked or approved, or posted) does not decide its quality.
+              -- A lot split off keeps its origin: the lineage climbs LOT_SPLIT edges only (not consumption, so an input's
+              -- reporter is not caught). Output without a lot shares one balance per item: any lotless output of that
+              -- item in the plant counts.
+              IF EXISTS (WITH RECURSIVE line (lot_id) AS (
+                             SELECT m.lot_id FROM public.inventory_movements m
+                              WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id AND m.lot_id IS NOT NULL
+                             UNION
+                             SELECT g.from_lot_id FROM line
+                               JOIN public.genealogy_edges g ON g.tenant_id = NEW.tenant_id AND g.to_lot_id = line.lot_id
+                               JOIN public.inventory_documents gd ON gd.tenant_id = g.tenant_id AND gd.id = g.document_id AND gd.doc_type = 'LOT_SPLIT')
+                         SELECT 1 FROM line
+                           JOIN public.inventory_movements o ON o.tenant_id = NEW.tenant_id AND o.lot_id = line.lot_id
+                            AND o.movement_code IN ('OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT') AND o.qty_signed > 0
+                           JOIN public.inventory_documents od ON od.tenant_id = o.tenant_id AND od.id = o.document_id
+                          WHERE od.posted_by IN (NEW.requested_by, NEW.posted_by))
+                 OR EXISTS (SELECT 1 FROM public.inventory_movements m JOIN public.inventory_movements o ON o.tenant_id = m.tenant_id AND o.item_id = m.item_id
+                              AND o.lot_id IS NULL AND o.movement_code IN ('OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT') AND o.qty_signed > 0
+                              JOIN public.inventory_documents od ON od.tenant_id = o.tenant_id AND od.id = o.document_id AND od.plant_id = NEW.plant_id
+                             WHERE m.tenant_id = NEW.tenant_id AND m.document_id = NEW.id AND m.lot_id IS NULL AND od.posted_by IN (NEW.requested_by, NEW.posted_by)) THEN
                 RAISE EXCEPTION 'who reported the output does not decide its quality' USING ERRCODE = '42501';
               END IF;
               RETURN NULL;

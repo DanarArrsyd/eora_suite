@@ -191,6 +191,7 @@ test('dispositions: the supervisor decides the reversal of a posted disposition 
     decidedByName: 'Inspector',
     rejectReason: null,
     at: '2026-11-13T08:00:00Z',
+    reasons: 'Hold: Visual (scratch, dent) — Scratch on flange',
     reversalId: ID(81),
     reversalReason: 'Held the wrong quantity',
     reversalRequestedById: ID(72),
@@ -211,6 +212,7 @@ test('dispositions: the supervisor decides the reversal of a posted disposition 
   await page.goto(`/quality/inspection-lots?request=${ID(80)}`);
   await expect(page.getByRole('heading', { level: 1, name: 'QCD-P1-2026-0001' })).toBeVisible();
   await expect(page.getByText('Held the wrong quantity (Inventory controller)')).toBeVisible();
+  await expect(page.getByText('Hold: Visual (scratch, dent) — Scratch on flange')).toBeVisible();
   await axe(page);
   await page.getByRole('button', { name: 'Approve' }).click();
   await expect(page.getByText('Reversed', { exact: true })).toBeVisible();

@@ -25,6 +25,15 @@ final class DispositionsQuery extends QueryDefinition
                                  (select sum((e ->> 'qty')::numeric) from jsonb_array_elements(d.request -> 'legs') e
                                    where e ->> 'movementCode' = '%1\$s' and (e ->> 'qty')::numeric > 0), 0))::text";
 
+    /** Each outcome's reason and note, as recorded on its leg (D-113), e.g. "Hold: Dimension out of tolerance — Hole 0.2 mm off". */
+    private const string REASONS = "(select string_agg(
+                                       case m.movement_code when 'QC_RELEASE' then 'Release' when 'QC_HOLD' then 'Hold' when 'QC_REWORK' then 'Rework' else 'Reject' end
+                                       || coalesce(': ' || case m.reason_code when 'DIMENSION' then 'Dimension out of tolerance' when 'VISUAL' then 'Visual (scratch, dent)'
+                                            when 'BURR' then 'Burr' when 'CRACK' then 'Crack' when 'MATERIAL' then 'Material' when 'OTHER' then 'Other' end, '')
+                                       || coalesce(' — ' || m.reason_note, ''), '; ' order by m.leg_no)
+                                     from inventory_movements m where m.tenant_id = d.tenant_id and m.document_id = d.id and m.qty_signed > 0
+                                      and (m.reason_code is not null or m.reason_note is not null))";
+
     public function resource(): string
     {
         return 'quality.dispositions';
@@ -103,6 +112,7 @@ final class DispositionsQuery extends QueryDefinition
             new Field('rejectQty', sprintf(self::QTY, 'QC_REJECT')),
             new Field('uomCode', 'u.code'),
             new Field('note', 'd.note'),
+            new Field('reasons', self::REASONS),
             new Field('requestedById', 'd.requested_by', Field::UUID),
             new Field('requestedByName', 'ur.display_name'),
             new Field('decidedByName', 'ud.display_name'),
@@ -137,6 +147,7 @@ final class DispositionsQuery extends QueryDefinition
             new ExportColumn('Rework', 'reworkQty', ExportColumn::DECIMAL),
             new ExportColumn('Reject', 'rejectQty', ExportColumn::DECIMAL),
             new ExportColumn('Unit', 'uomCode'),
+            new ExportColumn('Reasons', 'reasons'),
             new ExportColumn('Note', 'note'),
             new ExportColumn('Asked by', 'requestedByName'),
             new ExportColumn('Decided by', 'decidedByName'),

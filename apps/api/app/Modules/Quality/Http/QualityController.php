@@ -213,18 +213,25 @@ final class QualityController
     }
 
     /**
-     * SoD-01, BR-QC-03: who reported this lot's output does not decide its quality (the database refuses it too). Output
+     * SoD-01, BR-QC-03: who reported this lot's output — or the output of the lot it was split from — does not decide its
+     * quality (the database refuses it too). Output
      * without a lot (item not lot-controlled) shares one balance per item: whoever reported any output of that item in the
      * plant without a lot does not decide it.
      */
     private function requireNotReporter(EoraPostgresConnection $db, stdClass $line): void
     {
+        // a lot split off keeps its origin: climb LOT_SPLIT edges only (consumed inputs are not this lot's output)
         $reporter = $db->selectOne(
-            "select 1 as ok from inventory_movements m join inventory_documents d on d.id = m.document_id
+            "with recursive line (lot_id) as (
+               select ?::uuid where ?::uuid is not null
+               union
+               select g.from_lot_id from line join genealogy_edges g on g.to_lot_id = line.lot_id
+                 join inventory_documents gd on gd.id = g.document_id and gd.doc_type = 'LOT_SPLIT')
+             select 1 as ok from inventory_movements m join inventory_documents d on d.id = m.document_id
               where m.movement_code in ('OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT') and m.qty_signed > 0
-                and (m.lot_id = ?::uuid or (?::uuid is null and m.lot_id is null and m.item_id = ? and d.plant_id = ?))
+                and (m.lot_id in (select lot_id from line) or (?::uuid is null and m.lot_id is null and m.item_id = ? and d.plant_id = ?))
                 and d.posted_by = (select c.actor from ctx_api.context() c) limit 1",
-            [$line->lot_id, $line->lot_id, $line->item_id, $line->plant_id],
+            [$line->lot_id, $line->lot_id, $line->lot_id, $line->item_id, $line->plant_id],
         );
         if ($reporter !== null) {
             throw new DomainProblem(403, 'SOD_VIOLATION', 'Second person required', 'You reported this lot’s output; another person decides its quality.');

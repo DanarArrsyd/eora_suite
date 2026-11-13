@@ -76,6 +76,7 @@ type DispositionRow = {
   rejectQty: string;
   uomCode: string;
   note: string | null;
+  reasons: string | null;
   requestedById: string | null;
   requestedByName: string | null;
   decidedByName: string | null;
@@ -102,6 +103,11 @@ const OUTCOMES: { value: Outcome; label: string; place: string }[] = [
   { value: 'REWORK', label: 'Rework', place: 'goes to the NG area for rework' },
   { value: 'REJECT', label: 'Reject', place: 'goes to the NG area, rejected' },
 ];
+/** A quantity as an integer at the ledger's scale (numeric 20,6): sums and comparisons without float drift. */
+const scaled = (qty: string): bigint => {
+  const [whole = '0', fraction = ''] = qty.split('.');
+  return BigInt(whole + fraction.padEnd(6, '0').slice(0, 6));
+};
 const stockLabel = (s: string) => STATUS_CATALOGUE.stock[s as keyof typeof STATUS_CATALOGUE.stock]?.label ?? s;
 
 export const PENDING_QC: MasterResource<QcLineRow> = {
@@ -286,7 +292,7 @@ function LotPage({ id }: { id: string }) {
   const set = (o: Outcome, patch: Partial<Decision>) => setDecisions((all) => ({ ...all, [o]: { ...all[o], ...patch } }));
   const check = (): string | null => {
     if (asked.length === 0) return 'Enter the quantity of at least one decision.';
-    let total = 0;
+    let total = 0n;
     for (const [o, d] of asked) {
       const label = OUTCOMES.find((x) => x.value === o)!.label;
       if (!/^\d+(\.\d+)?$/.test(d.qty) || Number(d.qty) <= 0) return `${label}: enter a quantity above zero.`;
@@ -294,9 +300,9 @@ function LotPage({ id }: { id: string }) {
       if (precision) return `${label}: ${precision}`;
       if (o !== 'RELEASE' && !d.reasonCode) return `${label}: choose the reason.`;
       if (d.reasonCode === 'OTHER' && d.note.trim().length < 3) return `${label}: explain it when the reason is Other.`;
-      total += Number(d.qty);
+      total += scaled(d.qty);
     }
-    if (total > Number(r.qty)) return `Only ${r.qty} ${r.uomCode} waits here.`;
+    if (total > scaled(r.qty)) return `Only ${r.qty} ${r.uomCode} waits here.`;
     return null;
   };
   const decide = async () => {
@@ -459,7 +465,7 @@ function LotPage({ id }: { id: string }) {
                   const why =
                     !/^\d+(\.\d+)?$/.test(askQty) || Number(askQty) <= 0
                       ? 'Enter the quantity to release.'
-                      : Number(askQty) > Number(r.qty)
+                      : scaled(askQty) > scaled(r.qty)
                         ? `Only ${r.qty} ${r.uomCode} is here.`
                         : (unitPrecisionError(askQty, r.uomCode, r.uomDecimals) ?? (askReason.trim().length < 3 ? 'Give the reason.' : null));
                   setProblem(why);
@@ -560,6 +566,7 @@ function DispositionPage({ id }: { id: string }) {
     ...(Number(r.holdQty) > 0 ? [{ label: 'Hold', value: `${r.holdQty} ${r.uomCode}` }] : []),
     ...(Number(r.reworkQty) > 0 ? [{ label: 'Rework', value: `${r.reworkQty} ${r.uomCode}` }] : []),
     ...(Number(r.rejectQty) > 0 ? [{ label: 'Reject', value: `${r.rejectQty} ${r.uomCode}` }] : []),
+    ...(r.reasons ? [{ label: 'Reasons', value: r.reasons }] : []),
     { label: r.outOfPolicy ? 'Reason' : 'Note', value: r.note ?? '—' },
     ...(r.status === 'REJECTED' ? [{ label: 'Rejected because', value: r.rejectReason ?? '—' }] : []),
     ...(r.reversalId ? [{ label: 'Reversal asked', value: `${r.reversalReason ?? '—'} (${r.reversalRequestedByName ?? 'unknown'})` }] : []),

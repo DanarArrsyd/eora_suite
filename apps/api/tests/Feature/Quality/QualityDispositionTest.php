@@ -69,7 +69,8 @@ it('releases, holds, reworks and rejects parts of a lot; the rest keeps waiting 
     ]);
     spa($this)->getJson('/api/v1/query/quality.dispositions')->assertOk()->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.releasedQty', '60')->assertJsonPath('data.0.holdQty', '10')->assertJsonPath('data.0.reworkQty', '10')
-        ->assertJsonPath('data.0.rejectQty', '8')->assertJsonPath('data.0.fromStatus', 'PENDING_QC')->assertJsonPath('data.0.outOfPolicy', false);
+        ->assertJsonPath('data.0.rejectQty', '8')->assertJsonPath('data.0.fromStatus', 'PENDING_QC')->assertJsonPath('data.0.outOfPolicy', false)
+        ->assertJsonPath('data.0.reasons', 'Hold: Dimension out of tolerance — Hole 0.2 mm off; Rework: Burr; Reject: Crack');
 
     // from HOLD only reject in policy (BR-QC-02); its release is asked of a second person
     $hold = ($f['line'])('QC_AREA', 'HOLD');
@@ -208,4 +209,32 @@ it('lets only a quality supervisor decide the reversal of a disposition (D-113)'
     expect(prStock($this->t, $f['item']['id']))->toBe(['NG-01 / REJECTED' => '3', 'NG-01 / REWORK' => '5', 'QC-01 / PENDING_QC' => '90']);
     spa($this)->getJson("/api/v1/query/quality.dispositions?filter[id]={$hold}")->assertOk()
         ->assertJsonPath('data.0.status', 'REVERSED')->assertJsonPath('data.0.reversalId', null);
+})->group('integration', 'quality');
+
+it('keeps SoD-01 on a lot split off the reporter\'s output (Codex on #74)', function () {
+    $f = qcFixture($this, $this->t);
+    $qc = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => (string) $db->selectOne("select id from locations where code = 'QC-01'")->id);
+    AccessFixtures::grant($this->t, $f['prl']['id'], 'QCI');
+    signIn($this, $f['prl'], $this->t);
+    $child = spa($this)->postJson('/api/v1/inventory/lot-splits', [
+        'plantId' => $f['plant'], 'itemId' => $f['item']['id'], 'lotId' => $f['posted']['lotId'], 'stockStatus' => 'PENDING_QC', 'locationId' => $qc,
+        'children' => [['qty' => '10']],
+    ], ['Idempotency-Key' => 'qc-split-0001'])->assertCreated()->json('data.children.0.lotId');
+    $line = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
+        "select id from stock_balances where lot_id = ? and stock_status = 'PENDING_QC'", [$child])->id);
+
+    qcDispose($this, $line, [['outcome' => 'RELEASE', 'qty' => '10']])->assertStatus(403)->assertJsonPath('code', 'SOD_VIOLATION');
+    try {
+        asApp($this->t, (string) $f['prl']['id'], fn (EoraPostgresConnection $db) => app(InventoryPostingService::class)->post($db, new PostingCommand('QC_DISPOSITION', $f['plant'], 'qc-split-0002', [
+            new PostingLeg('QC_RELEASE', $qc, $f['item']['id'], $child, 'PENDING_QC', '-10'),
+            new PostingLeg('QC_RELEASE', $qc, $f['item']['id'], $child, 'QC_RELEASED', '10'),
+        ])));
+        $this->fail('posted: a split child released by the output reporter');
+    } catch (DomainProblem $e) {
+        expect($e->detail)->toContain('who reported the output');
+    }
+
+    // another inspector decides it
+    signIn($this, $f['qci'], $this->t);
+    qcDispose($this, $line, [['outcome' => 'RELEASE', 'qty' => '10']], 'qc-dispose-0003')->assertCreated();
 })->group('integration', 'quality');
