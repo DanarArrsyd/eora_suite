@@ -48,9 +48,12 @@ final class ProductionRunsQuery extends QueryDefinition
 
     public function filterFrom(): string
     {
+        // every sortable field's join (paging sorts inside this FROM)
         return 'production_runs r
                  join plants p on p.tenant_id = r.tenant_id and p.id = r.plant_id
-                 join work_orders w on w.tenant_id = r.tenant_id and w.id = r.work_order_id';
+                 join work_orders w on w.tenant_id = r.tenant_id and w.id = r.work_order_id
+                 join items i on i.tenant_id = w.tenant_id and i.id = w.item_id
+                 join work_centers wc on wc.tenant_id = r.tenant_id and wc.id = r.work_center_id';
     }
 
     public function idColumn(): string

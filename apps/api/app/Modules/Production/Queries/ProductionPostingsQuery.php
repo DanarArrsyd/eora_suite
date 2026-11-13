@@ -91,7 +91,11 @@ final class ProductionPostingsQuery extends QueryDefinition
             new Field('goodQty', 'trim_scale('.sprintf(self::SUM, 'OUTPUT_GOOD').')::text'),
             new Field('ngReworkQty', 'trim_scale('.sprintf(self::SUM, 'OUTPUT_NG_REWORK').')::text'),
             new Field('ngRejectQty', 'trim_scale('.sprintf(self::SUM, 'OUTPUT_NG_REJECT').')::text'),
-            new Field('scrapQty', 'trim_scale('.sprintf(self::SUM, 'OUTPUT_SCRAP').')::text'),
+            // scrap per unit of its items (D-111: each in its scrap item's unit), e.g. "12 KG, 3 PCS"; null when none
+            new Field('scrapSummary', "(select string_agg(s.q || ' ' || s.uom, ', ' order by s.uom) from (
+                                         select trim_scale(sum(m.qty_signed))::text as q, su.code as uom from inventory_movements m join uoms su on su.id = m.uom_id
+                                          where m.tenant_id = d.tenant_id and m.document_id = d.id and m.movement_code = 'OUTPUT_SCRAP' and m.qty_signed > 0
+                                          group by su.code) s)"),
             new Field('outputLotNo', 'ol.lot_no'),
             new Field('correctsCode', 'cd.doc_no'),
             new Field('note', 'd.note'),
@@ -122,7 +126,7 @@ final class ProductionPostingsQuery extends QueryDefinition
             new ExportColumn('NG rework', 'ngReworkQty', ExportColumn::DECIMAL),
             new ExportColumn('NG reject', 'ngRejectQty', ExportColumn::DECIMAL),
             new ExportColumn('Unit', 'uomCode'),
-            new ExportColumn('Scrap', 'scrapQty', ExportColumn::DECIMAL),
+            new ExportColumn('Scrap', 'scrapSummary'),
             new ExportColumn('Output lot', 'outputLotNo'),
             new ExportColumn('Corrects', 'correctsCode'),
             new ExportColumn('Posted by', 'postedByName'),

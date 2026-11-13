@@ -96,7 +96,7 @@ type PostingRow = {
   goodQty: string;
   ngReworkQty: string;
   ngRejectQty: string;
-  scrapQty: string;
+  scrapSummary: string | null;
   outputLotNo: string | null;
   correctsCode: string | null;
   postedByName: string | null;
@@ -186,7 +186,7 @@ export const PRODUCTION_POSTINGS: MasterResource<PostingRow> = {
     { id: 'workOrderCode', header: 'Work order', sortable: true, cell: (r) => <span className="font-mono">{r.workOrderCode}</span>, sub: (r) => r.runCode },
     { id: 'goodQty', header: 'Good', numeric: true, critical: true, cell: (r) => `${r.goodQty} ${r.uomCode}` },
     { id: 'ngQty', header: 'NG', numeric: true, cell: (r) => `${Number(r.ngReworkQty) + Number(r.ngRejectQty)} ${r.uomCode}` },
-    { id: 'scrapQty', header: 'Scrap', numeric: true, cell: (r) => (Number(r.scrapQty) > 0 ? `${r.scrapQty} KG` : '—') },
+    { id: 'scrapSummary', header: 'Scrap', numeric: true, cell: (r) => r.scrapSummary ?? '—' },
     { id: 'status', header: 'Status', sortable: true, cell: (r) => <DomainStatusBadge domain="document" status={r.status} /> },
   ],
   fields: [],
@@ -532,7 +532,7 @@ function RunPage({ id }: { id: string }) {
     },
     { id: 'goodQty', header: 'Good', numeric: true, cell: (p) => `${p.goodQty} ${p.uomCode}` },
     { id: 'ngQty', header: 'NG', numeric: true, cell: (p) => `${Number(p.ngReworkQty) + Number(p.ngRejectQty)} ${p.uomCode}` },
-    { id: 'scrapQty', header: 'Scrap', numeric: true, cell: (p) => (Number(p.scrapQty) > 0 ? `${p.scrapQty} KG` : '—') },
+    { id: 'scrapSummary', header: 'Scrap', numeric: true, cell: (p) => p.scrapSummary ?? '—' },
     { id: 'outputLotNo', header: 'Output lot', cell: (p) => p.outputLotNo ?? '—' },
     { id: 'status', header: 'Status', cell: (p) => <DomainStatusBadge domain="document" status={p.status} /> },
   ];

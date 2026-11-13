@@ -20715,6 +20715,7 @@ export interface operations {
                         qty: string;
                         evidence: string;
                     }[];
+                    /** @description a category may be zero (nothing of it made); something must be made overall (checked below) */
                     goodQty?: string | null;
                     ngReworkQty?: string | null;
                     ngRejectQty?: string | null;

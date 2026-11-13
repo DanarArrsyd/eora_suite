@@ -170,9 +170,10 @@ final class ProductionController
             'consumptions.*.method' => ['required', Rule::in(ProductionController::METHODS)],
             'consumptions.*.qty' => ['required', 'string', 'regex:'.ProductionController::MEASURED],
             'consumptions.*.evidence' => ['required', 'string', 'min:1', 'max:200'],
-            'goodQty' => ['nullable', 'string', 'regex:'.ReceiptController::QTY],
-            'ngReworkQty' => ['nullable', 'string', 'regex:'.ReceiptController::QTY],
-            'ngRejectQty' => ['nullable', 'string', 'regex:'.ReceiptController::QTY],
+            // a category may be zero (nothing of it made); something must be made overall (checked below)
+            'goodQty' => ['nullable', 'string', 'regex:'.ProductionController::MEASURED],
+            'ngReworkQty' => ['nullable', 'string', 'regex:'.ProductionController::MEASURED],
+            'ngRejectQty' => ['nullable', 'string', 'regex:'.ProductionController::MEASURED],
             'scrap' => ['nullable', 'array', 'max:10'],
             'scrap.*.itemId' => ['required', 'uuid'],
             'scrap.*.qty' => ['required', 'string', 'regex:'.ReceiptController::QTY],

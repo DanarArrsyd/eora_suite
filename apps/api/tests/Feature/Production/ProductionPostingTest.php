@@ -102,7 +102,7 @@ it('opens a run, posts measured consumption, output by category and scrap in one
     expect($posted['lotNo'])->toStartWith('L');
     // BR-OUT-08: one regular posting per run, production date and shift
     prPost($this, $f, $run['id'], ['consumptions' => [['itemId' => $f['coil']['id'], 'lotId' => $f['lot'], 'method' => 'WEIGHED_CONSUMED', 'qty' => '1', 'evidence' => 'S-01']],
-        'goodQty' => '1', 'ngReworkQty' => null, 'ngRejectQty' => null, 'scrap' => []], 'pr-post-0002')
+        'goodQty' => '1', 'ngReworkQty' => '0', 'ngRejectQty' => '0', 'scrap' => []], 'pr-post-0002')
         ->assertStatus(409)->assertJsonPath('code', 'PRODUCTION_ALREADY_POSTED');
 
     // material: 48 KG coil and 200 nuts consumed, 12 KG coil left at the work center; no backflush (BR-CON-05)
@@ -123,8 +123,10 @@ it('opens a run, posts measured consumption, output by category and scrap in one
     ));
     expect([$measure->measurement_method, $measure->measured, $measure->measurement_evidence])->toBe(['WEIGHED_REMAINING', '12', 'Scale S-01']);
 
+    spa($this)->getJson('/api/v1/query/production.runs?sort=workCenterCode')->assertOk();
+    spa($this)->getJson('/api/v1/query/production.runs?sort=-itemCode')->assertOk();
     spa($this)->getJson("/api/v1/query/production.postings?filter[runId]={$run['id']}")->assertOk()->assertJsonCount(1, 'data')
-        ->assertJsonPath('data.0.goodQty', '90')->assertJsonPath('data.0.ngReworkQty', '5')->assertJsonPath('data.0.ngRejectQty', '3')->assertJsonPath('data.0.scrapQty', '6')
+        ->assertJsonPath('data.0.goodQty', '90')->assertJsonPath('data.0.ngReworkQty', '5')->assertJsonPath('data.0.ngRejectQty', '3')->assertJsonPath('data.0.scrapSummary', '6 KG')
         ->assertJsonPath('data.0.outputLotNo', $posted['lotNo']);
     $run = spa($this)->getJson("/api/v1/production/runs/{$run['id']}")->assertOk()->assertJsonPath('data.goodQty', '90')->assertJsonPath('data.postings', 1)->json('data');
     expect(array_map(fn ($m) => [$m['itemCode'], $m['qty']], $run['atWorkCenter']))->toBe([['COIL-9', '12']]);

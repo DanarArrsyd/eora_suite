@@ -39885,21 +39885,22 @@
                                             "string",
                                             "null"
                                         ],
-                                        "pattern": "^(?!0+(\\.0+)?$)\\d{1,12}(\\.\\d{1,6})?$"
+                                        "description": "a category may be zero (nothing of it made); something must be made overall (checked below)",
+                                        "pattern": "^\\d{1,12}(\\.\\d{1,6})?$"
                                     },
                                     "ngReworkQty": {
                                         "type": [
                                             "string",
                                             "null"
                                         ],
-                                        "pattern": "^(?!0+(\\.0+)?$)\\d{1,12}(\\.\\d{1,6})?$"
+                                        "pattern": "^\\d{1,12}(\\.\\d{1,6})?$"
                                     },
                                     "ngRejectQty": {
                                         "type": [
                                             "string",
                                             "null"
                                         ],
-                                        "pattern": "^(?!0+(\\.0+)?$)\\d{1,12}(\\.\\d{1,6})?$"
+                                        "pattern": "^\\d{1,12}(\\.\\d{1,6})?$"
                                     },
                                     "scrap": {
                                         "type": [
