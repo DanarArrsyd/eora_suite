@@ -16,6 +16,8 @@ import { MATERIALS_IMPLEMENTED } from '@/modules/materials/implemented';
 import { MaterialsScreen } from '@/modules/materials/registry';
 import { PPIC_IMPLEMENTED, PPIC_LIVE } from '@/modules/ppic/implemented';
 import { PpicScreen } from '@/modules/ppic/registry';
+import { PRODUCTION_IMPLEMENTED } from '@/modules/production/implemented';
+import { ProductionScreen } from '@/modules/production/registry';
 
 type Params = { module: string; item: string };
 
@@ -82,6 +84,14 @@ export default async function ItemPage({ params }: { params: Promise<Params> }) 
     return (
       <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
         <InventoryScreen item={item} />
+      </Suspense>
+    );
+  }
+  if (module === 'production' && (PRODUCTION_IMPLEMENTED as readonly string[]).includes(item)) {
+    // M4 step 4 production runs and postings on the live API (doc 33 §1.4)
+    return (
+      <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
+        <ProductionScreen item={item} />
       </Suspense>
     );
   }

@@ -29,6 +29,8 @@ final readonly class PostingCommand
         public ?string $sourceType = null,
         public ?string $sourceId = null,
         public ?string $requestHash = null,
+        /** A production posting that replaces a reversed one of the same run (BR-OUT-08 correction). */
+        public ?string $correctsDocumentId = null,
     ) {
         if ($legs === []) {
             throw new InvalidArgumentException('A posting has legs.');
@@ -46,6 +48,7 @@ final readonly class PostingCommand
     {
         return $this->requestHash ?? hash('sha256', json_encode([$this->docType, $this->plantId, $this->effectiveDate, $this->note, $this->sourceType, $this->sourceId,
             array_map(static fn (PostingLeg $l) => $l->hashShape(), $this->legs),
-            array_map(static fn (GenealogyLink $g) => array_values(get_object_vars($g)), $this->genealogy)], JSON_THROW_ON_ERROR));
+            array_map(static fn (GenealogyLink $g) => array_values(get_object_vars($g)), $this->genealogy),
+            ...($this->correctsDocumentId === null ? [] : [$this->correctsDocumentId])], JSON_THROW_ON_ERROR));
     }
 }

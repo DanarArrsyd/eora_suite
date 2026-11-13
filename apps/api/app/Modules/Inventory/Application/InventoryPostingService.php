@@ -52,6 +52,8 @@ final class InventoryPostingService
         'LOT_SPLIT' => ['LOT_SPLIT_OUT', 'LOT_SPLIT_IN'],
         // M4 step 3 (D-110): material issue to a released work order
         'MAT_ISSUE' => ['ISSUE_TO_PROD'],
+        // M4 step 4 (D-111): measured consumption and output of a run, in one document
+        'PRODUCTION_POSTING' => ['CONSUME', 'OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT', 'OUTPUT_SCRAP'],
     ];
 
     /** Asked by one role and received by another with what was measured (D-110): a return, asked by production. */
@@ -160,7 +162,7 @@ final class InventoryPostingService
             if ($leg->reversesMovementId !== null) {
                 $refuse('Only a reversal reverses a leg.');
             }
-            if ($leg->woId !== null && ! in_array($command->docType, ['MAT_ISSUE', 'MAT_RETURN', 'LOT_SPLIT', 'STOCK_ADJUSTMENT'], true)) {
+            if ($leg->woId !== null && ! in_array($command->docType, ['MAT_ISSUE', 'MAT_RETURN', 'LOT_SPLIT', 'STOCK_ADJUSTMENT', 'PRODUCTION_POSTING'], true)) {
                 $refuse("A {$command->docType} does not name a work order.");
             }
             match ($command->docType) {
@@ -177,6 +179,11 @@ final class InventoryPostingService
                 'MAT_ISSUE', 'MAT_RETURN' => ($leg->stockStatus === 'UNRESTRICTED' && $leg->woId !== null
                         && $type === ((($command->docType === 'MAT_ISSUE') === $out) ? 'RM_WAREHOUSE' : 'MAT_AT_PROD'))
                     || $refuse('An issue moves UNRESTRICTED material of its work order from a raw-material location to Material at Production; a return moves it back.'),
+                // doc 04 rows 5 and 8: consumption leaves Material at Production for V_CONSUMED, output comes from V_PRODUCED
+                'PRODUCTION_POSTING' => ($leg->movementCode === 'CONSUME'
+                        ? ($out ? $type === 'MAT_AT_PROD' && $leg->woId !== null && $leg->measurementMethod !== null : $type === 'V_CONSUMED' && $leg->woId === null)
+                        : ($out ? $type === 'V_PRODUCED' : ! str_starts_with($type, 'V_')) && $leg->woId === null)
+                    || $refuse('A production posting consumes from its work order\'s Material at Production and puts its output into physical locations.'),
                 default => ! str_starts_with($type, 'V_') || $refuse('A transfer or split moves between physical locations.'),
             };
             if ($command->docType === 'LOT_SPLIT' && $leg->lotId === null) {
@@ -185,6 +192,10 @@ final class InventoryPostingService
             $line = $leg->itemId.'|'.($command->docType === 'LOT_SPLIT' ? '' : (string) $leg->lotId);
             if ($command->docType === 'MAT_TRANSFER') {
                 $places[$line][$out ? 'from' : 'to'][$leg->locationId] = true;
+            }
+            if ($command->docType === 'PRODUCTION_POSTING') {
+                // consumption and output change place and status by design (ADR-0004); the database checks each category
+                continue;
             }
             if ($command->docType === 'INCOMING_RELEASE') {
                 // released in place, rack by rack: what leaves BLOCKED at a location enters UNRESTRICTED there
@@ -210,8 +221,8 @@ final class InventoryPostingService
                 $refuse('Stock keeps its status when it moves; a status changes only by its own document.');
             }
         }
-        if ($command->genealogy !== [] && $command->docType !== 'LOT_SPLIT') {
-            $refuse('Only a lot split records genealogy in M3.');
+        if ($command->genealogy !== [] && ! in_array($command->docType, ['LOT_SPLIT', 'PRODUCTION_POSTING'], true)) {
+            $refuse('Only a lot split or a production posting records genealogy.');
         }
         // a split's links are exactly its parent → child pairs, with the child leg's quantity (one link per child)
         $children = [];
@@ -224,7 +235,8 @@ final class InventoryPostingService
         $parents = array_values(array_unique(array_map(static fn (PostingLeg $l) => (string) $l->lotId,
             array_filter($command->legs, static fn (PostingLeg $l) => $l->movementCode === 'LOT_SPLIT_OUT'))));
         $linked = [];
-        foreach ($command->genealogy as $g) {
+        // a production posting links each consumed lot to its output lot; the database checks it (ADR-0004)
+        foreach ($command->docType === 'LOT_SPLIT' ? $command->genealogy : [] as $g) {
             if (! in_array($g->fromLotId, $parents, true) || ! isset($children[$g->toLotId]) || isset($linked[$g->toLotId])
                 || bccomp(self::num($g->qtyFrom), self::num($children[$g->toLotId]), 6) !== 0 || bccomp(self::num($g->qtyTo), self::num($children[$g->toLotId]), 6) !== 0) {
                 $refuse('A split links its parent to each of its children once, with the child\'s quantity.');
@@ -662,20 +674,23 @@ final class InventoryPostingService
             )->id
             : (string) $db->selectOne(
                 'insert into inventory_documents (tenant_id, plant_id, doc_type, doc_no, status, effective_date, production_date, calendar_date, shift_id, shift_date,
-                                                  posted_at, posted_by, note, source_type, source_id, idempotency_key)
-                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, \'POSTED\', ?, ?, ?, ?, ?, now(), (select c.actor from ctx_api.context() c), ?, ?, ?, ?)
+                                                  posted_at, posted_by, note, source_type, source_id, idempotency_key, corrects_document_id)
+                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, \'POSTED\', ?, ?, ?, ?, ?, now(), (select c.actor from ctx_api.context() c), ?, ?, ?, ?, ?)
                  returning id',
                 [$command->plantId, $command->docType, $docNo, $effective, $effective, $time->calendarDate, $backdated ? null : $time->shiftId,
-                    $backdated ? null : $time->shiftDate, $command->note, $command->sourceType, $command->sourceId, $command->idempotencyKey],
+                    $backdated ? null : $time->shiftDate, $command->note, $command->sourceType, $command->sourceId, $command->idempotencyKey, $command->correctsDocumentId],
             )->id;
 
         foreach ($command->legs as $i => $leg) {
             $db->insert(
                 'insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, reverses_movement_id, plant_id, location_id, item_id, lot_id,
-                                                  stock_status, uom_id, qty_signed, entered_qty, entered_uom_id, uom_conversion_id, wo_id)
-                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                                                  stock_status, uom_id, qty_signed, entered_qty, entered_uom_id, uom_conversion_id, wo_id, run_id,
+                                                  measurement_method, measured_qty, measurement_evidence, reason_code, reason_note)
+                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [$documentId, $i + 1, $leg->movementCode, $leg->reversesMovementId, $command->plantId, $leg->locationId, $leg->itemId, $leg->lotId,
-                    $leg->stockStatus, $items[$leg->itemId]->base_uom_id, $leg->qty, $leg->enteredQty, $leg->enteredUomId, $leg->uomConversionId, $leg->woId],
+                    $leg->stockStatus, $items[$leg->itemId]->base_uom_id, $leg->qty, $leg->enteredQty, $leg->enteredUomId, $leg->uomConversionId, $leg->woId,
+                    $command->sourceType === 'production_run' ? $command->sourceId : null,
+                    $leg->measurementMethod, $leg->measuredQty, $leg->measurementEvidence, $leg->reasonCode, $leg->reasonNote],
             );
         }
         foreach ($command->genealogy as $g) {
@@ -820,6 +835,10 @@ final class InventoryPostingService
     private function refusal(QueryException $e): ?DomainProblem
     {
         $state = (string) $e->getCode();
+        if ($state === '23505' && str_contains($e->getMessage(), 'regular_production_uq')) {
+            return new DomainProblem(409, 'PRODUCTION_ALREADY_POSTED', 'Already posted for this shift',
+                'This run already has its regular posting for this production date and shift. Reverse it and post a correction instead.');
+        }
         if ($state === '23505' && str_contains($e->getMessage(), 'idempotency_key')) {
             return new DomainProblem(409, 'IDEMPOTENCY_IN_PROGRESS', 'Posting in progress', 'A posting with this key is being written. Send the request again to get its result.');
         }

@@ -6,6 +6,7 @@ export const DOCUMENT_TYPES: Record<string, string> = {
   LOT_SPLIT: 'Lot split',
   MAT_ISSUE: 'Material issue',
   MAT_RETURN: 'Material return',
+  PRODUCTION_POSTING: 'Production posting',
   STOCK_ADJUSTMENT: 'Adjustment',
   REVERSAL: 'Reversal',
 };

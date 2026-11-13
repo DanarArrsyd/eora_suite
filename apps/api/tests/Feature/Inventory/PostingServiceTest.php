@@ -260,9 +260,9 @@ it('checks what each leg means: codes per document, sign and place, and status o
         new PostingLeg('TRANSFER_LOC', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '-1'),
         new PostingLeg('TRANSFER_LOC', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '1'),
     ])))->toThrow(DomainProblem::class, 'Invalid legs');
-    // documents of M4 are not posted yet
-    expect($refused(new PostingCommand('PRODUCTION_POSTING', $f['plant'], 'production-early', [
-        new PostingLeg('OUTPUT_GOOD', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '1'),
+    // documents of later steps are not posted yet
+    expect($refused(new PostingCommand('SCRAP_DISPOSITION', $f['plant'], 'scrap-early', [
+        new PostingLeg('SCRAP_DISPOSAL', $f['rm1'], $f['item'], $f['lot'], 'UNRESTRICTED', '1'),
     ])))->toThrow(DomainProblem::class, 'Not available yet');
 
     // the incoming release (D-062): an item that needs it is received BLOCKED (never UNRESTRICTED), then released in place

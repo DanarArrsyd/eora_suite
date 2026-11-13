@@ -267,7 +267,7 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Execution',
         items: [
-          { id: 'runs', label: 'Production Runs', icon: CirclePlay, release: 'R1', phase: 4 },
+          { id: 'runs', label: 'Production Runs', icon: CirclePlay, release: 'R1', permission: 'production.run.view', phase: 4 },
           { id: 'run-reporting', label: 'Run Reporting', icon: ClipboardPen, release: 'R1', phase: 5 },
           { id: 'downtime', label: 'Downtime', icon: TimerOff, release: 'R2', phase: 'later' },
         ],
@@ -275,7 +275,7 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Output',
         items: [
-          { id: 'postings', label: 'Production Postings', icon: FileStack, release: 'R1', phase: 4 },
+          { id: 'postings', label: 'Production Postings', icon: FileStack, release: 'R1', permission: 'production.posting.view', phase: 4 },
           { id: 'rework-orders', label: 'Rework Orders', icon: RefreshCcw, release: 'R2', phase: 'later' },
         ],
       },

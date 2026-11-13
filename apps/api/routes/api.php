@@ -18,6 +18,7 @@ use App\Modules\Planning\Http\ConversionProfileController;
 use App\Modules\Planning\Http\ItemWeightController;
 use App\Modules\Planning\Http\RoutingController;
 use App\Modules\Planning\Http\WorkOrderController;
+use App\Modules\Production\Http\ProductionController;
 use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
 use App\Platform\Auth\Http\AuthController;
@@ -201,6 +202,15 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('periods/{period}/reopen-requests', [PeriodController::class, 'requestReopen'])->name('periods.reopen-request');
         Route::post('periods/{period}/reopen', [PeriodController::class, 'reopen'])->name('periods.reopen');
         Route::post('periods/{period}/reopen-return', [PeriodController::class, 'returnReopen'])->name('periods.reopen-return');
+    });
+
+    // Production → runs and production postings (doc 33 §1.4, D-111): one tenant transaction, retried on deadlock (postings are idempotent)
+    Route::prefix('production')->name('production.')->middleware(['tenant:retry'])->group(function (): void {
+        Route::post('runs', [ProductionController::class, 'open'])->name('runs.store');
+        Route::get('runs/{run}', [ProductionController::class, 'show'])->name('runs.show');
+        Route::post('runs/{run}/actions/close', [ProductionController::class, 'close'])->name('runs.close');
+        Route::post('runs/{run}/actions/cancel', [ProductionController::class, 'cancel'])->name('runs.cancel');
+        Route::post('postings', [ProductionController::class, 'post'])->name('postings.store');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

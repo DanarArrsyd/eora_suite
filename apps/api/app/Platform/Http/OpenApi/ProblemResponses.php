@@ -220,6 +220,12 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.inventory.periods.reopen-return' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.inventory.adjustments.reject' => self::TENANT_WRITE + [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION'], 404 => ['NOT_FOUND'],
             409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        // D-111: production runs (production leader) and production postings (one regular per run, production date and shift)
+        'v1.production.runs.store' => self::TENANT_WRITE + self::MASTER_403 + [409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.production.runs.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
+        'v1.production.runs.close' => self::MASTER_EDIT + self::SCOPED_403 + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.production.runs.cancel' => self::MASTER_EDIT + self::SCOPED_403 + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.production.postings.store' => [409 => [...self::POSTING[409], 'INVALID_STATE_TRANSITION', 'PRODUCTION_ALREADY_POSTED', 'NO_VIRTUAL_LOCATION']] + self::POSTING,
         // D-110: issue to a released WO; return asked by production, received (measured) or refused by materials
         'v1.inventory.material-issues.store' => [409 => [...self::POSTING[409], 'INVALID_STATE_TRANSITION']] + self::POSTING,
         'v1.inventory.material-returns.store' => self::TENANT_WRITE + self::MASTER_403 + [
@@ -236,7 +242,7 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
 
     /** Posting routes (doc 24 §5.3): the Idempotency-Key header and the posted document, 201 first time, 200 on replay. */
     private const array POSTINGS = ['v1.inventory.receipts.store', 'v1.inventory.incoming-releases.store', 'v1.inventory.transfers.store', 'v1.inventory.lot-splits.store',
-        'v1.inventory.adjustments.approve', 'v1.inventory.reversals.approve', 'v1.inventory.material-issues.store', 'v1.inventory.material-returns.receive'];
+        'v1.inventory.adjustments.approve', 'v1.inventory.reversals.approve', 'v1.inventory.material-issues.store', 'v1.inventory.material-returns.receive', 'v1.production.postings.store'];
 
     /** Requests decided by a second person (D-060): the Idempotency-Key header and the submitted request, 201 first time, 200 on replay. */
     private const array REQUESTS = ['v1.inventory.adjustments.store', 'v1.inventory.reversals.store', 'v1.inventory.material-returns.store'];

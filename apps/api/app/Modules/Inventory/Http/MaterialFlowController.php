@@ -82,7 +82,7 @@ final class MaterialFlowController
 
         // locked until the posting commits: the WO stays released meanwhile (BR-ISS-01, doc 04 row 3)
         $status = (string) $db->selectOne('select status from work_orders where id = ? for share', [$wo->id])->status;
-        if ($status !== 'RELEASED') {
+        if (! in_array($status, ['RELEASED', 'IN_PROGRESS'], true)) {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Work order not released', "Material is issued to a released work order; {$wo->wo_no} is ".strtolower($status).'.');
         }
         // a new issue goes only to an active location, held until the posting commits so it is not deactivated in between
@@ -247,7 +247,8 @@ final class MaterialFlowController
 
     private function issued(EoraPostgresConnection $db, PostingResult $result): JsonResponse
     {
-        return response()->json(['data' => $result->toArray() + ['replayed' => $result->replayed]], $result->replayed ? 200 : 201);
+        // the posting answer of doc 24 §5.3; an issue creates no lot
+        return response()->json(['data' => $result->toArray() + ['replayed' => $result->replayed, 'lotId' => null, 'lotNo' => null]], $result->replayed ? 200 : 201);
     }
 
     private function trim(string $qty): string
