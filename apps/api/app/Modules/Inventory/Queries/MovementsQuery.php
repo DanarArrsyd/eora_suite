@@ -19,14 +19,14 @@ final class MovementsQuery extends QueryDefinition
     /** D-084 codes posted in M3 and M4 so far (doc 04 §Movement codes). */
     public const array CODES = ['RCPT_SUPPLIER', 'INCOMING_RELEASE', 'TRANSFER_LOC', 'LOT_SPLIT_OUT', 'LOT_SPLIT_IN', 'ADJ_PLUS', 'ADJ_MINUS', 'ISSUE_TO_PROD', 'RETURN_FROM_PROD', 'CONSUME',
         'OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT', 'OUTPUT_SCRAP',
-        'QC_RELEASE', 'QC_HOLD', 'QC_REWORK', 'QC_REJECT', 'FG_RECEIPT', 'PICK'];
+        'QC_RELEASE', 'QC_HOLD', 'QC_REWORK', 'QC_REJECT', 'FG_RECEIPT', 'PICK', 'SHIP'];
 
     public const array CODE_LABELS = [
         'RCPT_SUPPLIER' => 'Supplier receipt', 'INCOMING_RELEASE' => 'Incoming release', 'TRANSFER_LOC' => 'Transfer', 'LOT_SPLIT_OUT' => 'Split out',
         'LOT_SPLIT_IN' => 'Split in', 'ADJ_PLUS' => 'Adjustment plus', 'ADJ_MINUS' => 'Adjustment minus', 'ISSUE_TO_PROD' => 'Issue to production',
         'RETURN_FROM_PROD' => 'Return from production', 'CONSUME' => 'Consumed', 'OUTPUT_GOOD' => 'Output good', 'OUTPUT_NG_REWORK' => 'Output NG rework',
         'OUTPUT_NG_REJECT' => 'Output NG reject', 'OUTPUT_SCRAP' => 'Process scrap',
-        'QC_RELEASE' => 'QC release', 'QC_HOLD' => 'QC hold', 'QC_REWORK' => 'QC rework', 'QC_REJECT' => 'QC reject', 'FG_RECEIPT' => 'FG receipt', 'PICK' => 'Pick',
+        'QC_RELEASE' => 'QC release', 'QC_HOLD' => 'QC hold', 'QC_REWORK' => 'QC rework', 'QC_REJECT' => 'QC reject', 'FG_RECEIPT' => 'FG receipt', 'PICK' => 'Pick', 'SHIP' => 'Shipped',
     ];
 
     public function resource(): string

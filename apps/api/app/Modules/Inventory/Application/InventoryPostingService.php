@@ -61,6 +61,8 @@ final class InventoryPostingService
         'FG_RECEIPT' => ['FG_RECEIPT'],
         // M4 step 7a (D-115): allocated FG picked to staging for a schedule line, or staged goods put back (unpick)
         'PICK' => ['PICK'],
+        // M4 step 7b (D-115, D-116): staged goods shipped to the customer
+        'SHIPMENT' => ['SHIP'],
     ];
 
     /** Asked by one role and received by another with what was measured (D-110): a return, asked by production. */
@@ -208,6 +210,9 @@ final class InventoryPostingService
                 // doc 04 row 11, D-115: UNRESTRICTED goods of a schedule line between an FG rack and staging
                 'PICK' => ($leg->woId === null && $leg->scheduleLineId !== null && $leg->stockStatus === 'UNRESTRICTED' && in_array($type, ['FG_WAREHOUSE', 'STAGING'], true))
                     || $refuse('A pick moves unrestricted goods of a schedule line between an FG warehouse location and staging.'),
+                // doc 04 row 11, BR-FG-03: UNRESTRICTED goods of a schedule line from staging to the customer
+                'SHIPMENT' => ($leg->woId === null && $leg->scheduleLineId !== null && $leg->stockStatus === 'UNRESTRICTED' && $type === ($out ? 'STAGING' : 'V_CUSTOMER'))
+                    || $refuse('A shipment moves unrestricted goods of a schedule line from staging to the customer.'),
                 'PRODUCTION_POSTING' => ($leg->movementCode === 'CONSUME'
                         ? ($out ? $type === 'MAT_AT_PROD' && $leg->woId !== null && $leg->measurementMethod !== null : $type === 'V_CONSUMED' && $leg->woId === null)
                         : ($out ? $type === 'V_PRODUCED' : ! str_starts_with($type, 'V_')) && $leg->woId === null)

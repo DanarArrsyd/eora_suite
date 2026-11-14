@@ -30,6 +30,7 @@ use App\Modules\Core\Queries\WarehousesQuery;
 use App\Modules\Core\Queries\WorkCentersQuery;
 use App\Modules\Delivery\Queries\OpenDemandQuery;
 use App\Modules\Delivery\Queries\PicksQuery;
+use App\Modules\Delivery\Queries\ShipmentsQuery;
 use App\Modules\Demand\Queries\SalesOrdersQuery;
 use App\Modules\Demand\Queries\ScheduleLinesQuery;
 use App\Modules\Inventory\Queries\AdjustmentsQuery;
@@ -141,6 +142,7 @@ return [
         'warehouse.fg_receipts' => FgReceiptsQuery::class,
         'delivery.schedule_lines' => OpenDemandQuery::class,
         'delivery.picks' => PicksQuery::class,
+        'delivery.shipments' => ShipmentsQuery::class,
         'exchange.import_jobs' => ImportJobsQuery::class,
         'exchange.export_jobs' => ExportJobsQuery::class,
     ],

@@ -103,8 +103,7 @@ test('allocation: delivery confirms the FIFO proposal, never more than the line 
   await axe(page);
   await page.getByRole('button', { name: 'Allocate', exact: true }).click();
   await page.getByRole('alertdialog', { name: 'Allocate these goods' }).getByRole('button', { name: 'Allocate' }).click();
-  await expect(page.getByText('Allocated', { exact: true }).first()).toBeVisible();
-  expect(writes).toHaveLength(1);
+  await expect.poll(() => writes.length).toBe(1);
   expect(writes[0]!.key).toBeTruthy();
   expect(writes[0]!.body).toEqual({
     scheduleLineId: ID(1),

@@ -499,22 +499,25 @@ final class SalesOrderController
             [$id],
         );
         $schedules = $db->select(
-            'select s.id, s.so_line_id, s.schedule_no, s.requirement_date::text as requirement_date, trim_scale(s.required_qty)::text as qty, s.status,
-                    s.cancel_reason, s.cancelled_at, cu.display_name as cancelled_by_name
+            "select s.id, s.so_line_id, s.schedule_no, s.requirement_date::text as requirement_date, trim_scale(s.required_qty)::text as qty, s.status,
+                    s.cancel_reason, s.cancelled_at, cu.display_name as cancelled_by_name,
+                    trim_scale(coalesce((select sum(m.qty_signed) from inventory_movements m join locations ml on ml.id = m.location_id
+                                          where m.schedule_line_id = s.id and ml.location_type = 'V_CUSTOMER'), 0))::text as delivered
                from delivery_schedule_lines s join sales_order_lines l on l.id = s.so_line_id left join users cu on cu.id = s.cancelled_by
-              where l.sales_order_id = ? order by s.requirement_date, s.schedule_no',
+              where l.sales_order_id = ? order by s.requirement_date, s.schedule_no",
             [$id],
         );
         $byLine = [];
         foreach ($schedules as $s) {
-            // delivered and outstanding follow posted shipments (BR-DEM-10, M4 step 7); none exist yet
+            // delivered and outstanding follow posted shipments and their reversals (BR-DEM-10, D-115)
             $byLine[(string) $s->so_line_id][] = [
                 'id' => (string) $s->id,
                 'scheduleNo' => (int) $s->schedule_no,
                 'requirementDate' => (string) $s->requirement_date,
                 'qty' => (string) $s->qty,
-                'deliveredQty' => '0',
-                'outstandingQty' => in_array($s->status, ['CANCELLED', 'SUPERSEDED', 'DRAFT'], true) ? '0' : (string) $s->qty,
+                'deliveredQty' => (string) $s->delivered,
+                'outstandingQty' => in_array($s->status, ['CANCELLED', 'SUPERSEDED', 'DRAFT'], true) ? '0'
+                    : (bccomp(self::decimal((string) $s->qty), self::decimal((string) $s->delivered), 6) > 0 ? self::trimQty(bcsub(self::decimal((string) $s->qty), self::decimal((string) $s->delivered), 6)) : '0'),
                 'status' => (string) $s->status,
                 'cancelReason' => $s->cancel_reason,
                 'cancelledAt' => $s->cancelled_at === null ? null : (new DateTimeImmutable((string) $s->cancelled_at))->format(DATE_ATOM),
@@ -547,5 +550,16 @@ final class SalesOrderController
         $row['plantToday'] = $this->today($db, (string) $row['plantId']);
 
         return Concurrency::withVersion(response()->json(['data' => $row], $status), (int) $row['version']);
+    }
+
+    /** @return numeric-string */
+    private static function decimal(string $value): string
+    {
+        return is_numeric($value) ? $value : throw new LogicException('Not a quantity.');
+    }
+
+    private static function trimQty(string $qty): string
+    {
+        return str_contains($qty, '.') ? (rtrim(rtrim($qty, '0'), '.') ?: '0') : $qty;
     }
 }
