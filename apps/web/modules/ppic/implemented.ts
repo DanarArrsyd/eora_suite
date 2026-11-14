@@ -16,4 +16,4 @@ export const PPIC_IMPLEMENTED = [
 ] as const;
 
 /** PPIC items on the live API (M4, doc 33 §1.1–1.2): Sales Orders (same screen as Demand → Sales Orders) and Work Orders. */
-export const PPIC_LIVE = ['sales-orders', 'work-orders'] as const;
+export const PPIC_LIVE = ['sales-orders', 'work-orders', 'wo-close-exceptions'] as const;

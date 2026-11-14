@@ -18,6 +18,7 @@ use App\Modules\Planning\Http\BomRoutingMapController;
 use App\Modules\Planning\Http\ConversionProfileController;
 use App\Modules\Planning\Http\ItemWeightController;
 use App\Modules\Planning\Http\RoutingController;
+use App\Modules\Planning\Http\WoCloseExceptionController;
 use App\Modules\Planning\Http\WorkOrderController;
 use App\Modules\Production\Http\ProductionController;
 use App\Modules\Quality\Http\QualityController;
@@ -146,6 +147,11 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('work-orders/{order}/actions/return', [WorkOrderController::class, 'returnToDraft'])->name('work-orders.return');
         Route::post('work-orders/{order}/actions/release', [WorkOrderController::class, 'release'])->name('work-orders.release');
         Route::post('work-orders/{order}/actions/cancel', [WorkOrderController::class, 'cancel'])->name('work-orders.cancel');
+        // D-117: close, and the close exception for material left at production (PPC asks, CSA/INV decides)
+        Route::post('work-orders/{order}/actions/close', [WorkOrderController::class, 'close'])->name('work-orders.close');
+        Route::post('work-orders/{order}/close-exceptions', [WoCloseExceptionController::class, 'store'])->name('work-orders.close-exceptions.store');
+        Route::post('wo-close-exceptions/{exception}/approve', [WoCloseExceptionController::class, 'approve'])->name('wo-close-exceptions.approve');
+        Route::post('wo-close-exceptions/{exception}/reject', [WoCloseExceptionController::class, 'reject'])->name('wo-close-exceptions.reject');
 
         // Conversion data (doc 29 §1.5, D-080; tenant-wide, master.conversion.*): net weights and conversion profiles
         Route::post('item-weights', [ItemWeightController::class, 'store'])->name('item-weights.store');

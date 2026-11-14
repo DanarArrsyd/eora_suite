@@ -11,6 +11,7 @@ export const DOCUMENT_TYPES: Record<string, string> = {
   FG_RECEIPT: 'FG receipt',
   PICK: 'Pick',
   SHIPMENT: 'Shipment',
+  WO_CLOSE_EXCEPTION: 'WO close exception',
   STOCK_ADJUSTMENT: 'Adjustment',
   REVERSAL: 'Reversal',
 };

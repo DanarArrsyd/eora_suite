@@ -56,6 +56,7 @@ use App\Modules\Planning\Queries\ItemWeightsQuery;
 use App\Modules\Planning\Queries\ProcessTypesQuery;
 use App\Modules\Planning\Queries\RoutingsQuery;
 use App\Modules\Planning\Queries\RoutingVersionsQuery;
+use App\Modules\Planning\Queries\WoCloseExceptionsQuery;
 use App\Modules\Planning\Queries\WorkOrdersQuery;
 use App\Modules\Production\Queries\ProductionPostingsQuery;
 use App\Modules\Production\Queries\ProductionRunsQuery;
@@ -143,6 +144,7 @@ return [
         'delivery.schedule_lines' => OpenDemandQuery::class,
         'delivery.picks' => PicksQuery::class,
         'delivery.shipments' => ShipmentsQuery::class,
+        'planning.wo_close_exceptions' => WoCloseExceptionsQuery::class,
         'exchange.import_jobs' => ImportJobsQuery::class,
         'exchange.export_jobs' => ExportJobsQuery::class,
     ],
