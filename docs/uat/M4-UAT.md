@@ -51,7 +51,7 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
 | 13 | Login `fgw` → Demand → Sales Orders → buka SO pertama. | Bisa melihat; tidak ada tombol Add line, Add delivery, Confirm atau Cancel. | |
 
 ## 2. Work Order manual (langkah 2, D-109)
-Persiapan: BOM dan routing BRK-A100 dari data demo masih **Draft**. Sebagai `ppc` ajukan (Master Data → BOMs / Routings → Submit), lalu sebagai `csa` setujui keduanya.
+Persiapan: BOM dan routing BRK-A100 dari data demo masih **Draft**. Sebagai `ppc` ajukan (Master Data → BOMs / Routings → Submit), lalu sebagai `csa` setujui keduanya. Di tenant demo yang baru di-seed, draf hasil import disiapkan oleh `csa` sendiri — `csa` tidak boleh menyetujuinya (D-060); setujui dengan akun `uat` (§0).
 
 | # | Langkah | Yang diharapkan | Hasil |
 |---|---|---|---|
@@ -170,4 +170,22 @@ Persiapan: WO dari §3–4 masih In production dengan sisa coil di work center. 
 | 5 | Buka → **Approve**. | Material pindah ke scrap yard (WCX-P1-<tahun>-0001); "Nothing keeps it open". | |
 | 6 | Login `ppc` → **Close work order** → konfirmasi. | Status **Closed**; tombol Issue/Open run hilang. | |
 | 7 | Login `mat` → coba issue bahan ke WO itu. | Ditolak: WO bukan Released. | |
+
+## 9. Trace dan pesanan demo (langkah 9, D-118)
+Persiapan: jalankan `eora:tenants:sync` setelah migrate (izin baru `traceability.lot_trace.view`). Satu pesanan penuh siap dengan perintah berikut (aman diulang; butuh master demo, stok awal coil HEAT-A102 released dan nut di RM-A01):
+```bash
+docker compose run --rm --entrypoint php db-migrate artisan eora:demo:m4
+```
+Di tenant demo yang baru di-seed, BOM dan routing BRK-A100 hasil import disiapkan oleh `csa`, jadi `csa` tidak boleh menyetujuinya sendiri (D-060): buat dulu akun `uat` (§0) — perintah di atas memakainya sebagai approver kedua. Hasil akhirnya mencetak nomor SO, WO, lot FG dan SHP.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `ppc` → Traceability. | Menu Backward/Forward Trace tidak ada (hanya CSA, INV, AUD). | |
+| 2 | Login `inv` → Traceability → **Backward Trace** → isi nomor SHP dari perintah di atas → **Trace**. | "What SHP-… was made of": lot FG BRK-A100 (**Made**) dengan baris "Shipped SHP-… to OEM-A · SO-… 1/1 · customer PO PO-DEMO-M4 · 150 PCS · <oleh>, <waktu>". | |
+| 3 | Lihat baris di bawahnya. | Lot coil COIL-SPCC-12 dan nut NUT-M8 (**Received**): "… KG used for 300 PCS · Production posting PRD-… · run RUN-… · WO-… · <oleh>, <waktu>" dan "Received on RCV-… from SUP-STEEL · supplier lot HEAT-A102 · <oleh>, <waktu>". | |
+| 4 | **Forward trace** → isi nomor lot coil → **Trace**. | Bila nomor lot sama dipakai beberapa item: "… is the number of several lots" → pilih COIL-SPCC-12. "Where … went": lot FG yang dibuat dari coil itu dan shipment ke OEM-A (untuk recall). URL menyimpan pencarian (bisa dibagikan). | |
+| 5 | Backward Trace → nomor yang tidak ada (mis. `L9999-9999`). | "Nothing with this number in your plants. Check the lot or shipment number." | |
+| 6 | Forward Trace → nomor SHP. | Ditolak: "A shipment is traced backward. Trace one of its lots forward instead." | |
+| 7 | Login `ppc` → Demand → Sales Orders → SO dari perintah di atas. | Schedule line Delivered 150 dari 300, **Partially fulfilled**. | |
+| 8 | Login `inv` → reversal shipment itu, `csa` setujui; trace lagi. | Shipment tetap tampil, ditandai **Reversed**; SO itu kembali Delivered 0. | |
 

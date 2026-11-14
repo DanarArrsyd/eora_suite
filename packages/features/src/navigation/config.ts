@@ -472,8 +472,8 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Lot Trace',
         items: [
-          { id: 'backward-trace', label: 'Backward Trace', icon: ArrowLeftToLine, release: 'R1', phase: 'later' },
-          { id: 'forward-trace', label: 'Forward Trace', icon: ArrowRightToLine, release: 'R1', phase: 'later' },
+          { id: 'backward-trace', label: 'Backward Trace', icon: ArrowLeftToLine, release: 'R1', permission: 'traceability.lot_trace.view', phase: 4 },
+          { id: 'forward-trace', label: 'Forward Trace', icon: ArrowRightToLine, release: 'R1', permission: 'traceability.lot_trace.view', phase: 4 },
           { id: 'genealogy', label: 'Genealogy Graph', icon: Network, release: 'R2', phase: 'later' },
         ],
       },

@@ -254,6 +254,8 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.delivery.unpicks.store' => self::POSTING,
         // D-116: staged goods of one customer's schedule lines shipped, with the transport (delivery or the FG warehouse)
         'v1.delivery.staged.index' => self::TENANT_READ + [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN'], 422 => ['VALIDATION_FAILED']],
+        // Traceability → lot trace (D-118): nothing in the viewer's plants is 404; a shipment traced forward is 422
+        'v1.traceability.lot-trace.show' => self::TENANT_READ + [404 => ['NOT_FOUND'], 422 => ['VALIDATION_FAILED']],
         'v1.delivery.shipments.store' => [409 => [...self::POSTING[409], 'NO_VIRTUAL_LOCATION']] + self::POSTING,
         // D-114: FG receipt of QC-released finished goods, posted by the FG warehouse
         'v1.warehouse.fg-receipts.store' => self::POSTING,
