@@ -148,14 +148,7 @@ it('cancels firm schedule lines with a reason and the line with its last one; re
     expect(array_column($schedules, 'scheduleNo'))->toBe([1, 2, 3]);
     $v = $more->json('data.version');
 
-    // an ACTIVE allocation on the schedule line (the allocation rows of step 7) blocks the cancel
-    rtSwitch($this, $this->t, 'MAT');
-    $lot = rcReceive($this, $f)->assertCreated()->json('data.lotId');
-    $balance = rcRun($this->t, fn (EoraPostgresConnection $db) => (string) $db->selectOne('select id from stock_balances where lot_id = ?', [$lot])->id);
-    rcRun($this->t, fn (EoraPostgresConnection $db) => $db->insert("insert into stock_allocations (tenant_id, balance_id, demand_type, demand_id, qty) values ((select c.tenant from ctx_api.context() c), ?, 'SCHEDULE_LINE', ?, 1)", [$balance, $schedules[0]['id']]));
-    rtSwitch($this, $this->t, 'PPC');
-    soWith($this, 'POST', "{$uri}/schedule-lines/{$schedules[0]['id']}/actions/cancel", ['reason' => 'Customer pulled it in'], $v)
-        ->assertStatus(409)->assertJsonPath('code', 'SCHEDULE_LINE_ALLOCATED');
+    // FG allocated or picked for a schedule line blocks its cancel (SCHEDULE_LINE_ALLOCATED): tests/Feature/Delivery (D-115)
 
     $one = soWith($this, 'POST', "{$uri}/schedule-lines/{$schedules[1]['id']}/actions/cancel", ['reason' => 'Customer pulled it in'], $v)
         ->assertOk()->assertJsonPath('data.lines.0.qty', '350')->assertJsonPath('data.lines.0.status', 'ACTIVE');

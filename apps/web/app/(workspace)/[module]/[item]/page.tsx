@@ -22,6 +22,8 @@ import { QUALITY_IMPLEMENTED } from '@/modules/quality/implemented';
 import { QualityScreen } from '@/modules/quality/registry';
 import { WAREHOUSE_IMPLEMENTED } from '@/modules/warehouse/implemented';
 import { WarehouseScreen } from '@/modules/warehouse/registry';
+import { DELIVERY_IMPLEMENTED } from '@/modules/delivery/implemented';
+import { DeliveryScreen } from '@/modules/delivery/registry';
 
 type Params = { module: string; item: string };
 
@@ -112,6 +114,14 @@ export default async function ItemPage({ params }: { params: Promise<Params> }) 
     return (
       <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
         <WarehouseScreen item={item} />
+      </Suspense>
+    );
+  }
+  if (module === 'delivery' && (DELIVERY_IMPLEMENTED as readonly string[]).includes(item)) {
+    // M4 step 7 allocation and pick on the live API (doc 33 §1.7)
+    return (
+      <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
+        <DeliveryScreen item={item} />
       </Suspense>
     );
   }

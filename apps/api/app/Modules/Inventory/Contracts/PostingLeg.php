@@ -13,7 +13,8 @@ use InvalidArgumentException;
  */
 final readonly class PostingLeg
 {
-    private const array PRODUCTION = ['measurementMethod', 'measuredQty', 'measurementEvidence', 'reasonCode', 'reasonNote'];
+    /** Fields added after the first postings: they enter the request hash by name, only when set (ADR-0014). */
+    private const array KEYED = ['measurementMethod', 'measuredQty', 'measurementEvidence', 'reasonCode', 'reasonNote', 'scheduleLineId'];
 
     public function __construct(
         public string $movementCode,
@@ -35,6 +36,8 @@ final readonly class PostingLeg
         /** Process scrap (BR-OUT-04): its reason code and, for OTHER, the note. */
         public ?string $reasonCode = null,
         public ?string $reasonNote = null,
+        /** The schedule line a pick or shipment leg serves (D-115, BR-DEM-09), kept by its reversal. */
+        public ?string $scheduleLineId = null,
     ) {
         if (! is_numeric($qty) || preg_match('/^-?\d{1,14}(\.\d{1,6})?$/', $qty) !== 1 || bccomp($qty, '0', 6) === 0) {
             throw new InvalidArgumentException('A leg quantity is a non-zero decimal with at most 6 decimals.');
@@ -51,8 +54,8 @@ final readonly class PostingLeg
     {
         $values = get_object_vars($this);
         // fields added later enter the hash only when set, by name, so older legs keep their shape
-        $extra = array_filter(array_intersect_key($values, array_flip(self::PRODUCTION)), static fn ($v) => $v !== null);
-        $values = array_diff_key($values, array_flip(self::PRODUCTION));
+        $extra = array_filter(array_intersect_key($values, array_flip(self::KEYED)), static fn ($v) => $v !== null);
+        $values = array_diff_key($values, array_flip(self::KEYED));
         if ($values['woId'] === null) {
             unset($values['woId']);
         }

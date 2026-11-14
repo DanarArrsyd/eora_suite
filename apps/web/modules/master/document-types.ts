@@ -9,6 +9,7 @@ export const DOCUMENT_TYPES: Record<string, string> = {
   PRODUCTION_POSTING: 'Production posting',
   QC_DISPOSITION: 'QC disposition',
   FG_RECEIPT: 'FG receipt',
+  PICK: 'Pick',
   STOCK_ADJUSTMENT: 'Adjustment',
   REVERSAL: 'Reversal',
 };

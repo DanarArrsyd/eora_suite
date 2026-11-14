@@ -28,6 +28,8 @@ use App\Modules\Core\Queries\UomConversionsQuery;
 use App\Modules\Core\Queries\UomsQuery;
 use App\Modules\Core\Queries\WarehousesQuery;
 use App\Modules\Core\Queries\WorkCentersQuery;
+use App\Modules\Delivery\Queries\OpenDemandQuery;
+use App\Modules\Delivery\Queries\PicksQuery;
 use App\Modules\Demand\Queries\SalesOrdersQuery;
 use App\Modules\Demand\Queries\ScheduleLinesQuery;
 use App\Modules\Inventory\Queries\AdjustmentsQuery;
@@ -137,6 +139,8 @@ return [
         'production.postings' => ProductionPostingsQuery::class,
         'quality.dispositions' => DispositionsQuery::class,
         'warehouse.fg_receipts' => FgReceiptsQuery::class,
+        'delivery.schedule_lines' => OpenDemandQuery::class,
+        'delivery.picks' => PicksQuery::class,
         'exchange.import_jobs' => ImportJobsQuery::class,
         'exchange.export_jobs' => ExportJobsQuery::class,
     ],

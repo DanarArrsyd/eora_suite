@@ -423,6 +423,7 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Shipping',
         items: [
+          { id: 'allocation-pick', label: 'Allocation & Pick', icon: PackageCheck, release: 'R1', permission: 'delivery.shipment.view', phase: 4 },
           { id: 'delivery-orders', label: 'Delivery Orders', icon: FileText, release: 'R1', phase: 'later' },
           { id: 'shipments', label: 'Shipments', icon: Truck, release: 'R1', phase: 'later' },
           { id: 'proof-of-delivery', label: 'Proof of Delivery', icon: FileSignature, release: 'R2', phase: 'later' },

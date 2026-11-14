@@ -289,8 +289,9 @@ final class SalesOrderController
         if ($row->status !== 'FIRM') {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Schedule line not cancellable', 'Only a firm schedule line without deliveries can be cancelled.');
         }
-        if ($db->selectOne("select 1 as ok from stock_allocations where demand_type = 'SCHEDULE_LINE' and demand_id = ? and status = 'ACTIVE'", [$row->id]) !== null) {
-            throw new DomainProblem(409, 'SCHEDULE_LINE_ALLOCATED', 'Finished goods allocated', 'Release the finished goods allocated to this schedule line first.');
+        // D-115: allocated or picked (staged) goods hold the line until they are released or put back
+        if ((float) $db->selectOne('select eora_schedule_line_committed((select c.tenant from ctx_api.context() c), ?) as q', [$row->id])->q > 0) {
+            throw new DomainProblem(409, 'SCHEDULE_LINE_ALLOCATED', 'Finished goods allocated', 'Release the finished goods allocated to this schedule line, and put back what was picked for it, first.');
         }
         $this->bump($db, $so, $expected);
         $before = $this->state($db, 'delivery_schedule_lines', (string) $row->id);

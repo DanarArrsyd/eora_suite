@@ -130,3 +130,18 @@ Persiapan: §5 sudah me-release BRK-A100 (QC released di QC area). Lokasi FG (mi
 | 7 | Login `qci` → Warehouse → FG Receipt → **Receive FG**. | Daftar bisa dilihat, tapi halaman Receive FG menampilkan "Receiving FG is not available for your roles". | |
 | 8 | Login `inv` → Reversals → minta reversal FGR itu; `csa` setujui. | Stok kembali ke QC area QC released; FGR jadi Reversed. | |
 
+## 7a. Alokasi dan pick (langkah 7a, D-115)
+Persiapan: §6 sudah menerima BRK-A100 ke rak FG. Akun `ppc` membuat dan mengkonfirmasi SO BRK-A100 (mis. 300 PCS, jatuh tempo beberapa hari lagi). Lokasi STAGING (mis. STG-01) aktif. Akun `dlv` dan `fgw`.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `dlv` → Delivery → **Allocation & Pick**. | Baris SO itu: Required 300, Allocated 0, Staged 0, To allocate 300. | |
+| 2 | Buka baris itu. | Kartu **Allocate** berisi usulan FIFO (lot tertua dulu) terisi sampai 300. | |
+| 3 | Ubah qty satu baris melebihi yang available → **Allocate**. | Ditolak: "only … PCS is available there." | |
+| 4 | Kembalikan ke usulan → **Allocate** → konfirmasi. | Pesan "Allocated"; Allocated 300, To allocate 0; Stock Overview: on-hand tetap, available turun 300. | |
+| 5 | Login `ppc` → SO itu → coba batalkan schedule line. | Ditolak: FG masih dialokasikan. | |
+| 6 | Login `fgw` → buka baris yang sama. | Tidak ada tombol Release; Pick to = STG-01. | |
+| 7 | Pick 200 → **Pick to staging** → konfirmasi. | Pesan "PCK-P1-<tahun>-0001 picked to STG-01"; Allocated 100, Staged 200. | |
+| 8 | Staged: Put back 50 ke rak FG → konfirmasi. | Staged 150; 50 PCS kembali ke rak FG tanpa alokasi; To allocate 50. | |
+| 9 | Login `dlv` → **Release** sisa alokasi dengan alasan. | Allocated 0; To allocate 150. | |
+
