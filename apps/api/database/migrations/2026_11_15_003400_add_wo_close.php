@@ -146,11 +146,16 @@ return new class extends Migration
 
             -- a closed or cancelled work order gets no material back at production (an issue, a reversal of a return, …)
             CREATE OR REPLACE FUNCTION eora_guard_closed_work_order_material() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            DECLARE
+              v_status text;
             BEGIN
               IF NEW.qty_signed > 0
-                 AND EXISTS (SELECT 1 FROM public.locations l WHERE l.tenant_id = NEW.tenant_id AND l.id = NEW.location_id AND l.location_type = 'MAT_AT_PROD')
-                 AND EXISTS (SELECT 1 FROM public.work_orders w WHERE w.tenant_id = NEW.tenant_id AND w.id = NEW.wo_id AND w.status IN ('CLOSED', 'CANCELLED')) THEN
-                RAISE EXCEPTION 'a closed or cancelled work order gets no material at production' USING ERRCODE = '23514';
+                 AND EXISTS (SELECT 1 FROM public.locations l WHERE l.tenant_id = NEW.tenant_id AND l.id = NEW.location_id AND l.location_type = 'MAT_AT_PROD') THEN
+                -- the share lock waits for a close in flight and reads the order as it committed; a close waits for this posting
+                SELECT w.status INTO v_status FROM public.work_orders w WHERE w.tenant_id = NEW.tenant_id AND w.id = NEW.wo_id FOR SHARE;
+                IF v_status IN ('CLOSED', 'CANCELLED') THEN
+                  RAISE EXCEPTION 'a closed or cancelled work order gets no material at production' USING ERRCODE = '23514';
+                END IF;
               END IF;
               RETURN NEW;
             END

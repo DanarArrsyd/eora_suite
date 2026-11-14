@@ -50,12 +50,20 @@ final class WoCloseExceptionController
         $db = $this->db();
         $wo = $this->workOrder($db, $order);
         $this->authorizer->authorize($db, 'planning.wo_close_exception.request_correction', Scope::plant((string) $wo->plant_id, (string) $wo->company_id));
+        // a retry answers as it was asked, before anything that may have changed since (stock, scrap yards, the order's state)
+        $reason = trim($data['reason']);
+        $hash = hash('sha256', json_encode(['WO_CLOSE_EXCEPTION', (string) $wo->plant_id, (string) $wo->id, $reason,
+            isset($data['scrapLocationId']) ? strtolower($data['scrapLocationId']) : null], JSON_THROW_ON_ERROR));
+        $previous = $this->postings->requested($db, $key, 'WO_CLOSE_EXCEPTION', $hash);
+        if ($previous !== null) {
+            return response()->json(['data' => ['documentId' => $previous, 'replayed' => true, 'status' => 'SUBMITTED']]);
+        }
         if (! in_array($wo->status, WorkOrderController::CLOSABLE, true)) {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Work order not open', "{$wo->wo_no} is ".strtolower((string) $wo->status).'.');
         }
-        // another request waiting (a retry under this key replays its own request instead)
-        if ($db->selectOne("select 1 as ok from inventory_documents where doc_type = 'WO_CLOSE_EXCEPTION' and status = 'SUBMITTED' and request -> 'legs' -> 0 ->> 'woId' = ?::text
-                               and idempotency_key <> ?", [$wo->id, $key]) !== null) {
+        // another request waiting
+        if ($db->selectOne("select 1 as ok from inventory_documents where doc_type = 'WO_CLOSE_EXCEPTION' and status = 'SUBMITTED' and request -> 'legs' -> 0 ->> 'woId' = ?::text",
+            [$wo->id]) !== null) {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Exception already asked', "A close exception of {$wo->wo_no} is already waiting for its decision.");
         }
         $scrap = isset($data['scrapLocationId'])
@@ -77,7 +85,7 @@ final class WoCloseExceptionController
             $legs[] = new PostingLeg('WO_CLOSE_SCRAP', (string) $m->location_id, (string) $m->item_id, $m->lot_id, 'UNRESTRICTED', '-'.$m->qty, woId: (string) $wo->id);
             $legs[] = new PostingLeg('WO_CLOSE_SCRAP', $to, (string) $m->item_id, $m->lot_id, 'UNRESTRICTED', (string) $m->qty);
         }
-        $result = $this->postings->submit($db, new PostingCommand('WO_CLOSE_EXCEPTION', (string) $wo->plant_id, $key, $legs, note: trim($data['reason'])), 'WO_CLOSE');
+        $result = $this->postings->submit($db, new PostingCommand('WO_CLOSE_EXCEPTION', (string) $wo->plant_id, $key, $legs, note: $reason, requestHash: $hash), 'WO_CLOSE');
 
         return response()->json(['data' => $result + ['status' => 'SUBMITTED']], $result['replayed'] ? 200 : 201);
     }
