@@ -115,3 +115,18 @@ Persiapan: §4 langkah 5 sudah memposting output BRK-A100 (950 **Pending QC** di
 | 11 | `qci` minta release 2 dari NG area **Rejected**; `qcs` → **Reject** dengan alasan. | Status **Rejected** dengan alasan; stok Rejected tidak berubah. | |
 | 12 | Login `inv` → Inventory → Reversals → minta reversal `QCD-P1-<tahun>-0001`; login `csa` → buka request itu. | Tombol Approve tidak ada untuk `csa` (QC disposition diputuskan quality). | |
 | 13 | Login `qcs` → Quality → Dispositions → buka `QCD-P1-<tahun>-0001`. | Ada "Reversal asked" + alasan; **Approve** → disposisi jadi **Reversed**, stok kembali seperti sebelum keputusan. | |
+
+## 6. FG receipt (langkah 6, D-114)
+Persiapan: §5 sudah me-release BRK-A100 (QC released di QC area). Lokasi FG (mis. FG-A01) aktif di Master Data → Locations. Akun `fgw`.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `fgw` → Warehouse → **FG Receipt** → **Receive FG**. | FG location terisi rak FG pertama; daftar "QC released at P1" berisi BRK-A100 per lot dengan qty released. | |
+| 2 | **Receive FG** tanpa isi. | Pesan "Enter the counted quantity of at least one lot." — tidak ada yang terkirim. | |
+| 3 | Isi qty lebih besar dari yang released. | Ditolak: "only … PCS is QC released." | |
+| 4 | Isi qty hitungan (kurang dari released), Note "Shift 1" → **Receive FG** → konfirmasi. | Pesan "FGR-P1-<tahun>-0001 received into FG-A01"; baris lot itu tinggal sisanya. | |
+| 5 | Inventory → Stock Overview → BRK-A100. | FG-A01 **Unrestricted** = qty diterima; QC area QC released = sisanya. | |
+| 6 | Warehouse → FG Receipt (daftar) → buka FGR itu. | Detail: rak, lot dan qty, oleh `fgw`, status Posted. | |
+| 7 | Login `qci` → Warehouse → FG Receipt → **Receive FG**. | Daftar bisa dilihat, tapi halaman Receive FG menampilkan "Receiving FG is not available for your roles". | |
+| 8 | Login `inv` → Reversals → minta reversal FGR itu; `csa` setujui. | Stok kembali ke QC area QC released; FGR jadi Reversed. | |
+

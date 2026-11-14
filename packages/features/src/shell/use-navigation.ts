@@ -19,7 +19,7 @@ export type ShellNavigation = {
 };
 
 /** Modules running on the live API, whose menus follow the user's permission hints item by item. */
-const LIVE_MODULES = new Set(['master', 'admin', 'materials', 'inventory', 'production', 'quality']);
+const LIVE_MODULES = new Set(['master', 'admin', 'materials', 'inventory', 'production', 'quality', 'warehouse']);
 
 /**
  * Modules partly on the live API (M3): the view permissions of their live items. Their other items are still prototype
@@ -29,6 +29,7 @@ const PARTLY_LIVE: Record<string, readonly string[]> = {
   demand: ['demand.sales_order.view'],
   production: ['production.run.view', 'production.posting.view'],
   quality: ['quality.inspection.view', 'quality.disposition_release.approve'],
+  warehouse: ['warehouse.fg_receipt.view'],
   materials: ['materials.receipt.view', 'materials.incoming_release.view', 'production.lot_split.view', 'materials.issue.view', 'materials.return.view'],
   inventory: [
     'inventory.stock.view',

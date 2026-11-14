@@ -59,6 +59,7 @@ export const MOVEMENT_CODES: Record<string, string> = {
   QC_HOLD: 'QC hold',
   QC_REWORK: 'QC rework',
   QC_REJECT: 'QC reject',
+  FG_RECEIPT: 'FG receipt',
 };
 const options = (labels: Record<string, string>): Option[] => Object.entries(labels).map(([value, label]) => ({ value, label }));
 const movement = (r: MovementRow) => `${MOVEMENT_CODES[r.movementCode] ?? r.movementCode}${r.reversesMovementId ? ' (reversal)' : ''}`;

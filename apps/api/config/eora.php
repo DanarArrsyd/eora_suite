@@ -57,6 +57,7 @@ use App\Modules\Planning\Queries\WorkOrdersQuery;
 use App\Modules\Production\Queries\ProductionPostingsQuery;
 use App\Modules\Production\Queries\ProductionRunsQuery;
 use App\Modules\Quality\Queries\DispositionsQuery;
+use App\Modules\Warehouse\Queries\FgReceiptsQuery;
 use App\Platform\Export\ExportJobsQuery;
 use App\Platform\Import\ImportJobsQuery;
 
@@ -135,6 +136,7 @@ return [
         'production.runs' => ProductionRunsQuery::class,
         'production.postings' => ProductionPostingsQuery::class,
         'quality.dispositions' => DispositionsQuery::class,
+        'warehouse.fg_receipts' => FgReceiptsQuery::class,
         'exchange.import_jobs' => ImportJobsQuery::class,
         'exchange.export_jobs' => ExportJobsQuery::class,
     ],
