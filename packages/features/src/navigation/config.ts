@@ -400,7 +400,7 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Inbound',
         items: [
-          { id: 'fg-receipt', label: 'FG Receipt', icon: PackagePlus, release: 'R1', phase: 'later' },
+          { id: 'fg-receipt', label: 'FG Receipt', icon: PackagePlus, release: 'R1', permission: 'warehouse.fg_receipt.view', phase: 4 },
           { id: 'putaway', label: 'Putaway', icon: MoveDown, release: 'R1', phase: 'later' },
         ],
       },

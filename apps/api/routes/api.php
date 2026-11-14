@@ -20,6 +20,7 @@ use App\Modules\Planning\Http\RoutingController;
 use App\Modules\Planning\Http\WorkOrderController;
 use App\Modules\Production\Http\ProductionController;
 use App\Modules\Quality\Http\QualityController;
+use App\Modules\Warehouse\Http\FgReceiptController;
 use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
 use App\Platform\Auth\Http\AuthController;
@@ -220,6 +221,11 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('release-requests', [QualityController::class, 'requestRelease'])->name('release-requests.store');
         Route::post('release-requests/{release}/approve', [QualityController::class, 'approve'])->name('release-requests.approve');
         Route::post('release-requests/{release}/reject', [QualityController::class, 'reject'])->name('release-requests.reject');
+    });
+
+    // Warehouse → FG receipt (doc 33 §1.6, D-114): one tenant transaction, retried on deadlock (postings are idempotent)
+    Route::prefix('warehouse')->name('warehouse.')->middleware(['tenant:retry'])->group(function (): void {
+        Route::post('fg-receipts', [FgReceiptController::class, 'store'])->name('fg-receipts.store');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

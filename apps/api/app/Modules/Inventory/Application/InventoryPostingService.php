@@ -56,6 +56,8 @@ final class InventoryPostingService
         'PRODUCTION_POSTING' => ['CONSUME', 'OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT', 'OUTPUT_SCRAP'],
         // M4 step 5 (D-113): quality disposition of a lot waiting at the QC area
         'QC_DISPOSITION' => ['QC_RELEASE', 'QC_HOLD', 'QC_REWORK', 'QC_REJECT'],
+        // M4 step 6 (D-114): QC-released finished goods received into the FG warehouse
+        'FG_RECEIPT' => ['FG_RECEIPT'],
     ];
 
     /** Asked by one role and received by another with what was measured (D-110): a return, asked by production. */
@@ -187,6 +189,9 @@ final class InventoryPostingService
                 // doc 04 row 9: out of what waits for a decision (or a rejected quantity), into the QC or NG area
                 'QC_DISPOSITION' => ($leg->woId === null && ($out ? in_array($type, ['QC_AREA', 'NG_AREA'], true) : in_array($type, ['QC_AREA', 'NG_AREA'], true)))
                     || $refuse('A disposition moves a lot between the QC area and the NG area.'),
+                // doc 04 row 10, BR-FG-01: QC_RELEASED out of the QC area, into the FG warehouse as UNRESTRICTED
+                'FG_RECEIPT' => ($leg->woId === null && ($out ? $type === 'QC_AREA' && $leg->stockStatus === 'QC_RELEASED' : $type === 'FG_WAREHOUSE' && $leg->stockStatus === 'UNRESTRICTED'))
+                    || $refuse('An FG receipt moves QC-released stock from the QC area into the FG warehouse as unrestricted stock.'),
                 'PRODUCTION_POSTING' => ($leg->movementCode === 'CONSUME'
                         ? ($out ? $type === 'MAT_AT_PROD' && $leg->woId !== null && $leg->measurementMethod !== null : $type === 'V_CONSUMED' && $leg->woId === null)
                         : ($out ? $type === 'V_PRODUCED' : ! str_starts_with($type, 'V_')) && $leg->woId === null)
@@ -200,7 +205,7 @@ final class InventoryPostingService
             if ($command->docType === 'MAT_TRANSFER') {
                 $places[$line][$out ? 'from' : 'to'][$leg->locationId] = true;
             }
-            if (in_array($command->docType, ['PRODUCTION_POSTING', 'QC_DISPOSITION'], true)) {
+            if (in_array($command->docType, ['PRODUCTION_POSTING', 'QC_DISPOSITION', 'FG_RECEIPT'], true)) {
                 // consumption and output change place and status by design (ADR-0004); the database checks each category
                 continue;
             }
