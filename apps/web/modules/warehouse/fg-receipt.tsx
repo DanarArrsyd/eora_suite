@@ -79,7 +79,7 @@ export const FG_RECEIPTS: MasterResource<ReceiptRow> = {
   filterPermissions: { plantId: 'master.org.view' },
   columns: [
     { id: 'postedAt', header: 'Received', lead: true, sortable: true, cell: (r) => when(r.postedAt), sub: (r) => <span className="font-mono">{r.code}</span> },
-    { id: 'locationCode', header: 'FG location', sortable: true, cell: (r) => r.locationCode ?? '—', sub: (r) => r.plantCode },
+    { id: 'locationCode', header: 'FG location', cell: (r) => r.locationCode ?? '—', sub: (r) => r.plantCode },
     { id: 'received', header: 'Received', cell: (r) => r.parts ?? '—', sub: (r) => r.received ?? undefined },
     { id: 'lines', header: 'Lines', numeric: true, cell: (r) => r.lines },
     { id: 'postedByName', header: 'By', cell: (r) => r.postedByName ?? '—' },

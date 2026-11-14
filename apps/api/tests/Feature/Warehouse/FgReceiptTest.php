@@ -83,6 +83,7 @@ it('receives part of one lot and all of another into the FG rack chosen; the res
     fgReceive($this, $f, [['stockLineId' => ($f['line'])($a), 'qty' => '30']], [], 'fg-receipt-0002')->assertCreated();
     expect(fgStock($this->t, $f['item']['id']))->toMatchArray(['FG-01 / UNRESTRICTED' => '30', 'FG-02 / UNRESTRICTED' => '150'])
         ->not->toHaveKey('QC-01 / QC_RELEASED');
+    spa($this)->getJson('/api/v1/query/warehouse.fg_receipts?sort=locationCode')->assertStatus(422);
     spa($this)->getJson('/api/v1/query/warehouse.fg_receipts?sort=postedAt')->assertOk()->assertJsonCount(2, 'data')
         ->assertJsonPath('data.0.locationCode', 'FG-02')->assertJsonPath('data.0.lines', 2)->assertJsonPath('data.0.note', 'Shift 1')
         ->assertJsonPath('data.1.locationCode', 'FG-01');

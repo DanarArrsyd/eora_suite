@@ -76,7 +76,8 @@ final class FgReceiptsQuery extends QueryDefinition
             new Field('status', 'd.status', Field::ENUM, sortable: true, filterable: true, options: self::STATUSES),
             new Field('plantId', 'd.plant_id', Field::UUID, filterable: true),
             new Field('plantCode', 'p.code', sortable: true),
-            new Field('locationCode', 'l.code', sortable: true),
+            // not sortable: the location comes from the received legs, outside the paging scope (filterFrom)
+            new Field('locationCode', 'l.code'),
             new Field('lines', 'x.lines', Field::INTEGER),
             new Field('parts', 'x.parts'),
             new Field('received', 'x.received'),
