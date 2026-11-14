@@ -12,6 +12,7 @@ use App\Platform\Calendar\BusinessCalendar;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
 use App\Platform\Outbox\OutboxPublisher;
+use Closure;
 use DateTimeImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Validation\ValidationException;
@@ -58,6 +59,8 @@ final class InventoryPostingService
         'QC_DISPOSITION' => ['QC_RELEASE', 'QC_HOLD', 'QC_REWORK', 'QC_REJECT'],
         // M4 step 6 (D-114): QC-released finished goods received into the FG warehouse
         'FG_RECEIPT' => ['FG_RECEIPT'],
+        // M4 step 7a (D-115): allocated FG picked to staging for a schedule line, or staged goods put back (unpick)
+        'PICK' => ['PICK'],
     ];
 
     /** Asked by one role and received by another with what was measured (D-110): a return, asked by production. */
@@ -84,7 +87,11 @@ final class InventoryPostingService
         private readonly OutboxPublisher $outbox,
     ) {}
 
-    public function post(EoraPostgresConnection $db, PostingCommand $command): PostingResult
+    /**
+     * @param  ?Closure(string): void  $linked  writes that name the new document (a pick's consumed allocations, D-115),
+     *                                          run before the database checks the whole posting
+     */
+    public function post(EoraPostgresConnection $db, PostingCommand $command, ?Closure $linked = null): PostingResult
     {
         if ($db->transactionLevel() === 0) {
             throw new LogicException('Postings run inside the tenant transaction.');
@@ -120,6 +127,9 @@ final class InventoryPostingService
 
         try {
             $result = $this->write($db, $command);
+            if ($linked !== null && ! $result->replayed) {
+                $linked($result->documentId);
+            }
             // the database checks the whole posting at commit (conservation, balance = ledger, codes, lots, genealogy);
             // run them now so a refusal is this posting's answer
             $db->statement('set constraints all immediate');
@@ -168,6 +178,9 @@ final class InventoryPostingService
             if ($leg->reversesMovementId !== null) {
                 $refuse('Only a reversal reverses a leg.');
             }
+            if ($leg->scheduleLineId !== null && ! in_array($command->docType, ['PICK', 'SHIPMENT'], true)) {
+                $refuse("A {$command->docType} does not name a schedule line.");
+            }
             if ($leg->woId !== null && ! in_array($command->docType, ['MAT_ISSUE', 'MAT_RETURN', 'LOT_SPLIT', 'STOCK_ADJUSTMENT', 'PRODUCTION_POSTING'], true)) {
                 $refuse("A {$command->docType} does not name a work order.");
             }
@@ -192,6 +205,9 @@ final class InventoryPostingService
                 // doc 04 row 10, BR-FG-01: QC_RELEASED out of the QC area, into the FG warehouse as UNRESTRICTED
                 'FG_RECEIPT' => ($leg->woId === null && ($out ? $type === 'QC_AREA' && $leg->stockStatus === 'QC_RELEASED' : $type === 'FG_WAREHOUSE' && $leg->stockStatus === 'UNRESTRICTED'))
                     || $refuse('An FG receipt moves QC-released stock from the QC area into the FG warehouse as unrestricted stock.'),
+                // doc 04 row 11, D-115: UNRESTRICTED goods of a schedule line between an FG rack and staging
+                'PICK' => ($leg->woId === null && $leg->scheduleLineId !== null && $leg->stockStatus === 'UNRESTRICTED' && in_array($type, ['FG_WAREHOUSE', 'STAGING'], true))
+                    || $refuse('A pick moves unrestricted goods of a schedule line between an FG warehouse location and staging.'),
                 'PRODUCTION_POSTING' => ($leg->movementCode === 'CONSUME'
                         ? ($out ? $type === 'MAT_AT_PROD' && $leg->woId !== null && $leg->measurementMethod !== null : $type === 'V_CONSUMED' && $leg->woId === null)
                         : ($out ? $type === 'V_PRODUCED' : ! str_starts_with($type, 'V_')) && $leg->woId === null)
@@ -319,9 +335,9 @@ final class InventoryPostingService
         }
         $legs = array_map(static fn (stdClass $m) => [
             'movementCode' => $m->movement_code, 'locationId' => $m->location_id, 'itemId' => $m->item_id, 'lotId' => $m->lot_id,
-            'stockStatus' => $m->stock_status, 'qty' => $m->qty, 'reversesMovementId' => $m->id, 'woId' => $m->wo_id,
+            'stockStatus' => $m->stock_status, 'qty' => $m->qty, 'reversesMovementId' => $m->id, 'woId' => $m->wo_id, 'scheduleLineId' => $m->schedule_line_id,
         ], $db->select(
-            'select id, movement_code, location_id, item_id, lot_id, stock_status, trim_scale(-qty_signed)::text as qty, wo_id from inventory_movements where document_id = ? order by leg_no',
+            'select id, movement_code, location_id, item_id, lot_id, stock_status, trim_scale(-qty_signed)::text as qty, wo_id, schedule_line_id from inventory_movements where document_id = ? order by leg_no',
             [$documentId],
         ));
         $plant = (string) $original->plant_id;
@@ -398,7 +414,7 @@ final class InventoryPostingService
         $request = json_decode((string) $doc->request, true, flags: JSON_THROW_ON_ERROR);
         $command = new PostingCommand((string) $doc->doc_type, (string) $doc->plant_id, $key, array_values(array_map(static fn (array $l) => new PostingLeg(
             $l['movementCode'], $l['locationId'], $l['itemId'], $l['lotId'], $l['stockStatus'], $l['qty'], reversesMovementId: $l['reversesMovementId'] ?? null,
-            woId: $l['woId'] ?? null,
+            woId: $l['woId'] ?? null, scheduleLineId: $l['scheduleLineId'] ?? null,
         ), $request['legs'])), effectiveDate: (string) $doc->effective_date, note: $doc->note, requestHash: $hash);
         $this->checkLegs($db, $command);
         $reversed = $doc->reverses_document_id;
@@ -601,6 +617,38 @@ final class InventoryPostingService
         }
     }
 
+    /**
+     * Runs a write that is not a ledger posting (an allocation, D-115) once per key (ADR-0014 §4): a retry under the key
+     * answers with the stored response, a key used for another command or request is refused.
+     *
+     * @param  Closure(): array<string, mixed>  $write
+     * @return array{response: array<string, mixed>, replayed: bool}
+     */
+    public function once(EoraPostgresConnection $db, string $key, string $command, string $hash, Closure $write): array
+    {
+        $this->lockKey($db, $key);
+        $stored = $db->selectOne('select command, request_hash, response from idempotency_records where idempotency_key = ?', [$key]);
+        if ($stored !== null) {
+            if ($stored->command !== $command || $stored->request_hash !== $hash) {
+                throw new DomainProblem(409, 'IDEMPOTENCY_KEY_REUSED', 'Idempotency key reused', 'This key was used for another request. Send a new key for a new request.');
+            }
+            /** @var array<string, mixed> $response */
+            $response = json_decode((string) $stored->response, true, flags: JSON_THROW_ON_ERROR);
+
+            return ['response' => $response, 'replayed' => true];
+        }
+        if ($db->selectOne('select 1 as used from inventory_documents where idempotency_key = ?', [$key]) !== null) {
+            throw new DomainProblem(409, 'IDEMPOTENCY_KEY_REUSED', 'Idempotency key reused', 'This key was used for another request. Send a new key for a new request.');
+        }
+        $response = $write();
+        $db->insert(
+            'insert into idempotency_records (tenant_id, idempotency_key, command, request_hash, response) values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?::jsonb)',
+            [$key, $command, $hash, json_encode($response, JSON_THROW_ON_ERROR)],
+        );
+
+        return ['response' => $response, 'replayed' => false];
+    }
+
     private function replay(EoraPostgresConnection $db, PostingCommand $command): ?PostingResult
     {
         return $this->previous($db, $command->idempotencyKey, $command->hash());
@@ -697,12 +745,12 @@ final class InventoryPostingService
             $db->insert(
                 'insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, reverses_movement_id, plant_id, location_id, item_id, lot_id,
                                                   stock_status, uom_id, qty_signed, entered_qty, entered_uom_id, uom_conversion_id, wo_id, run_id,
-                                                  measurement_method, measured_qty, measurement_evidence, reason_code, reason_note)
-                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                                                  measurement_method, measured_qty, measurement_evidence, reason_code, reason_note, schedule_line_id)
+                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [$documentId, $i + 1, $leg->movementCode, $leg->reversesMovementId, $command->plantId, $leg->locationId, $leg->itemId, $leg->lotId,
                     $leg->stockStatus, $items[$leg->itemId]->base_uom_id, $leg->qty, $leg->enteredQty, $leg->enteredUomId, $leg->uomConversionId, $leg->woId,
                     $command->sourceType === 'production_run' ? $command->sourceId : null,
-                    $leg->measurementMethod, $leg->measuredQty, $leg->measurementEvidence, $leg->reasonCode, $leg->reasonNote],
+                    $leg->measurementMethod, $leg->measuredQty, $leg->measurementEvidence, $leg->reasonCode, $leg->reasonNote, $leg->scheduleLineId],
             );
         }
         foreach ($command->genealogy as $g) {

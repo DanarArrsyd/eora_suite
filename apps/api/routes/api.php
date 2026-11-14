@@ -4,6 +4,7 @@ use App\Modules\Core\Http\OrgController;
 use App\Modules\Core\Http\PartController;
 use App\Modules\Core\Http\PartnerController;
 use App\Modules\Core\Http\ResourceController;
+use App\Modules\Delivery\Http\DeliveryController;
 use App\Modules\Demand\Http\SalesOrderController;
 use App\Modules\Inventory\Http\AdjustmentController;
 use App\Modules\Inventory\Http\LotSplitController;
@@ -226,6 +227,16 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
     // Warehouse → FG receipt (doc 33 §1.6, D-114): one tenant transaction, retried on deadlock (postings are idempotent)
     Route::prefix('warehouse')->name('warehouse.')->middleware(['tenant:retry'])->group(function (): void {
         Route::post('fg-receipts', [FgReceiptController::class, 'store'])->name('fg-receipts.store');
+    });
+
+    // Delivery → FG allocation and pick (doc 33 §1.7, D-115): one tenant transaction, retried on deadlock (writes are idempotent)
+    Route::prefix('delivery')->name('delivery.')->middleware(['tenant:retry'])->group(function (): void {
+        Route::get('schedule-lines/{line}', [DeliveryController::class, 'show'])->name('schedule-lines.show');
+        Route::get('schedule-lines/{line}/proposal', [DeliveryController::class, 'proposal'])->name('schedule-lines.proposal');
+        Route::post('allocations', [DeliveryController::class, 'allocate'])->name('allocations.store');
+        Route::post('allocations/{allocation}/release', [DeliveryController::class, 'release'])->name('allocations.release');
+        Route::post('picks', [DeliveryController::class, 'pick'])->name('picks.store');
+        Route::post('unpicks', [DeliveryController::class, 'unpick'])->name('unpicks.store');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

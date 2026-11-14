@@ -235,6 +235,14 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
             409 => [...self::POSTING[409], 'INVALID_STATE_TRANSITION']] + self::POSTING,
         'v1.quality.release-requests.reject' => self::TENANT_WRITE + [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION'], 404 => ['NOT_FOUND'],
             409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        // D-115: FG allocation for a schedule line (delivery), released with the reason; pick and unpick (FG warehouse)
+        'v1.delivery.schedule-lines.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
+        'v1.delivery.schedule-lines.proposal' => self::TENANT_READ + [404 => ['NOT_FOUND']],
+        'v1.delivery.allocations.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 400 => ['IDEMPOTENCY_KEY_REQUIRED'],
+            409 => ['IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_IN_PROGRESS', 'INSUFFICIENT_AVAILABLE', 'OVER_ALLOCATION', 'INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.delivery.allocations.release' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.delivery.picks.store' => self::POSTING,
+        'v1.delivery.unpicks.store' => self::POSTING,
         // D-114: FG receipt of QC-released finished goods, posted by the FG warehouse
         'v1.warehouse.fg-receipts.store' => self::POSTING,
         // D-110: issue to a released WO; return asked by production, received (measured) or refused by materials
@@ -254,7 +262,11 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
     /** Posting routes (doc 24 §5.3): the Idempotency-Key header and the posted document, 201 first time, 200 on replay. */
     private const array POSTINGS = ['v1.inventory.receipts.store', 'v1.inventory.incoming-releases.store', 'v1.inventory.transfers.store', 'v1.inventory.lot-splits.store',
         'v1.inventory.adjustments.approve', 'v1.inventory.reversals.approve', 'v1.inventory.material-issues.store', 'v1.inventory.material-returns.receive', 'v1.production.postings.store',
-        'v1.quality.dispositions.store', 'v1.quality.release-requests.approve', 'v1.warehouse.fg-receipts.store'];
+        'v1.quality.dispositions.store', 'v1.quality.release-requests.approve', 'v1.warehouse.fg-receipts.store',
+        'v1.delivery.picks.store', 'v1.delivery.unpicks.store'];
+
+    /** Other writes taking the Idempotency-Key header (ADR-0014), answering with their own body: an allocation (D-115). */
+    private const array KEYED = ['v1.delivery.allocations.store'];
 
     /** Requests decided by a second person (D-060): the Idempotency-Key header and the submitted request, 201 first time, 200 on replay. */
     private const array REQUESTS = ['v1.inventory.adjustments.store', 'v1.inventory.reversals.store', 'v1.inventory.material-returns.store', 'v1.quality.release-requests.store'];
@@ -285,6 +297,9 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         }
         if (in_array($context->route->getName(), self::POSTINGS, true)) {
             self::posting($subject, $context->route->getName() === 'v1.inventory.lot-splits.store');
+        }
+        if (in_array($context->route->getName(), self::KEYED, true)) {
+            self::idempotencyKey($subject);
         }
 
         $subject->responses = array_values(array_filter(
