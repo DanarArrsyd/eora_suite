@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Platform\Demo;
 
+use App\Platform\Console\ReadsTextInput;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 use RuntimeException;
@@ -15,6 +16,8 @@ use RuntimeException;
  */
 final class LoadDemoMasterData extends Command
 {
+    use ReadsTextInput;
+
     protected $signature = 'eora:demo:master
         {--code=demo-stamping : Tenant code of a seeded demo tenant}
         {--from= : First effective date YYYY-MM-DD of routings, BOMs and customer items (default today at plant P1)}
@@ -29,7 +32,7 @@ final class LoadDemoMasterData extends Command
 
             return self::FAILURE;
         }
-        $from = (string) $this->option('from');
+        $from = $this->textOption('from');
         if ($from !== '' && ! ImportSamples::isDate($from)) {
             $this->error('--from must be a date as YYYY-MM-DD.');
 
@@ -37,7 +40,7 @@ final class LoadDemoMasterData extends Command
         }
 
         try {
-            $spec = new DemoSpec((string) $this->option('code'));
+            $spec = new DemoSpec($this->textOption('code'));
             $loaded = $master->load($spec, $from !== '' ? $from : null, fn (string $template, int $rows) => $this->line(sprintf('%-22s %4d rows committed', $template, $rows)), max(1, (int) $this->option('wait')));
         } catch (InvalidArgumentException $e) {
             $this->error($e->getMessage());

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Platform\Demo;
 
 use App\Platform\Audit\AuditRecorder;
+use App\Platform\Console\ReadsTextInput;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Provisioning\TenantProvisioner;
 use App\Platform\Tenancy\TenantContext;
@@ -19,6 +20,8 @@ use Illuminate\Database\QueryException;
  */
 final class AddDemoPlant extends Command
 {
+    use ReadsTextInput;
+
     protected $signature = 'eora:demo:plant
         {tenant : Tenant id (printed by eora:tenant:provision)}
         {code : Plant code (A-Z, 0-9, _ -)}
@@ -34,9 +37,9 @@ final class AddDemoPlant extends Command
             return self::FAILURE;
         }
 
-        $tenant = (string) $this->argument('tenant');
-        $code = (string) $this->argument('code');
-        $name = trim((string) $this->argument('name'));
+        $tenant = $this->textArgument('tenant');
+        $code = $this->textArgument('code');
+        $name = trim($this->textArgument('name'));
         if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $tenant) !== 1) {
             $this->error('The tenant must be a tenant id (UUID).');
 
