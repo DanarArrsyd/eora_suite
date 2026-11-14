@@ -6,7 +6,7 @@
     "license": "proprietary",
     "require": {
         "php": "^8.4",
-        "laravel/framework": "^13.33",
+        "laravel/framework": "^13.40",
         "laravel/sanctum": "^4.3.3",
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.35.3",

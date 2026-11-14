@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Console;
 
 use App\Modules\Inventory\Demo\DemoStock;
+use App\Platform\Console\ReadsTextInput;
 use App\Platform\Demo\DemoSpec;
 use App\Platform\Exceptions\DomainProblem;
 use Illuminate\Console\Command;
@@ -19,6 +20,8 @@ use RuntimeException;
  */
 final class LoadDemoStock extends Command
 {
+    use ReadsTextInput;
+
     protected $signature = 'eora:demo:stock {--code=demo-stamping : Tenant code of a seeded demo tenant with its sample master data}';
 
     protected $description = 'Post the opening stock of a demo tenant through the real postings (local UAT only)';
@@ -31,7 +34,7 @@ final class LoadDemoStock extends Command
             return self::FAILURE;
         }
         try {
-            $spec = new DemoSpec((string) $this->option('code'));
+            $spec = new DemoSpec($this->textOption('code'));
             $posted = $stock->load($spec, fn (string $line) => $this->line($line));
         } catch (InvalidArgumentException $e) {
             $this->error($e->getMessage());

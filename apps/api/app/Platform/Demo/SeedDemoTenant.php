@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Platform\Demo;
 
 use App\Platform\Auth\PasswordPolicy;
+use App\Platform\Console\ReadsTextInput;
 use App\Platform\Provisioning\ProvisioningException;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Validator;
@@ -17,6 +18,8 @@ use InvalidArgumentException;
  */
 final class SeedDemoTenant extends Command
 {
+    use ReadsTextInput;
+
     protected $signature = 'eora:demo:seed
         {--code=demo-stamping : Tenant code; accounts are <role>@<code>.test}
         {--name=Demo Stamping : Tenant display name}
@@ -32,8 +35,8 @@ final class SeedDemoTenant extends Command
             return self::FAILURE;
         }
 
-        $given = (string) $this->option('password') !== '';
-        $password = $given ? (string) $this->option('password') : 'Demo-'.Str::password(16, symbols: false);
+        $given = $this->textOption('password') !== '';
+        $password = $given ? $this->textOption('password') : 'Demo-'.Str::password(16, symbols: false);
         $check = Validator::make(['password' => $password], ['password' => ['string', 'min:12', 'max:1024', new PasswordPolicy]]);
         if ($check->fails()) {
             $this->error((string) $check->errors()->first('password'));
@@ -42,7 +45,7 @@ final class SeedDemoTenant extends Command
         }
 
         try {
-            $spec = new DemoSpec((string) $this->option('code'), (string) $this->option('name'));
+            $spec = new DemoSpec($this->textOption('code'), $this->textOption('name'));
             ['resumed' => $resumed, 'accounts' => $accounts] = $seeder->seed($spec, $password, $given);
         } catch (InvalidArgumentException $e) {
             $this->error($e->getMessage());

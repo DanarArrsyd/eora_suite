@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Platform\Demo;
 
 use App\Platform\Auth\PasswordPolicy;
+use App\Platform\Console\ReadsTextInput;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Validator;
 use InvalidArgumentException;
@@ -17,6 +18,8 @@ use RuntimeException;
  */
 final class AddUatAccount extends Command
 {
+    use ReadsTextInput;
+
     protected $signature = 'eora:demo:uat-account
         {--code=demo-stamping : Demo tenant code}
         {--password= : Password of the new account (use the shared demo password); kept when the account exists already}';
@@ -30,7 +33,7 @@ final class AddUatAccount extends Command
 
             return self::FAILURE;
         }
-        $password = (string) $this->option('password');
+        $password = $this->textOption('password');
         $check = Validator::make(['password' => $password], ['password' => ['required', 'string', 'min:12', 'max:1024', new PasswordPolicy]]);
         if ($check->fails()) {
             $this->error('--password: '.$check->errors()->first('password'));
@@ -39,7 +42,7 @@ final class AddUatAccount extends Command
         }
 
         try {
-            $result = $seeder->addUatAccount(new DemoSpec((string) $this->option('code'), 'Demo'), $password);
+            $result = $seeder->addUatAccount(new DemoSpec($this->textOption('code'), 'Demo'), $password);
         } catch (InvalidArgumentException|RuntimeException $e) {
             $this->error($e->getMessage());
 
