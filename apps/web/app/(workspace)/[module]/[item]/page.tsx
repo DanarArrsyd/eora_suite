@@ -24,6 +24,8 @@ import { WAREHOUSE_IMPLEMENTED } from '@/modules/warehouse/implemented';
 import { WarehouseScreen } from '@/modules/warehouse/registry';
 import { DELIVERY_IMPLEMENTED } from '@/modules/delivery/implemented';
 import { DeliveryScreen } from '@/modules/delivery/registry';
+import { TRACEABILITY_IMPLEMENTED } from '@/modules/traceability/implemented';
+import { TraceabilityScreen } from '@/modules/traceability/registry';
 
 type Params = { module: string; item: string };
 
@@ -122,6 +124,14 @@ export default async function ItemPage({ params }: { params: Promise<Params> }) 
     return (
       <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
         <DeliveryScreen item={item} />
+      </Suspense>
+    );
+  }
+  if (module === 'traceability' && (TRACEABILITY_IMPLEMENTED as readonly string[]).includes(item)) {
+    // M4 step 9 lot trace on the live API (doc 33 §1.9); the search lives in the URL
+    return (
+      <Suspense fallback={<LoadingState title={`Loading ${match.item.label}`} />}>
+        <TraceabilityScreen item={item} />
       </Suspense>
     );
   }

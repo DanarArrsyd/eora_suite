@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Modules\Inventory\Application\BalanceVerification;
 use App\Platform\Database\EoraPostgresConnection;
-use App\Platform\Provisioning\TenantProvisioner;
 use App\Platform\Tenancy\TenantContext;
 use App\Platform\Tenancy\TenantTransaction;
 use Illuminate\Support\Facades\Storage;
@@ -19,11 +18,6 @@ beforeEach(function () {
     config(['queue.default' => 'sync']);
     Storage::fake('imports');
 });
-
-function demoStockRead(string $tenant, string $sql): stdClass
-{
-    return app(TenantTransaction::class)->run(TenantContext::forTenant($tenant, TenantProvisioner::SYSTEM_ACTOR), fn (EoraPostgresConnection $db) => $db->selectOne($sql), 'pgsql_provisioner');
-}
 
 it('posts the opening stock as the materials PIC and the inspector, once; a load cut off half-way finishes when run again', function () {
     // one seeded tenant for every scenario: each demo tenant creates 14 identities (the creation cap is platform-wide)
