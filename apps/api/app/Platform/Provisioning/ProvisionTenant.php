@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Platform\Provisioning;
 
 use App\Platform\Auth\Delivery\ConsoleInvitation;
+use App\Platform\Console\ReadsTextInput;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 
@@ -14,6 +15,8 @@ use InvalidArgumentException;
  */
 final class ProvisionTenant extends Command
 {
+    use ReadsTextInput;
+
     protected $signature = 'eora:tenant:provision
         {code : Tenant code (a-z, 0-9, -)}
         {name : Tenant display name}
@@ -30,7 +33,7 @@ final class ProvisionTenant extends Command
 
     public function handle(TenantProvisioner $provisioner, ConsoleInvitation $console): int
     {
-        $deliver = (string) $this->option('deliver');
+        $deliver = $this->textOption('deliver');
         if (! in_array($deliver, ['email', 'console'], true)) {
             $this->error('--deliver must be email or console.');
 
@@ -39,15 +42,15 @@ final class ProvisionTenant extends Command
 
         try {
             $spec = new TenantSpec(
-                tenantCode: (string) $this->argument('code'),
-                tenantName: (string) $this->argument('name'),
-                adminEmail: (string) $this->argument('admin-email'),
-                companyCode: (string) $this->option('company-code'),
-                companyName: (string) $this->option('company-name'),
-                plantCode: (string) $this->option('plant-code'),
-                plantName: (string) $this->option('plant-name'),
-                productionDayStartsAt: (string) $this->option('day-starts'),
-                timezone: (string) $this->option('timezone'),
+                tenantCode: $this->textArgument('code'),
+                tenantName: $this->textArgument('name'),
+                adminEmail: $this->textArgument('admin-email'),
+                companyCode: $this->textOption('company-code'),
+                companyName: $this->textOption('company-name'),
+                plantCode: $this->textOption('plant-code'),
+                plantName: $this->textOption('plant-name'),
+                productionDayStartsAt: $this->textOption('day-starts'),
+                timezone: $this->textOption('timezone'),
             );
             $result = $provisioner->provision($spec, console: $deliver === 'console');
         } catch (InvalidArgumentException|ProvisioningException $e) {

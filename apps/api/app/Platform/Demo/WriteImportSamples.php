@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Platform\Demo;
 
+use App\Platform\Console\ReadsTextInput;
 use App\Platform\Import\ImportTemplates;
 use Illuminate\Console\Command;
 
@@ -14,6 +15,8 @@ use Illuminate\Console\Command;
  */
 final class WriteImportSamples extends Command
 {
+    use ReadsTextInput;
+
     protected $signature = 'eora:demo:import-samples
         {dir : Folder to write the .xlsx files to (created when missing)}
         {--from= : First effective date YYYY-MM-DD (today or later when imported; default today)}';
@@ -27,13 +30,13 @@ final class WriteImportSamples extends Command
 
             return self::FAILURE;
         }
-        $from = (string) ($this->option('from') ?: now('Asia/Jakarta')->toDateString());
+        $from = ($this->textOption('from') ?: now('Asia/Jakarta')->toDateString());
         if (! ImportSamples::isDate($from)) {
             $this->error('--from must be a date as YYYY-MM-DD.');
 
             return self::INVALID;
         }
-        $dir = rtrim((string) $this->argument('dir'), '/');
+        $dir = rtrim($this->textArgument('dir'), '/');
         if (! is_dir($dir) && ! mkdir($dir, 0775, true) && ! is_dir($dir)) {
             $this->error("The folder {$dir} could not be created.");
 
