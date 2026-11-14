@@ -173,9 +173,20 @@ return new class extends Migration
             REVOKE ALL ON FUNCTION eora_guard_delivery_leg() FROM PUBLIC;
             CREATE TRIGGER guard_delivery_leg BEFORE INSERT ON inventory_movements FOR EACH ROW EXECUTE FUNCTION eora_guard_delivery_leg();
 
-            -- what a schedule line has at a staging location never goes below zero (an unpick, a shipment, a reversal)
+            -- what a schedule line has at a staging location never goes below zero (an unpick, a shipment, a reversal); any
+            -- leg of the line, a reversal's too (e.g. of an unpick), keeps it within its required quantity, and goods enter
+            -- staging only for a firm line
             CREATE OR REPLACE FUNCTION eora_check_staged() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
             BEGIN
+              IF public.eora_schedule_line_committed(NEW.tenant_id, NEW.schedule_line_id)
+                 > (SELECT sl.required_qty FROM public.delivery_schedule_lines sl WHERE sl.tenant_id = NEW.tenant_id AND sl.id = NEW.schedule_line_id) THEN
+                RAISE EXCEPTION 'a schedule line gets no more allocated, staged and delivered than it requires' USING ERRCODE = '23514';
+              END IF;
+              IF NEW.qty_signed > 0
+                 AND EXISTS (SELECT 1 FROM public.locations l WHERE l.tenant_id = NEW.tenant_id AND l.id = NEW.location_id AND l.location_type = 'STAGING')
+                 AND (SELECT sl.status FROM public.delivery_schedule_lines sl WHERE sl.tenant_id = NEW.tenant_id AND sl.id = NEW.schedule_line_id) NOT IN ('FIRM', 'PARTIALLY_FULFILLED') THEN
+                RAISE EXCEPTION 'goods are staged for a firm schedule line' USING ERRCODE = '23514';
+              END IF;
               IF (SELECT sum(m.qty_signed) FROM public.inventory_movements m
                    WHERE m.tenant_id = NEW.tenant_id AND m.schedule_line_id = NEW.schedule_line_id AND m.location_id = NEW.location_id
                      AND m.item_id = NEW.item_id AND m.lot_id IS NOT DISTINCT FROM NEW.lot_id) < 0

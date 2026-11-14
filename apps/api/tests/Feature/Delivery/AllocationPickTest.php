@@ -108,7 +108,7 @@ it('proposes FIFO, allocates, picks part of an allocation, keeps the rest alloca
     $unpick = fn (string $qty, string $key) => spa($this)->postJson('/api/v1/delivery/unpicks', ['plantId' => $f['plant'], 'locationId' => $f['fg1'],
         'lines' => [['scheduleLineId' => $f['schedule'], 'stockLineId' => $staged, 'qty' => $qty]]], ['Idempotency-Key' => $key]);
     $unpick('61', 'dl-unpick-0009')->assertStatus(422)->assertJsonValidationErrors(['lines.0.qty']);
-    $unpick('20', 'dl-unpick-0001')->assertCreated();
+    $unpicked = $unpick('20', 'dl-unpick-0001')->assertCreated()->json('data.documentId');
     spa($this)->getJson("/api/v1/delivery/schedule-lines/{$f['schedule']}")->assertOk()->assertJsonPath('data.stagedQty', '50')->assertJsonPath('data.toAllocateQty', '20');
 
     // delivery releases what stays allocated, with the reason; the line can be allocated again
@@ -117,6 +117,19 @@ it('proposes FIFO, allocates, picks part of an allocation, keeps the rest alloca
     spa($this)->postJson("/api/v1/delivery/allocations/{$rest}/release", ['reason' => 'Customer moved the date'])->assertNoContent();
     spa($this)->getJson("/api/v1/delivery/schedule-lines/{$f['schedule']}")->assertOk()->assertJsonPath('data.allocatedQty', '0')->assertJsonPath('data.toAllocateQty', '50');
     spa($this)->getJson('/api/v1/query/delivery.schedule_lines')->assertOk()->assertJsonPath('data.0.stagedQty', '50')->assertJsonPath('data.0.toAllocateQty', '50');
+
+    // the line is fully committed again; reversing the unpick would stage 20 more than it requires: refused
+    dlAllocate($this, $f, [['stockLineId' => $fg2, 'qty' => '50']], 'dl-alloc-0003')->assertCreated();
+    AccessFixtures::grant($this->t, $f['fgw']['id'], 'INV');
+    signIn($this, $f['fgw'], $this->t);
+    $undo = spa($this)->postJson('/api/v1/inventory/reversals', ['documentId' => $unpicked, 'reason' => 'Put back by mistake'], ['Idempotency-Key' => 'dl-reverse-0001'])
+        ->assertCreated()->json('data.documentId');
+    AccessFixtures::grant($this->t, $f['ppc']['id'], 'CSA');
+    signIn($this, $f['ppc'], $this->t);
+    spa($this)->postJson("/api/v1/inventory/reversals/{$undo}/approve", [], ['Idempotency-Key' => 'dl-reverse-0002'])
+        ->assertStatus(422)->assertJsonPath('code', 'POSTING_REFUSED');
+    signIn($this, $f['dlv'], $this->t);
+    spa($this)->getJson("/api/v1/delivery/schedule-lines/{$f['schedule']}")->assertOk()->assertJsonPath('data.stagedQty', '50')->assertJsonPath('data.allocatedQty', '50');
     spa($this)->getJson('/api/v1/query/delivery.picks?sort=postedAt')->assertOk()->assertJsonCount(2, 'data')
         ->assertJsonPath('data.0.direction', 'PICK')->assertJsonPath('data.1.direction', 'UNPICK');
 
