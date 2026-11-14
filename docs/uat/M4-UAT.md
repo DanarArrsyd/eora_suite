@@ -145,3 +145,16 @@ Persiapan: §6 sudah menerima BRK-A100 ke rak FG. Akun `ppc` membuat dan mengkon
 | 8 | Staged: Put back 50 ke rak FG → konfirmasi. | Staged 150; 50 PCS kembali ke rak FG tanpa alokasi; To allocate 50. | |
 | 9 | Login `dlv` → **Release** sisa alokasi dengan alasan. | Allocated 0; To allocate 150. | |
 
+## 7b. Shipment (langkah 7b, D-116)
+Persiapan: §7a sudah men-stage barang untuk SO itu (mis. 150 PCS di STG-01). Akun `fgw` atau `dlv`; `inv` dan `csa` untuk reversal.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `fgw` → Delivery → **Shipments** → **Ship** → pilih customer. | "Staged for <customer>" berisi baris SO itu dengan qty staged terisi penuh dan sisa yang harus dikirim. | |
+| 2 | Isi qty lebih besar dari staged → **Ship**. | Ditolak: "only … PCS is staged for it." | |
+| 3 | Qty 100, No. kendaraan "B 1234 XY", Sopir "Budi" → **Ship** → konfirmasi. | Pesan "SHP-P1-<tahun>-0001 shipped"; baris itu tinggal 50 staged. | |
+| 4 | Shipments (daftar) → buka shipment itu. | Customer, kendaraan, sopir, barang terkirim, status Posted. | |
+| 5 | Login `ppc` → SO itu. | Schedule line: Delivered 100, Outstanding sisa, status **Partially fulfilled**. | |
+| 6 | Kirim sisa sampai penuh. | Status schedule line **Fulfilled**; baris hilang dari Allocation & Pick. | |
+| 7 | Login `inv` → Reversals → minta reversal shipment terakhir; `csa` setujui. | Barang kembali ke STAGING untuk schedule line itu; Delivered turun; status kembali **Partially fulfilled**. | |
+

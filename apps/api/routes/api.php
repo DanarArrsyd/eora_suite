@@ -237,6 +237,8 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('allocations/{allocation}/release', [DeliveryController::class, 'release'])->name('allocations.release');
         Route::post('picks', [DeliveryController::class, 'pick'])->name('picks.store');
         Route::post('unpicks', [DeliveryController::class, 'unpick'])->name('unpicks.store');
+        Route::get('staged', [DeliveryController::class, 'staged'])->name('staged.index');
+        Route::post('shipments', [DeliveryController::class, 'ship'])->name('shipments.store');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

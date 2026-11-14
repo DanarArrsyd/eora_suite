@@ -10,6 +10,7 @@ export const DOCUMENT_TYPES: Record<string, string> = {
   QC_DISPOSITION: 'QC disposition',
   FG_RECEIPT: 'FG receipt',
   PICK: 'Pick',
+  SHIPMENT: 'Shipment',
   STOCK_ADJUSTMENT: 'Adjustment',
   REVERSAL: 'Reversal',
 };

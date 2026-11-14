@@ -95,7 +95,7 @@ it('gives every exportable master list export columns that read only its own fie
             expect($definition->title())->not->toBe($resource);
         }
     }
-    expect($exportable)->toHaveCount(37)->toContain('delivery.schedule_lines', 'delivery.picks', 'warehouse.fg_receipts', 'quality.dispositions', 'production.runs', 'production.postings', 'core.items', 'core.customer_items', 'demand.sales_orders', 'planning.work_orders', 'materials.issues', 'materials.returns', 'inventory.material_at_production', 'planning.routings', 'planning.conversion_profiles', 'inventory.stock', 'inventory.receipts', 'inventory.adjustments', 'inventory.documents', 'inventory.reversals', 'inventory.periods', 'inventory.movements')
+    expect($exportable)->toHaveCount(38)->toContain('delivery.shipments', 'delivery.schedule_lines', 'delivery.picks', 'warehouse.fg_receipts', 'quality.dispositions', 'production.runs', 'production.postings', 'core.items', 'core.customer_items', 'demand.sales_orders', 'planning.work_orders', 'materials.issues', 'materials.returns', 'inventory.material_at_production', 'planning.routings', 'planning.conversion_profiles', 'inventory.stock', 'inventory.receipts', 'inventory.adjustments', 'inventory.documents', 'inventory.reversals', 'inventory.periods', 'inventory.movements')
         ->not->toContain('exchange.import_jobs', 'planning.routing_versions');
 })->group('integration', 'export');
 

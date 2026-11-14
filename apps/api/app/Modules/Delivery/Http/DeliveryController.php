@@ -317,6 +317,117 @@ final class DeliveryController
         return $this->answer($db, $this->postings->post($db, new PostingCommand('PICK', $plant, $key, $legs, note: self::optionalText($data['note'] ?? null), requestHash: $hash)));
     }
 
+    /**
+     * What is staged for a customer's open schedule lines at a plant, ready to ship: one row per schedule line and staged
+     * lot, with what the line still needs delivered (D-116).
+     */
+    public function staged(Request $request): JsonResponse
+    {
+        $data = $request->validate(['plantId' => ['required', 'uuid'], 'customerId' => ['required', 'uuid']]);
+        $db = $this->db();
+        $plant = $this->plant($db, $data['plantId'], 'delivery.shipment.view');
+        $rows = $db->select(
+            "select s.id as schedule_line_id, h.so_no, ol.line_no, s.schedule_no, s.requirement_date::text as requirement_date, ol.customer_po_no,
+                    i.code as item_code, i.name as item_name, u.code as uom, u.decimals, b.id as stock_line_id, l.code as location_code, lt.lot_no,
+                    trim_scale(sum(m.qty_signed))::text as staged,
+                    trim_scale(greatest(s.required_qty - coalesce((select sum(d.qty_signed) from inventory_movements d join locations dl on dl.id = d.location_id
+                                                                    where d.schedule_line_id = s.id and dl.location_type = 'V_CUSTOMER'), 0), 0))::text as outstanding
+               from inventory_movements m
+               join locations l on l.id = m.location_id and l.location_type = 'STAGING'
+               join delivery_schedule_lines s on s.id = m.schedule_line_id and s.status in ('FIRM', 'PARTIALLY_FULFILLED')
+               join sales_order_lines ol on ol.id = s.so_line_id join sales_order_headers h on h.id = ol.sales_order_id
+               join items i on i.id = m.item_id join uoms u on u.id = i.base_uom_id left join lots lt on lt.id = m.lot_id
+               join stock_balances b on b.location_id = m.location_id and b.item_id = m.item_id and b.lot_id is not distinct from m.lot_id and b.stock_status = 'UNRESTRICTED'
+              where m.plant_id = ? and ol.customer_id = ?
+              group by s.id, h.so_no, ol.line_no, s.schedule_no, s.requirement_date, ol.customer_po_no, i.code, i.name, u.code, u.decimals, b.id, l.code, lt.lot_no
+             having sum(m.qty_signed) > 0
+              order by s.requirement_date, h.so_no, ol.line_no, s.schedule_no, l.code, lt.lot_no",
+            [$plant, strtolower($data['customerId'])],
+        );
+
+        return response()->json(['data' => array_map(static fn (stdClass $r) => [
+            'scheduleLineId' => (string) $r->schedule_line_id, 'soNo' => (string) $r->so_no, 'lineNo' => (int) $r->line_no, 'scheduleNo' => (int) $r->schedule_no,
+            'requirementDate' => (string) $r->requirement_date, 'customerPoNo' => $r->customer_po_no, 'itemCode' => (string) $r->item_code, 'itemName' => (string) $r->item_name,
+            'stockLineId' => (string) $r->stock_line_id, 'locationCode' => (string) $r->location_code, 'lotNo' => $r->lot_no,
+            'stagedQty' => (string) $r->staged, 'outstandingQty' => (string) $r->outstanding, 'uomCode' => (string) $r->uom, 'uomDecimals' => (int) $r->decimals,
+        ], $rows)]);
+    }
+
+    /**
+     * Ship staged goods of one customer's schedule lines (Idempotency-Key header required): STAGING → the customer, with
+     * the transport. 201 when posted, 200 when the same request was posted before under the key.
+     */
+    public function ship(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'plantId' => ['required', 'uuid'],
+            'customerId' => ['required', 'uuid'],
+            'vehicleNo' => ['nullable', 'string', 'max:30'],
+            'driverName' => ['nullable', 'string', 'max:80'],
+            'note' => ['nullable', 'string', 'max:500'],
+            'lines' => ['required', 'array', 'min:1', 'max:30'],
+            'lines.*.scheduleLineId' => ['required', 'uuid'],
+            'lines.*.stockLineId' => ['required', 'uuid'],
+            'lines.*.qty' => ['required', 'string', 'regex:'.ReceiptController::QTY],
+        ]);
+        $key = $this->key($request);
+        $db = $this->db();
+        $plant = $this->plant($db, $data['plantId'], 'delivery.shipment.post');
+        $hash = hash('sha256', json_encode(['SHIPMENT', $plant, $data], JSON_THROW_ON_ERROR));
+        $previous = $this->postings->claim($db, $key, $hash);
+        if ($previous !== null) {
+            return $this->answer($db, $previous);
+        }
+        $customer = strtolower($data['customerId']);
+        $db->selectOne('select 1 as ok from customers where id = ?', [$customer]) ?? throw ValidationException::withMessages(['customerId' => 'Unknown customer.']);
+        $to = (string) ($db->selectOne("select id from locations where plant_id = ? and location_type = 'V_CUSTOMER'", [$plant])
+            ?? throw new DomainProblem(409, 'NO_VIRTUAL_LOCATION', 'Plant not set up', 'This plant has no V_CUSTOMER location.'))->id;
+
+        $legs = [];
+        $seen = [];
+        foreach (array_values($data['lines']) as $i => $l) {
+            $line = strtolower($l['scheduleLineId']);
+            $stock = strtolower($l['stockLineId']);
+            if (isset($seen["{$line}|{$stock}"])) {
+                throw ValidationException::withMessages(["lines.{$i}.stockLineId" => 'Enter each schedule line and staged lot once.']);
+            }
+            $seen["{$line}|{$stock}"] = true;
+            // held until commit: the schedule line keeps its status while it ships
+            $s = $db->selectOne(
+                'select s.id, s.status, trim_scale(s.required_qty)::text as required, ol.customer_id from delivery_schedule_lines s join sales_order_lines ol on ol.id = s.so_line_id
+                  where s.id = ? and s.plant_id = ? for update of s',
+                [$line, $plant],
+            );
+            if ($s === null || (string) $s->customer_id !== $customer || ! in_array($s->status, ['FIRM', 'PARTIALLY_FULFILLED'], true)) {
+                throw ValidationException::withMessages(["lines.{$i}.scheduleLineId" => 'Choose an open schedule line of this customer at this plant.']);
+            }
+            $b = $db->selectOne(
+                "select b.location_id, b.item_id, b.lot_id, u.code as uom, u.decimals,
+                        trim_scale(coalesce((select sum(m.qty_signed) from inventory_movements m where m.schedule_line_id = ? and m.location_id = b.location_id
+                                                and m.item_id = b.item_id and m.lot_id is not distinct from b.lot_id), 0))::text as staged
+                   from stock_balances b join locations l on l.id = b.location_id join items i on i.id = b.item_id join uoms u on u.id = i.base_uom_id
+                  where b.id = ? and b.plant_id = ? and l.location_type = 'STAGING' and b.stock_status = 'UNRESTRICTED'",
+                [$line, $stock, $plant],
+            ) ?? throw ValidationException::withMessages(["lines.{$i}.stockLineId" => 'Choose goods at a staging location of this plant.']);
+            self::requireUnitPrecision($l['qty'], $b, "lines.{$i}.qty");
+            $qty = self::num($l['qty']);
+            if (bccomp($qty, '0', 6) <= 0 || bccomp($qty, self::num((string) $b->staged), 6) > 0) {
+                throw ValidationException::withMessages(["lines.{$i}.qty" => "Ship above zero and at most the {$b->staged} {$b->uom} staged for this schedule line."]);
+            }
+            $legs[] = new PostingLeg('SHIP', (string) $b->location_id, (string) $b->item_id, $b->lot_id, 'UNRESTRICTED', '-'.$qty, scheduleLineId: $line);
+            $legs[] = new PostingLeg('SHIP', $to, (string) $b->item_id, $b->lot_id, 'UNRESTRICTED', $qty, scheduleLineId: $line);
+        }
+        $vehicle = self::optionalText($data['vehicleNo'] ?? null);
+        $driver = self::optionalText($data['driverName'] ?? null);
+
+        return $this->answer($db, $this->postings->post($db, new PostingCommand('SHIPMENT', $plant, $key, $legs, note: self::optionalText($data['note'] ?? null),
+            sourceType: 'customer', sourceId: $customer, requestHash: $hash),
+            function (string $document) use ($db, $vehicle, $driver): void {
+                $db->insert('insert into shipment_details (tenant_id, document_id, vehicle_no, driver_name) values ((select c.tenant from ctx_api.context() c), ?, ?, ?)',
+                    [$document, $vehicle, $driver]);
+            }));
+    }
+
     /** The schedule line with its item, plant and unit, when the actor holds $permission in its plant (404 otherwise). */
     private function scheduleLine(EoraPostgresConnection $db, string $id, string $permission): stdClass
     {

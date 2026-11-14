@@ -243,6 +243,9 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.delivery.allocations.release' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.delivery.picks.store' => self::POSTING,
         'v1.delivery.unpicks.store' => self::POSTING,
+        // D-116: staged goods of one customer's schedule lines shipped, with the transport (delivery or the FG warehouse)
+        'v1.delivery.staged.index' => self::TENANT_READ + [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN'], 422 => ['VALIDATION_FAILED']],
+        'v1.delivery.shipments.store' => [409 => [...self::POSTING[409], 'NO_VIRTUAL_LOCATION']] + self::POSTING,
         // D-114: FG receipt of QC-released finished goods, posted by the FG warehouse
         'v1.warehouse.fg-receipts.store' => self::POSTING,
         // D-110: issue to a released WO; return asked by production, received (measured) or refused by materials
@@ -263,7 +266,7 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
     private const array POSTINGS = ['v1.inventory.receipts.store', 'v1.inventory.incoming-releases.store', 'v1.inventory.transfers.store', 'v1.inventory.lot-splits.store',
         'v1.inventory.adjustments.approve', 'v1.inventory.reversals.approve', 'v1.inventory.material-issues.store', 'v1.inventory.material-returns.receive', 'v1.production.postings.store',
         'v1.quality.dispositions.store', 'v1.quality.release-requests.approve', 'v1.warehouse.fg-receipts.store',
-        'v1.delivery.picks.store', 'v1.delivery.unpicks.store'];
+        'v1.delivery.picks.store', 'v1.delivery.unpicks.store', 'v1.delivery.shipments.store'];
 
     /** Other writes taking the Idempotency-Key header (ADR-0014), answering with their own body: an allocation (D-115). */
     private const array KEYED = ['v1.delivery.allocations.store'];
