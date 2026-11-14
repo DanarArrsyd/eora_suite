@@ -52,6 +52,9 @@ final class WorkOrderController
 
     public const string QTY = '/^\d{1,14}(\.\d{1,6})?$/';
 
+    /** Statuses a work order is closed from (D-117). */
+    public const array CLOSABLE = ['RELEASED', 'IN_PROGRESS', 'ON_HOLD', 'PRODUCTION_COMPLETE'];
+
     public function __construct(
         private readonly Authorizer $authorizer,
         private readonly AuditRecorder $audit,
@@ -255,6 +258,54 @@ final class WorkOrderController
     }
 
     /**
+     * Close a released or in-production work order (If-Match required; BR-PLN-03, D-063, D-117): by a planner, once it has
+     * no open run, no Material at Production left (returned, or closed by an approved exception) and no return or
+     * exception still waiting. The database refuses it otherwise too.
+     */
+    public function close(Request $request, string $order): JsonResponse
+    {
+        $expected = Concurrency::expectedVersion($request);
+        $db = $this->db();
+        $wo = $this->writable($db, $order, self::CLOSABLE);
+        $this->authorizer->authorize($db, self::POST, $this->plantScope($db, (string) $wo->plant_id));
+        foreach ($this->closeBlockers($db, (string) $wo->id) as $why) {
+            throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Work order not closable', "{$wo->wo_no}: {$why}");
+        }
+        $this->transition($db, $wo, $expected, "status = 'CLOSED', closed_by = ?, closed_at = now()", [$this->actor($db)], 'work_order.closed');
+        $this->outbox->publish($db, 'wo.closed', 'work_order', (string) $wo->id, ['plantId' => $wo->plant_id]);
+
+        return $this->respondOrder($db, (string) $wo->id);
+    }
+
+    /**
+     * What still keeps the work order open (BR-PLN-03): open runs, material left at production, a return or close
+     * exception waiting.
+     *
+     * @return list<string>
+     */
+    private function closeBlockers(EoraPostgresConnection $db, string $id): array
+    {
+        $why = [];
+        $runs = (int) $db->selectOne("select count(*) as n from production_runs where work_order_id = ? and status = 'OPEN'", [$id])->n;
+        if ($runs > 0) {
+            $why[] = "{$runs} production run(s) still open; close or cancel them first.";
+        }
+        if ($db->selectOne(
+            "select 1 as ok from inventory_movements m join locations l on l.id = m.location_id and l.location_type = 'MAT_AT_PROD'
+              where m.wo_id = ? group by m.location_id, m.item_id, m.lot_id having sum(m.qty_signed) <> 0 limit 1", [$id]) !== null) {
+            $why[] = 'material is still at production; return it, or ask for a close exception.';
+        }
+        if ($db->selectOne(
+            "select 1 as ok from inventory_documents d where d.status = 'SUBMITTED'
+                and ((d.doc_type = 'MAT_RETURN' and d.source_id = ?) or (d.doc_type = 'WO_CLOSE_EXCEPTION' and d.request -> 'legs' -> 0 ->> 'woId' = ?::text)) limit 1",
+            [$id, $id]) !== null) {
+            $why[] = 'a return or close exception is still waiting for its decision.';
+        }
+
+        return $why;
+    }
+
+    /**
      * The checked columns of a draft: an active finished item with its base unit, a quantity in that unit's decimals, a
      * due date today or later at the plant, a reason (OTHER with a note) and an optional firm schedule line of the same
      * plant and item.
@@ -393,6 +444,31 @@ final class WorkOrderController
                 [$id],
             ));
         $row['plantToday'] = $this->today($db, (string) $row['plantId']);
+        // D-117: what still keeps it open, what is left at production, who closed it, and its latest close exception
+        $row['closeBlockers'] = in_array($row['status'], self::CLOSABLE, true) ? $this->closeBlockers($db, $id) : [];
+        $row['atProduction'] = array_map(static fn (stdClass $r) => ['locationCode' => (string) $r->location_code, 'itemCode' => (string) $r->item_code,
+            'lotNo' => $r->lot_no, 'qty' => (string) $r->qty, 'uomCode' => (string) $r->uom], $db->select(
+                "select l.code as location_code, i.code as item_code, lt.lot_no, trim_scale(sum(m.qty_signed))::text as qty, u.code as uom
+                   from inventory_movements m join locations l on l.id = m.location_id and l.location_type = 'MAT_AT_PROD'
+                   join items i on i.id = m.item_id join uoms u on u.id = i.base_uom_id left join lots lt on lt.id = m.lot_id
+                  where m.wo_id = ? group by l.code, i.code, lt.lot_no, u.code having sum(m.qty_signed) <> 0 order by l.code, i.code, lt.lot_no",
+                [$id],
+            ));
+        $closed = $db->selectOne('select w.closed_at, u.display_name from work_orders w left join users u on u.id = w.closed_by where w.id = ?', [$id]);
+        $row['closedAt'] = $closed?->closed_at === null ? null : (new DateTimeImmutable((string) $closed->closed_at))->format(DATE_ATOM);
+        $row['closedByName'] = $closed?->display_name;
+        $exception = $db->selectOne(
+            "select d.id, d.status, d.doc_no, d.note, d.reject_reason, coalesce(d.decided_at, d.posted_at, d.submitted_at) as at, d.requested_by, ur.display_name as requested_by_name,
+                    ud.display_name as decided_by_name
+               from inventory_documents d left join users ur on ur.id = d.requested_by left join users ud on ud.id = coalesce(d.decided_by, d.posted_by)
+              where d.doc_type = 'WO_CLOSE_EXCEPTION' and d.request -> 'legs' -> 0 ->> 'woId' = ?::text order by d.submitted_at desc limit 1",
+            [$id],
+        );
+        $row['closeException'] = $exception === null ? null : [
+            'id' => (string) $exception->id, 'status' => (string) $exception->status, 'docNo' => $exception->doc_no, 'reason' => (string) $exception->note,
+            'rejectReason' => $exception->reject_reason, 'requestedById' => (string) $exception->requested_by, 'requestedByName' => $exception->requested_by_name,
+            'decidedByName' => $exception->decided_by_name, 'at' => (new DateTimeImmutable((string) $exception->at))->format(DATE_ATOM),
+        ];
 
         return Concurrency::withVersion(response()->json(['data' => $row], $status), (int) $row['version']);
     }

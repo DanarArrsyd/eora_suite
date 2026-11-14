@@ -158,3 +158,16 @@ Persiapan: §7a sudah men-stage barang untuk SO itu (mis. 150 PCS di STG-01). Ak
 | 6 | Kirim sisa sampai penuh. | Status schedule line **Fulfilled**; baris hilang dari Allocation & Pick. | |
 | 7 | Login `inv` → Reversals → minta reversal shipment terakhir; `csa` setujui. | Barang kembali ke STAGING untuk schedule line itu; Delivered turun; status kembali **Partially fulfilled**. | |
 
+## 8. Penutupan WO (langkah 8, D-117)
+Persiapan: WO dari §3–4 masih In production dengan sisa coil di work center. Jalankan `eora:tenants:sync` setelah migrate (izin baru `planning.wo_close_exception`). Akun `ppc`, `prl`, `csa`.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `ppc` → PPIC → Work Orders → buka WO itu. | Tombol **Close work order** nonaktif; kartu **Closing** menyebut run masih open dan/atau material masih di produksi, plus daftar "Left at production". | |
+| 2 | Login `prl` → tutup run-nya. Kembali sebagai `ppc`. | Closing tinggal menyebut material di produksi. | |
+| 3 | **Ask close exception** → alasan "Coil end too short" → konfirmasi. | Pesan "Close exception asked…"; panel Approval menunggu orang kedua; tombol Ask hilang. | |
+| 4 | Login `csa` → PPIC → **WO Close Exceptions**. | Baris exception itu (Waiting for approval) dengan material yang akan dibuang. | |
+| 5 | Buka → **Approve**. | Material pindah ke scrap yard (WCX-P1-<tahun>-0001); "Nothing keeps it open". | |
+| 6 | Login `ppc` → **Close work order** → konfirmasi. | Status **Closed**; tombol Issue/Open run hilang. | |
+| 7 | Login `mat` → coba issue bahan ke WO itu. | Ditolak: WO bukan Released. | |
+

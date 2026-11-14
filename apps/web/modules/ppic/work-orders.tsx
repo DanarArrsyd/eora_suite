@@ -12,7 +12,7 @@ import { MasterEditor } from '@/modules/master/editor';
 import { MasterScreen } from '@/modules/master/master-screen';
 import { PLANT_FILTER } from '@/modules/master/resources';
 import type { FormValues, MasterResource } from '@/modules/master/types';
-import { when } from '@/modules/master/version-ui';
+import { ApprovalPanel, when } from '@/modules/master/version-ui';
 
 /*
  * M4 step 2 (doc 33 §1.2, D-109, G-MPS-6, BR-PLN-01): PPIC → Work Orders on the live API. A planner drafts a manual WO for
@@ -76,7 +76,30 @@ type Material = {
   baseUomCode: string;
 };
 
-type WorkOrder = WorkOrderRow & { materials: Material[]; plantToday: string };
+type CloseException = {
+  id: string;
+  status: 'SUBMITTED' | 'REJECTED' | 'POSTED' | 'REVERSED';
+  docNo: string | null;
+  reason: string;
+  rejectReason: string | null;
+  requestedById: string;
+  requestedByName: string | null;
+  decidedByName: string | null;
+  at: string;
+};
+
+type WorkOrder = WorkOrderRow & {
+  materials: Material[];
+  plantToday: string;
+  /** D-117: what still keeps it open, what is left at production, who closed it, its latest close exception. */
+  closeBlockers: string[];
+  atProduction: { locationCode: string; itemCode: string; lotNo: string | null; qty: string; uomCode: string }[];
+  closedAt: string | null;
+  closedByName: string | null;
+  closeException: CloseException | null;
+};
+
+const CLOSABLE: Status[] = ['RELEASED', 'IN_PROGRESS', 'ON_HOLD', 'PRODUCTION_COMPLETE'];
 
 /** G-MPS-6 planning-exception reasons (D-109). */
 export const WO_REASONS: Option[] = [
@@ -224,11 +247,15 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
   const canApprove = permissions.includes('planning.wo.approve');
   const canIssue = permissions.includes('materials.issue.post') && permissions.includes('materials.issue.create');
   const canRun = permissions.includes('production.run.post');
+  const canAskException = permissions.includes('planning.wo_close_exception.request_correction');
+  const canDecideException = permissions.includes('planning.wo_close_exception.approve');
   const router = useRouter();
   const client = useQueryClient();
   const [notice, setNotice] = React.useState<string | null>(null);
   const [editing, setEditing] = React.useState(false);
-  const [ask, setAsk] = React.useState<null | 'submit' | 'withdraw' | 'release' | 'return' | 'cancel'>(null);
+  const [ask, setAsk] = React.useState<null | 'submit' | 'withdraw' | 'release' | 'return' | 'cancel' | 'close' | 'exception'>(null);
+  // one key per exception request and approval attempt: a retry replays instead of asking or posting twice (ADR-0014)
+  const exceptionKey = React.useRef(`wcx-${crypto.randomUUID()}`);
 
   const order = useQuery({
     queryKey: ['master', 'planning.work_orders', 'one', id],
@@ -284,7 +311,7 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
 
   const mine = me.data?.user.id === o.submittedById;
   // the dialog shows the server's explanation (e.g. which master is missing), not only its title
-  const act = (action: 'submit' | 'withdraw' | 'release' | 'return' | 'cancel', body?: { reason: string }) =>
+  const act = (action: 'submit' | 'withdraw' | 'release' | 'return' | 'cancel' | 'close', body?: { reason: string }) =>
     call(() =>
       api.POST(`/planning/work-orders/{order}/actions/${action}` as '/planning/work-orders/{order}/actions/submit', {
         params: { path: { order: id } },
@@ -344,6 +371,7 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
         ]
       : []),
     ...(o.status === 'CANCELLED' ? [{ label: 'Cancelled because', value: o.cancelReason ?? '—' }] : []),
+    ...(o.closedAt ? [{ label: 'Closed', value: `${when(o.closedAt)}${o.closedByName ? ` · ${o.closedByName}` : ''}` }] : []),
   ];
   const materialColumns: EoraColumn<Material>[] = [
     { id: 'itemCode', header: 'Material', lead: true, cell: (m) => <span className="font-mono">{m.itemCode}</span>, sub: (m) => m.itemName },
@@ -353,7 +381,13 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
     { id: 'atProductionQty', header: 'At production', numeric: true, cell: (m) => `${m.atProductionQty} ${m.baseUomCode}` },
     { id: 'conversionProfileVersion', header: 'Conversion profile', cell: (m) => (m.conversionProfileVersion ? `v${m.conversionProfileVersion}` : '—') },
   ];
-  const status = o.status === 'SUBMITTED' || o.status === 'RELEASED' || o.status === 'IN_PROGRESS' || o.status === 'CANCELLED' ? o.status : 'DRAFT';
+  const status =
+    o.status === 'SUBMITTED' || o.status === 'RELEASED' || o.status === 'IN_PROGRESS' || o.status === 'CANCELLED' || o.status === 'CLOSED' ? o.status : 'DRAFT';
+  const closable = CLOSABLE.includes(o.status);
+  const blockers = o.closeBlockers ?? [];
+  const atProduction = o.atProduction ?? [];
+  const exception = o.closeException ?? null;
+  const pendingException = exception?.status === 'SUBMITTED';
 
   return (
     <EnterprisePage
@@ -367,7 +401,9 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
               ? 'Released: its BOM and routing versions and material lines are fixed on the work order.'
               : o.status === 'IN_PROGRESS'
                 ? 'In production: runs post what is consumed and made.'
-                : 'Cancelled: kept for the record.'
+                : o.status === 'CLOSED'
+                  ? 'Closed: kept for the record. Nothing more is issued or produced for it.'
+                  : 'Cancelled: kept for the record.'
       }
       meta={<DomainStatusBadge domain="document" status={status} />}
       actions={
@@ -398,6 +434,11 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
           {(o.status === 'RELEASED' || o.status === 'IN_PROGRESS') && canIssue ? (
             <Button variant="primary" onClick={() => router.push(`/materials/material-issue?wo=${o.id}`)}>
               Issue material
+            </Button>
+          ) : null}
+          {closable && canPost ? (
+            <Button onClick={() => setAsk('close')} disabled={blockers.length > 0}>
+              Close work order
             </Button>
           ) : null}
           {((o.status === 'DRAFT' || o.status === 'SUBMITTED') && canCreate) || (o.status === 'RELEASED' && canPost) ? (
@@ -478,6 +519,81 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
         </Card>
       </div>
 
+      {closable && (canPost || canAskException || canDecideException) ? (
+        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_340px] gap-4 max-lg:grid-cols-1">
+          <Card>
+            <CardHeader>
+              <CardTitle>Closing</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {blockers.length === 0 ? (
+                <p className="m-0 text-[13.5px] text-ink">Nothing keeps it open: no open run and no material left at production.</p>
+              ) : (
+                <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-[13.5px] text-ink" aria-label="What keeps it open">
+                  {blockers.map((b) => (
+                    <li key={b}>{b}</li>
+                  ))}
+                </ul>
+              )}
+              {atProduction.length > 0 ? (
+                <>
+                  <h3 className="mt-4 mb-1 text-[13px] font-semibold text-ink">Left at production</h3>
+                  <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[13px] text-ink-2 tabular-nums">
+                    {atProduction.map((m) => (
+                      <li key={`${m.locationCode}|${m.itemCode}|${m.lotNo ?? ''}`}>
+                        {m.locationCode} · <span className="font-mono text-ink">{m.itemCode}</span> · {m.lotNo ?? 'no lot'} · {m.qty} {m.uomCode}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="m-0 mt-3 text-[13px] text-ink-2">
+                    Return it to a raw-material rack (Material Return), or ask a close exception: once approved it moves to the scrap yard.
+                  </p>
+                  {canAskException && !pendingException ? (
+                    <div className="mt-3 flex justify-end">
+                      <Button onClick={() => setAsk('exception')}>Ask close exception</Button>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+              {exception?.status === 'REJECTED' ? (
+                <InlineAlert tone="warning" title="The last close exception was rejected" className="mt-4">
+                  {exception.rejectReason ?? '—'}
+                </InlineAlert>
+              ) : null}
+            </CardContent>
+          </Card>
+          {pendingException ? (
+            <ApprovalPanel
+              label="Exception"
+              record={{ status: 'SUBMITTED', preparedByName: exception.requestedByName, approvedByName: null, approvedAt: null }}
+              can={{ view: true, create: false, submit: false, approve: canDecideException && me.data?.user.id !== exception.requestedById }}
+              approvedNote="Posted: the material went to the scrap yard."
+              rejectNote="Nothing moves; the planner sees the reason."
+              act={async () => {
+                const posted = await call(() =>
+                  api.POST('/planning/wo-close-exceptions/{exception}/approve', {
+                    params: { path: { exception: exception.id }, header: { 'Idempotency-Key': exceptionKey.current } },
+                  }),
+                );
+                exceptionKey.current = `wcx-${crypto.randomUUID()}`;
+                return posted;
+              }}
+              reject={(why) =>
+                call(() =>
+                  api.POST('/planning/wo-close-exceptions/{exception}/reject', { params: { path: { exception: exception.id } }, body: { reason: why } }),
+                )
+              }
+              onDone={(message) => changed(message.replace(/approved$/, 'approved: the material went to the scrap yard'))}
+            />
+          ) : null}
+        </div>
+      ) : null}
+      {pendingException ? (
+        <InlineAlert tone="info" title="A close exception waits for its decision" className="mt-4">
+          {exception.reason}
+        </InlineAlert>
+      ) : null}
+
       <MasterEditor
         config={editConfig}
         row={o}
@@ -536,6 +652,39 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
           await act('return', { reason: why ?? '' });
           setAsk(null);
           changed(`${o.code} returned to the planner`);
+        }}
+      />
+      <ConfirmDialog
+        open={ask === 'close'}
+        onOpenChange={(v) => (v ? undefined : setAsk(null))}
+        title="Close this work order"
+        description="Nothing more is issued or produced for it; it stays in the list as Closed."
+        confirmLabel="Close work order"
+        onConfirm={async () => {
+          await act('close');
+          setAsk(null);
+          changed(`${o.code} closed`);
+        }}
+      />
+      <ConfirmDialog
+        open={ask === 'exception'}
+        onOpenChange={(v) => (v ? undefined : setAsk(null))}
+        title="Ask close exception"
+        description={`${atProduction.map((m) => `${m.itemCode} ${m.qty} ${m.uomCode}`).join(', ')} go to the scrap yard once a second person approves it. Nothing moves until then.`}
+        confirmLabel="Ask close exception"
+        reason={{ label: 'Reason', minLength: 3 }}
+        onConfirm={async (why) => {
+          await call(() =>
+            api.POST('/planning/work-orders/{order}/close-exceptions', {
+              params: { path: { order: id }, header: { 'Idempotency-Key': exceptionKey.current } },
+              body: { reason: why ?? '', scrapLocationId: null },
+            }),
+          ).catch((e: unknown) => {
+            throw new Error(failureMessage(e, 'The close exception could not be asked.'));
+          });
+          exceptionKey.current = `wcx-${crypto.randomUUID()}`;
+          setAsk(null);
+          changed('Close exception asked; it waits for a second person');
         }}
       />
       <ConfirmDialog

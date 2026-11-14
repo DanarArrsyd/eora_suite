@@ -40,7 +40,7 @@ use stdClass;
 final class InventoryPostingService
 {
     /** Requests decided by a second person (D-060): never posted directly. */
-    private const array REQUESTED = ['STOCK_ADJUSTMENT', 'REVERSAL'];
+    private const array REQUESTED = ['STOCK_ADJUSTMENT', 'REVERSAL', 'WO_CLOSE_EXCEPTION'];
 
     /**
      * Documents posted directly in M3 (doc 32 M3-D2) with the codes of their legs; the others come with their documents in
@@ -75,12 +75,14 @@ final class InventoryPostingService
         'STOCK_ADJUSTMENT' => ['ADJ_PLUS', 'ADJ_MINUS'],
         // D-113: a release out of policy (from HOLD, or REJECTED back to released), asked by the inspector, decided by QCS
         'QC_DISPOSITION' => ['QC_RELEASE'],
+        // D-117: a work order's material left at production, scrapped so the work order can close (PPC asks, CSA/INV decides)
+        'WO_CLOSE_EXCEPTION' => ['WO_CLOSE_SCRAP'],
     ];
 
     private const array PREFIX = [
         'RM_RECEIPT' => 'RCV', 'INCOMING_RELEASE' => 'REL', 'MAT_ISSUE' => 'ISS', 'CUSTODY_ACCEPT' => 'CUS', 'MAT_TRANSFER' => 'TRF',
         'MAT_RETURN' => 'RTN', 'LOT_SPLIT' => 'SPL', 'PRODUCTION_POSTING' => 'PRD', 'QC_DISPOSITION' => 'QCD', 'FG_RECEIPT' => 'FGR',
-        'PICK' => 'PCK', 'SHIPMENT' => 'SHP', 'SCRAP_DISPOSITION' => 'SCR', 'REWORK_POSTING' => 'RWK', 'STOCK_ADJUSTMENT' => 'ADJ', 'REVERSAL' => 'REV',
+        'PICK' => 'PCK', 'SHIPMENT' => 'SHP', 'WO_CLOSE_EXCEPTION' => 'WCX', 'SCRAP_DISPOSITION' => 'SCR', 'REWORK_POSTING' => 'RWK', 'STOCK_ADJUSTMENT' => 'ADJ', 'REVERSAL' => 'REV',
     ];
 
     public function __construct(
@@ -183,7 +185,7 @@ final class InventoryPostingService
             if ($leg->scheduleLineId !== null && ! in_array($command->docType, ['PICK', 'SHIPMENT'], true)) {
                 $refuse("A {$command->docType} does not name a schedule line.");
             }
-            if ($leg->woId !== null && ! in_array($command->docType, ['MAT_ISSUE', 'MAT_RETURN', 'LOT_SPLIT', 'STOCK_ADJUSTMENT', 'PRODUCTION_POSTING'], true)) {
+            if ($leg->woId !== null && ! in_array($command->docType, ['MAT_ISSUE', 'MAT_RETURN', 'LOT_SPLIT', 'STOCK_ADJUSTMENT', 'PRODUCTION_POSTING', 'WO_CLOSE_EXCEPTION'], true)) {
                 $refuse("A {$command->docType} does not name a work order.");
             }
             match ($command->docType) {
@@ -210,6 +212,9 @@ final class InventoryPostingService
                 // doc 04 row 11, D-115: UNRESTRICTED goods of a schedule line between an FG rack and staging
                 'PICK' => ($leg->woId === null && $leg->scheduleLineId !== null && $leg->stockStatus === 'UNRESTRICTED' && in_array($type, ['FG_WAREHOUSE', 'STAGING'], true))
                     || $refuse('A pick moves unrestricted goods of a schedule line between an FG warehouse location and staging.'),
+                // BR-PLN-03, D-117: a work order's UNRESTRICTED material from Material at Production to a scrap yard
+                'WO_CLOSE_EXCEPTION' => ($leg->stockStatus === 'UNRESTRICTED' && ($out ? $type === 'MAT_AT_PROD' && $leg->woId !== null : $type === 'SCRAP_YARD' && $leg->woId === null))
+                    || $refuse('A close exception moves a work order\'s material from Material at Production to a scrap yard.'),
                 // doc 04 row 11, BR-FG-03: UNRESTRICTED goods of a schedule line from staging to the customer
                 'SHIPMENT' => ($leg->woId === null && $leg->scheduleLineId !== null && $leg->stockStatus === 'UNRESTRICTED' && $type === ($out ? 'STAGING' : 'V_CUSTOMER'))
                     || $refuse('A shipment moves unrestricted goods of a schedule line from staging to the customer.'),

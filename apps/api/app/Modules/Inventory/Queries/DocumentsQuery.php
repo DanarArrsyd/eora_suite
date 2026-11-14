@@ -14,11 +14,11 @@ use App\Platform\Query\QueryDefinition;
  */
 final class DocumentsQuery extends QueryDefinition
 {
-    public const array TYPES = ['RM_RECEIPT', 'INCOMING_RELEASE', 'MAT_TRANSFER', 'LOT_SPLIT', 'MAT_ISSUE', 'MAT_RETURN', 'PRODUCTION_POSTING', 'QC_DISPOSITION', 'FG_RECEIPT', 'PICK', 'SHIPMENT', 'STOCK_ADJUSTMENT', 'REVERSAL'];
+    public const array TYPES = ['RM_RECEIPT', 'INCOMING_RELEASE', 'MAT_TRANSFER', 'LOT_SPLIT', 'MAT_ISSUE', 'MAT_RETURN', 'PRODUCTION_POSTING', 'QC_DISPOSITION', 'FG_RECEIPT', 'PICK', 'SHIPMENT', 'WO_CLOSE_EXCEPTION', 'STOCK_ADJUSTMENT', 'REVERSAL'];
 
     public const array TYPE_LABELS = [
         'RM_RECEIPT' => 'Receipt', 'INCOMING_RELEASE' => 'Incoming release', 'MAT_TRANSFER' => 'Transfer', 'LOT_SPLIT' => 'Lot split',
-        'MAT_ISSUE' => 'Material issue', 'MAT_RETURN' => 'Material return', 'PRODUCTION_POSTING' => 'Production posting', 'QC_DISPOSITION' => 'QC disposition', 'FG_RECEIPT' => 'FG receipt', 'PICK' => 'Pick', 'SHIPMENT' => 'Shipment', 'STOCK_ADJUSTMENT' => 'Adjustment', 'REVERSAL' => 'Reversal',
+        'MAT_ISSUE' => 'Material issue', 'MAT_RETURN' => 'Material return', 'PRODUCTION_POSTING' => 'Production posting', 'QC_DISPOSITION' => 'QC disposition', 'FG_RECEIPT' => 'FG receipt', 'PICK' => 'Pick', 'SHIPMENT' => 'Shipment', 'WO_CLOSE_EXCEPTION' => 'WO close exception', 'STOCK_ADJUSTMENT' => 'Adjustment', 'REVERSAL' => 'Reversal',
     ];
 
     public function resource(): string

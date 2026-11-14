@@ -186,6 +186,15 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.planning.work-orders.return' => self::MASTER_EDIT + self::SCOPED_403 + [409 => ['INVALID_STATE_TRANSITION']],
         'v1.planning.work-orders.release' => self::MASTER_EDIT + self::SCOPED_403 + [409 => ['INVALID_STATE_TRANSITION', 'WO_MASTER_MISSING']],
         'v1.planning.work-orders.cancel' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        // D-117: close by a planner (nothing left at production, no open run); the exception asked by PPC, decided by CSA/INV
+        'v1.planning.work-orders.close' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.work-orders.close-exceptions.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'],
+            400 => ['IDEMPOTENCY_KEY_REQUIRED'], 409 => ['IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_IN_PROGRESS', 'INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED', 'INVALID_LEGS'],
+        ],
+        'v1.planning.wo-close-exceptions.approve' => [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION'], 404 => ['NOT_FOUND'],
+            409 => [...self::POSTING[409], 'INVALID_STATE_TRANSITION']] + self::POSTING,
+        'v1.planning.wo-close-exceptions.reject' => self::TENANT_WRITE + [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN', 'SOD_VIOLATION'], 404 => ['NOT_FOUND'],
+            409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         // Sales Orders (doc 33 §1.1, D-107): drafts and confirmed orders edited with If-Match
         'v1.demand.sales-orders.store' => self::TENANT_WRITE + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
         'v1.demand.sales-orders.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
@@ -266,13 +275,14 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
     private const array POSTINGS = ['v1.inventory.receipts.store', 'v1.inventory.incoming-releases.store', 'v1.inventory.transfers.store', 'v1.inventory.lot-splits.store',
         'v1.inventory.adjustments.approve', 'v1.inventory.reversals.approve', 'v1.inventory.material-issues.store', 'v1.inventory.material-returns.receive', 'v1.production.postings.store',
         'v1.quality.dispositions.store', 'v1.quality.release-requests.approve', 'v1.warehouse.fg-receipts.store',
-        'v1.delivery.picks.store', 'v1.delivery.unpicks.store', 'v1.delivery.shipments.store'];
+        'v1.delivery.picks.store', 'v1.delivery.unpicks.store', 'v1.delivery.shipments.store',
+        'v1.planning.wo-close-exceptions.approve'];
 
     /** Other writes taking the Idempotency-Key header (ADR-0014), answering with their own body: an allocation (D-115). */
     private const array KEYED = ['v1.delivery.allocations.store'];
 
     /** Requests decided by a second person (D-060): the Idempotency-Key header and the submitted request, 201 first time, 200 on replay. */
-    private const array REQUESTS = ['v1.inventory.adjustments.store', 'v1.inventory.reversals.store', 'v1.inventory.material-returns.store', 'v1.quality.release-requests.store'];
+    private const array REQUESTS = ['v1.inventory.adjustments.store', 'v1.inventory.reversals.store', 'v1.inventory.material-returns.store', 'v1.quality.release-requests.store', 'v1.planning.work-orders.close-exceptions.store'];
 
     /** Laravel-shaped error components Scramble registers; replaced by the problem responses above. */
     private const array INFERRED_COMPONENTS = ['ValidationException', 'AuthenticationException', 'NotFoundHttpException', 'AuthorizationException', 'AccessDeniedHttpException'];
