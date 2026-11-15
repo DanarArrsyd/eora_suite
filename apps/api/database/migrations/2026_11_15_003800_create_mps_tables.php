@@ -371,8 +371,9 @@ return new class extends Migration
             DECLARE
               v record;
             BEGIN
+              -- FOR SHARE: a child write waits for (and blocks) a concurrent submit / approval of its version
               SELECT m.status, m.plant_id INTO v FROM public.mps_versions m
-               WHERE m.tenant_id = COALESCE(NEW.tenant_id, OLD.tenant_id) AND m.id = COALESCE(NEW.mps_version_id, OLD.mps_version_id);
+               WHERE m.tenant_id = COALESCE(NEW.tenant_id, OLD.tenant_id) AND m.id = COALESCE(NEW.mps_version_id, OLD.mps_version_id) FOR SHARE;
               -- a cascade from a deleted version never happens (versions are never deleted); a draft is the only writable state
               IF v.status IS DISTINCT FROM 'DRAFT' THEN
                 RAISE EXCEPTION 'only a draft MPS changes its calculation' USING ERRCODE = '23514';

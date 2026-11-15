@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Security\SecurityHasher;
+use App\Platform\Tenancy\TenantContext;
+use App\Platform\Tenancy\TenantTransaction;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\RateLimiter;
 use Tests\Support\AccessFixtures;
@@ -197,6 +199,18 @@ it('plans an item with a safety stock even without demand: stock below it is rep
     $item = collect($m['items'])->firstWhere('itemCode', 'BRK-900');
     expect($item)->toMatchArray(['onHand' => '0', 'safetyStock' => '50', 'demands' => []])
         ->and(array_map(static fn (array $o) => [$o['qty'], $o['dueDate'], $o['pegs']], $item['plannedOrders']))->toBe([['50', $m['planDate'], [['demandId' => null, 'qty' => '50']]]]);
+});
+
+it('serializes a write to the calculation with submitting its version: the submit waits and gives up (Codex #87)', function () {
+    $f = mpsFixture($this, $this->t);
+    $m = spa($this)->postJson('/api/v1/planning/mps-versions', ['plantId' => $f['plant']])->assertCreated()->json('data');
+    config(['database.connections.pgsql_takeover' => config('database.connections.pgsql')]);
+    // a planner's transaction deletes a peg of the draft and stays open: the version is held, the submit cannot pass it
+    app(TenantTransaction::class)->run(TenantContext::forTenant($this->t['tenant'], (string) $f['ppc']['id']), function (EoraPostgresConnection $db) use ($m) {
+        $db->delete('delete from mps_pegs where mps_version_id = ?', [$m['id']]);
+        mpsAct($this, $m, 'submit')->assertStatus(503)->assertJsonPath('code', 'RETRYABLE_CONFLICT');
+    }, 'pgsql_takeover');
+    spa($this)->getJson("/api/v1/planning/mps-versions/{$m['id']}")->assertOk()->assertJsonPath('data.status', 'DRAFT');
 });
 
 it('keeps the MPS to the planners and approvers of its plant, and lets a planner cancel a draft', function () {

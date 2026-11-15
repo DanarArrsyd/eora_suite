@@ -608,6 +608,7 @@ function ItemCard({ item, canAdjust, onAdjust }: { item: MpsItem; canAdjust: boo
                     </td>
                     <td className="px-2 py-2 tabular-nums">{o.startDate}</td>
                     <td className="px-2 py-2">
+                      {o.adjusted ? <span className="block text-[12px] text-ink-2">Calculated to cover (before the adjustment):</span> : null}
                       <ul className="m-0 list-none p-0 text-[12.5px]">
                         {o.pegs.map((p, i) => {
                           const d = p.demandId ? demandById.get(p.demandId) : undefined;
