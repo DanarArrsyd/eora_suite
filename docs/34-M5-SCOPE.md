@@ -22,6 +22,8 @@ Dua fase berurutan dengan satu persetujuan scope ini; setelah fase A ada titik c
 10. **Control Tower data asli (B9 sebagian):** read model + freshness (ADR-0016) untuk layar yang dipilih (M5-D8); layar lain tetap mock dengan label "Mock data".
 11. **Penutup:** `eora:demo:m5` (R1 vertical slice lengkap lewat endpoint asli, termasuk case sheet 25 pcs), stack e2e M5, skrip UAT `docs/uat/M5-UAT.md`, checklist exit.
 
+**Progres:** Langkah 1 (parameter perencanaan per item + plant: lead time produksi/beli dalam hari kerja, safety stock qty UOM dasar atau NOT CONFIGURED, lot-for-lot; PPC ubah langsung + audit; inbound schedule supplier oleh MAT/PPC, receipt boleh menyebut barisnya, status dari receipt posted, tidak pernah menolak receipt — D-121; migration 003600; layar Master Data → **Planning Parameters**, Materials → **Inbound Schedule**, field "Against inbound line" di RM Receipt) — PR `feat/m5-step1-planning-params`.
+
 ## 2. Di luar scope M5
 - Blanket order / Unscheduled Blanket Balance (D-039) dan import jadwal kirim → M7 (usulan M5-D2).
 - Rework execution dan re-inspeksi NG → M7; custody dua langkah, stock count (R2), transfer antar plant, purchasing/PO, APS dan penjadwalan otomatis (R2), offline PWA posting, push notification, staging online (M6).

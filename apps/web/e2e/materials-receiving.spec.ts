@@ -107,6 +107,7 @@ test('RM receipts: a receipt is confirmed before it posts, with one idempotency 
     locationId: RACK.id,
     qty: '2500',
     supplierLotNo: 'HEAT-88121',
+    inboundLineId: null,
     note: null,
   });
 });

@@ -11,6 +11,7 @@ export const MASTER_IMPLEMENTED = [
   'routings',
   'boms',
   'conversion-data',
+  'planning-parameters',
   'import',
   'exports',
 ] as const;

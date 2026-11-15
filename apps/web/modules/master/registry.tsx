@@ -2,6 +2,7 @@
 
 import { DIE_ITEMS, PART_SCREENS } from './part-resources';
 import { PROCESS_TYPES } from './engineering-resources';
+import { PLANNING_SCREENS } from './planning-resources';
 import { MasterGroupScreen, type MasterGroup } from './master-screen';
 import { MASTER_SCREENS } from './resources';
 import { BomsScreen } from './bom-screen';
@@ -16,6 +17,7 @@ const GROUPS: Record<string, MasterGroup> = {
   // Work Centers also shows which parts each die makes
   'work-centers': { ...MASTER_SCREENS['work-centers']!, parts: [...MASTER_SCREENS['work-centers']!.parts, DIE_ITEMS as never] },
   ...PART_SCREENS,
+  ...PLANNING_SCREENS,
   'process-types': { title: 'Process Types', parts: [PROCESS_TYPES as never] },
 };
 

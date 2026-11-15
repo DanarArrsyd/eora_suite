@@ -1,6 +1,7 @@
 import { api, call } from '@eora/features/auth';
 import type { Option } from '@eora/features/data';
 import { DomainStatusBadge, STATUS_CATALOGUE, type FilterField } from '@eora/features/patterns';
+import { Badge } from '@eora/ui';
 import { queryAll, queryOptions } from '@/modules/master/source';
 import type { MasterResource, MasterRow } from '@/modules/master/types';
 
@@ -143,9 +144,16 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
       maxLength: 60,
       hint: 'As on the mill certificate. Lot-tracked items only; optional.',
     },
+    {
+      key: 'inboundLineId',
+      label: 'Against inbound line',
+      kind: 'select',
+      options: 'inboundLines',
+      hint: 'Optional: the scheduled delivery of this supplier and item it arrives against.',
+    },
     { key: 'note', label: 'Note', kind: 'text', maxLength: 500 },
   ],
-  blank: { plantId: '', supplierId: '', itemId: '', locationId: '', qty: '', supplierLotNo: '', note: '' },
+  blank: { plantId: '', supplierId: '', itemId: '', locationId: '', qty: '', supplierLotNo: '', inboundLineId: '', note: '' },
   toForm: () => ({}),
   facts: (r) => [
     { label: 'Received', value: `${r.effectiveDate} · ${r.plantCode}` },
@@ -186,6 +194,7 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
           locationId: v.locationId!,
           qty: v.qty!,
           supplierLotNo: v.supplierLotNo || null,
+          inboundLineId: v.inboundLineId || null,
           note: v.note || null,
         },
       }),
@@ -440,3 +449,152 @@ async function workOrderLine(id: string): Promise<{ workOrderId: string; workOrd
     await queryAll<{ workOrderId: string; workOrderCode: string; qty: string }>('inventory.material_at_production', { id }, undefined, 'workOrderCode')
   )[0];
 }
+
+export type InboundRow = MasterRow & {
+  status: 'OPEN' | 'PARTIALLY_RECEIVED' | 'RECEIVED' | 'CANCELLED';
+  plantId: string;
+  plantCode: string;
+  supplierCode: string;
+  supplierName: string;
+  itemId: string;
+  itemCode: string;
+  itemName: string;
+  qty: string;
+  receivedQty: string;
+  outstandingQty: string;
+  receipts: number;
+  uomCode: string;
+  uomDecimals: number;
+  expectedDate: string;
+  note: string | null;
+  cancelReason: string | null;
+  cancelledByName: string | null;
+  createdByName: string | null;
+};
+
+const INBOUND_STATUS: Record<InboundRow['status'], { label: string; tone: 'info' | 'warning' | 'success' | 'neutral' }> = {
+  OPEN: { label: 'Open', tone: 'info' },
+  PARTIALLY_RECEIVED: { label: 'Partially received', tone: 'warning' },
+  RECEIVED: { label: 'Received', tone: 'success' },
+  CANCELLED: { label: 'Cancelled', tone: 'neutral' },
+};
+const inboundBadge = (status: InboundRow['status']) => <Badge tone={INBOUND_STATUS[status].tone}>{INBOUND_STATUS[status].label}</Badge>;
+const ifMatch = (version: number) => ({ 'If-Match': `"${version}"` });
+
+/** Materials → Inbound Schedule (D-087, D-121): what suppliers are expected to deliver; reference data for MPS and receipts. */
+export const INBOUND_SCHEDULE: MasterResource<InboundRow> = {
+  id: 'inbound-schedule',
+  resource: 'materials.inbound_schedule',
+  permission: { view: 'materials.inbound_schedule.view', create: 'materials.inbound_schedule.create', label: 'the inbound schedule' },
+  title: 'Inbound Schedule',
+  description:
+    'What suppliers are expected to deliver, by day. Planning counts it as projected supply; a receipt names the line it arrives against. No prices or approvals: reference data only.',
+  itemLabel: 'inbound lines',
+  singular: 'inbound line',
+  searchPlaceholder: 'Search inbound number, supplier or item…',
+  rowLabel: (r) => `${r.code} ${r.itemCode}`,
+  defaultSort: [{ id: 'expectedDate', desc: false }],
+  filters: [
+    PLANT_FILTER,
+    ITEM_FILTER,
+    {
+      key: 'status',
+      type: 'multiselect',
+      source: 'static',
+      label: 'Status',
+      options: (Object.keys(INBOUND_STATUS) as InboundRow['status'][]).map((k) => ({ value: k, label: INBOUND_STATUS[k].label })),
+    },
+  ],
+  columns: [
+    {
+      id: 'expectedDate',
+      header: 'Expected',
+      lead: true,
+      sortable: true,
+      cell: (r) => r.expectedDate,
+      sub: (r) => <span className="font-mono">{r.code}</span>,
+    },
+    { id: 'supplierCode', header: 'Supplier', sortable: true, cell: (r) => r.supplierCode, sub: (r) => r.supplierName },
+    { id: 'itemCode', header: 'Item', sortable: true, cell: (r) => <span className="font-mono">{r.itemCode}</span>, sub: (r) => r.itemName },
+    { id: 'qty', header: 'Scheduled', numeric: true, cell: (r) => `${r.qty} ${r.uomCode}` },
+    {
+      id: 'outstandingQty',
+      header: 'Outstanding',
+      numeric: true,
+      critical: true,
+      cell: (r) => `${r.outstandingQty} ${r.uomCode}`,
+      sub: (r) => `${r.receivedQty} received`,
+    },
+    { id: 'status', header: 'Status', cell: (r) => inboundBadge(r.status) },
+  ],
+  fields: [
+    { key: 'plantId', label: 'Plant', kind: 'select', required: true, options: 'plants', createOnly: true },
+    { key: 'supplierId', label: 'Supplier', kind: 'select', required: true, options: 'suppliers', createOnly: true },
+    { key: 'itemId', label: 'Item', kind: 'select', required: true, options: 'receivedItems', createOnly: true, hint: 'Raw material or consumables.' },
+    { key: 'qty', label: 'Quantity', kind: 'number', required: true, decimals: 6, positive: true, hint: "In the item's base unit." },
+    { key: 'expectedDate', label: 'Expected on', kind: 'date', required: true },
+    { key: 'note', label: 'Note', kind: 'text', maxLength: 500 },
+    {
+      key: 'cancelReason',
+      label: 'Cancel the rest — reason',
+      kind: 'text',
+      maxLength: 500,
+      editOnly: true,
+      hint: 'Fill in only to cancel what is still expected; what was received stays received.',
+    },
+  ],
+  blank: { plantId: '', supplierId: '', itemId: '', qty: '', expectedDate: '', note: '' },
+  toForm: (r) => ({ qty: r.qty, expectedDate: r.expectedDate, note: r.note ?? '', cancelReason: '' }),
+  facts: (r) => [
+    { label: 'Inbound', value: `${r.code} · ${r.plantCode}` },
+    { label: 'Supplier', value: `${r.supplierCode} · ${r.supplierName}` },
+    { label: 'Item', value: `${r.itemCode} · ${r.itemName}` },
+    { label: 'Received', value: `${r.receivedQty} of ${r.qty} ${r.uomCode} (${r.receipts} ${r.receipts === 1 ? 'receipt' : 'receipts'})` },
+    { label: 'Status', value: inboundBadge(r.status) },
+    ...(r.cancelReason ? [{ label: 'Cancelled', value: `${r.cancelReason}${r.cancelledByName ? ` — ${r.cancelledByName}` : ''}` }] : []),
+  ],
+  readOnly: (r) => (r.status === 'CANCELLED' ? 'A cancelled inbound line is history.' : undefined),
+  check: async (v, row): Promise<Record<string, string>> => {
+    const [item] = await queryAll<{ baseUomCode: string; baseUomDecimals: number }>('core.items', { id: row ? row.itemId : v.itemId! });
+    if (!item || !v.qty) return {};
+    const qty = unitPrecisionError(v.qty, item.baseUomCode, item.baseUomDecimals);
+    const problems: Record<string, string> = qty ? { qty } : {};
+    if (row && row.receipts > 0 && (v.qty !== row.qty || v.expectedDate !== row.expectedDate))
+      problems.qty = 'Something was received against this line: its quantity and date stay. Cancel the rest and add a new line instead.';
+    if (v.cancelReason && v.cancelReason.trim().length < 3) problems.cancelReason = 'Give the reason in at least 3 characters.';
+    return problems;
+  },
+  confirm: (v, row) =>
+    row && v.cancelReason
+      ? {
+          title: 'Cancel this inbound line',
+          description: `What is still expected of ${row.code} is no longer counted as supply. What was received stays received.`,
+          confirmLabel: 'Cancel the rest',
+        }
+      : {
+          title: row ? 'Save this inbound line' : 'Add this inbound line',
+          description: 'Planning counts it as projected supply from the expected day.',
+          confirmLabel: row ? 'Save' : 'Add line',
+        },
+  create: (v) =>
+    call(() =>
+      api.POST('/inventory/inbound-lines', {
+        body: { plantId: v.plantId!, supplierId: v.supplierId!, itemId: v.itemId!, qty: v.qty!, expectedDate: v.expectedDate!, note: v.note || null },
+      }),
+    ),
+  update: (r, v) => {
+    if (v.cancelReason)
+      return call(() =>
+        api.POST('/inventory/inbound-lines/{line}/actions/cancel', {
+          params: { path: { line: r.id } },
+          headers: ifMatch(r.version),
+          body: { reason: v.cancelReason!.trim() },
+        }),
+      );
+    const body: Record<string, unknown> = {};
+    if (v.qty !== r.qty) body.qty = v.qty;
+    if (v.expectedDate !== r.expectedDate) body.expectedDate = v.expectedDate;
+    if ((v.note || null) !== r.note) body.note = v.note || null;
+    return call(() => api.PATCH('/inventory/inbound-lines/{line}', { params: { path: { line: r.id } }, headers: ifMatch(r.version), body: body as never }));
+  },
+};

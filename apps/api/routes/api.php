@@ -7,6 +7,7 @@ use App\Modules\Core\Http\ResourceController;
 use App\Modules\Delivery\Http\DeliveryController;
 use App\Modules\Demand\Http\SalesOrderController;
 use App\Modules\Inventory\Http\AdjustmentController;
+use App\Modules\Inventory\Http\InboundScheduleController;
 use App\Modules\Inventory\Http\LotSplitController;
 use App\Modules\Inventory\Http\MaterialFlowController;
 use App\Modules\Inventory\Http\PeriodController;
@@ -17,6 +18,7 @@ use App\Modules\Planning\Http\BomController;
 use App\Modules\Planning\Http\BomRoutingMapController;
 use App\Modules\Planning\Http\ConversionProfileController;
 use App\Modules\Planning\Http\ItemWeightController;
+use App\Modules\Planning\Http\PlanParameterController;
 use App\Modules\Planning\Http\RoutingController;
 use App\Modules\Planning\Http\WoCloseExceptionController;
 use App\Modules\Planning\Http\WorkOrderController;
@@ -107,6 +109,9 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
 
     // Master Data → routings (doc 29 §1.3, doc 26 §2.3–§2.4a); lists are the planning.* query resources
     Route::prefix('planning')->name('planning.')->middleware('tenant')->group(function (): void {
+        // D-121: planning parameters per item + plant
+        Route::post('plan-parameters', [PlanParameterController::class, 'store'])->name('plan-parameters.store');
+        Route::patch('plan-parameters/{parameter}', [PlanParameterController::class, 'update'])->name('plan-parameters.update');
         Route::post('process-types', [RoutingController::class, 'storeProcessType'])->name('process-types.store');
         Route::patch('process-types/{processType}', [RoutingController::class, 'updateProcessType'])->name('process-types.update');
         Route::post('routings', [RoutingController::class, 'storeRouting'])->name('routings.store');
@@ -193,6 +198,10 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
     // Inventory postings (doc 32 §1.3, ADR-0014): one tenant transaction, retried on deadlock (the posting is idempotent)
     Route::prefix('inventory')->name('inventory.')->middleware(['tenant:retry'])->group(function (): void {
         Route::post('receipts', [ReceiptController::class, 'receive'])->name('receipts.store');
+        // D-087, D-121: supplier inbound schedule (reference data)
+        Route::post('inbound-lines', [InboundScheduleController::class, 'store'])->name('inbound-lines.store');
+        Route::patch('inbound-lines/{line}', [InboundScheduleController::class, 'update'])->name('inbound-lines.update');
+        Route::post('inbound-lines/{line}/actions/cancel', [InboundScheduleController::class, 'cancel'])->name('inbound-lines.cancel');
         Route::post('incoming-releases', [ReceiptController::class, 'release'])->name('incoming-releases.store');
         Route::post('transfers', [TransferController::class, 'transfer'])->name('transfers.store');
         Route::post('lot-splits', [LotSplitController::class, 'store'])->name('lot-splits.store');

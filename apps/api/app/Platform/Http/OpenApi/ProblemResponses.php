@@ -141,6 +141,12 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.planning.bom-routing-maps.reopen' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION']],
         'v1.planning.bom-routing-maps.approve' => self::TENANT_WRITE + self::SCOPED_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         // conversion data (doc 29 §1.5, D-080)
+        // D-121: planning parameters per item + plant (no approval) and the supplier inbound schedule (reference data)
+        'v1.planning.plan-parameters.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.plan-parameters.update' => self::MASTER_EDIT,
+        'v1.inventory.inbound-lines.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 422 => ['VALIDATION_FAILED']],
+        'v1.inventory.inbound-lines.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.inventory.inbound-lines.cancel' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
         'v1.planning.item-weights.store' => self::TENANT_WRITE + self::MASTER_403 + [409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.planning.item-weights.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
         'v1.planning.item-weights.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
