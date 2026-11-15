@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Traceability\Http\LotTraceController;
 use App\Platform\Database\EoraPostgresConnection;
 use Tests\Support\AccessFixtures;
 use Tests\Support\TenantFixtures;
@@ -10,6 +11,8 @@ use Tests\Support\TenantFixtures;
  * M4 step 9 (doc 33 §1.9, D-118, doc 14 #18): the lot trace reconstructs customer shipment → FG lot → WO/run → material
  * lot with actors and times, backward and forward, for CSA/INV/AUD of the plant only.
  */
+
+afterEach(fn () => LotTraceController::$maxDepth = 30);
 
 beforeEach(function () {
     $this->t = TenantFixtures::provision(2);
@@ -102,4 +105,16 @@ it('shows only the viewer\'s plants: another plant\'s inspector finds nothing; a
     spa($this)->postJson("/api/v1/inventory/reversals/{$undo}/approve", [], ['Idempotency-Key' => 'lt-reverse-0002'])->assertCreated();
     $a = collect(ltTrace($this, $f['aNo'], 'backward', ['lotId' => $f['lots'][0]])->assertOk()->json('data.nodes'))->firstWhere('depth', 0);
     expect($a['shipments'][0])->toMatchArray(['docNo' => $f['shipment']['docNo'], 'reversed' => true]);
+})->group('integration', 'traceability');
+
+it('says when the depth limit cuts the trace: the lot is marked and the trace truncated', function () {
+    $f = ltFixture($this, $this->t);
+    AccessFixtures::grant($this->t, $f['fgw']['id'], 'INV');
+    expect(ltTrace($this, $f['shipment']['docNo'])->assertOk()->json('data.truncated'))->toBeFalse();
+
+    // one level only: the FG lots are listed, the coil behind them is not
+    LotTraceController::$maxDepth = 0;
+    $trace = ltTrace($this, $f['shipment']['docNo'])->assertOk()->json('data');
+    expect($trace['truncated'])->toBeTrue()->and(collect($trace['nodes'])->pluck('depth')->unique()->all())->toBe([0])
+        ->and(collect($trace['nodes'])->every(fn (array $n) => $n['deeper'] === true))->toBeTrue();
 })->group('integration', 'traceability');

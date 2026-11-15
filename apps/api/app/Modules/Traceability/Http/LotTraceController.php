@@ -25,8 +25,8 @@ use stdClass;
  */
 final class LotTraceController
 {
-    /** Genealogy is followed this many levels deep at most. */
-    public const int MAX_DEPTH = 30;
+    /** Genealogy is followed this many levels deep at most; a lot with more beyond it says so (tests lower it). */
+    public static int $maxDepth = 30;
 
     /** A trace lists this many lots at most; a longer one is cut and says so. */
     public const int MAX_NODES = 2000;
@@ -131,7 +131,12 @@ final class LotTraceController
                    join inventory_documents d on d.id = g.document_id and d.status in ('POSTED', 'REVERSED')
                   where t.visible and t.depth < ? and not g.{$next} = any(t.path)
              )
-             select t.lot_id, t.edge_id, t.depth, t.steps, t.visible, d.doc_no, d.doc_type, d.status as doc_status,
+             select t.lot_id, t.edge_id, t.depth, t.steps, t.visible,
+                    -- cut by the depth limit: the lot was made of (or went into) more than is listed
+                    (t.visible and t.depth >= ? and exists (
+                        select 1 from genealogy_edges g2 join inventory_documents d2 on d2.id = g2.document_id and d2.status in ('POSTED', 'REVERSED')
+                         where g2.{$here} = t.lot_id and not g2.{$next} = any(t.path))) as deeper,
+                    d.doc_no, d.doc_type, d.status as doc_status,
                     d.posted_at, up.display_name as posted_by_name, r.run_no, w.wo_no,
                     trim_scale(g.qty_from)::text as qty_from, uf.code as uom_from, trim_scale(g.qty_to)::text as qty_to, ut.code as uom_to
                from t
@@ -143,7 +148,7 @@ final class LotTraceController
                left join uoms uf on uf.id = g.uom_from
                left join uoms ut on ut.id = g.uom_to
               limit ?",
-            ['{'.implode(',', $roots).'}', $plants, self::MAX_DEPTH, self::MAX_NODES * 4 + 1],
+            ['{'.implode(',', $roots).'}', $plants, self::$maxDepth, self::$maxDepth, self::MAX_NODES * 4 + 1],
         );
 
         // children of each row, by its steps (root lot, then the edges taken): a lot can be reached by several paths
@@ -164,8 +169,10 @@ final class LotTraceController
                 }
                 $key = (string) $e->steps;
                 $restricted = ! $e->visible;
+                $truncated = $truncated || (bool) $e->deeper;
                 $nodes[] = [
                     'key' => $key, 'parentKey' => $parentKey, 'depth' => (int) $e->depth, 'lotId' => (string) $e->lot_id, 'restricted' => $restricted,
+                    'deeper' => (bool) $e->deeper,
                     'via' => $e->edge_id === null ? null : ($restricted ? ['outsideYourPlants' => true] : [
                         'docNo' => $e->doc_no, 'docType' => (string) $e->doc_type, 'reversed' => $e->doc_status === 'REVERSED',
                         'runNo' => $e->run_no, 'workOrderNo' => $e->wo_no, 'postedByName' => $e->posted_by_name, 'postedAt' => $e->posted_at,

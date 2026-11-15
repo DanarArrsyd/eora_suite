@@ -13,6 +13,7 @@ const fg = {
   depth: 0,
   lotId: ID(1),
   restricted: false,
+  deeper: false,
   via: null,
   lotNo: 'L2611-0002',
   itemCode: 'BRK-A100',

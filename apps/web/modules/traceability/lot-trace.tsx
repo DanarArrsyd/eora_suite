@@ -55,6 +55,8 @@ type TraceNode = {
   depth: number;
   lotId: string;
   restricted: boolean;
+  /** cut by the depth limit: more lies beyond it */
+  deeper: boolean;
   via: Via | null;
   lotNo: string;
   itemCode: string;
@@ -258,7 +260,7 @@ function TraceTree({ direction, nodes, truncated, start }: { direction: Directio
         </p>
         {truncated ? (
           <InlineAlert tone="warning" title="The trace is cut" className="mb-3">
-            It reaches more lots than one page shows. Trace one of the lots below on its own.
+            It reaches more lots, or goes deeper, than one page shows. Trace one of the lots below on its own.
           </InlineAlert>
         ) : null}
         <ol aria-label={direction === 'backward' ? 'Backward trace' : 'Forward trace'} className="m-0 flex list-none flex-col divide-y divide-line p-0">
@@ -285,6 +287,11 @@ function TraceRow({ node: n, direction }: { node: TraceNode; direction: Directio
           <Badge tone={n.origin === 'RECEIPT' ? 'info' : 'neutral'}>{ORIGIN[n.origin]}</Badge>
           {via?.reversed ? <Badge tone="warning">Reversed posting</Badge> : null}
         </div>
+        {n.deeper ? (
+          <p className="mt-1 mb-0 text-[13px] text-ink-2">
+            {direction === 'backward' ? 'Made of more than is listed here' : 'Went into more than is listed here'} — trace {n.lotNo} on its own.
+          </p>
+        ) : null}
         {n.restricted ? <p className="mt-1 mb-0 text-[13px] text-ink-2">Outside your plants — the trace does not continue here.</p> : null}
         {via ? (
           <p className="mt-1 mb-0 text-[13px] text-ink-2 tabular-nums">
