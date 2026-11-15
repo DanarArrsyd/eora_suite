@@ -254,6 +254,25 @@ it('counts a planner who changed calculation rows in SQL as a preparer (SoD-07, 
     mpsAct($this, $m, 'approve')->assertForbidden()->assertJsonPath('code', 'SOD_VIOLATION');
 });
 
+it('lets nobody write another user into the preparers of an MPS (Codex #87)', function () {
+    $f = mpsFixture($this, $this->t);
+    $m = spa($this)->postJson('/api/v1/planning/mps-versions', ['plantId' => $f['plant']])->assertCreated()->json('data');
+    $csa = rtSwitch($this, $this->t, 'CSA');
+    foreach ([[(string) $f['ppc']['id'], $csa['id']], [(string) $csa['id'], $csa['id']]] as [$writer, $named]) {
+        try {
+            asApp($this->t, $writer, fn (EoraPostgresConnection $db) => $db->insert(
+                "insert into mps_contributors (tenant_id, mps_version_id, user_id, contribution) values (?, ?, ?, 'CALCULATED')", [$this->t['tenant'], $m['id'], $named]));
+            $this->fail('wrote a contributor');
+        } catch (QueryException $e) {
+            expect($e->getMessage())->toContain('recorded by its own planner');
+        }
+    }
+    mpsAs($this, $this->t, $f['ppc']);
+    $m = mpsAct($this, $m, 'submit')->assertOk()->json('data');
+    mpsAs($this, $this->t, $csa);
+    mpsAct($this, $m, 'approve')->assertOk()->assertJsonPath('data.status', 'APPROVED');
+});
+
 it('keeps the MPS to the planners and approvers of its plant, and lets a planner cancel a draft', function () {
     $f = mpsFixture($this, $this->t);
     $m = spa($this)->postJson('/api/v1/planning/mps-versions', ['plantId' => $f['plant']])->assertCreated()->json('data');

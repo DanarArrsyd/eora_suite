@@ -277,22 +277,43 @@ return new class extends Migration
             CREATE POLICY tenant_isolation ON mps_contributors TO eora_app
               USING (tenant_id = (SELECT c.tenant FROM ctx_api.context() c)) WITH CHECK (tenant_id = (SELECT c.tenant FROM ctx_api.context() c));
             GRANT SELECT, INSERT ON mps_contributors TO eora_app;
+            -- a contribution is the writer's own, to a draft or submitted MPS of a plant where they plan
+            CREATE OR REPLACE FUNCTION eora_guard_mps_contributor() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            DECLARE
+              v record;
+            BEGIN
+              SELECT m.status, m.plant_id INTO v FROM public.mps_versions m WHERE m.tenant_id = NEW.tenant_id AND m.id = NEW.mps_version_id;
+              IF NEW.user_id IS DISTINCT FROM (SELECT c.actor FROM ctx_api.context() c) OR v.status NOT IN ('DRAFT', 'SUBMITTED')
+                 OR NOT (public.eora_actor_may('planning.mps.create', v.plant_id) OR public.eora_actor_may('planning.mps.submit', v.plant_id)) THEN
+                RAISE EXCEPTION 'a contribution to an MPS is recorded by its own planner' USING ERRCODE = '42501';
+              END IF;
+              RETURN NEW;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_guard_mps_contributor() FROM PUBLIC;
+            CREATE TRIGGER guard_mps_contributor BEFORE INSERT ON mps_contributors FOR EACH ROW EXECUTE FUNCTION eora_guard_mps_contributor();
 
             -- records every name a row carries on each write (insert-only, duplicates ignored: never updated or deleted by the app)
             CREATE OR REPLACE FUNCTION eora_record_mps_contributor() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            DECLARE
+              a uuid := (SELECT c.actor FROM ctx_api.context() c);
             BEGIN
+              -- a name is recorded by the write of its own user (the guards make every name the writer's when it is set)
               IF TG_TABLE_NAME = 'mps_planned_orders' THEN
-                IF NEW.adjusted_by IS NOT NULL THEN
+                IF NEW.adjusted_by = a THEN
                   INSERT INTO public.mps_contributors (tenant_id, mps_version_id, user_id, contribution)
                   VALUES (NEW.tenant_id, NEW.mps_version_id, NEW.adjusted_by, 'ADJUSTED') ON CONFLICT DO NOTHING;
                 END IF;
                 RETURN NULL;
               END IF;
-              IF NEW.calculated_by IS NOT NULL THEN
+              IF NEW.status NOT IN ('DRAFT', 'SUBMITTED') THEN
+                RETURN NULL; -- approval, supersession, cancellation: nothing prepared
+              END IF;
+              IF NEW.calculated_by = a THEN
                 INSERT INTO public.mps_contributors (tenant_id, mps_version_id, user_id, contribution)
                 VALUES (NEW.tenant_id, NEW.id, NEW.calculated_by, 'CALCULATED') ON CONFLICT DO NOTHING;
               END IF;
-              IF NEW.submitted_by IS NOT NULL THEN
+              IF NEW.submitted_by = a THEN
                 INSERT INTO public.mps_contributors (tenant_id, mps_version_id, user_id, contribution)
                 VALUES (NEW.tenant_id, NEW.id, NEW.submitted_by, 'SUBMITTED') ON CONFLICT DO NOTHING;
               END IF;
@@ -440,6 +461,7 @@ return new class extends Migration
         }
         DB::unprepared(<<<'SQL'
             DROP TABLE IF EXISTS mps_contributors;
+            DROP FUNCTION IF EXISTS eora_guard_mps_contributor();
             DROP TABLE IF EXISTS mps_versions;
             DROP FUNCTION IF EXISTS eora_record_mps_contributor();
             DROP FUNCTION IF EXISTS eora_guard_mps_rows();
