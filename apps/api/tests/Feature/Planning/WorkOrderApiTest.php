@@ -41,6 +41,18 @@ it('drafts a WO, asks for release, and a second person releases it with the BOM 
         ->toBe(['wo.release_requested', 'wo.released']);
     spa($this)->getJson('/api/v1/query/planning.work_orders?q=brk')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.status', 'RELEASED');
     expect($approver)->toBeArray();
+
+    // the master changes after release (BOM v2 approved: more coil per piece); the released WO keeps its snapshot (doc 33 §4 item 4)
+    $v2 = spa($this)->postJson('/api/v1/planning/bom-versions', ['itemId' => $s['item']['id'], 'effectiveFrom' => rtDayFrom($s['today'], 1), 'copyFromVersionId' => $s['bom']['id']])->assertCreated()->json('data');
+    $v2 = spa($this)->putJson("/api/v1/planning/bom-versions/{$v2['id']}/lines", ['lines' => [
+        ['lineNo' => 10, 'componentItemId' => $s['coil']['id'], 'grossQtyPer' => '0.6', 'uomId' => $s['coil']['baseUomId']],
+        ['lineNo' => 20, 'componentItemId' => $s['nut']['id'], 'grossQtyPer' => '2', 'uomId' => $s['nut']['baseUomId']],
+    ]], ['If-Match' => '"'.$v2['version'].'"'])->assertOk()->json('data');
+    spa($this)->postJson("/api/v1/planning/bom-versions/{$v2['id']}/actions/submit")->assertOk();
+    rtSwitch($this, $this->t, 'CSA');
+    spa($this)->postJson("/api/v1/planning/bom-versions/{$v2['id']}/actions/approve")->assertOk();
+    $after = spa($this)->getJson("/api/v1/planning/work-orders/{$wo['id']}")->assertOk()->assertJsonPath('data.bomVersionNo', 1)->json('data');
+    expect(array_map(fn ($m) => [$m['itemCode'], $m['requiredQty']], $after['materials']))->toBe([['COIL-9', '50'], ['NUT-9', '200']]);
 })->group('integration', 'planning');
 
 it('refuses the requester as releaser in the database too', function () {

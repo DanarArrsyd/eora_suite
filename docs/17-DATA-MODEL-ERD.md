@@ -118,6 +118,15 @@ erDiagram
 
 > **2026-10-09 (D-053, review status):** B1 tenancy/identity refinements are in doc 25 (architecture review); B2 master-data and routing additions — `routings` header, `process_types`, operation machines/tools/inspections, `die_items`, effective ranges, BOM–routing map per version pair, and the B6 `consumption_line_allocations` entity (one consume leg per lot per posting allocated to several WO material lines; BR-OUT-01 unchanged; owner-approved direction) — are in doc 26 (planning only). Both are PROPOSED and not part of the approved logical model until the owner approves them.
 
+### M4 as built (D-107..D-118, migrations 002600..003500)
+Physical tables of the thin flow; all tenant-scoped with forced RLS on the signed context and composite tenant FKs (§3).
+- `sales_order_headers` → `sales_order_lines` (one demand identity per line, customer part, UOM, plant) → `delivery_schedule_lines` (requirement date, qty, status Draft/Firm/Partially fulfilled/Fulfilled/Cancelled; composite FK `(tenant, so_line, uom, plant)` keeps the line's UOM and plant) — 002600, D-108.
+- `work_orders` (manual WO, reason, optional `schedule_line_id` pegging, BOM/routing/net-weight snapshot ids at release, `closed_by`/`closed_at` with CHECK = CLOSED) → `work_order_materials` (required qty per BOM line) — 002700, 003400, D-109, D-117.
+- `production_runs` (one WO at one work center, Open → Closed/Cancelled) — 002900, D-111. Production postings, QC dispositions, FG receipts, picks, shipments and WO close exceptions are `inventory_documents` types with their legs in `inventory_movements` (doc 04 rows 3–14); `genealogy_edges` link input lots to output lots.
+- `stock_allocations` (row 2 of doc 04, demand = schedule line) and `inventory_movements.schedule_line_id` (staged and shipped quantities per line) — 003200, D-115.
+- `shipment_details` (vehicle, driver per shipment document) — 003300, D-116.
+- No table for the lot trace (D-118): it reads `lots`, `genealogy_edges`, `inventory_documents` and `inventory_movements`.
+
 ## 3. Tenant isolation checklist (per table)
 1. `tenant_id NOT NULL`, leading column of every index used by queries.
 2. Composite FK to every tenant parent.
