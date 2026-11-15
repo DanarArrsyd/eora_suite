@@ -65,6 +65,23 @@ APR role adds `A` on configured entities; it never adds `P` on the same document
 | `master.conversion` (NW, conversion profile) | VCSA | V | V | V | VA | V |
 C = create and edit (organisation and part master have no approval lifecycle). `master.*.approve` is sensitive (D-B1-25); maker ≠ checker per version (D-060). TENANT_ADMIN, OPR, MAD and APR get no master permission by default. Export uses `exchange.export` with the view permission. Existing tenants receive later template additions through `eora:tenants:sync`.
 
+### M4 as implemented (D-107..D-118, seeded by migrations 002600..003500)
+The role templates below are what `eora:tenants:sync` grants; they supersede the planning rows of §2 and §5 where these differ. Letters as §3.
+
+| Resource | Templates | Used for |
+|---|---|---|
+| `demand.sales_order` | V: AUD CSA DLV FGW PPC · C S P: PPC | Draft/edit (C), confirm and change confirmed (P); no second approver (D-108) |
+| `planning.wo` | V: all operational roles · C S P: PPC · A: CSA | Draft, ask release (PPC), release by a second person (CSA, D-109); close (P, D-117) |
+| `planning.wo_close_exception` | V: AUD CSA INV PPC · R: PPC · A: CSA INV | Ask with reason (PPC), decided by CSA/INV, never who asked (D-117) |
+| `materials.issue` | V: AUD CSA INV MAT PPC PRL · C S: MAT · P: MAT PRL | Issue to a work center (MAT, D-110) |
+| `materials.return` | V: AUD CSA INV MAT OPR PPC PRL · C: OPR PRL · S: PRL · P: MAT | PRL asks, MAT receives measured qty (D-110) |
+| `production.run / production.posting` | V: AUD CSA INV MAT OPR PPC PRL QCI QCS · C S: OPR PRL · P: PRL | Open/close run, post consumption + output + scrap (PRL, D-111) |
+| `quality.inspection` | V: AUD CSA FGW INV PPC PRL QCI QCS · C S P: QCI QCS | QC disposition of a Pending QC lot; never by its output reporter (SoD-01, D-113) |
+| `quality.disposition_release` | V: AUD CSA FGW INV PPC · P: QCI QCS · A: QCS | Release out of HOLD/REJECTED: QCI asks, QCS decides (D-113) |
+| `warehouse.fg_receipt` | V: AUD CSA DLV FGW INV PPC QCI QCS · C S P: FGW | FG receipt of QC-released goods (D-114) |
+| `delivery.shipment` | V: AUD CSA DLV FGW INV PPC · C S: DLV · P: DLV FGW | Allocate/release (C, DLV); pick (P, FGW); ship (P, DLV or FGW) (D-115, D-116) |
+| `traceability.lot_trace` | V: AUD CSA INV | Backward/forward lot trace (D-118) |
+
 ## 3. Separation-of-duties rules (enforced in policy layer)
 | SoD-ID | Conflict | Rule |
 |---|---|---|
