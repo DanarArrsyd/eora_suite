@@ -47,7 +47,9 @@ it('documents every v1 error as problem+json with codes from the doc 24 §5 cata
         // work orders (M4)
         'WO_MASTER_MISSING', 'PRODUCTION_ALREADY_POSTED', 'NO_VIRTUAL_LOCATION',
         // delivery (M4)
-        'OVER_ALLOCATION'];
+        'OVER_ALLOCATION',
+        // MPS (M5)
+        'MPS_INPUTS_CHANGED'];
     $routes = collect(Route::getRoutes()->getRoutes())->map->getName()->filter(fn ($n) => is_string($n) && str_starts_with($n, 'v1.'))->values();
     $declared = array_keys(ProblemResponses::ERRORS);
 

@@ -144,6 +144,15 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         // D-121: planning parameters per item + plant (no approval) and the supplier inbound schedule (reference data)
         'v1.planning.plan-parameters.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 422 => ['VALIDATION_FAILED']],
         'v1.planning.plan-parameters.update' => self::MASTER_EDIT,
+        // D-123: MPS per plant; approval by a second person while the inputs are unchanged
+        'v1.planning.mps-versions.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.planning.mps-versions.show' => self::TENANT_READ + [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN'], 404 => ['NOT_FOUND']],
+        'v1.planning.mps-versions.recalculate' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.mps-versions.planned-orders.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.mps-versions.submit' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.mps-versions.cancel' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.mps-versions.return' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.mps-versions.approve' => self::MASTER_EDIT + self::SCOPED_403 + [409 => ['INVALID_STATE_TRANSITION', 'MPS_INPUTS_CHANGED']],
         'v1.inventory.inbound-lines.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 422 => ['VALIDATION_FAILED']],
         'v1.inventory.inbound-lines.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
         'v1.inventory.inbound-lines.cancel' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],

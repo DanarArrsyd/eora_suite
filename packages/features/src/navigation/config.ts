@@ -168,7 +168,14 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Production Planning',
         items: [
-          { id: 'mps', label: 'Master Production Schedule', icon: CalendarDays, release: 'R1', phase: 'later' },
+          {
+            id: 'mps',
+            label: 'Master Production Schedule',
+            icon: CalendarDays,
+            release: 'R1',
+            permission: ['planning.mps.view', 'planning.mps.approve'],
+            phase: 5,
+          },
           {
             id: 'work-orders',
             label: 'Work Orders',

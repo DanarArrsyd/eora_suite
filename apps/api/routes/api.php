@@ -19,6 +19,7 @@ use App\Modules\Planning\Http\BomController;
 use App\Modules\Planning\Http\BomRoutingMapController;
 use App\Modules\Planning\Http\ConversionProfileController;
 use App\Modules\Planning\Http\ItemWeightController;
+use App\Modules\Planning\Http\MpsController;
 use App\Modules\Planning\Http\PlanParameterController;
 use App\Modules\Planning\Http\RoutingController;
 use App\Modules\Planning\Http\WoCloseExceptionController;
@@ -113,6 +114,15 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         // D-121: planning parameters per item + plant
         Route::post('plan-parameters', [PlanParameterController::class, 'store'])->name('plan-parameters.store');
         Route::patch('plan-parameters/{parameter}', [PlanParameterController::class, 'update'])->name('plan-parameters.update');
+        // D-123: master production schedule per plant
+        Route::post('mps-versions', [MpsController::class, 'store'])->name('mps-versions.store');
+        Route::get('mps-versions/{version}', [MpsController::class, 'show'])->name('mps-versions.show');
+        Route::post('mps-versions/{version}/actions/recalculate', [MpsController::class, 'recalculate'])->name('mps-versions.recalculate');
+        Route::patch('mps-versions/{version}/planned-orders/{order}', [MpsController::class, 'adjust'])->name('mps-versions.planned-orders.update');
+        Route::post('mps-versions/{version}/actions/submit', [MpsController::class, 'submit'])->name('mps-versions.submit');
+        Route::post('mps-versions/{version}/actions/cancel', [MpsController::class, 'cancel'])->name('mps-versions.cancel');
+        Route::post('mps-versions/{version}/actions/return', [MpsController::class, 'returnToDraft'])->name('mps-versions.return');
+        Route::post('mps-versions/{version}/actions/approve', [MpsController::class, 'approve'])->name('mps-versions.approve');
         Route::post('process-types', [RoutingController::class, 'storeProcessType'])->name('process-types.store');
         Route::patch('process-types/{processType}', [RoutingController::class, 'updateProcessType'])->name('process-types.update');
         Route::post('routings', [RoutingController::class, 'storeRouting'])->name('routings.store');
