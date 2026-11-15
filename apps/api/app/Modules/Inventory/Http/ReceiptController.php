@@ -89,8 +89,9 @@ final class ReceiptController
         $supplier = $db->selectOne("select id from suppliers where id = ? and status = 'ACTIVE'", [$supplierId])
             ?? throw ValidationException::withMessages(['supplierId' => 'Unknown or inactive supplier.']);
         $location = $this->rmLocation($db, $plant, $locationId, 'locationId');
-        if ($inbound !== null && $db->selectOne('select 1 as ok from supplier_inbound_lines where id = ? and plant_id = ? and supplier_id = ? and item_id = ? and cancelled_at is null',
-            [$inbound, $plant, $supplier->id, $item->id]) === null) {
+        // held until commit: a cancel in flight finishes first, then this reads the line as committed (D-121)
+        if ($inbound !== null && $db->selectOne('select l.cancelled_at is null and l.plant_id = ? and l.supplier_id = ? and l.item_id = ? as ok from supplier_inbound_lines l where l.id = ? for share',
+            [$plant, $supplier->id, $item->id, $inbound])?->ok !== true) {
             throw ValidationException::withMessages(['inboundLineId' => 'Choose an open inbound line of this supplier and item at this plant.']);
         }
         // the day the receipt belongs to, resolved once: its lot number and its posting use the same day

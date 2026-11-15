@@ -172,13 +172,17 @@ return new class extends Migration
 
             -- a receipt names an open line of its plant, supplier and item, with its posting
             CREATE OR REPLACE FUNCTION eora_guard_inbound_receipts() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            DECLARE
+              l record;
             BEGIN
-              IF NOT EXISTS (
+              -- the share lock waits for a cancel in flight and reads the line as it committed
+              SELECT x.plant_id, x.supplier_id, x.item_id, x.cancelled_at INTO l
+                FROM public.supplier_inbound_lines x WHERE x.tenant_id = NEW.tenant_id AND x.id = NEW.inbound_line_id FOR SHARE;
+              IF l.cancelled_at IS NOT NULL OR l.plant_id IS NULL OR NOT EXISTS (
                 SELECT 1 FROM public.inventory_documents d
-                  JOIN public.supplier_inbound_lines l ON l.tenant_id = d.tenant_id AND l.id = NEW.inbound_line_id
                  WHERE d.tenant_id = NEW.tenant_id AND d.id = NEW.document_id AND d.doc_type = 'RM_RECEIPT' AND d.status = 'POSTED'
                    AND d.posted_by = (SELECT c.actor FROM ctx_api.context() c) AND d.posted_at = pg_catalog.now()
-                   AND l.cancelled_at IS NULL AND l.plant_id = d.plant_id AND d.source_type = 'supplier' AND l.supplier_id = d.source_id
+                   AND l.plant_id = d.plant_id AND d.source_type = 'supplier' AND l.supplier_id = d.source_id
                    AND EXISTS (SELECT 1 FROM public.inventory_movements m WHERE m.tenant_id = d.tenant_id AND m.document_id = d.id AND m.item_id = l.item_id)) THEN
                 RAISE EXCEPTION 'a receipt names an open inbound line of its plant, supplier and item, with its posting' USING ERRCODE = '23514';
               END IF;

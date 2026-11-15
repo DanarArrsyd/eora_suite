@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Platform\Database\EoraPostgresConnection;
+use App\Platform\Tenancy\TenantContext;
+use App\Platform\Tenancy\TenantTransaction;
 use Illuminate\Database\QueryException;
 use Tests\Support\AccessFixtures;
 use Tests\Support\TenantFixtures;
@@ -108,4 +110,21 @@ it('schedules supplier deliveries; receipts against a line move it to partially 
     // only materials or a planner of the plant writes the schedule
     rtSwitch($this, $this->t, 'INV');
     $line()->assertForbidden();
+})->group('integration', 'inventory');
+
+it('makes a receipt naming an inbound line wait for a cancel in flight, then refuses it (Codex on #85)', function () {
+    $f = rcFixture($this->t);
+    $mat = rtSwitch($this, $this->t, 'MAT');
+    $a = spa($this)->postJson('/api/v1/inventory/inbound-lines', ['plantId' => $f['plant'], 'supplierId' => $f['supplier'], 'itemId' => $f['coil'], 'qty' => '100',
+        'expectedDate' => $f['today']])->assertCreated()->json('data');
+    $tx = app(TenantTransaction::class);
+    config(['database.connections.pgsql_takeover' => config('database.connections.pgsql')]);
+    // the cancel holds the line while the receipt comes in: the receipt waits, gives up, nothing is posted
+    $tx->run(TenantContext::forTenant($this->t['tenant'], (string) $mat['id']), function (EoraPostgresConnection $db) use ($a, $f) {
+        $db->update("update supplier_inbound_lines set cancelled_at = now(), cancelled_by = (select c.actor from ctx_api.context() c), cancel_reason = 'Supplier short' where id = ?", [$a['id']]);
+        rcReceive($this, $f, ['qty' => '10', 'inboundLineId' => $a['id']], 'inb-race-0001')->assertStatus(503)->assertJsonPath('code', 'RETRYABLE_CONFLICT');
+    }, 'pgsql_takeover');
+    // committed, the cancel stands: the same receipt is refused, also straight in the database
+    rcReceive($this, $f, ['qty' => '10', 'inboundLineId' => $a['id']], 'inb-race-0001')->assertStatus(422)->assertJsonValidationErrors(['inboundLineId']);
+    expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select count(*) as n from inbound_receipts')->n))->toBe(0);
 })->group('integration', 'inventory');
