@@ -118,3 +118,20 @@ it('says when the depth limit cuts the trace: the lot is marked and the trace tr
     expect($trace['truncated'])->toBeTrue()->and(collect($trace['nodes'])->pluck('depth')->unique()->all())->toBe([0])
         ->and(collect($trace['nodes'])->every(fn (array $n) => $n['deeper'] === true))->toBeTrue();
 })->group('integration', 'traceability');
+
+it('marks a reversed supplier receipt on the lot it received (D-118)', function () {
+    $f = ltFixture($this, $this->t);
+    signIn($this, $f['mat'], $this->t);
+    $received = spa($this)->postJson('/api/v1/inventory/receipts', ['plantId' => $f['plant'], 'itemId' => $f['coil']['id'], 'locationId' => $f['rack'], 'supplierId' => $f['supplier'],
+        'qty' => '25', 'supplierLotNo' => 'HEAT-9'], ['Idempotency-Key' => 'lt-receipt-0001'])->assertCreated()->json('data');
+    AccessFixtures::grant($this->t, $f['mat']['id'], 'INV');
+    $undo = spa($this)->postJson('/api/v1/inventory/reversals', ['documentId' => $received['documentId'], 'reason' => 'Wrong supplier'], ['Idempotency-Key' => 'lt-reverse-0011'])
+        ->assertCreated()->json('data.documentId');
+    $trace = fn () => collect(ltTrace($this, $received['lotNo'], 'backward', ['lotId' => $received['lotId']])->assertOk()->json('data.nodes'))->firstWhere('depth', 0);
+    expect($trace()['receipt'])->toMatchArray(['docNo' => $received['docNo'], 'reversed' => false]);
+
+    signIn($this, $f['dlv'], $this->t);
+    AccessFixtures::grant($this->t, $f['dlv']['id'], 'CSA');
+    spa($this)->postJson("/api/v1/inventory/reversals/{$undo}/approve", [], ['Idempotency-Key' => 'lt-reverse-0012'])->assertCreated();
+    expect($trace()['receipt'])->toMatchArray(['docNo' => $received['docNo'], 'reversed' => true]);
+})->group('integration', 'traceability');

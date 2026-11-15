@@ -53,6 +53,7 @@ const coil = {
   supplierLotNo: 'HEAT-A102',
   receipt: {
     docNo: 'RCV-P1-2026-0002',
+    reversed: false,
     supplierCode: 'SUP-STEEL',
     supplierName: 'Sample steel service centre',
     postedByName: 'Materials',

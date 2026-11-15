@@ -64,7 +64,14 @@ type TraceNode = {
   uomCode: string;
   origin: 'RECEIPT' | 'OUTPUT' | 'SPLIT';
   supplierLotNo: string | null;
-  receipt: { docNo: string; supplierCode: string | null; supplierName: string | null; postedByName: string | null; postedAt: string | null } | null;
+  receipt: {
+    docNo: string;
+    reversed: boolean;
+    supplierCode: string | null;
+    supplierName: string | null;
+    postedByName: string | null;
+    postedAt: string | null;
+  } | null;
   shipments: Shipment[];
 };
 
@@ -327,6 +334,12 @@ function TraceRow({ node: n, direction }: { node: TraceNode; direction: Directio
             ) : null}
             {n.receipt.postedByName ? ` · ${n.receipt.postedByName}` : ''}
             {n.receipt.postedAt ? `, ${when(n.receipt.postedAt)}` : ''}
+            {n.receipt.reversed ? (
+              <>
+                {' '}
+                <Badge tone="warning">Reversed receipt</Badge>
+              </>
+            ) : null}
           </p>
         ) : null}
         {n.shipments.length > 0 ? (

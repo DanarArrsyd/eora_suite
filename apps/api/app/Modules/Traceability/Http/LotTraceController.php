@@ -209,10 +209,10 @@ final class LotTraceController
     {
         $rows = $db->select(
             "select l.id, l.lot_no, l.origin, l.supplier_lot_no, i.code as item_code, i.name as item_name, u.code as uom,
-                    rc.doc_no as receipt_no, rc.posted_at as received_at, rc.received_by, rc.supplier_code, rc.supplier_name
+                    rc.doc_no as receipt_no, rc.status as receipt_status, rc.posted_at as received_at, rc.received_by, rc.supplier_code, rc.supplier_name
                from lots l join items i on i.id = l.item_id join uoms u on u.id = i.base_uom_id
                left join lateral (
-                    select d.doc_no, d.posted_at, up.display_name as received_by, s.code as supplier_code, s.name as supplier_name
+                    select d.doc_no, d.status, d.posted_at, up.display_name as received_by, s.code as supplier_code, s.name as supplier_name
                       from inventory_movements m join inventory_documents d on d.id = m.document_id and d.plant_id = any(?::uuid[])
                       left join users up on up.id = d.posted_by
                       left join suppliers s on d.source_type = 'supplier' and s.id = d.source_id
@@ -227,7 +227,7 @@ final class LotTraceController
                 'lotNo' => (string) $r->lot_no, 'itemCode' => (string) $r->item_code, 'itemName' => (string) $r->item_name, 'uomCode' => (string) $r->uom,
                 'origin' => (string) $r->origin, 'supplierLotNo' => $r->supplier_lot_no,
                 'receipt' => $r->receipt_no === null ? null : [
-                    'docNo' => (string) $r->receipt_no, 'supplierCode' => $r->supplier_code, 'supplierName' => $r->supplier_name,
+                    'docNo' => (string) $r->receipt_no, 'reversed' => $r->receipt_status === 'REVERSED', 'supplierCode' => $r->supplier_code, 'supplierName' => $r->supplier_name,
                     'postedByName' => $r->received_by, 'postedAt' => $r->received_at,
                 ],
             ];
