@@ -150,6 +150,34 @@ it('lets the planner adjust a planned order with a reason, and a second person a
     }
 });
 
+it('keeps everyone who adjusted a planned order out of the approval, even after another planner adjusted it again (SoD-07, Codex #87)', function () {
+    $f = mpsFixture($this, $this->t);
+    $m = spa($this)->postJson('/api/v1/planning/mps-versions', ['plantId' => $f['plant']])->assertCreated()->json('data');
+    $order = $m['items'][0]['plannedOrders'][0];
+    $adjust = fn (string $qty, int $version) => spa($this)->patchJson("/api/v1/planning/mps-versions/{$m['id']}/planned-orders/{$order['id']}",
+        ['qty' => $qty, 'dueDate' => $order['dueDate'], 'reason' => 'Die run size'], ['If-Match' => '"'.$version.'"']);
+    // a planner who also approves adjusts first; the calculating planner adjusts again and submits
+    $both = rtSwitch($this, $this->t, 'PPC');
+    AccessFixtures::grant($this->t, $both['id'], 'CSA', ['TENANT']);
+    $m = $adjust('100', $m['version'])->assertOk()->json('data');
+    // the grid follows the adjusted plan: 100 of 270 leaves a shortage of 170 in that week
+    expect(collect($m['items'][0]['buckets'])->firstWhere('weekStart', $f['weekB']))->toMatchArray(['plannedQty' => '100', 'netRequirement' => '270', 'closing' => '-170']);
+    mpsAs($this, $this->t, $f['ppc']);
+    $m = $adjust('300', $m['version'])->assertOk()->json('data');
+    $m = mpsAct($this, $m, 'submit')->assertOk()->json('data');
+    mpsAs($this, $this->t, $both);
+    mpsAct($this, $m, 'approve')->assertForbidden()->assertJsonPath('code', 'SOD_VIOLATION');
+    try {
+        asApp($this->t, (string) $both['id'], fn (EoraPostgresConnection $db) => $db->update(
+            "update mps_versions set status = 'APPROVED', approved_at = now(), approved_by = ? where id = ?", [$both['id'], $m['id']]));
+        $this->fail('approved by an earlier adjuster');
+    } catch (QueryException $e) {
+        expect($e->getMessage())->toContain('did not prepare it (SoD-07)');
+    }
+    expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
+        'select count(*) as n from mps_contributors where mps_version_id = ?', [$m['id']])->n))->toBe(4);
+});
+
 it('keeps the MPS to the planners and approvers of its plant, and lets a planner cancel a draft', function () {
     $f = mpsFixture($this, $this->t);
     $m = spa($this)->postJson('/api/v1/planning/mps-versions', ['plantId' => $f['plant']])->assertCreated()->json('data');

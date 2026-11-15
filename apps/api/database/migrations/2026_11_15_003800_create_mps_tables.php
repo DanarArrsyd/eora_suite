@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\DB;
  *   DRAFT → SUBMITTED → APPROVED → SUPERSEDED; SUBMITTED may go back to DRAFT with a reason, a DRAFT may be cancelled.
  *   A planner (`planning.mps.create`) calculates and adjusts it, submits it (`planning.mps.submit`); a CSA approves it
  *   (`planning.mps.approve`), never the one who calculated, submitted or adjusted it (SoD-07, also in SQL). One open
- *   (DRAFT/SUBMITTED) and one APPROVED version per plant. `input_fingerprint` is the hash of what it was calculated
+ *   (DRAFT/SUBMITTED) and one APPROVED version per plant. `mps_contributors` keeps everyone who calculated, submitted
+ *   or adjusted a version for its whole life (SoD checks it, not only the latest names). `input_fingerprint` is the hash of what it was calculated
  *   from; the API refuses approval when the inputs changed since (D-123 (2)).
  * - What a calculation wrote, per FG item: `mps_items` (opening on hand, out-of-scope allocation, safety stock, Pending QC
  *   shown only), `mps_demands` (firm outstanding per schedule line and net forecast per forecast line, each on its day),
@@ -253,6 +254,54 @@ return new class extends Migration
               CHECK (status <> 'OVERLOAD' OR load_hours > available_hours)
             );
 
+            -- everyone who prepared a version (calculated, submitted, adjusted a planned order), kept for its whole life:
+            -- none of them approves it (SoD-07), even after a later recalculation or adjustment overwrote their name
+            CREATE TABLE mps_contributors (
+              tenant_id uuid NOT NULL REFERENCES tenants (id),
+              id uuid NOT NULL DEFAULT uuidv7(),
+              mps_version_id uuid NOT NULL,
+              user_id uuid NOT NULL,
+              contribution text NOT NULL CHECK (contribution IN ('CALCULATED', 'SUBMITTED', 'ADJUSTED')),
+              created_at timestamptz NOT NULL,
+              created_by uuid NOT NULL,
+              updated_at timestamptz NOT NULL,
+              updated_by uuid NOT NULL,
+              version integer NOT NULL,
+              PRIMARY KEY (id),
+              UNIQUE (tenant_id, id),
+              UNIQUE (tenant_id, mps_version_id, user_id, contribution),
+              FOREIGN KEY (tenant_id, mps_version_id) REFERENCES mps_versions (tenant_id, id)
+            );
+            CREATE TRIGGER stamp_audit BEFORE INSERT OR UPDATE ON mps_contributors FOR EACH ROW EXECUTE FUNCTION eora_stamp_audit();
+            ALTER TABLE mps_contributors ENABLE ROW LEVEL SECURITY, FORCE ROW LEVEL SECURITY;
+            CREATE POLICY tenant_isolation ON mps_contributors TO eora_app
+              USING (tenant_id = (SELECT c.tenant FROM ctx_api.context() c)) WITH CHECK (tenant_id = (SELECT c.tenant FROM ctx_api.context() c));
+            GRANT SELECT, INSERT ON mps_contributors TO eora_app;
+
+            -- records each contribution as it happens (insert-only: never updated or deleted by the app)
+            CREATE OR REPLACE FUNCTION eora_record_mps_contributor() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            BEGIN
+              IF TG_TABLE_NAME = 'mps_planned_orders' THEN
+                IF NEW.adjusted_by IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.adjusted_at IS DISTINCT FROM OLD.adjusted_at) THEN
+                  INSERT INTO public.mps_contributors (tenant_id, mps_version_id, user_id, contribution)
+                  VALUES (NEW.tenant_id, NEW.mps_version_id, NEW.adjusted_by, 'ADJUSTED') ON CONFLICT DO NOTHING;
+                END IF;
+                RETURN NULL;
+              END IF;
+              IF TG_OP = 'INSERT' OR NEW.calculated_at IS DISTINCT FROM OLD.calculated_at THEN
+                INSERT INTO public.mps_contributors (tenant_id, mps_version_id, user_id, contribution)
+                VALUES (NEW.tenant_id, NEW.id, NEW.calculated_by, 'CALCULATED') ON CONFLICT DO NOTHING;
+              END IF;
+              IF NEW.submitted_by IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.submitted_at IS DISTINCT FROM OLD.submitted_at) THEN
+                INSERT INTO public.mps_contributors (tenant_id, mps_version_id, user_id, contribution)
+                VALUES (NEW.tenant_id, NEW.id, NEW.submitted_by, 'SUBMITTED') ON CONFLICT DO NOTHING;
+              END IF;
+              RETURN NULL;
+            END
+            $fn$;
+            REVOKE ALL ON FUNCTION eora_record_mps_contributor() FROM PUBLIC;
+            CREATE TRIGGER record_mps_contributor AFTER INSERT OR UPDATE ON mps_versions FOR EACH ROW EXECUTE FUNCTION eora_record_mps_contributor();
+
             -- who writes an MPS, and how its status moves (BR-PLN-04, SoD-07)
             CREATE OR REPLACE FUNCTION eora_guard_mps_version() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
             DECLARE
@@ -290,7 +339,7 @@ return new class extends Migration
                     RAISE EXCEPTION 'a submitted MPS is approved or returned by an approver of the plant' USING ERRCODE = '42501';
                   END IF;
                   IF NEW.status = 'APPROVED' AND (NEW.approved_by IS DISTINCT FROM a OR a IN (OLD.calculated_by, OLD.submitted_by)
-                     OR EXISTS (SELECT 1 FROM public.mps_planned_orders o WHERE o.tenant_id = NEW.tenant_id AND o.mps_version_id = NEW.id AND o.adjusted_by = a)) THEN
+                     OR EXISTS (SELECT 1 FROM public.mps_contributors k WHERE k.tenant_id = NEW.tenant_id AND k.mps_version_id = NEW.id AND k.user_id = a)) THEN
                     RAISE EXCEPTION 'an MPS is approved by someone who did not prepare it (SoD-07)' USING ERRCODE = '42501';
                   END IF;
                   IF NEW.status = 'DRAFT' AND (NEW.return_reason IS NULL OR NEW.submitted_by IS NOT NULL) THEN
@@ -348,6 +397,7 @@ return new class extends Migration
                 GRANT SELECT, INSERT, DELETE{$update} ON {$table} TO eora_app;
                 SQL);
         }
+        DB::unprepared('CREATE TRIGGER record_mps_contributor AFTER UPDATE ON mps_planned_orders FOR EACH ROW EXECUTE FUNCTION eora_record_mps_contributor()');
     }
 
     public function down(): void
@@ -356,7 +406,9 @@ return new class extends Migration
             DB::unprepared("DROP TABLE IF EXISTS {$table}");
         }
         DB::unprepared(<<<'SQL'
+            DROP TABLE IF EXISTS mps_contributors;
             DROP TABLE IF EXISTS mps_versions;
+            DROP FUNCTION IF EXISTS eora_record_mps_contributor();
             DROP FUNCTION IF EXISTS eora_guard_mps_rows();
             DROP FUNCTION IF EXISTS eora_guard_mps_version();
             SQL);

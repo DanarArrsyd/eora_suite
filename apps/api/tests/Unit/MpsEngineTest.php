@@ -122,3 +122,13 @@ it('counts working days Monday to Saturday with calendar exceptions', function (
         ->and((new WorkingDays)->isWorking('2026-10-10'))->toBeTrue()
         ->and((new WorkingDays)->isWorking('2026-10-11'))->toBeFalse();
 });
+
+it('lets the plan date receipts cover safety stock before planning to restore it (Codex #87)', function () {
+    $plan = (new MpsEngine(new WorkingDays))->plan(mpsItem([
+        'safetyStock' => '50',
+        'demands' => [firm('today', '2026-10-06', '10')],
+        'supplies' => [wo('wo', '2026-10-06', '60')],
+    ]), '2026-10-05', 12, '2026-10-06');
+
+    expect($plan['plannedOrders'])->toBe([]);
+});

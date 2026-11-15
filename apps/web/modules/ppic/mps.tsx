@@ -561,7 +561,10 @@ function ItemCard({ item, canAdjust, onAdjust }: { item: MpsItem; canAdjust: boo
                   {item.buckets.map((b) => {
                     const v = value(b);
                     return (
-                      <td key={b.weekStart} className={`px-2 py-1.5 text-right tabular-nums ${weight ?? ''} ${zero(v) ? 'text-ink-2' : ''}`}>
+                      <td
+                        key={b.weekStart}
+                        className={`px-2 py-1.5 text-right tabular-nums ${weight ?? ''} ${zero(v) ? 'text-ink-2' : Number(v) < 0 ? 'font-semibold text-stat-err-fg' : ''}`}
+                      >
                         {zero(v) ? '·' : v}
                       </td>
                     );

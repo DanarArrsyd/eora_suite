@@ -224,8 +224,9 @@ final class MpsController
         $db = $this->db();
         $m = $this->locked($db, $version, self::APPROVE, ['SUBMITTED']);
         $actor = (string) $db->selectOne('select c.actor from ctx_api.context() c')->actor;
+        // anyone who ever calculated, submitted or adjusted it (mps_contributors), not only the latest names
         if (in_array($actor, [(string) $m->calculated_by, (string) $m->submitted_by], true)
-            || $db->selectOne('select 1 as ok from mps_planned_orders where mps_version_id = ? and adjusted_by = ?', [$m->id, $actor]) !== null) {
+            || $db->selectOne('select 1 as ok from mps_contributors where mps_version_id = ? and user_id = ?', [$m->id, $actor]) !== null) {
             throw new DomainProblem(403, 'SOD_VIOLATION', 'Second person required', 'You prepared this MPS; another approver decides it.');
         }
         if ($this->inputs->load($db, (string) $m->plant_id)->fingerprint() !== $m->input_fingerprint) {
@@ -412,17 +413,25 @@ final class MpsController
                 'leadTimeDays' => $r->lead === null ? null : (int) $r->lead, 'buckets' => [], 'demands' => [], 'supplies' => [], 'plannedOrders' => [],
             ];
         }
+        $pab = [];
         foreach ($db->select(
             'select b.mps_item_id, b.week_start::text as week_start, trim_scale(b.opening)::text as opening, trim_scale(b.firm_demand)::text as firm,
                     trim_scale(b.forecast_demand)::text as forecast, trim_scale(b.receipts)::text as receipts, trim_scale(b.planned)::text as planned,
                     trim_scale(b.closing)::text as closing,
-                    trim_scale(coalesce((select sum(o.qty) from mps_planned_orders o where o.mps_item_id = b.mps_item_id and o.week_start = b.week_start), 0))::text as plan_qty
+                    trim_scale(coalesce((select sum(o.qty) from mps_planned_orders o
+                                          where o.mps_item_id = b.mps_item_id and o.due_date between b.week_start and b.week_start + 6), 0))::text as plan_qty
                from mps_buckets b where b.mps_version_id = ? order by b.week_start',
             [$id],
         ) as $b) {
-            $byItem[(string) $b->mps_item_id]['buckets'][] = ['weekStart' => (string) $b->week_start, 'opening' => (string) $b->opening, 'firm' => (string) $b->firm,
+            // the balances shown follow the plan as it stands: a planned order counts in the week of its (adjusted) due date
+            // with its (adjusted) quantity; a negative closing is a shortage the adjustment left (the week's net requirement stays)
+            $key = (string) $b->mps_item_id;
+            $opening = $pab[$key] ?? MpsItemInput::num($b->opening);
+            $pab[$key] = bcsub(bcadd(bcadd($opening, MpsItemInput::num($b->receipts), 6), MpsItemInput::num($b->plan_qty), 6),
+                bcadd(MpsItemInput::num($b->firm), MpsItemInput::num($b->forecast), 6), 6);
+            $byItem[$key]['buckets'][] = ['weekStart' => (string) $b->week_start, 'opening' => self::plain($opening), 'firm' => (string) $b->firm,
                 'forecast' => (string) $b->forecast, 'receipts' => (string) $b->receipts, 'netRequirement' => (string) $b->planned, 'plannedQty' => (string) $b->plan_qty,
-                'closing' => (string) $b->closing];
+                'closing' => self::plain($pab[$key])];
         }
         foreach ($db->select(
             "select d.id, d.mps_item_id, d.kind, d.due_date::text as due, d.original_date::text as original, trim_scale(d.qty)::text as qty,
@@ -467,6 +476,13 @@ final class MpsController
         }
 
         return array_values($byItem);
+    }
+
+    private static function plain(string $number): string
+    {
+        $n = str_contains($number, '.') ? rtrim(rtrim($number, '0'), '.') : $number;
+
+        return $n === '-0' ? '0' : $n;
     }
 
     /** @return list<string> a text[] literal of plain codes */

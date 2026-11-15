@@ -56,14 +56,14 @@ final readonly class MpsEngine
             $order = null;
             for ($d = 0; $d < 7; $d++) {
                 $day = $monday->modify("+{$d} days")->format('Y-m-d');
-                // a negative opening (safety stock above stock) is short on the plan's first day
-                if ($day === $today && bccomp($pab, '0', self::SCALE) < 0) {
-                    $order = $this->short($order, $day, bcmul($pab, '-1', self::SCALE), null);
-                    $pab = '0';
-                }
                 for (; $si < count($supplies) && $supplies[$si]['date'] === $day; $si++) {
                     $pab = bcadd($pab, $supplies[$si]['qty'], self::SCALE);
                     $bucket['receipts'] = bcadd($bucket['receipts'], $supplies[$si]['qty'], self::SCALE);
+                }
+                // a negative opening (safety stock above stock) not covered by the day's receipts is short on the plan's first day
+                if ($day === $today && bccomp($pab, '0', self::SCALE) < 0) {
+                    $order = $this->short($order, $day, bcmul($pab, '-1', self::SCALE), null);
+                    $pab = '0';
                 }
                 for (; $di < count($demands) && $demands[$di]['date'] === $day; $di++) {
                     $dm = $demands[$di];
