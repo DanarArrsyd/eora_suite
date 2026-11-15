@@ -38,13 +38,15 @@ final class MpsCapacity
                         greatest(coalesce(o.parts_per_cycle, 1), 1) as per_cycle, o.requires_tooling,
                         exists (select 1 from routing_operation_tools t join dies d on d.tenant_id = t.tenant_id and d.id = t.die_id and d.status = 'ACTIVE'
                                  where t.tenant_id = o.tenant_id and t.operation_id = o.id) as has_die
-                   from routings r
-                   join routing_versions v on v.tenant_id = r.tenant_id and v.routing_id = r.id and v.status = 'APPROVED'
-                    and v.effective_from <= ?::date and (v.effective_to is null or v.effective_to >= ?::date)
-                   join routing_operations o on o.tenant_id = v.tenant_id and o.routing_version_id = v.id
-                  where r.plant_id = ? and r.item_id = ? and r.routing_kind = 'PRIMARY' and r.status = 'ACTIVE'
+                   from routing_operations o
+                  where o.routing_version_id = (
+                    -- the version in force on the start date: approved, or superseded by a later-dated approval (as WO release)
+                    select v.id from routings r join routing_versions v on v.tenant_id = r.tenant_id and v.routing_id = r.id
+                     where r.plant_id = ? and r.item_id = ? and r.routing_kind = 'PRIMARY' and r.status = 'ACTIVE' and v.status in ('APPROVED', 'SUPERSEDED')
+                       and v.effective_from <= ?::date and (v.effective_to is null or v.effective_to >= ?::date)
+                     order by v.effective_from desc limit 1)
                   order by o.op_seq",
-                [$o['startDate'], $o['startDate'], $plant, $o['itemId']],
+                [$plant, $o['itemId'], $o['startDate'], $o['startDate']],
             );
             if ($ops === []) {
                 $noRouting[] = $n;

@@ -140,6 +140,14 @@ it('lets the planner adjust a planned order with a reason, and a second person a
     mpsAs($this, $this->t, $csa);
     mpsAct($this, $next, 'approve')->assertOk();
     spa($this)->getJson("/api/v1/planning/mps-versions/{$approved['id']}")->assertOk()->assertJsonPath('data.status', 'SUPERSEDED');
+    // superseding the approved MPS happens only through approving a successor, in SQL too
+    try {
+        asApp($this->t, (string) $csa['id'], fn (EoraPostgresConnection $db) => $db->update(
+            "update mps_versions set status = 'SUPERSEDED', superseded_at = now() where status = 'APPROVED' and plant_id = ?", [$f['plant']]));
+        $this->fail('superseded without a successor');
+    } catch (QueryException $e) {
+        expect($e->getMessage())->toContain('superseded only by approving its successor');
+    }
 
     // history in the database too: rows of an approved MPS never change, and the preparer never approves in SQL
     try {
@@ -176,6 +184,19 @@ it('keeps everyone who adjusted a planned order out of the approval, even after 
     }
     expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
         'select count(*) as n from mps_contributors where mps_version_id = ?', [$m['id']])->n))->toBe(4);
+});
+
+it('plans an item with a safety stock even without demand: stock below it is replenished (G-MPS-2, Codex #87)', function () {
+    $f = mpsFixture($this, $this->t);
+    rtSwitch($this, $this->t, 'CSA');
+    $pcs = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne("select id from uoms where code = 'PCS'")->id);
+    $spare = spa($this)->postJson('/api/v1/core/items', ['code' => 'BRK-900', 'name' => 'Spare bracket', 'itemType' => 'FINISHED', 'baseUomId' => $pcs])->assertCreated()->json('data');
+    mpsAs($this, $this->t, $f['ppc']);
+    spa($this)->postJson('/api/v1/planning/plan-parameters', ['plantId' => $f['plant'], 'itemId' => $spare['id'], 'safetyStock' => '50'])->assertCreated();
+    $m = spa($this)->postJson('/api/v1/planning/mps-versions', ['plantId' => $f['plant']])->assertCreated()->assertJsonPath('data.itemCount', 2)->json('data');
+    $item = collect($m['items'])->firstWhere('itemCode', 'BRK-900');
+    expect($item)->toMatchArray(['onHand' => '0', 'safetyStock' => '50', 'demands' => []])
+        ->and(array_map(static fn (array $o) => [$o['qty'], $o['dueDate'], $o['pegs']], $item['plannedOrders']))->toBe([['50', $m['planDate'], [['demandId' => null, 'qty' => '50']]]]);
 });
 
 it('keeps the MPS to the planners and approvers of its plant, and lets a planner cancel a draft', function () {

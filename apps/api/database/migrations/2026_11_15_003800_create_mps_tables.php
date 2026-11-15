@@ -346,7 +346,15 @@ return new class extends Migration
                   IF NEW.status = 'DRAFT' AND (NEW.return_reason IS NULL OR NEW.submitted_by IS NOT NULL) THEN
                     RAISE EXCEPTION 'a returned MPS gives the reason' USING ERRCODE = '23514';
                   END IF;
-                ELSIF NOT (OLD.status = 'APPROVED' AND NEW.status = 'SUPERSEDED') THEN
+                ELSIF OLD.status = 'APPROVED' AND NEW.status = 'SUPERSEDED' THEN
+                  -- only while an approver of the plant approves its successor: a submitted MPS of the plant they did not prepare
+                  IF NOT public.eora_actor_may('planning.mps.approve', NEW.plant_id)
+                     OR NOT EXISTS (SELECT 1 FROM public.mps_versions s WHERE s.tenant_id = NEW.tenant_id AND s.plant_id = NEW.plant_id AND s.status = 'SUBMITTED'
+                                      AND a NOT IN (s.calculated_by, s.submitted_by)
+                                      AND NOT EXISTS (SELECT 1 FROM public.mps_contributors k WHERE k.tenant_id = s.tenant_id AND k.mps_version_id = s.id AND k.user_id = a)) THEN
+                    RAISE EXCEPTION 'an approved MPS is superseded only by approving its successor' USING ERRCODE = '42501';
+                  END IF;
+                ELSE
                   RAISE EXCEPTION 'an MPS goes DRAFT → SUBMITTED → APPROVED → SUPERSEDED' USING ERRCODE = '23514';
                 END IF;
               ELSIF (NEW.submitted_at, NEW.approved_at, NEW.approved_by) IS DISTINCT FROM (OLD.submitted_at, OLD.approved_at, OLD.approved_by) THEN

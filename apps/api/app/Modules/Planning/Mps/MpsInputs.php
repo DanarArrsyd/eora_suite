@@ -19,7 +19,8 @@ use stdClass;
  *   outside the horizon (`outOfScope`); class B dated: QC released stock (today: no expected receipt date is kept) and
  *   the remaining output (qty − good posted) of RELEASED / IN_PROGRESS / ON_HOLD work orders on their due date;
  *   class C: Pending QC, shown only;
- * - per item + plant planning parameters (safety stock, production lead time; NULL = not configured), working days.
+ * - per item + plant planning parameters (safety stock, production lead time; NULL = not configured), working days;
+ *   an FG / semi-finished item with a safety stock is planned even without demand in the horizon.
  * The fingerprint hashes all of it (and the plan date): approval compares it with a fresh read (D-123 (2)).
  */
 final class MpsInputs
@@ -69,6 +70,14 @@ final class MpsInputs
             [$plant, $this->horizonStart, $this->horizonEnd],
         ) as $r) {
             $this->item($r)->demands[] = ['key' => (string) $r->id, 'kind' => 'FORECAST', 'date' => $this->firstWorkingDay((string) $r->week_start), 'qty' => MpsItemInput::num($r->qty)];
+        }
+        // items with a safety stock at the plant are planned even without demand: stock below it is replenished
+        foreach ($db->select(
+            "select p.item_id, i.base_uom_id as uom_id from item_plan_parameters p join items i on i.tenant_id = p.tenant_id and i.id = p.item_id
+              where p.plant_id = ? and p.safety_stock > 0 and i.status = 'ACTIVE' and i.item_type in ('FINISHED', 'SEMI_FINISHED') order by p.item_id",
+            [$plant],
+        ) as $r) {
+            $this->item($r);
         }
         if ($this->items === []) {
             return $this;
