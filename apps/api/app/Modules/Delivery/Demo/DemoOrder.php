@@ -83,6 +83,9 @@ final class DemoOrder
         $who = fn (string $role) => $this->member($tenant, $spec->email($role));
         [$ppc, $csa, $mat, $prl, $qci, $fgw, $dlv] = array_map($who, ['ppc', 'csa', 'mat', 'prl', 'qci', 'fgw', 'dlv']);
 
+        $today = (string) $this->system($tenant, fn (EoraPostgresConnection $db) => $db->selectOne(
+            'select (now() at time zone t.timezone)::date::text as d from tenants t where t.id = ?', [$tenant])->d);
+
         // 1. the master of BRK-A100 approved: the planner asks, an approver who neither prepared nor edited it decides
         //    (D-060) — csa@, or uat@ (eora:demo:uat-account) when csa@ committed the imported draft itself
         foreach ([[BomController::class, $this->bom($tenant), 'bom_version'], [RoutingController::class, $this->routing($tenant), 'routing_version']] as [$controller, $version, $table]) {
@@ -95,6 +98,16 @@ final class DemoOrder
             }
             $approver = $this->approver($tenant, $spec, $table, (string) $version->id)
                 ?? throw new RuntimeException("{$what} of BRK-A100 was prepared by its only approver (csa@). Add a second approver with eora:demo:uat-account, or approve it in UAT §2, then run again.");
+            // a draft imported days ago starts in the past: withdrawn when asked already, the planner moves it to today
+            if ($version->effective_from < $today) {
+                if ($version->status === 'SUBMITTED') {
+                    $this->as($tenant, $ppc, fn () => app($controller)->withdraw((string) $version->id));
+                    $version->status = 'DRAFT';
+                }
+                $row = $this->system($tenant, fn (EoraPostgresConnection $db) => $db->selectOne("select version from {$table}s where id = ?", [$version->id]));
+                $this->call($tenant, $ppc, $controller, 'updateVersion', ['effectiveFrom' => $today], [(string) $version->id], ['If-Match' => '"'.$row->version.'"']);
+                $progress("{$what} of BRK-A100 moved to start {$today}");
+            }
             if ($version->status === 'DRAFT') {
                 $this->as($tenant, $ppc, fn () => app($controller)->submit((string) $version->id));
             }
@@ -235,14 +248,14 @@ final class DemoOrder
     private function bom(string $tenant): ?stdClass
     {
         return $this->system($tenant, fn (EoraPostgresConnection $db) => $db->selectOne(
-            "select v.id, v.status from bom_versions v join items i on i.id = v.item_id where i.code = ? and v.status in ('DRAFT', 'SUBMITTED', 'APPROVED')
+            "select v.id, v.status, v.effective_from::text as effective_from from bom_versions v join items i on i.id = v.item_id where i.code = ? and v.status in ('DRAFT', 'SUBMITTED', 'APPROVED')
               order by v.status = 'APPROVED' desc, v.version_no desc limit 1", [self::ITEM]));
     }
 
     private function routing(string $tenant): ?stdClass
     {
         return $this->system($tenant, fn (EoraPostgresConnection $db) => $db->selectOne(
-            "select v.id, v.status from routing_versions v join routings r on r.id = v.routing_id join items i on i.id = r.item_id
+            "select v.id, v.status, v.effective_from::text as effective_from from routing_versions v join routings r on r.id = v.routing_id join items i on i.id = r.item_id
               where i.code = ? and r.routing_kind = 'PRIMARY' and v.status in ('DRAFT', 'SUBMITTED', 'APPROVED')
               order by v.status = 'APPROVED' desc, v.version_no desc limit 1", [self::ITEM]));
     }

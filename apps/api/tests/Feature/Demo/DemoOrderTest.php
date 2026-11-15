@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 use App\Modules\Inventory\Application\BalanceVerification;
+use App\Platform\Database\EoraPostgresConnection;
+use App\Platform\Tenancy\TenantContext;
+use App\Platform\Tenancy\TenantTransaction;
 use Illuminate\Support\Facades\Storage;
 
 /*
@@ -21,11 +24,16 @@ it('runs one order from sales order to a partial shipment as the demo roles, onc
     $this->artisan('eora:demo:seed', ['--code' => $code, '--password' => DEMO_PASSWORD])->assertSuccessful();
     $tenant = demoState($code)['tenant'];
     $this->artisan('eora:demo:master', ['--code' => $code])->assertSuccessful();
+    // the drafts were imported days ago: they start in the past, so the planner moves them to today first
+    app(TenantTransaction::class)->run(TenantContext::system($tenant), function (EoraPostgresConnection $db): void {
+        $db->update("update bom_versions set effective_from = effective_from - 3 where status = 'DRAFT'");
+        $db->update("update routing_versions set effective_from = effective_from - 3 where status = 'DRAFT'");
+    }, 'pgsql_provisioner');
     // csa@ committed the imported BOM and routing drafts: a second approver decides them (D-060)
     $this->artisan('eora:demo:m4', ['--code' => $code])->expectsOutputToContain('eora:demo:uat-account')->assertFailed();
     $this->artisan('eora:demo:uat-account', ['--code' => $code, '--password' => DEMO_PASSWORD])->assertSuccessful();
     // no stock yet: the order and its work order are made, the issue stops; with the stock, running again finishes
-    $this->artisan('eora:demo:m4', ['--code' => $code])->expectsOutputToContain('WO-P1-')->expectsOutputToContain('Run eora:demo:stock')->assertFailed();
+    $this->artisan('eora:demo:m4', ['--code' => $code])->expectsOutputToContain('BOM of BRK-A100 moved to start')->expectsOutputToContain('WO-P1-')->expectsOutputToContain('Run eora:demo:stock')->assertFailed();
     $this->artisan('eora:demo:stock', ['--code' => $code])->assertSuccessful();
 
     $this->artisan('eora:demo:m4', ['--code' => $code])->expectsOutputToContain('150 PCS shipped to OEM-A')->expectsOutputToContain('Demo order done')->assertSuccessful();
