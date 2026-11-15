@@ -80,6 +80,8 @@ return new class extends Migration
             );
             -- one active version per customer and plant
             CREATE UNIQUE INDEX forecast_versions_active_uq ON forecast_versions (tenant_id, customer_id, plant_id) WHERE status = 'ACTIVE';
+            -- and one draft at a time
+            CREATE UNIQUE INDEX forecast_versions_draft_uq ON forecast_versions (tenant_id, customer_id, plant_id) WHERE status = 'DRAFT';
             CREATE TRIGGER stamp_audit BEFORE INSERT OR UPDATE ON forecast_versions FOR EACH ROW EXECUTE FUNCTION eora_stamp_audit();
             ALTER TABLE forecast_versions ENABLE ROW LEVEL SECURITY, FORCE ROW LEVEL SECURITY;
             CREATE POLICY tenant_isolation ON forecast_versions TO eora_app

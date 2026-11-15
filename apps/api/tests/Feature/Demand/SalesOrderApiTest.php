@@ -267,7 +267,7 @@ it('revises a firm schedule line: superseded with its delivered quantity, new li
 
 it('keeps forecast versions per customer and plant; firm demand of the same week consumes the forecast once (D-122, BR-DEM-08)', function () {
     $f = $this->f;
-    orgUser($this, $this->t, 'PPC');
+    $planner = orgUser($this, $this->t, 'PPC');
     // a firm order of OEM-A: 250 in the week of today + 3
     $so = soCreate($this, $f)->assertCreated()->json('data');
     $filled = soWith($this, 'PUT', "/api/v1/demand/sales-orders/{$so['id']}/lines", ['lines' => [soLine($f, schedules: [['+3', '250']])]], $so['version'])->assertOk()->json('data');
@@ -280,6 +280,15 @@ it('keeps forecast versions per customer and plant; firm demand of the same week
     $v1 = spa($this)->postJson('/api/v1/demand/forecast-versions', ['plantId' => $f['plant'], 'customerId' => $f['oemA']])->assertCreated()
         ->assertJsonPath('data.code', "FC-P1-{$year}-0001")->assertJsonPath('data.status', 'DRAFT')->json('data');
     spa($this)->postJson('/api/v1/demand/forecast-versions', ['plantId' => $f['plant'], 'customerId' => $f['oemA']])->assertStatus(409);
+    // one draft per customer and plant in the database too (two planners at the same moment, Codex on #86)
+    try {
+        asApp($this->t, (string) $planner['id'], fn (EoraPostgresConnection $db) => $db->insert(
+            'insert into forecast_versions (tenant_id, plant_id, customer_id, forecast_no) values ((select c.tenant from ctx_api.context() c), ?, ?, ?)',
+            [$f['plant'], $f['oemA'], "FC-P1-{$year}-9999"]));
+        $this->fail('a second draft');
+    } catch (QueryException $e) {
+        expect($e->getCode())->toBe('23505');
+    }
     $put = fn (string $id, array $lines, int $version) => soWith($this, 'PUT', "/api/v1/demand/forecast-versions/{$id}/lines", ['lines' => $lines], $version);
     // only the customer's own parts; a day names its week
     $put($v1['id'], [['customerItemId' => $f['partB'], 'weekStart' => $due, 'qty' => '100']], $v1['version'])->assertStatus(422)->assertJsonValidationErrors(['lines.0.customerItemId']);

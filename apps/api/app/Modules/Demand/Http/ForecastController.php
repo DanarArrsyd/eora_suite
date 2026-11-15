@@ -15,6 +15,7 @@ use App\Platform\Http\Concurrency;
 use App\Platform\Http\MasterWrites;
 use App\Platform\Query\QueryRunner;
 use DateTimeImmutable;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -70,10 +71,18 @@ final class ForecastController
             [$plant, $year],
         )->last_no;
         $code = (string) $db->selectOne('select code from plants where id = ?', [$plant])->code;
-        $id = (string) $db->selectOne(
-            'insert into forecast_versions (tenant_id, plant_id, customer_id, forecast_no, note) values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?) returning id',
-            [$plant, $customer->id, sprintf('FC-%s-%d-%04d', $code, $year, $number), self::optionalText($data['note'] ?? null)],
-        )->id;
+        try {
+            $id = (string) $db->selectOne(
+                'insert into forecast_versions (tenant_id, plant_id, customer_id, forecast_no, note) values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?) returning id',
+                [$plant, $customer->id, sprintf('FC-%s-%d-%04d', $code, $year, $number), self::optionalText($data['note'] ?? null)],
+            )->id;
+        } catch (QueryException $e) {
+            // another planner drafted one at the same moment (forecast_versions_draft_uq)
+            if ($e->getCode() === '23505') {
+                throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Draft exists', 'This customer has a draft forecast at this plant; finish it first.');
+            }
+            throw $e;
+        }
         if ((bool) ($data['copyFromActive'] ?? false)) {
             $db->insert(
                 "insert into forecast_lines (tenant_id, forecast_version_id, customer_id, plant_id, customer_item_id, item_id, week_start, qty)

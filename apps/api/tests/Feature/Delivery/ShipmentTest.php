@@ -132,7 +132,10 @@ it('reverses a shipment of a line revised since: back to staging for the superse
     signIn($this, $f['fgw'], $this->t);
     $staged = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
         "select b.id from stock_balances b join locations l on l.id = b.location_id where l.location_type = 'STAGING' and b.lot_id = ? and b.qty > 0", [$f['lots'][0]])->id);
+    // the superseded line with goods back at staging is listed in Allocation & Pick, to be put back (Codex on #86)
+    spa($this)->getJson("/api/v1/query/delivery.schedule_lines?filter[id]={$l1}")->assertOk()->assertJsonCount(1, 'data');
     $unpick($staged, '90', 'rs-unpick-0002')->assertCreated();
+    spa($this)->getJson("/api/v1/query/delivery.schedule_lines?filter[id]={$l1}")->assertOk()->assertJsonCount(0, 'data');
     expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select status from delivery_schedule_lines where id = ?', [$l1])->status))->toBe('SUPERSEDED');
 })->group('integration', 'delivery');
 
