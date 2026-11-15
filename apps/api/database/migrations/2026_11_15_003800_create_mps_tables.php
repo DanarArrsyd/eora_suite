@@ -278,21 +278,21 @@ return new class extends Migration
               USING (tenant_id = (SELECT c.tenant FROM ctx_api.context() c)) WITH CHECK (tenant_id = (SELECT c.tenant FROM ctx_api.context() c));
             GRANT SELECT, INSERT ON mps_contributors TO eora_app;
 
-            -- records each contribution as it happens (insert-only: never updated or deleted by the app)
+            -- records every name a row carries on each write (insert-only, duplicates ignored: never updated or deleted by the app)
             CREATE OR REPLACE FUNCTION eora_record_mps_contributor() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
             BEGIN
               IF TG_TABLE_NAME = 'mps_planned_orders' THEN
-                IF NEW.adjusted_by IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.adjusted_at IS DISTINCT FROM OLD.adjusted_at) THEN
+                IF NEW.adjusted_by IS NOT NULL THEN
                   INSERT INTO public.mps_contributors (tenant_id, mps_version_id, user_id, contribution)
                   VALUES (NEW.tenant_id, NEW.mps_version_id, NEW.adjusted_by, 'ADJUSTED') ON CONFLICT DO NOTHING;
                 END IF;
                 RETURN NULL;
               END IF;
-              IF TG_OP = 'INSERT' OR NEW.calculated_at IS DISTINCT FROM OLD.calculated_at THEN
+              IF NEW.calculated_by IS NOT NULL THEN
                 INSERT INTO public.mps_contributors (tenant_id, mps_version_id, user_id, contribution)
                 VALUES (NEW.tenant_id, NEW.id, NEW.calculated_by, 'CALCULATED') ON CONFLICT DO NOTHING;
               END IF;
-              IF NEW.submitted_by IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.submitted_at IS DISTINCT FROM OLD.submitted_at) THEN
+              IF NEW.submitted_by IS NOT NULL THEN
                 INSERT INTO public.mps_contributors (tenant_id, mps_version_id, user_id, contribution)
                 VALUES (NEW.tenant_id, NEW.id, NEW.submitted_by, 'SUBMITTED') ON CONFLICT DO NOTHING;
               END IF;
@@ -339,7 +339,8 @@ return new class extends Migration
                     RAISE EXCEPTION 'a submitted MPS is approved or returned by an approver of the plant' USING ERRCODE = '42501';
                   END IF;
                   IF NEW.status = 'APPROVED' AND (NEW.approved_by IS DISTINCT FROM a OR a IN (OLD.calculated_by, OLD.submitted_by)
-                     OR EXISTS (SELECT 1 FROM public.mps_contributors k WHERE k.tenant_id = NEW.tenant_id AND k.mps_version_id = NEW.id AND k.user_id = a)) THEN
+                     OR EXISTS (SELECT 1 FROM public.mps_contributors k WHERE k.tenant_id = NEW.tenant_id AND k.mps_version_id = NEW.id AND k.user_id = a)
+                     OR EXISTS (SELECT 1 FROM public.mps_planned_orders o WHERE o.tenant_id = NEW.tenant_id AND o.mps_version_id = NEW.id AND o.adjusted_by = a)) THEN
                     RAISE EXCEPTION 'an MPS is approved by someone who did not prepare it (SoD-07)' USING ERRCODE = '42501';
                   END IF;
                   IF NEW.status = 'DRAFT' AND (NEW.return_reason IS NULL OR NEW.submitted_by IS NOT NULL) THEN
@@ -397,7 +398,7 @@ return new class extends Migration
                 GRANT SELECT, INSERT, DELETE{$update} ON {$table} TO eora_app;
                 SQL);
         }
-        DB::unprepared('CREATE TRIGGER record_mps_contributor AFTER UPDATE ON mps_planned_orders FOR EACH ROW EXECUTE FUNCTION eora_record_mps_contributor()');
+        DB::unprepared('CREATE TRIGGER record_mps_contributor AFTER INSERT OR UPDATE ON mps_planned_orders FOR EACH ROW EXECUTE FUNCTION eora_record_mps_contributor()');
     }
 
     public function down(): void

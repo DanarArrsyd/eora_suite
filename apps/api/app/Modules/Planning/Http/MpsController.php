@@ -226,7 +226,8 @@ final class MpsController
         $actor = (string) $db->selectOne('select c.actor from ctx_api.context() c')->actor;
         // anyone who ever calculated, submitted or adjusted it (mps_contributors), not only the latest names
         if (in_array($actor, [(string) $m->calculated_by, (string) $m->submitted_by], true)
-            || $db->selectOne('select 1 as ok from mps_contributors where mps_version_id = ? and user_id = ?', [$m->id, $actor]) !== null) {
+            || $db->selectOne('select 1 as ok from mps_contributors where mps_version_id = ? and user_id = ?
+                                union all select 1 from mps_planned_orders where mps_version_id = ? and adjusted_by = ? limit 1', [$m->id, $actor, $m->id, $actor]) !== null) {
             throw new DomainProblem(403, 'SOD_VIOLATION', 'Second person required', 'You prepared this MPS; another approver decides it.');
         }
         if ($this->inputs->load($db, (string) $m->plant_id)->fingerprint() !== $m->input_fingerprint) {
