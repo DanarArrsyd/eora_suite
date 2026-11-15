@@ -10,16 +10,19 @@ use App\Platform\Query\QueryDefinition;
 
 /**
  * `demand.forecast_lines` — forecast per customer part and ISO week with what firm demand consumed of it (BR-DEM-08,
- * D-040, D-122): firm = required quantity of the customer's schedule lines of that item and plant whose requirement date
+ * D-040, D-122): firm = required quantity of the schedule lines of that customer part and plant whose requirement date
  * falls in the week (not DRAFT, SUPERSEDED or CANCELLED; fulfilled included, so a delivery never re-opens forecast);
  * net forecast = max(0, forecast − firm). Read with `demand.forecast.view`.
  */
 final class ForecastLinesQuery extends QueryDefinition
 {
-    /** Firm demand matched to a forecast line: same customer, item and plant, requirement date inside the week. */
+    /**
+     * Firm demand matched to a forecast line: same customer part (so the same customer and item), plant and week. A
+     * version has one line per customer part and week, so each firm quantity consumes one forecast line only.
+     */
     public const string FIRM = "coalesce((select sum(s.required_qty) from delivery_schedule_lines s
                                              join sales_order_lines ol on ol.tenant_id = s.tenant_id and ol.id = s.so_line_id
-                                            where s.tenant_id = l.tenant_id and s.plant_id = l.plant_id and ol.customer_id = l.customer_id and ol.item_id = l.item_id
+                                            where s.tenant_id = l.tenant_id and s.plant_id = l.plant_id and ol.customer_id = l.customer_id and ol.customer_item_id = l.customer_item_id
                                               and s.status in ('FIRM', 'PARTIALLY_FULFILLED', 'FULFILLED')
                                               and s.requirement_date between l.week_start and l.week_start + 6), 0)";
 

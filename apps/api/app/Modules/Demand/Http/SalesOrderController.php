@@ -352,12 +352,13 @@ final class SalesOrderController
         $no = (int) $db->selectOne('select coalesce(max(schedule_no), 0) as n from delivery_schedule_lines where so_line_id = ?', [$row->so_line_id])->n;
         $ids = [];
         foreach ($new as $k => $s) {
-            // a split keeps the customer's reference with a suffix, so one reference and revision stays one line (BR-DEM-06)
+            // a split keeps the customer's reference; the extra lines add their own schedule number, unique on the order line, so
+            // no two revised branches ever name the same reference at the same revision (BR-DEM-06)
             $ids[] = (string) $db->selectOne(
                 "insert into delivery_schedule_lines (tenant_id, so_line_id, plant_id, schedule_no, schedule_type, source_document_type, source_document_no, source_line_ref,
                                                       requirement_date, required_qty, uom_id, status, revision)
                  values ((select c.tenant from ctx_api.context() c), ?, ?, ?, 'MANUAL', 'SALES_ORDER', ?, ?, ?, ?, ?, 'FIRM', ?) returning id",
-                [$row->so_line_id, $so->plant_id, $no + $k + 1, $row->source_document_no, $k === 0 ? $row->source_line_ref : "{$row->source_line_ref}.".($k + 1),
+                [$row->so_line_id, $so->plant_id, $no + $k + 1, $row->source_document_no, $k === 0 ? $row->source_line_ref : explode('.', (string) $row->source_line_ref)[0].'.'.($no + $k + 1),
                     $s['date'], $s['qty'], $row->uom_id, (int) $row->revision + 1],
             )->id;
         }
