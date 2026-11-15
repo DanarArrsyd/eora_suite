@@ -128,7 +128,7 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Releases & Forecast',
         items: [
-          { id: 'forecast', label: 'Forecast', icon: TrendingUp, release: 'R2', phase: 'later' },
+          { id: 'forecast', label: 'Forecast', icon: TrendingUp, release: 'R1', permission: 'demand.forecast.view', phase: 5 },
           { id: 'releases', label: 'Kanban / Delivery Releases', icon: CalendarCheck, release: 'R2', phase: 'later' },
           { id: 'netting', label: 'Demand Netting', icon: GitMerge, release: 'R2', decision: 'O-011', phase: 'later' },
         ],

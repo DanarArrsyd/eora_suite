@@ -7,6 +7,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiError, api, call, useMe } from '@eora/features/auth';
 import type { Option } from '@eora/features/data';
 import { ConfirmDialog, DataTable, DomainStatusBadge, EnterprisePage, type EoraColumn } from '@eora/features/patterns';
+import { todayIn } from '@eora/ui';
+import { ReviseDialog } from './revise-dialog';
 import { Button, Card, CardContent, CardHeader, CardTitle, EmptyState, ErrorState, InlineAlert, LoadingState, PermissionDeniedState } from '@eora/ui';
 import { MasterEditor } from '@/modules/master/editor';
 import { MasterScreen } from '@/modules/master/master-screen';
@@ -56,6 +58,8 @@ type Schedule = {
   deliveredQty: string;
   outstandingQty: string;
   status: ScheduleStatus;
+  revision: number;
+  supersededById: string | null;
   cancelReason: string | null;
   cancelledAt: string | null;
   cancelledByName: string | null;
@@ -70,6 +74,7 @@ type Line = {
   itemCode: string;
   itemName: string;
   uomCode: string;
+  uomDecimals: number;
   customerPoNo: string;
   customerPoLine: string;
   status: 'ACTIVE' | 'CANCELLED';
@@ -192,6 +197,7 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
   const client = useQueryClient();
   const [notice, setNotice] = React.useState<string | null>(null);
   const [drawer, setDrawer] = React.useState<null | { kind: 'line' } | { kind: 'delivery'; line: Line }>(null);
+  const [revise, setRevise] = React.useState<null | { line: Line; schedule: Schedule }>(null);
   const [ask, setAsk] = React.useState<
     null | { kind: 'confirm' } | { kind: 'cancel' } | { kind: 'removeLine'; line: Line } | { kind: 'cancelDelivery'; line: Line; schedule: Schedule }
   >(null);
@@ -369,6 +375,8 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
       cell: (s) => (
         <div className="flex flex-col items-start gap-0.5">
           <DomainStatusBadge domain="schedule" status={s.status} />
+          {s.revision > 1 && s.status !== 'SUPERSEDED' ? <span className="text-[12.5px] text-ink-2">Revision {s.revision}</span> : null}
+          {s.status === 'SUPERSEDED' ? <span className="text-[12.5px] text-ink-2">Revised; kept with what it delivered</span> : null}
           {s.status === 'CANCELLED' && s.cancelReason ? (
             <span className="text-[12.5px] text-ink-2">
               {s.cancelReason}
@@ -382,10 +390,17 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
       id: 'actions',
       header: 'Actions',
       cell: (s) =>
-        confirmed && canPost && s.status === 'FIRM' ? (
-          <Button size="sm" variant="ghost" onClick={() => setAsk({ kind: 'cancelDelivery', line, schedule: s })}>
-            Cancel delivery
-          </Button>
+        confirmed && canPost && (s.status === 'FIRM' || s.status === 'PARTIALLY_FULFILLED') ? (
+          <div className="flex flex-wrap gap-1">
+            <Button size="sm" variant="ghost" onClick={() => setRevise({ line, schedule: s })}>
+              Revise
+            </Button>
+            {s.status === 'FIRM' ? (
+              <Button size="sm" variant="ghost" onClick={() => setAsk({ kind: 'cancelDelivery', line, schedule: s })}>
+                Cancel delivery
+              </Button>
+            ) : null}
+          </div>
         ) : draft && canDraft && line.schedules.length > 1 ? (
           <Button
             size="sm"
@@ -549,6 +564,20 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
         onOpenChange={(v) => (v ? undefined : setDrawer(null))}
         onSaved={(message) => {
           setDrawer(null);
+          changed(message);
+        }}
+      />
+      <ReviseDialog
+        open={revise !== null}
+        onOpenChange={(v) => (v ? undefined : setRevise(null))}
+        orderId={id}
+        orderVersion={o.version}
+        schedule={revise?.schedule ?? null}
+        uomCode={revise?.line.uomCode ?? ''}
+        uomDecimals={revise?.line.uomDecimals ?? 0}
+        today={todayIn(me.data?.tenants.find((t) => t.id === me.data?.activeTenantId)?.timezone ?? 'Asia/Jakarta')}
+        onRevised={(message) => {
+          setRevise(null);
           changed(message);
         }}
       />

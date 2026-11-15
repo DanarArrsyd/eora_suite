@@ -308,6 +308,79 @@ final class SalesOrderController
     }
 
     /**
+     * Revise a FIRM or PARTIALLY_FULFILLED schedule line (If-Match on the order; D-038, D-122, BR-DEM-11): the line
+     * becomes SUPERSEDED with what it delivered, the new lines (date, quantity; several = a split) take `revision + 1`, and
+     * the old line's outstanding is mapped to them in order (`schedule_reallocations`, with the reason). Refused while
+     * FG is allocated to the line or staged for it.
+     */
+    public function reviseSchedule(Request $request, string $order, string $schedule): JsonResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:3', 'max:500'],
+            'schedules' => ['required', 'array', 'min:1', 'max:20'],
+            'schedules.*.requirementDate' => ['required', 'date_format:Y-m-d'],
+            'schedules.*.qty' => ['required', 'string', 'regex:'.SalesOrderController::QTY],
+        ]);
+        $expected = Concurrency::expectedVersion($request);
+        $db = $this->db();
+        $so = $this->writable($db, $order, ['CONFIRMED']);
+        $this->authorizer->authorize($db, self::POST, $this->plantScope($db, (string) $so->plant_id));
+        $row = $db->selectOne(
+            "select s.id, s.status, s.so_line_id, s.schedule_no, s.revision, s.source_document_no, s.source_line_ref, s.required_qty, l.line_no, l.uom_id, u.code as uom, u.decimals,
+                    coalesce((select sum(m.qty_signed) from inventory_movements m join locations ml on ml.id = m.location_id
+                               where m.schedule_line_id = s.id and ml.location_type = 'V_CUSTOMER'), 0) as delivered
+               from delivery_schedule_lines s join sales_order_lines l on l.id = s.so_line_id join uoms u on u.id = l.uom_id
+              where s.id = ? and l.sales_order_id = ? for update of s",
+            [strtolower($schedule), $so->id],
+        ) ?? throw new NotFoundHttpException;
+        if (! in_array($row->status, ['FIRM', 'PARTIALLY_FULFILLED'], true)) {
+            throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Schedule line not revisable', 'Only a firm schedule line still to deliver can be revised.');
+        }
+        // D-115: allocated or picked (staged) goods hold the line until they are released or put back
+        if (bccomp(self::decimal((string) $db->selectOne('select eora_schedule_line_committed((select c.tenant from ctx_api.context() c), ?) as q', [$row->id])->q),
+            self::decimal((string) $row->delivered), 6) > 0) {
+            throw new DomainProblem(409, 'SCHEDULE_LINE_ALLOCATED', 'Finished goods allocated', 'Release the finished goods allocated to this schedule line, and put back what was picked for it, first.');
+        }
+        $today = $this->today($db, (string) $so->plant_id);
+        $new = [];
+        foreach ($data['schedules'] as $n => $s) {
+            $new[] = $this->checkedSchedule($s, $row, $today, "schedules.{$n}");
+        }
+        $reason = trim($data['reason']);
+        $this->bump($db, $so, $expected);
+        $before = $this->summary($db, (string) $so->id);
+        $no = (int) $db->selectOne('select coalesce(max(schedule_no), 0) as n from delivery_schedule_lines where so_line_id = ?', [$row->so_line_id])->n;
+        $ids = [];
+        foreach ($new as $k => $s) {
+            // a split keeps the customer's reference with a suffix, so one reference and revision stays one line (BR-DEM-06)
+            $ids[] = (string) $db->selectOne(
+                "insert into delivery_schedule_lines (tenant_id, so_line_id, plant_id, schedule_no, schedule_type, source_document_type, source_document_no, source_line_ref,
+                                                      requirement_date, required_qty, uom_id, status, revision)
+                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, 'MANUAL', 'SALES_ORDER', ?, ?, ?, ?, ?, 'FIRM', ?) returning id",
+                [$row->so_line_id, $so->plant_id, $no + $k + 1, $row->source_document_no, $k === 0 ? $row->source_line_ref : "{$row->source_line_ref}.".($k + 1),
+                    $s['date'], $s['qty'], $row->uom_id, (int) $row->revision + 1],
+            )->id;
+        }
+        $db->update("update delivery_schedule_lines set status = 'SUPERSEDED', superseded_by = ? where id = ?", [$ids[0], $row->id]);
+        // the old line's outstanding goes to the new lines in order, as far as it reaches (BR-DEM-11)
+        $left = bcsub(self::decimal((string) $row->required_qty), self::decimal((string) $row->delivered), 6);
+        foreach ($new as $k => $s) {
+            if (bccomp($left, '0', 6) <= 0) {
+                break;
+            }
+            $qty = bccomp($left, self::decimal($s['qty']), 6) < 0 ? $left : self::decimal($s['qty']);
+            $db->insert('insert into schedule_reallocations (tenant_id, from_line_id, to_line_id, qty, reason) values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?)',
+                [$row->id, $ids[$k], $qty, $reason]);
+            $left = bcsub($left, $qty, 6);
+        }
+        $this->audit->record($db, 'sales_order.schedule_revised', 'delivery_schedule_line', (string) $row->id, $before, $this->summary($db, (string) $so->id),
+            ['salesOrderId' => $so->id, 'reason' => $reason, 'successors' => $ids], (string) $so->plant_id);
+        $this->outbox->publish($db, 'demand.schedule_changed', 'sales_order', (string) $so->id, ['plantId' => $so->plant_id, 'change' => 'REVISED', 'scheduleLineId' => $row->id]);
+
+        return $this->respondOrder($db, (string) $so->id);
+    }
+
+    /**
      * A line of the request, checked: the mapping (customer, active on the plant's today, finished item), the PO
      * reference and its schedule lines.
      *
@@ -491,15 +564,19 @@ final class SalesOrderController
         $row = $this->rows->find($db, new SalesOrdersQuery, $id) ?? throw new LogicException('Written row not visible.');
         $lines = $db->select(
             "select l.id, l.line_no, l.demand_id, l.customer_item_id, ci.customer_part_no, ci.customer_drawing_rev, l.item_id, i.code as item_code, i.name as item_name,
-                    u.code as uom_code, l.customer_po_no, l.customer_po_line, l.status,
-                    (select trim_scale(coalesce(sum(s.required_qty), 0))::text from delivery_schedule_lines s
-                      where s.so_line_id = l.id and s.status not in ('CANCELLED', 'SUPERSEDED')) as qty
+                    u.code as uom_code, u.decimals as uom_decimals, l.customer_po_no, l.customer_po_line, l.status,
+                    -- a revised (superseded) line keeps only what it delivered (BR-DEM-11, D-122)
+                    (select trim_scale(coalesce(sum(case when s.status = 'SUPERSEDED'
+                              then coalesce((select sum(m.qty_signed) from inventory_movements m join locations ml on ml.id = m.location_id
+                                              where m.schedule_line_id = s.id and ml.location_type = 'V_CUSTOMER'), 0)
+                              else s.required_qty end), 0))::text from delivery_schedule_lines s
+                      where s.so_line_id = l.id and s.status <> 'CANCELLED') as qty
                from sales_order_lines l join customer_items ci on ci.id = l.customer_item_id join items i on i.id = l.item_id join uoms u on u.id = l.uom_id
               where l.sales_order_id = ? order by l.line_no",
             [$id],
         );
         $schedules = $db->select(
-            "select s.id, s.so_line_id, s.schedule_no, s.requirement_date::text as requirement_date, trim_scale(s.required_qty)::text as qty, s.status,
+            "select s.id, s.so_line_id, s.schedule_no, s.requirement_date::text as requirement_date, trim_scale(s.required_qty)::text as qty, s.status, s.revision, s.superseded_by,
                     s.cancel_reason, s.cancelled_at, cu.display_name as cancelled_by_name,
                     trim_scale(coalesce((select sum(m.qty_signed) from inventory_movements m join locations ml on ml.id = m.location_id
                                           where m.schedule_line_id = s.id and ml.location_type = 'V_CUSTOMER'), 0))::text as delivered
@@ -519,6 +596,8 @@ final class SalesOrderController
                 'outstandingQty' => in_array($s->status, ['CANCELLED', 'SUPERSEDED', 'DRAFT'], true) ? '0'
                     : (bccomp(self::decimal((string) $s->qty), self::decimal((string) $s->delivered), 6) > 0 ? self::trimQty(bcsub(self::decimal((string) $s->qty), self::decimal((string) $s->delivered), 6)) : '0'),
                 'status' => (string) $s->status,
+                'revision' => (int) $s->revision,
+                'supersededById' => $s->superseded_by === null ? null : (string) $s->superseded_by,
                 'cancelReason' => $s->cancel_reason,
                 'cancelledAt' => $s->cancelled_at === null ? null : (new DateTimeImmutable((string) $s->cancelled_at))->format(DATE_ATOM),
                 'cancelledByName' => $s->cancelled_by_name,
@@ -538,6 +617,7 @@ final class SalesOrderController
                 'itemCode' => (string) $l->item_code,
                 'itemName' => (string) $l->item_name,
                 'uomCode' => (string) $l->uom_code,
+                'uomDecimals' => (int) $l->uom_decimals,
                 'customerPoNo' => (string) $l->customer_po_no,
                 'customerPoLine' => (string) $l->customer_po_line,
                 'status' => (string) $l->status,

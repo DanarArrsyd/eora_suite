@@ -211,6 +211,12 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.demand.sales-orders.lines.store' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
         'v1.demand.sales-orders.schedule-lines.store' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
         'v1.demand.sales-orders.schedule-lines.cancel' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION', 'SCHEDULE_LINE_ALLOCATED']],
+        // D-122: revision of a firm schedule line and forecast versions
+        'v1.demand.sales-orders.schedule-lines.revise' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION', 'SCHEDULE_LINE_ALLOCATED']],
+        'v1.demand.forecast-versions.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
+        'v1.demand.forecast-versions.show' => self::TENANT_READ + [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN'], 404 => ['NOT_FOUND']],
+        'v1.demand.forecast-versions.lines' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.demand.forecast-versions.activate' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
         'v1.inventory.adjustments.store' => self::TENANT_WRITE + self::MASTER_403 + [
             400 => ['IDEMPOTENCY_KEY_REQUIRED'], 409 => ['IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_IN_PROGRESS', 'NO_ADJUSTMENT_LOCATION'],
             422 => ['VALIDATION_FAILED', 'INVALID_LEGS'],

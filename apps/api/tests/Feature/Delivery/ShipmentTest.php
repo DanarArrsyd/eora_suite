@@ -105,3 +105,33 @@ it('refuses shipping beyond what is staged, for another customer, and outside th
     $refused(fn () => $post((string) $f['fgw']['id'], $f['customer'], $legs('31'), 'sh-direct-0003'), 'shipped more than staged for the line');
     spa($this)->getJson('/api/v1/query/delivery.shipments')->assertForbidden();
 })->group('integration', 'delivery');
+
+it('reverses a shipment of a line revised since: back to staging for the superseded line, then put back (D-038, D-122)', function () {
+    $f = shFixture($this, $this->t);
+    $l1 = $f['schedule'];
+    $posted = shShip($this, $f, [['scheduleLineId' => $l1, 'stockLineId' => $f['stgA'], 'qty' => '90']], [], 'rs-ship-0001')->assertCreated()->json('data');
+    $unpick = fn (string $stock, string $qty, string $key) => spa($this)->postJson('/api/v1/delivery/unpicks', ['plantId' => $f['plant'], 'locationId' => $f['fg2'],
+        'lines' => [['scheduleLineId' => $l1, 'stockLineId' => $stock, 'qty' => $qty]]], ['Idempotency-Key' => $key]);
+    $unpick($f['stgB'], '10', 'rs-unpick-0001')->assertCreated();
+
+    // the planner revises what the line still needs: 10 a week later
+    signIn($this, $f['ppc'], $this->t);
+    $so = spa($this)->getJson("/api/v1/demand/sales-orders/{$f['so']['id']}")->assertOk()->json('data');
+    spa($this)->postJson("/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$l1}/actions/revise", ['reason' => 'Customer moved the rest',
+        'schedules' => [['requirementDate' => date('Y-m-d', strtotime($f['today'].' +10 days')), 'qty' => '10']]], ['If-Match' => '"'.$so['version'].'"'])
+        ->assertOk()->assertJsonPath('data.lines.0.qty', '100');
+
+    // the shipment of the superseded line is still reversed; its goods come back to staging for that line and are put back
+    AccessFixtures::grant($this->t, $f['fgw']['id'], 'INV');
+    signIn($this, $f['fgw'], $this->t);
+    $undo = spa($this)->postJson('/api/v1/inventory/reversals', ['documentId' => $posted['documentId'], 'reason' => 'Wrong truck'], ['Idempotency-Key' => 'rs-reverse-0001'])
+        ->assertCreated()->json('data.documentId');
+    AccessFixtures::grant($this->t, $f['ppc']['id'], 'CSA');
+    signIn($this, $f['ppc'], $this->t);
+    spa($this)->postJson("/api/v1/inventory/reversals/{$undo}/approve", [], ['Idempotency-Key' => 'rs-reverse-0002'])->assertCreated();
+    signIn($this, $f['fgw'], $this->t);
+    $staged = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
+        "select b.id from stock_balances b join locations l on l.id = b.location_id where l.location_type = 'STAGING' and b.lot_id = ? and b.qty > 0", [$f['lots'][0]])->id);
+    $unpick($staged, '90', 'rs-unpick-0002')->assertCreated();
+    expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select status from delivery_schedule_lines where id = ?', [$l1])->status))->toBe('SUPERSEDED');
+})->group('integration', 'delivery');

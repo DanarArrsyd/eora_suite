@@ -5,6 +5,7 @@ use App\Modules\Core\Http\PartController;
 use App\Modules\Core\Http\PartnerController;
 use App\Modules\Core\Http\ResourceController;
 use App\Modules\Delivery\Http\DeliveryController;
+use App\Modules\Demand\Http\ForecastController;
 use App\Modules\Demand\Http\SalesOrderController;
 use App\Modules\Inventory\Http\AdjustmentController;
 use App\Modules\Inventory\Http\InboundScheduleController;
@@ -193,6 +194,12 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('sales-orders/{order}/lines', [SalesOrderController::class, 'addLine'])->name('sales-orders.lines.store');
         Route::post('sales-orders/{order}/schedule-lines', [SalesOrderController::class, 'addSchedule'])->name('sales-orders.schedule-lines.store');
         Route::post('sales-orders/{order}/schedule-lines/{schedule}/actions/cancel', [SalesOrderController::class, 'cancelSchedule'])->name('sales-orders.schedule-lines.cancel');
+        Route::post('sales-orders/{order}/schedule-lines/{schedule}/actions/revise', [SalesOrderController::class, 'reviseSchedule'])->name('sales-orders.schedule-lines.revise');
+        // D-122: forecast versions per customer + plant
+        Route::post('forecast-versions', [ForecastController::class, 'store'])->name('forecast-versions.store');
+        Route::get('forecast-versions/{version}', [ForecastController::class, 'show'])->name('forecast-versions.show');
+        Route::put('forecast-versions/{version}/lines', [ForecastController::class, 'putLines'])->name('forecast-versions.lines');
+        Route::post('forecast-versions/{version}/actions/activate', [ForecastController::class, 'activate'])->name('forecast-versions.activate');
     });
 
     // Inventory postings (doc 32 §1.3, ADR-0014): one tenant transaction, retried on deadlock (the posting is idempotent)

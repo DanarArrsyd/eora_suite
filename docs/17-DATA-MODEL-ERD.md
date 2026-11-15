@@ -130,6 +130,8 @@ Physical tables of the thin flow; all tenant-scoped with forced RLS on the signe
 ### M5 as built (D-120.., migrations 003600..)
 - `item_plan_parameters` (one per item + plant: production/purchase lead time in working days, safety stock in base unit, NULL = NOT CONFIGURED, lot policy) — 003600, D-121.
 - `supplier_inbound_lines` (`INB-` number, supplier, item, plant, qty, expected date, cancel with reason) and `inbound_receipts` (the posted RM receipt document → the line it was received against; received qty and status are derived from posted receipts) — 003600, D-087, D-121.
+- `forecast_versions` (`FC-` number, customer + plant, DRAFT → ACTIVE → SUPERSEDED, one active per customer + plant) and `forecast_lines` (customer part, item, ISO week Monday, qty; consumption derived on read) — 003700, D-122.
+- `schedule_reallocations` (superseded schedule line → successor, qty, reason; Σ ≤ the old outstanding) and `delivery_schedule_lines.superseded_by` for revisions — 003700, D-122.
 
 ## 3. Tenant isolation checklist (per table)
 1. `tenant_id NOT NULL`, leading column of every index used by queries.
