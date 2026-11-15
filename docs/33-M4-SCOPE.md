@@ -62,7 +62,7 @@
 
 **Pilihan owner:** ☑ Setuju scope M4 · ☑ Keputusan M4-D1..D10 sesuai usulan (M4-D7: pola lot ☑ `L<YYMM>-NNNN`) (2026-11-12)
 
-## 6. Checklist exit M4 (status 2026-11-15, **menunggu UAT owner**)
+## 6. Checklist exit M4 (status 2026-11-15, **M4 ditutup — D-119**)
 Status per butir §4. **Hijau** = ada bukti otomatis di CI; **OPEN** = belum terbukti, M4 belum boleh ditutup karena butir itu.
 
 | §4 | Butir | Status | Bukti / yang kurang |
@@ -74,7 +74,7 @@ Status per butir §4. **Hijau** = ada bukti otomatis di CI; **OPEN** = belum ter
 | 5 | Konkurensi + idempotency endpoint posting baru | Hijau setelah PR ini | `PostingContractTest`: key milik request lain (endpoint lain atau payload lain) → 409 `IDEMPOTENCY_KEY_REUSED` di 8 endpoint posting M4 (shipment, alokasi, pick, FG receipt, QC disposition, posting produksi, issue, return, close exception), retry → replay; shipment dan pick menunggu posting yang memegang stoknya (`STOCK_BUSY`, lalu berhasil). Replay per endpoint di setiap test langkahnya; issue paralel per WO di `MaterialFlowTest` (#10). Periode dan kalender lewat `InventoryPostingService` seperti M3. |
 | 6 | Isolasi tenant + scope plant, OpenAPI, round-trip, saldo = ledger | Hijau | `SchemaGuard` (setiap tabel ber-`tenant_id`: RLS forced + policy) di CI; scope plant per endpoint di test setiap langkah dan `LotTraceTest` (plant lain → 404, dokumen di luar plant → "outside your plants"); CI drift OpenAPI; migrate:refresh di CI, rollback 002600..003500 dicoba lokal; saldo = ledger setelah pesanan penuh: `DemoOrderTest` (`BalanceVerification`), stack e2e `eora:inventory:verify-balances`. |
 | 7 | Gate frontend + stack e2e M4 | Hijau | lint, typecheck, unit, e2e mock + axe per layar M4; stack e2e `m4-order.spec.ts` (seed → master → stok → pesanan demo lewat endpoint asli → SO sebagian terkirim → trace mundur ke coil dan maju ke customer → saldo = ledger) hijau di CI #80. |
-| 8 | Dokumen + UAT owner | **OPEN** | Dokumen: 04 (baris 14 `WO_CLOSE_EXCEPTION`, kode `WO_CLOSE_SCRAP`), 13 (D-107..D-118), 15, 17 (§ M4 as built), 18 (§ M4 as implemented), 24, 33 diperbarui. **Kurang:** owner menjalankan `docs/uat/M4-UAT.md` §1–9 di stack `eora` dan menyatakan M4 diterima (keputusan D-119). |
+| 8 | Dokumen + UAT owner | Hijau | Dokumen: 04 (baris 14 `WO_CLOSE_EXCEPTION`, kode `WO_CLOSE_SCRAP`), 13 (D-107..D-119), 15, 17 (§ M4 as built), 18 (§ M4 as implemented), 24, 33 diperbarui. Owner menjalankan `docs/uat/M4-UAT.md` §1–9 di stack `eora` (2026-11-15): "UAT M4 oke semua" (D-119). Ditemukan saat persiapan dan diperbaiki sebelum UAT: tanggal draf BOM/routing import yang sudah lewat di pesanan demo (PR #81). |
 
-**Status exit M4:** butir 1–7 hijau; butir 8 menunggu UAT owner. M5 butuh persetujuan scope sendiri (doc 27, D-054).
+**Status exit M4:** **ditutup 2026-11-15 (D-119)** — butir 1–8 hijau. M5 butuh persetujuan scope sendiri (doc 27, D-054).
 
