@@ -196,7 +196,8 @@ final class MpsInputs
      */
     private function exceptions(EoraPostgresConnection $db, string $plant): array
     {
-        $from = (new DateTimeImmutable($this->horizonStart))->modify('-366 days')->format('Y-m-d');
+        // a lead time of up to 365 working days (Mon–Sat, plus holidays) reaches back at most ~ 1.25 years: load 2
+        $from = (new DateTimeImmutable($this->horizonStart))->modify('-730 days')->format('Y-m-d');
         $versions = $db->select(
             'select id, plant_id is not null as override, effective_from::text as since from business_calendars
               where (plant_id = ? or plant_id is null) and effective_from <= ?::date order by effective_from desc',

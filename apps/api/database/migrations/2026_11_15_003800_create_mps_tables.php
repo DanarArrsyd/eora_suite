@@ -400,6 +400,10 @@ return new class extends Migration
               IF NOT public.eora_actor_may('planning.mps.create', v.plant_id) THEN
                 RAISE EXCEPTION 'an MPS is calculated by a planner of the plant' USING ERRCODE = '42501';
               END IF;
+              -- whoever writes the calculation prepared it: never its approver (SoD-07)
+              INSERT INTO public.mps_contributors (tenant_id, mps_version_id, user_id, contribution)
+              VALUES (COALESCE(NEW.tenant_id, OLD.tenant_id), COALESCE(NEW.mps_version_id, OLD.mps_version_id), (SELECT c.actor FROM ctx_api.context() c), 'CALCULATED')
+              ON CONFLICT DO NOTHING;
               IF TG_OP = 'UPDATE' THEN
                 IF TG_TABLE_NAME <> 'mps_planned_orders' OR (NEW.mps_version_id, NEW.mps_item_id, NEW.week_start, NEW.calc_qty, NEW.calc_due_date)
                      IS DISTINCT FROM (OLD.mps_version_id, OLD.mps_item_id, OLD.week_start, OLD.calc_qty, OLD.calc_due_date) THEN

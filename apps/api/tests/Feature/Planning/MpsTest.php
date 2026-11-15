@@ -198,7 +198,7 @@ it('keeps everyone who adjusted a planned order out of the approval, even after 
         expect($e->getMessage())->toContain('did not prepare it (SoD-07)');
     }
     expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
-        'select count(*) as n from mps_contributors where mps_version_id = ?', [$m['id']])->n))->toBe(4);
+        'select count(*) as n from mps_contributors where mps_version_id = ?', [$m['id']])->n))->toBe(5);
 });
 
 it('plans an item with a safety stock even without demand: stock below it is replenished (G-MPS-2, Codex #87)', function () {
@@ -240,6 +240,18 @@ it('takes working days from the calendar version in force on each date, also one
     $m = spa($this)->postJson('/api/v1/planning/mps-versions', ['plantId' => $f['plant']])->assertCreated()->json('data');
     // due Monday of week B, 1 working day before: Saturday is a holiday in the version in force then → Friday
     expect($m['items'][0]['plannedOrders'][0])->toMatchArray(['dueDate' => $f['weekB'], 'startDate' => date('Y-m-d', strtotime($f['weekB'].' -3 days'))]);
+});
+
+it('counts a planner who changed calculation rows in SQL as a preparer (SoD-07, Codex #87)', function () {
+    $f = mpsFixture($this, $this->t);
+    $m = spa($this)->postJson('/api/v1/planning/mps-versions', ['plantId' => $f['plant']])->assertCreated()->json('data');
+    $both = rtSwitch($this, $this->t, 'PPC');
+    AccessFixtures::grant($this->t, $both['id'], 'CSA', ['TENANT']);
+    asApp($this->t, (string) $both['id'], fn (EoraPostgresConnection $db) => $db->delete('delete from mps_pegs where mps_version_id = ?', [$m['id']]));
+    mpsAs($this, $this->t, $f['ppc']);
+    $m = mpsAct($this, spa($this)->getJson("/api/v1/planning/mps-versions/{$m['id']}")->json('data'), 'submit')->assertOk()->json('data');
+    mpsAs($this, $this->t, $both);
+    mpsAct($this, $m, 'approve')->assertForbidden()->assertJsonPath('code', 'SOD_VIOLATION');
 });
 
 it('keeps the MPS to the planners and approvers of its plant, and lets a planner cancel a draft', function () {
