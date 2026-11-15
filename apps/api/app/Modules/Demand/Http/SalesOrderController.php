@@ -298,7 +298,10 @@ final class SalesOrderController
         $db->update("update delivery_schedule_lines set status = 'CANCELLED', cancelled_at = now(), cancelled_by = ?, cancel_reason = ? where id = ?", [$this->actor($db), trim($data['reason']), $row->id]);
         $db->update(
             "update sales_order_lines l set status = 'CANCELLED' where l.id = ? and l.status = 'ACTIVE'
-                and not exists (select 1 from delivery_schedule_lines s where s.so_line_id = l.id and s.status <> 'CANCELLED')",
+                and not exists (select 1 from delivery_schedule_lines s where s.so_line_id = l.id and s.status <> 'CANCELLED'
+                                   -- a revised line that delivered nothing is no fulfilment history (D-122)
+                                   and not (s.status = 'SUPERSEDED' and not exists (select 1 from inventory_movements m join locations ml on ml.id = m.location_id
+                                                                                      where m.schedule_line_id = s.id and ml.location_type = 'V_CUSTOMER')))",
             [$row->so_line_id],
         );
         $this->audit->record($db, 'sales_order.schedule_cancelled', 'delivery_schedule_line', (string) $row->id, $before, $this->state($db, 'delivery_schedule_lines', (string) $row->id), ['salesOrderId' => $so->id], (string) $so->plant_id);

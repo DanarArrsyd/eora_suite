@@ -248,6 +248,14 @@ it('revises a firm schedule line: superseded with its delivered quantity, new li
     soWith($this, 'POST', "/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$line['id']}/actions/revise",
         ['reason' => 'Again', 'schedules' => [['requirementDate' => $day(6), 'qty' => '10']]], $third['version'])->assertStatus(409);
 
+    // every firm successor cancelled: nothing was delivered, so the order line is cancelled too (Codex on #86)
+    $version = $third['version'];
+    foreach (collect($third['lines'][0]['schedules'])->where('status', 'FIRM') as $firm) {
+        $version = soWith($this, 'POST', "/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$firm['id']}/actions/cancel", ['reason' => 'Order withdrawn'], $version)
+            ->assertOk()->json('data.version');
+    }
+    spa($this)->getJson("/api/v1/demand/sales-orders/{$so['id']}")->assertOk()->assertJsonPath('data.lines.0.status', 'CANCELLED');
+
     // straight in the database: superseded without a newer revision, or by someone who does not plan
     try {
         AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->update("update delivery_schedule_lines set status = 'SUPERSEDED', superseded_by = id where id = ?", [$new[1]['id']]));

@@ -7,7 +7,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiError, api, call, useMe } from '@eora/features/auth';
 import type { Option } from '@eora/features/data';
 import { ConfirmDialog, DataTable, DomainStatusBadge, EnterprisePage, type EoraColumn } from '@eora/features/patterns';
-import { todayIn } from '@eora/ui';
 import { ReviseDialog } from './revise-dialog';
 import { Button, Card, CardContent, CardHeader, CardTitle, EmptyState, ErrorState, InlineAlert, LoadingState, PermissionDeniedState } from '@eora/ui';
 import { MasterEditor } from '@/modules/master/editor';
@@ -575,7 +574,7 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
         schedule={revise?.schedule ?? null}
         uomCode={revise?.line.uomCode ?? ''}
         uomDecimals={revise?.line.uomDecimals ?? 0}
-        today={todayIn(me.data?.tenants.find((t) => t.id === me.data?.activeTenantId)?.timezone ?? 'Asia/Jakarta')}
+        today={o.plantToday}
         onRevised={(message) => {
           setRevise(null);
           changed(message);
