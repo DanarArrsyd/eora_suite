@@ -83,6 +83,8 @@ The role templates below are what `eora:tenants:sync` grants; they supersede the
 | `traceability.lot_trace` | V: AUD CSA INV | Backward/forward lot trace (D-118) |
 | `planning.plan_parameter` *(M5)* | V: AUD CSA INV MAT PPC PRL · C: PPC | Lead times and safety stock per item + plant, changed directly, audited (D-121) |
 | `materials.inbound_schedule` *(M5)* | V: AUD CSA INV MAT PPC · C: MAT PPC | Supplier inbound lines: add, edit, cancel with reason (D-087, D-121) |
+| `demand.forecast` *(M5)* | V: AUD CSA DLV PPC · C P: PPC | Draft forecast versions per customer + plant (C) and activate them (P), no approval (D-122) |
+| `demand.sales_order` revise *(M5)* | P: PPC | Revise a firm schedule line with a reason (D-122) |
 
 ## 3. Separation-of-duties rules (enforced in policy layer)
 | SoD-ID | Conflict | Rule |

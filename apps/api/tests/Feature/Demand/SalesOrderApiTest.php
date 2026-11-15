@@ -212,3 +212,112 @@ it('refuses in the database what the lifecycle forbids: editing a firm line, del
         [$so['id']], '23505',
     );
 })->group('integration', 'demand');
+
+it('revises a firm schedule line: superseded with its delivered quantity, new lines take the next revision and the outstanding (D-122, BR-DEM-11)', function () {
+    $f = $this->f;
+    orgUser($this, $this->t, 'PPC');
+    $so = soCreate($this, $f)->assertCreated()->json('data');
+    $filled = soWith($this, 'PUT', "/api/v1/demand/sales-orders/{$so['id']}/lines", ['lines' => [soLine($f, schedules: [['+3', '250']])]], $so['version'])->assertOk()->json('data');
+    $order = soWith($this, 'POST', "/api/v1/demand/sales-orders/{$so['id']}/actions/confirm", [], $filled['version'])->assertOk()->json('data');
+    $line = $order['lines'][0]['schedules'][0];
+    $day = fn (int $d) => date('Y-m-d', strtotime($f['today']." +{$d} days"));
+    $revise = fn (array $schedules, int $version, string $reason = 'Customer moved the date') => soWith($this, 'POST',
+        "/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$line['id']}/actions/revise", ['reason' => $reason, 'schedules' => $schedules], $version);
+
+    $revise([['requirementDate' => $day(-1), 'qty' => '100']], $order['version'])->assertStatus(422)->assertJsonValidationErrors(['schedules.0.requirementDate']);
+    $revise([['requirementDate' => $day(5), 'qty' => '100']], $order['version'], 'x')->assertStatus(422)->assertJsonValidationErrors(['reason']);
+    // a split: 150 on day 5, 120 on day 9 (the customer also raised the total by 20)
+    $revised = $revise([['requirementDate' => $day(5), 'qty' => '150'], ['requirementDate' => $day(9), 'qty' => '120']], $order['version'])->assertOk()->json('data');
+    $schedules = collect($revised['lines'][0]['schedules'])->keyBy('id');
+    expect($schedules[$line['id']])->toMatchArray(['status' => 'SUPERSEDED', 'revision' => 1, 'outstandingQty' => '0', 'deliveredQty' => '0'])
+        ->and($revised['lines'][0]['qty'])->toBe('270');
+    $new = $schedules->filter(fn ($s) => $s['status'] === 'FIRM')->values();
+    expect($new->pluck('revision')->all())->toBe([2, 2])->and($new->pluck('qty')->all())->toBe(['150', '120'])
+        ->and($schedules[$line['id']]['supersededById'])->toBe($new[0]['id']);
+    // the 250 outstanding went 150 + 100 to the new lines, with the reason
+    expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => array_map(fn ($r) => (array) $r, $db->select(
+        'select trim_scale(qty)::text as qty, reason from schedule_reallocations where from_line_id = ? order by qty desc', [$line['id']]))))
+        ->toBe([['qty' => '150', 'reason' => 'Customer moved the date'], ['qty' => '100', 'reason' => 'Customer moved the date']]);
+    // each branch is revised again, one with a split: references stay unique per revision (Codex on #86)
+    $again = fn (array $from, array $schedules, int $version) => soWith($this, 'POST', "/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$from['id']}/actions/revise",
+        ['reason' => 'Customer changed again', 'schedules' => $schedules], $version);
+    $second = $again($new[0], [['requirementDate' => $day(6), 'qty' => '100'], ['requirementDate' => $day(7), 'qty' => '50']], $revised['version'])->assertOk()->json('data');
+    $third = $again($new[1], [['requirementDate' => $day(11), 'qty' => '120']], $second['version'])->assertOk()->json('data');
+    expect(collect($third['lines'][0]['schedules'])->where('status', 'FIRM')->pluck('qty')->sort()->values()->all())->toBe(['50', '100', '120']);
+    // a superseded line is history
+    soWith($this, 'POST', "/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$line['id']}/actions/revise",
+        ['reason' => 'Again', 'schedules' => [['requirementDate' => $day(6), 'qty' => '10']]], $third['version'])->assertStatus(409);
+
+    // every firm successor cancelled: nothing was delivered, so the order line is cancelled too (Codex on #86)
+    $version = $third['version'];
+    foreach (collect($third['lines'][0]['schedules'])->where('status', 'FIRM') as $firm) {
+        $version = soWith($this, 'POST', "/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$firm['id']}/actions/cancel", ['reason' => 'Order withdrawn'], $version)
+            ->assertOk()->json('data.version');
+    }
+    spa($this)->getJson("/api/v1/demand/sales-orders/{$so['id']}")->assertOk()->assertJsonPath('data.lines.0.status', 'CANCELLED');
+
+    // straight in the database: superseded without a newer revision, or by someone who does not plan
+    try {
+        AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->update("update delivery_schedule_lines set status = 'SUPERSEDED', superseded_by = id where id = ?", [$new[1]['id']]));
+        $this->fail('superseded without a newer revision');
+    } catch (QueryException $e) {
+        expect($e->getCode())->toBeIn(['23514', '42501']);
+    }
+})->group('integration', 'demand');
+
+it('keeps forecast versions per customer and plant; firm demand of the same week consumes the forecast once (D-122, BR-DEM-08)', function () {
+    $f = $this->f;
+    $planner = orgUser($this, $this->t, 'PPC');
+    // a firm order of OEM-A: 250 in the week of today + 3
+    $so = soCreate($this, $f)->assertCreated()->json('data');
+    $filled = soWith($this, 'PUT', "/api/v1/demand/sales-orders/{$so['id']}/lines", ['lines' => [soLine($f, schedules: [['+3', '250']])]], $so['version'])->assertOk()->json('data');
+    soWith($this, 'POST', "/api/v1/demand/sales-orders/{$so['id']}/actions/confirm", [], $filled['version'])->assertOk();
+    $due = date('Y-m-d', strtotime($f['today'].' +3 days'));
+    $week = date('Y-m-d', strtotime('monday this week', strtotime($due)));
+    $next = date('Y-m-d', strtotime($week.' +7 days'));
+
+    $year = substr($f['today'], 0, 4);
+    $v1 = spa($this)->postJson('/api/v1/demand/forecast-versions', ['plantId' => $f['plant'], 'customerId' => $f['oemA']])->assertCreated()
+        ->assertJsonPath('data.code', "FC-P1-{$year}-0001")->assertJsonPath('data.status', 'DRAFT')->json('data');
+    spa($this)->postJson('/api/v1/demand/forecast-versions', ['plantId' => $f['plant'], 'customerId' => $f['oemA']])->assertStatus(409);
+    // one draft per customer and plant in the database too (two planners at the same moment, Codex on #86)
+    try {
+        asApp($this->t, (string) $planner['id'], fn (EoraPostgresConnection $db) => $db->insert(
+            'insert into forecast_versions (tenant_id, plant_id, customer_id, forecast_no) values ((select c.tenant from ctx_api.context() c), ?, ?, ?)',
+            [$f['plant'], $f['oemA'], "FC-P1-{$year}-9999"]));
+        $this->fail('a second draft');
+    } catch (QueryException $e) {
+        expect($e->getCode())->toBe('23505');
+    }
+    $put = fn (string $id, array $lines, int $version) => soWith($this, 'PUT', "/api/v1/demand/forecast-versions/{$id}/lines", ['lines' => $lines], $version);
+    // only the customer's own parts; a day names its week
+    $put($v1['id'], [['customerItemId' => $f['partB'], 'weekStart' => $due, 'qty' => '100']], $v1['version'])->assertStatus(422)->assertJsonValidationErrors(['lines.0.customerItemId']);
+    $v1 = $put($v1['id'], [['customerItemId' => $f['partA'], 'weekStart' => $due, 'qty' => '400'], ['customerItemId' => $f['partA'], 'weekStart' => $next, 'qty' => '300']], $v1['version'])
+        ->assertOk()->json('data');
+    expect(array_map(fn ($l) => [$l['weekStart'], $l['qty'], $l['firmQty'], $l['netQty']], $v1['lines']))->toBe([[$week, '400', '250', '150'], [$next, '300', '0', '300']]);
+    $v1 = soWith($this, 'POST', "/api/v1/demand/forecast-versions/{$v1['id']}/actions/activate", [], $v1['version'])->assertOk()->assertJsonPath('data.status', 'ACTIVE')->json('data');
+    $put($v1['id'], [], $v1['version'])->assertStatus(409);
+
+    // a new version from the active one; activated, it supersedes the old one
+    $v2 = spa($this)->postJson('/api/v1/demand/forecast-versions', ['plantId' => $f['plant'], 'customerId' => $f['oemA'], 'copyFromActive' => true])->assertCreated()
+        ->assertJsonCount(2, 'data.lines')->assertJsonPath('data.lineCount', 2)->json('data');
+    $v2 = soWith($this, 'POST', "/api/v1/demand/forecast-versions/{$v2['id']}/actions/activate", [], $v2['version'])->assertOk()->json('data');
+    spa($this)->getJson("/api/v1/query/demand.forecast_versions?filter[id]={$v1['id']}")->assertOk()->assertJsonPath('data.0.status', 'SUPERSEDED');
+    spa($this)->getJson('/api/v1/query/demand.forecast_lines?filter[versionStatus]=ACTIVE')->assertOk()->assertJsonCount(2, 'data')
+        ->assertJsonPath('data.0.netQty', '150');
+
+    // a second part of the same customer and item: its forecast is not consumed by the first part's orders (Codex on #86)
+    $alt = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
+        "insert into customer_items (tenant_id, customer_id, item_id, customer_part_no, effective_from) select tenant_id, customer_id, item_id, 'A-77101-ALT', '2026-01-01' from customer_items where id = ? returning id",
+        [$f['partA']])->id);
+    $draft = spa($this)->postJson('/api/v1/demand/forecast-versions', ['plantId' => $f['plant'], 'customerId' => $f['oemA']])->assertCreated()->json('data');
+    $alts = $put($draft['id'], [['customerItemId' => $f['partA'], 'weekStart' => $due, 'qty' => '100'], ['customerItemId' => $alt, 'weekStart' => $due, 'qty' => '100']], $draft['version'])
+        ->assertOk()->json('data.lines');
+    expect(collect($alts)->mapWithKeys(fn ($l) => [$l['customerPartNo'] => $l['netQty']])->all())->toBe(['A-77101' => '0', 'A-77101-ALT' => '100']);
+
+    // only a planner writes a forecast
+    rtSwitch($this, $this->t, 'DLV');
+    spa($this)->getJson('/api/v1/query/demand.forecast_versions')->assertOk()->assertJsonCount(3, 'data');
+    spa($this)->postJson('/api/v1/demand/forecast-versions', ['plantId' => $f['plant'], 'customerId' => $f['oemB']])->assertForbidden();
+    expect($v2['status'])->toBe('ACTIVE');
+})->group('integration', 'demand');

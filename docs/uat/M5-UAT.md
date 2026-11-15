@@ -36,3 +36,19 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
 | 9 | Buka inbound line → ubah quantity. | Ditolak: sudah ada receipt, quantity dan tanggal tetap. | |
 | 10 | Isi **Cancel the rest — reason** "Supplier short" → simpan → konfirmasi. | Status **Cancelled**; 600 tetap received. Receipt baru tidak bisa memilih line itu lagi. | |
 | 11 | Login `inv` → Inbound Schedule. | Daftar terlihat, tanpa tombol tambah. | |
+
+## 2. Forecast dan revisi schedule line (langkah 2, D-122)
+Persiapan: `eora:tenants:sync` (izin `demand.forecast`). Satu SO OEM-A confirmed untuk BRK-A100 dengan satu pengiriman Firm, mis. 200 PCS tanggal minggu depan.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `ppc` → Demand → **Forecast** → **New forecast version** → P1, OEM-A, Start from: Empty → simpan. | Halaman `FC-P1-<tahun>-0001`, **Draft**. | |
+| 2 | Add line: A-77101-BK, minggu dari tanggal pengiriman SO, qty `500`; Add line: minggu berikutnya `300` → **Save lines**. | "Forecast lines saved"; tabel: minggu pertama Forecast 500, Firm orders 200, **Net forecast 300**; minggu kedua Net 300. | |
+| 3 | Buat versi forecast baru lagi untuk OEM-A di P1. | Ditolak: masih ada draft; selesaikan dulu. | |
+| 4 | **Activate** → konfirmasi. | Status **Active**; baris tidak bisa diubah lagi. | |
+| 5 | New forecast version → Start from: The active version → Activate. | Versi baru Active; versi lama **Superseded** (daftar Forecast). | |
+| 6 | Demand → Sales Orders → SO itu → pengiriman Firm → **Revise** → ubah qty jadi `120`, **Add delivery** tanggal minggu berikutnya `80`, Reason "Customer split" → **Revise delivery**. | "Delivery split into 2": baris lama **Superseded** ("Revised; kept with what it delivered"), dua baris Firm **Revision 2**; qty line 200. | |
+| 7 | Kembali ke Forecast aktif. | Firm orders per minggu mengikuti baris revisi (120 dan 80); baris Superseded tidak dihitung. | |
+| 8 | Alokasikan FG ke salah satu baris revisi (Delivery → Allocation & Pick), lalu coba **Revise** baris itu. | Ditolak: lepas alokasi / kembalikan yang di-stage dulu. | |
+| 9 | Login `dlv` → Demand → Forecast. | Daftar terlihat, tanpa tombol tambah. | |
+

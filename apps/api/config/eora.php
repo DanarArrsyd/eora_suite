@@ -31,6 +31,8 @@ use App\Modules\Core\Queries\WorkCentersQuery;
 use App\Modules\Delivery\Queries\OpenDemandQuery;
 use App\Modules\Delivery\Queries\PicksQuery;
 use App\Modules\Delivery\Queries\ShipmentsQuery;
+use App\Modules\Demand\Queries\ForecastLinesQuery;
+use App\Modules\Demand\Queries\ForecastVersionsQuery;
 use App\Modules\Demand\Queries\SalesOrdersQuery;
 use App\Modules\Demand\Queries\ScheduleLinesQuery;
 use App\Modules\Inventory\Queries\AdjustmentsQuery;
@@ -148,6 +150,8 @@ return [
         'delivery.shipments' => ShipmentsQuery::class,
         'planning.wo_close_exceptions' => WoCloseExceptionsQuery::class,
         'planning.plan_parameters' => PlanParametersQuery::class,
+        'demand.forecast_versions' => ForecastVersionsQuery::class,
+        'demand.forecast_lines' => ForecastLinesQuery::class,
         'materials.inbound_schedule' => InboundScheduleQuery::class,
         'exchange.import_jobs' => ImportJobsQuery::class,
         'exchange.export_jobs' => ExportJobsQuery::class,

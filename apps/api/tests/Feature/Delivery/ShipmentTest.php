@@ -105,3 +105,58 @@ it('refuses shipping beyond what is staged, for another customer, and outside th
     $refused(fn () => $post((string) $f['fgw']['id'], $f['customer'], $legs('31'), 'sh-direct-0003'), 'shipped more than staged for the line');
     spa($this)->getJson('/api/v1/query/delivery.shipments')->assertForbidden();
 })->group('integration', 'delivery');
+
+it('reverses a shipment of a line revised since: back to staging for the superseded line, then put back (D-038, D-122)', function () {
+    $f = shFixture($this, $this->t);
+    $l1 = $f['schedule'];
+    $posted = shShip($this, $f, [['scheduleLineId' => $l1, 'stockLineId' => $f['stgA'], 'qty' => '90']], [], 'rs-ship-0001')->assertCreated()->json('data');
+    $unpick = fn (string $stock, string $qty, string $key) => spa($this)->postJson('/api/v1/delivery/unpicks', ['plantId' => $f['plant'], 'locationId' => $f['fg2'],
+        'lines' => [['scheduleLineId' => $l1, 'stockLineId' => $stock, 'qty' => $qty]]], ['Idempotency-Key' => $key]);
+    $unpick($f['stgB'], '10', 'rs-unpick-0001')->assertCreated();
+
+    // the planner revises what the line still needs: 10 a week later
+    signIn($this, $f['ppc'], $this->t);
+    $so = spa($this)->getJson("/api/v1/demand/sales-orders/{$f['so']['id']}")->assertOk()->json('data');
+    spa($this)->postJson("/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$l1}/actions/revise", ['reason' => 'Customer moved the rest',
+        'schedules' => [['requirementDate' => date('Y-m-d', strtotime($f['today'].' +10 days')), 'qty' => '10']]], ['If-Match' => '"'.$so['version'].'"'])
+        ->assertOk()->assertJsonPath('data.lines.0.qty', '100');
+
+    // the shipment of the superseded line is still reversed; its goods come back to staging for that line and are put back
+    AccessFixtures::grant($this->t, $f['fgw']['id'], 'INV');
+    signIn($this, $f['fgw'], $this->t);
+    $undo = spa($this)->postJson('/api/v1/inventory/reversals', ['documentId' => $posted['documentId'], 'reason' => 'Wrong truck'], ['Idempotency-Key' => 'rs-reverse-0001'])
+        ->assertCreated()->json('data.documentId');
+    AccessFixtures::grant($this->t, $f['ppc']['id'], 'CSA');
+    signIn($this, $f['ppc'], $this->t);
+    spa($this)->postJson("/api/v1/inventory/reversals/{$undo}/approve", [], ['Idempotency-Key' => 'rs-reverse-0002'])->assertCreated();
+    signIn($this, $f['fgw'], $this->t);
+    $staged = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
+        "select b.id from stock_balances b join locations l on l.id = b.location_id where l.location_type = 'STAGING' and b.lot_id = ? and b.qty > 0", [$f['lots'][0]])->id);
+    // the superseded line with goods back at staging is listed in Allocation & Pick, to be put back (Codex on #86)
+    spa($this)->getJson("/api/v1/query/delivery.schedule_lines?filter[id]={$l1}")->assertOk()->assertJsonCount(1, 'data');
+    $unpick($staged, '90', 'rs-unpick-0002')->assertCreated();
+    spa($this)->getJson("/api/v1/query/delivery.schedule_lines?filter[id]={$l1}")->assertOk()->assertJsonCount(0, 'data');
+    expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select status from delivery_schedule_lines where id = ?', [$l1])->status))->toBe('SUPERSEDED');
+})->group('integration', 'delivery');
+
+it('keeps what a revised line delivered consuming the forecast of its week (Codex on #86, D-122)', function () {
+    $f = shFixture($this, $this->t);
+    $l1 = $f['schedule'];
+    shShip($this, $f, [['scheduleLineId' => $l1, 'stockLineId' => $f['stgA'], 'qty' => '90']], [], 'fr-ship-0001')->assertCreated();
+    spa($this)->postJson('/api/v1/delivery/unpicks', ['plantId' => $f['plant'], 'locationId' => $f['fg2'],
+        'lines' => [['scheduleLineId' => $l1, 'stockLineId' => $f['stgB'], 'qty' => '10']]], ['Idempotency-Key' => 'fr-unpick-0001'])->assertCreated();
+
+    // the rest (10) is revised to the same day: the week still has 90 delivered + 10 firm
+    signIn($this, $f['ppc'], $this->t);
+    $due = $f['so']['lines'][0]['schedules'][0]['requirementDate'];
+    $so = spa($this)->getJson("/api/v1/demand/sales-orders/{$f['so']['id']}")->assertOk()->json('data');
+    spa($this)->postJson("/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$l1}/actions/revise", ['reason' => 'Rest moved',
+        'schedules' => [['requirementDate' => $due, 'qty' => '10']]], ['If-Match' => '"'.$so['version'].'"'])->assertOk();
+    $v = spa($this)->postJson('/api/v1/demand/forecast-versions', ['plantId' => $f['plant'], 'customerId' => $f['customer']])->assertCreated()->json('data');
+    $line = spa($this)->putJson("/api/v1/demand/forecast-versions/{$v['id']}/lines", ['lines' => [['customerItemId' => $f['part'], 'weekStart' => $due, 'qty' => '100']]],
+        ['If-Match' => '"'.$v['version'].'"'])->assertOk()->json('data.lines.0');
+    // the second order (30 PCS, its own line) counts too when it falls in the same week
+    $second = $f['so2']['lines'][0]['schedules'][0]['requirementDate'];
+    $sameWeek = date('o-W', strtotime($second)) === date('o-W', strtotime($due));
+    expect($line['firmQty'])->toBe($sameWeek ? '130' : '100')->and($line['netQty'])->toBe('0');
+})->group('integration', 'delivery');

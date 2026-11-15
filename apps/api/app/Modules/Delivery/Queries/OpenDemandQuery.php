@@ -38,7 +38,11 @@ final class OpenDemandQuery extends QueryDefinition
                  join customers c on c.tenant_id = h.tenant_id and c.id = h.customer_id
                  join items i on i.tenant_id = l.tenant_id and i.id = l.item_id
                  join uoms u on u.tenant_id = l.tenant_id and u.id = l.uom_id
-                 join plants p on p.tenant_id = s.tenant_id and p.id = s.plant_id and s.status in ('FIRM', 'PARTIALLY_FULFILLED')";
+                 join plants p on p.tenant_id = s.tenant_id and p.id = s.plant_id and (s.status in ('FIRM', 'PARTIALLY_FULFILLED')
+                   -- a revised line whose shipment was reversed: its goods are back at staging, to be put back (D-122)
+                   or (s.status = 'SUPERSEDED' and (select coalesce(sum(m.qty_signed), 0) from inventory_movements m
+                                                     join locations sl on sl.tenant_id = m.tenant_id and sl.id = m.location_id and sl.location_type = 'STAGING'
+                                                    where m.tenant_id = s.tenant_id and m.schedule_line_id = s.id) > 0))";
     }
 
     public function filterFrom(): string
@@ -46,7 +50,11 @@ final class OpenDemandQuery extends QueryDefinition
         return "delivery_schedule_lines s
                  join sales_order_lines l on l.tenant_id = s.tenant_id and l.id = s.so_line_id
                  join sales_order_headers h on h.tenant_id = l.tenant_id and h.id = l.sales_order_id
-                 join plants p on p.tenant_id = s.tenant_id and p.id = s.plant_id and s.status in ('FIRM', 'PARTIALLY_FULFILLED')";
+                 join plants p on p.tenant_id = s.tenant_id and p.id = s.plant_id and (s.status in ('FIRM', 'PARTIALLY_FULFILLED')
+                   -- a revised line whose shipment was reversed: its goods are back at staging, to be put back (D-122)
+                   or (s.status = 'SUPERSEDED' and (select coalesce(sum(m.qty_signed), 0) from inventory_movements m
+                                                     join locations sl on sl.tenant_id = m.tenant_id and sl.id = m.location_id and sl.location_type = 'STAGING'
+                                                    where m.tenant_id = s.tenant_id and m.schedule_line_id = s.id) > 0))";
     }
 
     public function idColumn(): string
