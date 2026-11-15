@@ -135,3 +135,25 @@ it('reverses a shipment of a line revised since: back to staging for the superse
     $unpick($staged, '90', 'rs-unpick-0002')->assertCreated();
     expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne('select status from delivery_schedule_lines where id = ?', [$l1])->status))->toBe('SUPERSEDED');
 })->group('integration', 'delivery');
+
+it('keeps what a revised line delivered consuming the forecast of its week (Codex on #86, D-122)', function () {
+    $f = shFixture($this, $this->t);
+    $l1 = $f['schedule'];
+    shShip($this, $f, [['scheduleLineId' => $l1, 'stockLineId' => $f['stgA'], 'qty' => '90']], [], 'fr-ship-0001')->assertCreated();
+    spa($this)->postJson('/api/v1/delivery/unpicks', ['plantId' => $f['plant'], 'locationId' => $f['fg2'],
+        'lines' => [['scheduleLineId' => $l1, 'stockLineId' => $f['stgB'], 'qty' => '10']]], ['Idempotency-Key' => 'fr-unpick-0001'])->assertCreated();
+
+    // the rest (10) is revised to the same day: the week still has 90 delivered + 10 firm
+    signIn($this, $f['ppc'], $this->t);
+    $due = $f['so']['lines'][0]['schedules'][0]['requirementDate'];
+    $so = spa($this)->getJson("/api/v1/demand/sales-orders/{$f['so']['id']}")->assertOk()->json('data');
+    spa($this)->postJson("/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$l1}/actions/revise", ['reason' => 'Rest moved',
+        'schedules' => [['requirementDate' => $due, 'qty' => '10']]], ['If-Match' => '"'.$so['version'].'"'])->assertOk();
+    $v = spa($this)->postJson('/api/v1/demand/forecast-versions', ['plantId' => $f['plant'], 'customerId' => $f['customer']])->assertCreated()->json('data');
+    $line = spa($this)->putJson("/api/v1/demand/forecast-versions/{$v['id']}/lines", ['lines' => [['customerItemId' => $f['part'], 'weekStart' => $due, 'qty' => '100']]],
+        ['If-Match' => '"'.$v['version'].'"'])->assertOk()->json('data.lines.0');
+    // the second order (30 PCS, its own line) counts too when it falls in the same week
+    $second = $f['so2']['lines'][0]['schedules'][0]['requirementDate'];
+    $sameWeek = date('o-W', strtotime($second)) === date('o-W', strtotime($due));
+    expect($line['firmQty'])->toBe($sameWeek ? '130' : '100')->and($line['netQty'])->toBe('0');
+})->group('integration', 'delivery');

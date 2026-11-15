@@ -18,12 +18,18 @@ final class ForecastLinesQuery extends QueryDefinition
 {
     /**
      * Firm demand matched to a forecast line: same customer part (so the same customer and item), plant and week. A
-     * version has one line per customer part and week, so each firm quantity consumes one forecast line only.
+     * version has one line per customer part and week, so each firm quantity consumes one forecast line only. A revised
+     * (superseded) schedule line still consumes what it delivered, never its old outstanding (BR-DEM-15, D-122).
      */
-    public const string FIRM = "coalesce((select sum(s.required_qty) from delivery_schedule_lines s
+    public const string FIRM = "coalesce((select sum(case when s.status = 'SUPERSEDED'
+                                                     then coalesce((select sum(m.qty_signed) from inventory_movements m
+                                                                      join locations ml on ml.tenant_id = m.tenant_id and ml.id = m.location_id and ml.location_type = 'V_CUSTOMER'
+                                                                     where m.tenant_id = s.tenant_id and m.schedule_line_id = s.id), 0)
+                                                     else s.required_qty end)
+                                              from delivery_schedule_lines s
                                              join sales_order_lines ol on ol.tenant_id = s.tenant_id and ol.id = s.so_line_id
                                             where s.tenant_id = l.tenant_id and s.plant_id = l.plant_id and ol.customer_id = l.customer_id and ol.customer_item_id = l.customer_item_id
-                                              and s.status in ('FIRM', 'PARTIALLY_FULFILLED', 'FULFILLED')
+                                              and s.status in ('FIRM', 'PARTIALLY_FULFILLED', 'FULFILLED', 'SUPERSEDED')
                                               and s.requirement_date between l.week_start and l.week_start + 6), 0)";
 
     public function resource(): string
