@@ -22,6 +22,7 @@ use App\Modules\Planning\Http\WoCloseExceptionController;
 use App\Modules\Planning\Http\WorkOrderController;
 use App\Modules\Production\Http\ProductionController;
 use App\Modules\Quality\Http\QualityController;
+use App\Modules\Traceability\Http\LotTraceController;
 use App\Modules\Warehouse\Http\FgReceiptController;
 use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
@@ -245,6 +246,11 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('unpicks', [DeliveryController::class, 'unpick'])->name('unpicks.store');
         Route::get('staged', [DeliveryController::class, 'staged'])->name('staged.index');
         Route::post('shipments', [DeliveryController::class, 'ship'])->name('shipments.store');
+    });
+
+    // Traceability → lot trace (doc 33 §1.9, D-118): read only
+    Route::prefix('traceability')->name('traceability.')->middleware('tenant')->group(function (): void {
+        Route::get('lot-trace', [LotTraceController::class, 'show'])->name('lot-trace.show');
     });
 
     // Query resources (ADR-0008, doc 24 §3): one read-only TenantTransaction; resources registered in config/eora.php

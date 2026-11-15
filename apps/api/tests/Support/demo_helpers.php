@@ -35,3 +35,9 @@ function demoState(string $code): array
 
     return ['tenant' => $tenant, 'members' => $members];
 }
+
+/** One row read as eora_provisioner in the demo tenant. */
+function demoStockRead(string $tenant, string $sql): stdClass
+{
+    return app(TenantTransaction::class)->run(TenantContext::forTenant($tenant, TenantProvisioner::SYSTEM_ACTOR), fn (EoraPostgresConnection $db) => $db->selectOne($sql), 'pgsql_provisioner');
+}

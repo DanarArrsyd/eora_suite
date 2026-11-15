@@ -1384,6 +1384,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/traceability/lot-trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trace a lot number or a shipment number (`SHP-`). A lot number shared by several items answers with the matches to
+         *     choose from (`lotId` picks one). A shipment is traced backward only
+         */
+        get: operations["v1.traceability.lot-trace.show"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/inventory/material-issues": {
         parameters: {
             query?: never;
@@ -15250,6 +15270,141 @@ export interface operations {
                         correlationId?: string;
                         /** @description Short support reference derived from the correlation id. */
                         reference?: string;
+                    };
+                };
+            };
+        };
+    };
+    "v1.traceability.lot-trace.show": {
+        parameters: {
+            query: {
+                q: string;
+                direction: "backward" | "forward";
+                lotId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            direction: string;
+                            start: {
+                                /** @constant */
+                                kind: "shipment";
+                                docNo: string;
+                            } | {
+                                /** @constant */
+                                kind: "lot";
+                                lotNo: unknown;
+                                itemCode: unknown;
+                            };
+                            nodes: string;
+                            truncated: boolean;
+                        };
+                    } | {
+                        data: {
+                            direction: string;
+                            matches: unknown[];
+                        };
+                    };
+                };
+            };
+            /** @description UNAUTHENTICATED, SESSION_EXPIRED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 401;
+                        /** @enum {string} */
+                        code: "UNAUTHENTICATED" | "SESSION_EXPIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 403;
+                        /** @enum {string} */
+                        code: "FORBIDDEN";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 404;
+                        /** @enum {string} */
+                        code: "NOT_FOUND";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description VALIDATION_FAILED */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 422;
+                        /** @enum {string} */
+                        code: "VALIDATION_FAILED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                        errors?: {
+                            [key: string]: string[];
+                        };
                     };
                 };
             };
