@@ -142,6 +142,19 @@ it('lets the planner adjust a planned order with a reason, and a second person a
     mpsAs($this, $this->t, $csa);
     mpsAct($this, $next, 'approve')->assertOk();
     spa($this)->getJson("/api/v1/planning/mps-versions/{$approved['id']}")->assertOk()->assertJsonPath('data.status', 'SUPERSEDED');
+    // approved history keeps its note and attribution, in SQL too
+    try {
+        asApp($this->t, (string) $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update("update mps_versions set note = 'rewritten' where id = ?", [$approved['id']]));
+        $this->fail('rewrote a superseded MPS');
+    } catch (QueryException $e) {
+        expect($e->getMessage())->toContain('is history');
+    }
+    try {
+        asApp($this->t, (string) $csa['id'], fn (EoraPostgresConnection $db) => $db->update("update mps_versions set note = 'rewritten', submitted_by = ? where id = ?", [$csa['id'], $next['id']]));
+        $this->fail('rewrote an approved MPS');
+    } catch (QueryException $e) {
+        expect($e->getMessage())->toContain('changes only through submit, return, approval or supersession');
+    }
     // superseding the approved MPS happens only through approving a successor, in SQL too
     try {
         asApp($this->t, (string) $csa['id'], fn (EoraPostgresConnection $db) => $db->update(
@@ -211,6 +224,22 @@ it('serializes a write to the calculation with submitting its version: the submi
         mpsAct($this, $m, 'submit')->assertStatus(503)->assertJsonPath('code', 'RETRYABLE_CONFLICT');
     }, 'pgsql_takeover');
     spa($this)->getJson("/api/v1/planning/mps-versions/{$m['id']}")->assertOk()->assertJsonPath('data.status', 'DRAFT');
+});
+
+it('takes working days from the calendar version in force on each date, also one starting inside the horizon (D-123 (1), Codex #87)', function () {
+    $f = mpsFixture($this, $this->t);
+    spa($this)->postJson('/api/v1/planning/plan-parameters', ['plantId' => $f['plant'], 'itemId' => $f['item']['id'], 'productionLeadTimeDays' => 1])->assertCreated();
+    // a new calendar version from the week before the order, with the Saturday before its due date as a holiday
+    $since = date('Y-m-d', strtotime($f['weekB'].' -7 days'));
+    $saturday = date('Y-m-d', strtotime($f['weekB'].' -2 days'));
+    AccessFixtures::run($this->t, function (EoraPostgresConnection $db) use ($since, $saturday) {
+        $cal = (string) $db->selectOne("insert into business_calendars (tenant_id, plant_id, timezone, production_day_starts_at, effective_from) values (?, null, 'Asia/Jakarta', '00:00', ?) returning id",
+            [$this->t['tenant'], $since])->id;
+        $db->insert("insert into calendar_exceptions (tenant_id, calendar_id, exception_date, kind, description) values (?, ?, ?, 'HOLIDAY', 'Holiday')", [$this->t['tenant'], $cal, $saturday]);
+    });
+    $m = spa($this)->postJson('/api/v1/planning/mps-versions', ['plantId' => $f['plant']])->assertCreated()->json('data');
+    // due Monday of week B, 1 working day before: Saturday is a holiday in the version in force then → Friday
+    expect($m['items'][0]['plannedOrders'][0])->toMatchArray(['dueDate' => $f['weekB'], 'startDate' => date('Y-m-d', strtotime($f['weekB'].' -3 days'))]);
 });
 
 it('keeps the MPS to the planners and approvers of its plant, and lets a planner cancel a draft', function () {

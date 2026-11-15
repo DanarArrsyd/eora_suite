@@ -187,24 +187,59 @@ final class MpsInputs
         return $first;
     }
 
-    /** @return array<string, string> the effective business calendar's exceptions (plant override, else tenant default) */
+    /**
+     * The working-day exceptions of each date from the start of the lead-time look-back to the horizon end, each from the
+     * business calendar version in force on that date (latest plant override, else latest tenant default, as
+     * BusinessCalendar): a version taking effect inside the horizon brings its own exceptions from its date on.
+     *
+     * @return array<string, string>
+     */
     private function exceptions(EoraPostgresConnection $db, string $plant): array
     {
-        $calendar = $db->selectOne(
-            'select id from business_calendars where (plant_id = ? or plant_id is null) and effective_from <= ?::date order by (plant_id is null), effective_from desc limit 1',
-            [$plant, $this->today],
+        $from = (new DateTimeImmutable($this->horizonStart))->modify('-366 days')->format('Y-m-d');
+        $versions = $db->select(
+            'select id, plant_id is not null as override, effective_from::text as since from business_calendars
+              where (plant_id = ? or plant_id is null) and effective_from <= ?::date order by effective_from desc',
+            [$plant, $this->horizonEnd],
         );
-        if ($calendar === null) {
+        if ($versions === []) {
             return [];
         }
-        $out = [];
+        $byCalendar = [];
         foreach ($db->select(
-            'select exception_date::text as d, kind from calendar_exceptions where calendar_id = ? and exception_date between ?::date - 366 and ?::date order by exception_date',
-            [$calendar->id, $this->horizonStart, $this->horizonEnd],
+            'select calendar_id, exception_date::text as d, kind from calendar_exceptions where calendar_id in ('.implode(',', array_fill(0, count($versions), '?')).')
+               and exception_date between ?::date and ?::date',
+            [...array_map(static fn (stdClass $v) => $v->id, $versions), $from, $this->horizonEnd],
         ) as $r) {
-            $out[(string) $r->d] = (string) $r->kind;
+            $byCalendar[(string) $r->calendar_id][(string) $r->d] = (string) $r->kind;
+        }
+        $out = [];
+        for ($d = new DateTimeImmutable($from); $d->format('Y-m-d') <= $this->horizonEnd; $d = $d->modify('+1 day')) {
+            $day = $d->format('Y-m-d');
+            $calendar = self::inForce($versions, $day);
+            if ($calendar !== null && isset($byCalendar[$calendar][$day])) {
+                $out[$day] = $byCalendar[$calendar][$day];
+            }
         }
 
         return $out;
+    }
+
+    /**
+     * The id of the version in force on $day among versions ordered by effective date descending: plant override first.
+     *
+     * @param  array<int, stdClass>  $versions  rows with id, override, since
+     */
+    public static function inForce(array $versions, string $day): ?string
+    {
+        foreach ([true, false] as $override) {
+            foreach ($versions as $v) {
+                if ((bool) $v->override === $override && (string) $v->since <= $day) {
+                    return (string) $v->id;
+                }
+            }
+        }
+
+        return null;
     }
 }

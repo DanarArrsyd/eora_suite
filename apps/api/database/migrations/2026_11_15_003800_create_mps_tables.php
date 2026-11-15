@@ -357,8 +357,27 @@ return new class extends Migration
                 ELSE
                   RAISE EXCEPTION 'an MPS goes DRAFT → SUBMITTED → APPROVED → SUPERSEDED' USING ERRCODE = '23514';
                 END IF;
-              ELSIF (NEW.submitted_at, NEW.approved_at, NEW.approved_by) IS DISTINCT FROM (OLD.submitted_at, OLD.approved_at, OLD.approved_by) THEN
+              ELSIF OLD.status <> 'DRAFT' THEN
+                -- a submitted or approved MPS changes only through its lifecycle transitions
+                IF (NEW.note, NEW.submitted_at, NEW.submitted_by, NEW.return_reason, NEW.approved_at, NEW.approved_by, NEW.superseded_at, NEW.cancelled_at, NEW.cancelled_by)
+                   IS DISTINCT FROM (OLD.note, OLD.submitted_at, OLD.submitted_by, OLD.return_reason, OLD.approved_at, OLD.approved_by, OLD.superseded_at, OLD.cancelled_at, OLD.cancelled_by) THEN
+                  RAISE EXCEPTION 'a submitted or approved MPS changes only through submit, return, approval or supersession' USING ERRCODE = '23514';
+                END IF;
+              ELSIF NOT public.eora_actor_may('planning.mps.create', NEW.plant_id) THEN
+                RAISE EXCEPTION 'a draft MPS is changed by a planner of the plant' USING ERRCODE = '42501';
+              ELSIF (NEW.submitted_at, NEW.submitted_by, NEW.approved_at, NEW.approved_by, NEW.superseded_at, NEW.cancelled_at, NEW.cancelled_by)
+                    IS DISTINCT FROM (OLD.submitted_at, OLD.submitted_by, OLD.approved_at, OLD.approved_by, OLD.superseded_at, OLD.cancelled_at, OLD.cancelled_by) THEN
                 RAISE EXCEPTION 'a submission or approval is history' USING ERRCODE = '23514';
+              END IF;
+              -- a status change moves only the fields of its transition
+              IF NEW.status IS DISTINCT FROM OLD.status THEN
+                IF NEW.note IS DISTINCT FROM OLD.note
+                   OR (NEW.status IN ('APPROVED', 'SUPERSEDED') AND (NEW.submitted_at, NEW.submitted_by, NEW.return_reason) IS DISTINCT FROM (OLD.submitted_at, OLD.submitted_by, OLD.return_reason))
+                   OR (NEW.status = 'SUPERSEDED' AND (NEW.approved_at, NEW.approved_by) IS DISTINCT FROM (OLD.approved_at, OLD.approved_by))
+                   OR (NEW.status <> 'CANCELLED' AND (NEW.cancelled_at, NEW.cancelled_by) IS DISTINCT FROM (OLD.cancelled_at, OLD.cancelled_by))
+                   OR (NEW.status <> 'SUPERSEDED' AND NEW.superseded_at IS DISTINCT FROM OLD.superseded_at) THEN
+                  RAISE EXCEPTION 'a status change moves only the fields of its transition' USING ERRCODE = '23514';
+                END IF;
               END IF;
               RETURN NEW;
             END
