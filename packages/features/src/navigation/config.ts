@@ -238,6 +238,7 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Receiving',
         items: [
+          { id: 'inbound-schedule', label: 'Inbound Schedule', icon: CalendarClock, release: 'R1', permission: 'materials.inbound_schedule.view', phase: 5 },
           { id: 'rm-receipts', label: 'RM Receipts', icon: PackagePlus, release: 'R1', permission: 'materials.receipt.view', phase: 'later' },
           {
             id: 'incoming-release',
@@ -542,6 +543,14 @@ export const NAV_MODULES: readonly NavModule[] = [
           { id: 'routings', label: 'Routings', icon: GitBranch, release: 'R1', permission: 'master.routing.view', phase: 'later' },
           { id: 'boms', label: 'BOMs', icon: Layers, release: 'R1', permission: 'master.routing.view', phase: 'later' },
           { id: 'conversion-data', label: 'Conversion Data', icon: Weight, release: 'R1', permission: 'master.conversion.view', phase: 'later' },
+          {
+            id: 'planning-parameters',
+            label: 'Planning Parameters',
+            icon: SlidersHorizontal,
+            release: 'R1',
+            permission: 'planning.plan_parameter.view',
+            phase: 5,
+          },
         ],
       },
       {

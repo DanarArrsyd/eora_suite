@@ -127,6 +127,10 @@ Physical tables of the thin flow; all tenant-scoped with forced RLS on the signe
 - `shipment_details` (vehicle, driver per shipment document) — 003300, D-116.
 - No table for the lot trace (D-118): it reads `lots`, `genealogy_edges`, `inventory_documents` and `inventory_movements`.
 
+### M5 as built (D-120.., migrations 003600..)
+- `item_plan_parameters` (one per item + plant: production/purchase lead time in working days, safety stock in base unit, NULL = NOT CONFIGURED, lot policy) — 003600, D-121.
+- `supplier_inbound_lines` (`INB-` number, supplier, item, plant, qty, expected date, cancel with reason) and `inbound_receipts` (the posted RM receipt document → the line it was received against; received qty and status are derived from posted receipts) — 003600, D-087, D-121.
+
 ## 3. Tenant isolation checklist (per table)
 1. `tenant_id NOT NULL`, leading column of every index used by queries.
 2. Composite FK to every tenant parent.

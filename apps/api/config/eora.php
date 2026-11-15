@@ -35,6 +35,7 @@ use App\Modules\Demand\Queries\SalesOrdersQuery;
 use App\Modules\Demand\Queries\ScheduleLinesQuery;
 use App\Modules\Inventory\Queries\AdjustmentsQuery;
 use App\Modules\Inventory\Queries\DocumentsQuery;
+use App\Modules\Inventory\Queries\InboundScheduleQuery;
 use App\Modules\Inventory\Queries\LotsQuery;
 use App\Modules\Inventory\Queries\MaterialAtProductionQuery;
 use App\Modules\Inventory\Queries\MaterialIssuesQuery;
@@ -53,6 +54,7 @@ use App\Modules\Planning\Queries\BomVersionsQuery;
 use App\Modules\Planning\Queries\ConversionProfilesQuery;
 use App\Modules\Planning\Queries\ConversionProfileVersionsQuery;
 use App\Modules\Planning\Queries\ItemWeightsQuery;
+use App\Modules\Planning\Queries\PlanParametersQuery;
 use App\Modules\Planning\Queries\ProcessTypesQuery;
 use App\Modules\Planning\Queries\RoutingsQuery;
 use App\Modules\Planning\Queries\RoutingVersionsQuery;
@@ -145,6 +147,8 @@ return [
         'delivery.picks' => PicksQuery::class,
         'delivery.shipments' => ShipmentsQuery::class,
         'planning.wo_close_exceptions' => WoCloseExceptionsQuery::class,
+        'planning.plan_parameters' => PlanParametersQuery::class,
+        'materials.inbound_schedule' => InboundScheduleQuery::class,
         'exchange.import_jobs' => ImportJobsQuery::class,
         'exchange.export_jobs' => ExportJobsQuery::class,
     ],

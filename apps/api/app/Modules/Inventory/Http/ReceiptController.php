@@ -26,7 +26,7 @@ final class ReceiptController
     use PostingRequests;
 
     /** D-097: purchased material only; semi-finished from a subcontractor comes with its own flow. */
-    private const array RECEIVED_TYPES = ['RAW', 'CONSUMABLE'];
+    public const array RECEIVED_TYPES = ['RAW', 'CONSUMABLE'];
 
     public const string QTY = '/^(?!0+(\.0+)?$)\d{1,12}(\.\d{1,6})?$/';
 
@@ -53,6 +53,8 @@ final class ReceiptController
             'supplierLotNo' => ['nullable', 'string', 'max:60'],
             'note' => ['nullable', 'string', 'max:500'],
             'effectiveDate' => ['nullable', 'date_format:Y-m-d'],
+            // the supplier inbound line received against (D-121): same plant, supplier and item, not cancelled
+            'inboundLineId' => ['nullable', 'uuid'],
         ]);
         $key = $this->key($request);
         $db = $this->db();
@@ -62,7 +64,9 @@ final class ReceiptController
         $locationId = strtolower($data['locationId']);
         $supplierLot = self::optionalText($data['supplierLotNo'] ?? null);
         $note = self::optionalText($data['note'] ?? null);
-        $hash = hash('sha256', json_encode(['RM_RECEIPT', $plant, $itemId, $locationId, $supplierId, $data['qty'], $supplierLot, $note, $data['effectiveDate'] ?? null], JSON_THROW_ON_ERROR));
+        $inbound = isset($data['inboundLineId']) ? strtolower($data['inboundLineId']) : null;
+        $hash = hash('sha256', json_encode(['RM_RECEIPT', $plant, $itemId, $locationId, $supplierId, $data['qty'], $supplierLot, $note, $data['effectiveDate'] ?? null,
+            ...($inbound === null ? [] : [$inbound])], JSON_THROW_ON_ERROR));
 
         // a retried request answers with what it posted, whatever master data changed since; a concurrent one waits
         $previous = $this->postings->claim($db, $key, $hash);
@@ -85,6 +89,11 @@ final class ReceiptController
         $supplier = $db->selectOne("select id from suppliers where id = ? and status = 'ACTIVE'", [$supplierId])
             ?? throw ValidationException::withMessages(['supplierId' => 'Unknown or inactive supplier.']);
         $location = $this->rmLocation($db, $plant, $locationId, 'locationId');
+        // held until commit: a cancel in flight finishes first, then this reads the line as committed (D-121)
+        if ($inbound !== null && $db->selectOne('select l.cancelled_at is null and l.plant_id = ? and l.supplier_id = ? and l.item_id = ? as ok from supplier_inbound_lines l where l.id = ? for share',
+            [$plant, $supplier->id, $item->id, $inbound])?->ok !== true) {
+            throw ValidationException::withMessages(['inboundLineId' => 'Choose an open inbound line of this supplier and item at this plant.']);
+        }
         // the day the receipt belongs to, resolved once: its lot number and its posting use the same day
         $day = $data['effectiveDate'] ?? $this->calendar->resolve($db, $plant, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
         $lot = null;
@@ -101,7 +110,10 @@ final class ReceiptController
         return $this->answer($db, $this->postings->post($db, new PostingCommand('RM_RECEIPT', $plant, $key, [
             new PostingLeg('RCPT_SUPPLIER', $from, (string) $item->id, $lot, $status, '-'.$data['qty']),
             new PostingLeg('RCPT_SUPPLIER', $location, (string) $item->id, $lot, $status, $data['qty']),
-        ], effectiveDate: $day, note: $note, sourceType: 'supplier', sourceId: (string) $supplier->id, requestHash: $hash)));
+        ], effectiveDate: $day, note: $note, sourceType: 'supplier', sourceId: (string) $supplier->id, requestHash: $hash),
+            $inbound === null ? null : function (string $document) use ($db, $inbound): void {
+                $db->insert('insert into inbound_receipts (tenant_id, document_id, inbound_line_id) values ((select c.tenant from ctx_api.context() c), ?, ?)', [$document, $inbound]);
+            }));
     }
 
     /**

@@ -92,6 +92,14 @@ const PICKERS: Record<
     label: (r) => `${String(r.code)} · ${String(r.itemCode)} · ${String(r.qty)} ${String(r.uomCode)}`,
     filters: { status: ['RELEASED', 'IN_PROGRESS', 'ON_HOLD', 'PRODUCTION_COMPLETE'] },
   },
+  // supplier deliveries still expected (D-121): what an RM receipt is received against
+  inboundLines: {
+    resource: 'materials.inbound_schedule',
+    label: (r) =>
+      `${String(r.code)} · ${String(r.supplierCode)} · ${String(r.itemCode)} · ${String(r.expectedDate)} · ${String(r.outstandingQty)} ${String(r.uomCode)} outstanding`,
+    filters: { status: ['OPEN', 'PARTIALLY_RECEIVED'] },
+    sortBy: 'expectedDate',
+  },
   // material a work order has at a work center (D-110): what production asks to return
   materialAtProduction: {
     resource: 'inventory.material_at_production',

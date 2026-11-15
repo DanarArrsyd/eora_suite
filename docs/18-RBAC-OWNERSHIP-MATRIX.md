@@ -81,6 +81,8 @@ The role templates below are what `eora:tenants:sync` grants; they supersede the
 | `warehouse.fg_receipt` | V: AUD CSA DLV FGW INV PPC QCI QCS · C S P: FGW | FG receipt of QC-released goods (D-114) |
 | `delivery.shipment` | V: AUD CSA DLV FGW INV PPC · C S: DLV · P: DLV FGW | Allocate/release (C, DLV); pick (P, FGW); ship (P, DLV or FGW) (D-115, D-116) |
 | `traceability.lot_trace` | V: AUD CSA INV | Backward/forward lot trace (D-118) |
+| `planning.plan_parameter` *(M5)* | V: AUD CSA INV MAT PPC PRL · C: PPC | Lead times and safety stock per item + plant, changed directly, audited (D-121) |
+| `materials.inbound_schedule` *(M5)* | V: AUD CSA INV MAT PPC · C: MAT PPC | Supplier inbound lines: add, edit, cancel with reason (D-087, D-121) |
 
 ## 3. Separation-of-duties rules (enforced in policy layer)
 | SoD-ID | Conflict | Rule |

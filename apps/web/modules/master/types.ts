@@ -29,7 +29,8 @@ export type OptionSource =
   | 'physicalLocations'
   | 'lots'
   | 'materialAtProduction'
-  | 'workOrders';
+  | 'workOrders'
+  | 'inboundLines';
 
 export type FieldSpec = {
   key: string;
