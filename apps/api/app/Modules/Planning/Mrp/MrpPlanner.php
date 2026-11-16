@@ -165,16 +165,23 @@ final class MrpPlanner
         foreach ($db->select('select id, kind, due_date::text as d, trim_scale(qty)::text as q from mps_demands where mps_item_id = ?', [$mpsItem]) as $d) {
             $in->demands[] = ['key' => 'mps:'.$d->id, 'kind' => 'FIRM', 'date' => (string) $d->d, 'qty' => MpsItemInput::num($d->q)];
         }
-        foreach ($db->select('select id, supply_date::text as d, trim_scale(qty)::text as q from mps_supplies where mps_item_id = ?', [$mpsItem]) as $s) {
-            $in->supplies[] = ['key' => 'mps:'.$s->id, 'kind' => 'MPS', 'date' => (string) $s->d, 'qty' => MpsItemInput::num($s->q)];
-        }
-        // an MPS order released to a live work order is that work order now: its current quantity (still to make) and due date
+        // live work orders of the item as they stand now (quantity still to make, due date)
         $ownWo = [];
         foreach ($own->supplies as $sup) {
             if ($sup['kind'] === 'WORK_ORDER') {
                 $ownWo[$sup['key']] = $sup;
             }
         }
+        // the MPS's supply: a work order it captured counts as it stands now (edited, partly made or done), other supply as
+        // captured
+        foreach ($db->select('select id, work_order_id, supply_date::text as d, trim_scale(qty)::text as q from mps_supplies where mps_item_id = ?', [$mpsItem]) as $s) {
+            if ($s->work_order_id === null) {
+                $in->supplies[] = ['key' => 'mps:'.$s->id, 'kind' => 'MPS', 'date' => (string) $s->d, 'qty' => MpsItemInput::num($s->q)];
+            } elseif (isset($ownWo[(string) $s->work_order_id])) {
+                $in->supplies[] = $ownWo[(string) $s->work_order_id];
+            }
+        }
+        // an MPS order released to a live work order is that work order now: its current quantity (still to make) and due date
         foreach ($orders as $o) {
             $wo = $db->selectOne(
                 "select w.id from work_orders w join mrp_orders x on x.id = w.mrp_order_id where w.status <> 'CANCELLED' and x.mps_planned_order_id = ? limit 1",
