@@ -117,3 +117,18 @@ it('takes a permission its template gave up away from the tenant roles, audited,
     $this->artisan('eora:tenants:sync')->assertSuccessful();
     expect((int) $aud()->audits)->toBe(1);
 })->group('integration', 'master');
+
+it('gives master data one door: only the Supervisor writes and imports it, CSA approves (D-128)', function () {
+    $owner = DB::connection('pgsql_owner');
+    $writers = fn (string $code) => array_column($owner->select(
+        'select template_code from role_template_permissions where permission_code = ? order by 1', [$code],
+    ), 'template_code');
+
+    foreach (['master.part.create', 'master.org.create', 'master.routing.create', 'master.routing.submit', 'master.conversion.create',
+        'master.conversion.submit', 'exchange.import.create', 'exchange.import.submit', 'exchange.import.post'] as $code) {
+        expect($writers($code))->toBe(['SUP'], $code);
+    }
+    expect($writers('master.routing.approve'))->toBe(['CSA', 'SUP'])
+        ->and($writers('master.conversion.approve'))->toBe(['CSA', 'QCS', 'SUP'])
+        ->and($writers('planning.plan_parameter.create'))->toBe(['PPC', 'SUP']);
+})->group('integration', 'master');

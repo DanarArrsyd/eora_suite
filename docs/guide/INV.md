@@ -81,6 +81,8 @@ Menjaga kebenaran stok: koreksi, reversal, tutup buku, dan pengawasan menyeluruh
 4. Inventory → Period Close → ajukan tutup buku bulanan (disetujui CSA).
 5. PPIC → WO Close Exceptions → setujui sisa bahan dibuang ke scrap.
 
+Menu Master Data hanya untuk dilihat; perubahannya oleh **Supervisor** (D-128).
+
 ## Persetujuan
 
 - Koreksi dan tutup buku yang Anda ajukan disetujui CSA.

@@ -56,7 +56,7 @@ function engCommit(object $test, array $t, string $id): stdClass
 }
 
 it('imports a routing as a DRAFT version with its operations, machine and die; an open version refuses the next import (D-083)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     rtSetup($this, $this->t);
 
     // one wrong row stops the whole file: all-or-nothing
@@ -83,7 +83,7 @@ it('imports a routing as a DRAFT version with its operations, machine and die; a
 })->group('integration', 'import');
 
 it('imports a BOM as a DRAFT version; a repeated component needs a purpose; version rows must agree', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     $kg = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne("select id from uoms where code = 'KG'")->id);
     spa($this)->postJson('/api/v1/core/items', ['code' => 'COIL-1', 'name' => 'Coil', 'itemType' => 'RAW', 'baseUomId' => $kg])->assertCreated();
@@ -113,7 +113,7 @@ it('imports a BOM as a DRAFT version; a repeated component needs a purpose; vers
 })->group('integration', 'import');
 
 it('imports a map only on submitted versions, every BOM line once, as a DRAFT revision (D-079)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     $kg = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne("select id from uoms where code = 'KG'")->id);
     spa($this)->postJson('/api/v1/core/items', ['code' => 'COIL-1', 'name' => 'Coil', 'itemType' => 'RAW', 'baseUomId' => $kg])->assertCreated();
@@ -147,7 +147,7 @@ it('imports a map only on submitted versions, every BOM line once, as a DRAFT re
 
 it('writes nothing when rows no longer pass at commit, and the retry commits everything once (B2-AT-61, 73)', function () {
     config(['eora.import_templates.crash_routings' => CrashingRoutingsTemplate::class]);
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     $file = impFile(ENG_ROUTING_HEADER, engOps($this->t), 'routings.xlsx');
 
@@ -185,7 +185,7 @@ it('writes nothing when rows no longer pass at commit, and the retry commits eve
 })->group('integration', 'import');
 
 it('records a database refusal on the rows, and finishes a job whose commit landed before the worker died', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     rtSetup($this, $this->t);
     // two new PRIMARY routings of one item and plant pass row by row, but the database allows one: nothing is written
     $rows = engOps($this->t);

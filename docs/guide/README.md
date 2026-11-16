@@ -24,8 +24,9 @@ Panduan singkat per role: menu yang terlihat, untuk apa, langkah kerja harian, d
 | Koreksi stok (adjustment) | INV | CSA |
 | Reversal dokumen | pemilik dokumen (MAT, PRL, QC, FGW, DLV, PPC, INV) | INV atau CSA (bukan peminta) |
 | Tutup buku bulanan | INV | CSA |
-| Routing dan BOM | PPC / CSA | CSA (bukan pembuatnya) |
-| Conversion data (berat, coil/sheet) | CSA | CSA lain atau QCS |
+| Master data (item, customer, supplier, …) dan import Excel | SUP | — (langsung berlaku) |
+| Routing dan BOM | SUP | CSA (bukan pembuatnya) |
+| Conversion data (berat, coil/sheet) | SUP | CSA atau QCS |
 | Release QC di luar kebijakan | QCI / QCS | QCS (bukan pemintanya) |
 | WO close exception | PPC | CSA / INV |
 

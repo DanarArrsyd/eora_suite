@@ -42,7 +42,7 @@ function cvAct(object $test, string $kind, string $id, string $action, array $bo
 }
 
 it('versions net weights: counted made items only, no back-dating, maker ≠ checker, a successor ends its predecessor', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $part = cvItem($this, $this->t, 'BRK-100', 'FINISHED');
     $coil = cvItem($this, $this->t, 'COIL-1', 'RAW', 'KG');
 
@@ -62,7 +62,7 @@ it('versions net weights: counted made items only, no back-dating, maker ≠ che
     spa($this)->postJson('/api/v1/planning/item-weights', ['itemId' => $part['id'], 'effectiveFrom' => rtDay($this->t)])->assertForbidden(); // QCS validates, never prepares
     cvAct($this, 'item-weights', $v1['id'], 'validate')->assertOk()->assertJsonPath('data.status', 'VALIDATED')->assertJsonPath('data.inUse', true);
 
-    rtSwitch($this, $this->t, 'CSA');
+    rtSwitch($this, $this->t, 'SUP');
     $v2 = spa($this)->postJson('/api/v1/planning/item-weights', ['itemId' => $part['id'], 'effectiveFrom' => rtDay($this->t, 1), 'changeReason' => 'New drawing rev'])
         ->assertCreated()->json('data');
     expect($v2['netWeightKg'])->toBe('0.290500'); // copied from the validated version
@@ -91,7 +91,7 @@ it('versions net weights: counted made items only, no back-dating, maker ≠ che
 })->group('integration', 'master');
 
 it('drafts a coil profile with the material spec geometry and refuses inputs without their unit (doc 02)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $part = cvItem($this, $this->t, 'BRK-100', 'FINISHED');
     $coil = cvItem($this, $this->t, 'COIL-SPCC', 'RAW', 'KG');
     spa($this)->putJson('/api/v1/core/items/'.$coil['id'].'/material-spec', ['grade' => 'SPCC', 'thicknessMm' => 1.2, 'widthMm' => 120, 'densityGCm3' => 7.85])->assertCreated();
@@ -145,7 +145,7 @@ it('drafts a coil profile with the material spec geometry and refuses inputs wit
 })->group('integration', 'master');
 
 it('drafts sheet profiles per part and material, copies the validated inputs, and rejects then reopens', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $part = cvItem($this, $this->t, 'PNL-200', 'SEMI_FINISHED');
     $sheet = cvItem($this, $this->t, 'SHT-SPCC', 'RAW', 'SHEET');
     $inputs = [
@@ -160,13 +160,13 @@ it('drafts sheet profiles per part and material, copies the validated inputs, an
 
     rtSwitch($this, $this->t, 'QCS');
     cvAct($this, 'conversion-profile-versions', $v1['id'], 'reject', ['reason' => 'Check the nesting'])->assertOk()->assertJsonPath('data.status', 'REJECTED');
-    rtSwitch($this, $this->t, 'CSA');
+    rtSwitch($this, $this->t, 'SUP');
     cvAct($this, 'conversion-profile-versions', $v1['id'], 'reopen')->assertOk()->assertJsonPath('data.status', 'DRAFT')->assertJsonPath('data.rejectReason', null);
     cvAct($this, 'conversion-profile-versions', $v1['id'], 'submit')->assertOk();
     rtSwitch($this, $this->t, 'QCS');
     cvAct($this, 'conversion-profile-versions', $v1['id'], 'validate')->assertOk();
 
-    rtSwitch($this, $this->t, 'CSA');
+    rtSwitch($this, $this->t, 'SUP');
     $v2 = spa($this)->postJson('/api/v1/planning/conversion-profile-versions', ['itemId' => $part['id'], 'inputItemId' => $sheet['id'], 'effectiveFrom' => rtDay($this->t, 2)])
         ->assertCreated()->json('data');
     expect($v2['profileId'])->toBe($v1['profileId'])->and($v2['versionNo'])->toBe(2)
@@ -183,10 +183,10 @@ it('drafts sheet profiles per part and material, copies the validated inputs, an
 })->group('integration', 'master');
 
 it('retires a validated version: from tomorrow when in force, never when not yet started', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $part = cvItem($this, $this->t, 'BRK-100', 'FINISHED');
     $make = function (int $startIn) use ($part) {
-        rtSwitch($this, $this->t, 'CSA');
+        rtSwitch($this, $this->t, 'SUP');
         $v = spa($this)->postJson('/api/v1/planning/item-weights', ['itemId' => $part['id'], 'effectiveFrom' => rtDay($this->t, $startIn), 'netWeightKg' => 0.29])->assertCreated()->json('data');
         cvAct($this, 'item-weights', $v['id'], 'submit')->assertOk();
         rtSwitch($this, $this->t, 'QCS');
@@ -202,12 +202,13 @@ it('retires a validated version: from tomorrow when in force, never when not yet
     expect($retired['effectiveTo'])->toBe(rtDay($this->t))->and($retired['inUse'])->toBeTrue();
     cvAct($this, 'item-weights', $now['id'], 'retire')->assertStatus(409);
 
+    // the planner reads conversion data, never retires it
     rtSwitch($this, $this->t, 'PPC');
     cvAct($this, 'item-weights', $now['id'], 'retire')->assertForbidden();
 })->group('integration', 'master');
 
 it('links a BOM line to the conversion profile of its component for the BOM item only', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $part = cvItem($this, $this->t, 'BRK-100', 'FINISHED');
     $other = cvItem($this, $this->t, 'BRK-200', 'FINISHED');
     $coil = cvItem($this, $this->t, 'COIL-1', 'RAW', 'KG');

@@ -46,7 +46,7 @@ function gapRoutingRow(array $t, string $item, array $over = []): array
 }
 
 it('imports 1,278 items and their customer part mappings for four customers, listing every duplicate and unknown reference per row (B2-AT-01)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     foreach (['C1', 'C2', 'C3', 'C4'] as $code) {
         spa($this)->postJson('/api/v1/core/customers', ['code' => $code, 'name' => "Customer {$code}"])->assertCreated();
     }
@@ -69,18 +69,18 @@ it('imports 1,278 items and their customer part mappings for four customers, lis
 })->group('integration', 'import');
 
 it('has no fixed maximum: a larger synthetic item set commits in full (B2-AT-01)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     expect(impJob($this->t, impThrough($this, $this->t, impFile(IMP_ITEM_HEADER, impItems(4000)))))->committed_rows->toBe(4000)->error_rows->toBe(0);
 })->group('integration', 'import');
 
 it('answers 404 for another tenant\'s routing, item and work center, records access.not_found, and treats its codes as unknown (B2-AT-11)', function () {
     $b = TenantFixtures::provision(1);
     AccessFixtures::roles($b);
-    orgUser($this, $b, 'CSA');
+    orgUser($this, $b, 'SUP');
     $sb = rtSetup($this, $b);
     [$routing, $v] = rtDraft($this, $b, $sb);
 
-    rtSwitch($this, $this->t, 'CSA');
+    rtSwitch($this, $this->t, 'SUP');
     spa($this)->getJson('/api/v1/planning/routing-versions/'.$v['id'])->assertNotFound();
     patchWith($this, '/api/v1/planning/routings/'.$routing['id'], ['status' => 'INACTIVE'], 1)->assertNotFound();
     patchWith($this, '/api/v1/core/items/'.$sb['item']['id'], ['name' => 'Taken'], 1)->assertNotFound();
@@ -96,7 +96,7 @@ it('answers 404 for another tenant\'s routing, item and work center, records acc
 })->group('integration', 'master');
 
 it('finds routings by an operation\'s process, filters by plant, work center and status, sorts by item and pages consistently (B2-AT-12)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     rtDraft($this, $this->t, $s); // BRK-100: BLANK on PRS-01, Final inspection on WLD-01
     impThrough($this, $this->t, impFile(IMP_ITEM_HEADER, impItems(120)));
@@ -122,7 +122,7 @@ it('finds routings by an operation\'s process, filters by plant, work center and
 })->group('integration', 'master');
 
 it('returns the previous job when the same routing file is uploaded again, without a second version (B2-AT-13)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     rtSetup($this, $this->t);
     $file = impFile(GAP_ROUTING_HEADER, [gapRoutingRow($this->t, 'BRK-100')], 'routings.xlsx');
     $id = impThrough($this, $this->t, impAgain($file), 'routings');
@@ -132,16 +132,18 @@ it('returns the previous job when the same routing file is uploaded again, witho
 })->group('integration', 'import');
 
 it('writes one audit row with actor, correlation id and before/after hashes for create, submit, approve, supersede and import commit (B2-AT-14)', function () {
-    $maker = orgUser($this, $this->t, 'CSA');
+    $maker = orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     [$routing, $v1] = rtDraft($this, $this->t, $s);
     spa($this)->withHeader('X-Request-Id', 'req-submit-v1')->postJson('/api/v1/planning/routing-versions/'.$v1['id'].'/actions/submit')->assertOk();
     $checker = rtSwitch($this, $this->t, 'CSA');
     spa($this)->withHeader('X-Request-Id', 'req-approve-v1')->postJson('/api/v1/planning/routing-versions/'.$v1['id'].'/actions/approve')->assertOk();
+    signIn($this, $maker, $this->t); // the Supervisor revises (D-128)
     $v2 = spa($this)->postJson('/api/v1/planning/routings/'.$routing['id'].'/versions', ['effectiveFrom' => rtDay($this->t, 1), 'changeReason' => 'Faster'])->assertCreated()->json('data');
     spa($this)->postJson('/api/v1/planning/routing-versions/'.$v2['id'].'/actions/submit')->assertOk();
     rtSwitch($this, $this->t, 'CSA');
     spa($this)->withHeader('X-Request-Id', 'req-approve-v2')->postJson('/api/v1/planning/routing-versions/'.$v2['id'].'/actions/approve')->assertOk();
+    signIn($this, $maker, $this->t); // only the Supervisor imports (D-128)
     $job = impThrough($this, $this->t, impFile(IMP_ITEM_HEADER, impItems(1)));
 
     $audit = fn (string $action, string $entity) => AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->select(
@@ -164,7 +166,7 @@ it('writes one audit row with actor, correlation id and before/after hashes for 
 })->group('integration', 'master');
 
 it('retries a routing file that failed on a missing work center once it exists, keeping the failed job and its error file (B2-AT-18)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     rtSetup($this, $this->t);
     $file = impFile(GAP_ROUTING_HEADER, [gapRoutingRow($this->t, 'BRK-100', ['Work center' => 'WC-WELD-2'])], 'routings.xlsx');
     $failed = impUpload($this, impAgain($file), 'routings')->assertCreated()->json('data.id');
@@ -192,10 +194,10 @@ it('retries a routing file that failed on a missing work center once it exists, 
 it('refuses a die of another tenant by id or code (B2-AT-38)', function () {
     $b = TenantFixtures::provision(1);
     AccessFixtures::roles($b);
-    orgUser($this, $b, 'CSA');
+    orgUser($this, $b, 'SUP');
     $foreign = spa($this)->postJson('/api/v1/core/dies', ['plantId' => $b['plants'][0], 'code' => 'D-900', 'name' => 'Foreign die', 'dieType' => 'DIE'])->assertCreated()->json('data');
 
-    rtSwitch($this, $this->t, 'CSA');
+    rtSwitch($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     [, $v] = rtDraft($this, $this->t, $s);
     patchWith($this, '/api/v1/core/dies/'.$foreign['id'], ['name' => 'Taken'], 1)->assertNotFound();
@@ -214,12 +216,13 @@ it('refuses a die of another tenant by id or code (B2-AT-38)', function () {
 })->group('integration', 'master');
 
 it('flags a die moved to another plant on the approved version and refuses to approve a version that still uses it (B2-AT-39)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     [$routing, $v1] = rtDraft($this, $this->t, $s);
     spa($this)->postJson('/api/v1/planning/routing-versions/'.$v1['id'].'/actions/submit')->assertOk();
     rtSwitch($this, $this->t, 'CSA');
     spa($this)->postJson('/api/v1/planning/routing-versions/'.$v1['id'].'/actions/approve')->assertOk();
+    rtSwitch($this, $this->t, 'SUP'); // the Supervisor revises (D-128)
     $v2 = spa($this)->postJson('/api/v1/planning/routings/'.$routing['id'].'/versions', ['effectiveFrom' => rtDay($this->t, 1), 'changeReason' => 'Faster'])->assertCreated()->json('data');
     expect($v2['operations'][0]['tools'][0])->dieCode->toBe('D-100')->availableInPlant->toBeTrue();
     spa($this)->postJson('/api/v1/planning/routing-versions/'.$v2['id'].'/actions/submit')->assertOk();
@@ -240,7 +243,7 @@ it('flags a die moved to another plant on the approved version and refuses to ap
 })->group('integration', 'master');
 
 it('refuses a routing import that uses a die of another plant, committing nothing of it (B2-AT-41)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     $p2 = spa($this)->postJson('/api/v1/core/dies', ['plantId' => $this->t['plants'][1], 'code' => 'D-P2', 'name' => 'Plant 2 die', 'dieType' => 'DIE'])->assertCreated()->json('data');
     spa($this)->postJson('/api/v1/core/die-items', ['dieId' => $p2['id'], 'itemId' => $s['item']['id'], 'partsPerStroke' => 1])->assertCreated();
@@ -255,7 +258,7 @@ it('refuses a routing import that uses a die of another plant, committing nothin
 })->group('integration', 'import');
 
 it('makes a takeover wait for the chunk a worker is committing; that chunk lands once and the worker\'s next chunk is refused (B2-AT-59)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $id = impUpload($this, impFile(IMP_ITEM_HEADER, impItems(2)))->assertCreated()->json('data.id');
     $context = TenantContext::forTenant($this->t['tenant'], (string) impJob($this->t, $id)->created_by_user);
     $tx = app(TenantTransaction::class);

@@ -25,7 +25,7 @@ function workCenter(object $test, string $plant, string $code, array $extra = []
 }
 
 it('gives every work center exactly one Material at Production location, never a WIP label', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $wc = workCenter($this, $this->t['plants'][0], 'PRS-01', ['availableHoursPerShift' => 7.5]);
     expect($wc['matAtProdLocationCode'])->toBe('MAP-PRS-01')->and($wc['availableHoursPerShift'])->toBe('7.50')
         ->and($wc['machineCount'])->toBe(0)->and($wc['plantCode'])->toBe('P1');
@@ -61,7 +61,7 @@ it('gives every work center exactly one Material at Production location, never a
 })->group('integration', 'master');
 
 it('keeps machines inside one work center of their plant; moving is an audited update', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     [$p1, $p2] = $this->t['plants'];
     $a = workCenter($this, $p1, 'PRS-A');
     $b = workCenter($this, $p1, 'PRS-B');
@@ -93,7 +93,7 @@ it('keeps machines inside one work center of their plant; moving is an audited u
 
 it('keeps die codes unique per tenant; a plant move needs the right scope in both plants', function () {
     [$p1, $p2] = $this->t['plants'];
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $die = spa($this)->postJson('/api/v1/core/dies', ['plantId' => $p1, 'code' => 'D-100', 'name' => 'Bracket die', 'dieType' => 'DIE', 'cavities' => 2, 'strokeLife' => 500000])
         ->assertCreated()->assertJsonPath('data.strokeLife', '500000')->assertJsonPath('data.currentStrokes', '0')->json('data');
     spa($this)->postJson('/api/v1/core/dies', ['plantId' => $p2, 'code' => 'D-100', 'name' => 'Same code, other plant', 'dieType' => 'DIE'])
@@ -102,13 +102,13 @@ it('keeps die codes unique per tenant; a plant move needs the right scope in bot
     spa($this)->postJson('/api/v1/auth/logout')->assertNoContent();
 
     // a CSA bound to plant 1 cannot move the die into plant 2
-    orgUser($this, $this->t, 'CSA', ['PLANT', $p1]);
+    orgUser($this, $this->t, 'SUP', ['PLANT', $p1]);
     patchWith($this, '/api/v1/core/dies/'.$die['id'], ['plantId' => $p2], 1)->assertForbidden()->assertJsonPath('code', 'SCOPE_FORBIDDEN');
     patchWith($this, '/api/v1/core/dies/'.$die['id'], ['status' => 'MAINTENANCE', 'currentStrokes' => 1200], 1)->assertOk()
         ->assertJsonPath('data.status', 'MAINTENANCE')->assertJsonPath('data.currentStrokes', '1200');
     spa($this)->postJson('/api/v1/auth/logout')->assertNoContent();
 
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     patchWith($this, '/api/v1/core/dies/'.$die['id'], ['plantId' => $p2], 2)->assertOk()->assertJsonPath('data.plantCode', 'P2');
     $move = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
         "select detail from audit_events where action = 'die.updated' and entity_id = ? order by occurred_at desc, id desc limit 1", [$die['id']],
@@ -118,7 +118,7 @@ it('keeps die codes unique per tenant; a plant move needs the right scope in bot
 
 it('lists production resources only inside the caller\'s plant scope and hides other tenants', function () {
     [$p1, $p2] = $this->t['plants'];
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     workCenter($this, $p1, 'WC-1');
     workCenter($this, $p2, 'WC-2');
     spa($this)->postJson('/api/v1/auth/logout')->assertNoContent();

@@ -73,7 +73,7 @@ function lpPlans(object $test, string $url): array
 it('pages, filters, sorts and searches big master lists through their indexes under RLS', function () {
     $t = TenantFixtures::provision(1);
     AccessFixtures::roles($t);
-    orgUser($this, $t, 'CSA');
+    orgUser($this, $t, 'SUP');
     $s = rtSetup($this, $t);
     lpSeed($t, ['wc' => $s['wc']['id'], 'process' => $s['blank']['id']]);
     lpSeed(TenantFixtures::provision(1), null);

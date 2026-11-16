@@ -15,7 +15,8 @@ use Tests\Support\AccessFixtures;
  */
 function woFixture(object $test, array $t): array
 {
-    orgUser($test, $t, 'CSA');
+    // master data has one door (D-128): the Supervisor prepares, CSA approves
+    orgUser($test, $t, 'SUP');
     $s = rtSetup($test, $t);
     AccessFixtures::run($t, fn (EoraPostgresConnection $db) => $db->insert(
         "insert into business_calendars (tenant_id, plant_id, timezone, production_day_starts_at, effective_from) values (?, null, 'Asia/Jakarta', '00:00', '2026-01-01')", [$t['tenant']],

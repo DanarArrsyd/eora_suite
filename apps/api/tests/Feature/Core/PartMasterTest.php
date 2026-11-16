@@ -30,7 +30,7 @@ function newItem(object $test, array $t, string $code, array $extra = []): array
 }
 
 it('starts every tenant with KG, PCS and SHEET; code, class and decimals never change', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $units = spa($this)->getJson('/api/v1/query/core.uoms')->assertOk()->json('data');
     expect(array_map(static fn ($u) => [$u['code'], $u['uomClass'], $u['decimals']], $units))
         ->toBe([['KG', 'MASS', 3], ['PCS', 'COUNT', 0], ['SHEET', 'COUNT', 0]]);
@@ -44,7 +44,7 @@ it('starts every tenant with KG, PCS and SHEET; code, class and decimals never c
 })->group('integration', 'master');
 
 it('keeps item codes upper-case and unique, the base unit fixed, and checks drawing data', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $item = newItem($this, $this->t, 'BRK-100.A/2', ['drawingNo' => 'DWG-77', 'drawingRev' => '0', 'incomingReleaseRequired' => true]);
     expect($item['drawingRev'])->toBe('0'); // revision 0 is a revision
     expect($item['baseUomCode'])->toBe('PCS')->and($item['lotControlled'])->toBeTrue()->and($item['incomingReleaseRequired'])->toBeTrue()
@@ -73,8 +73,8 @@ it('keeps item codes upper-case and unique, the base unit fixed, and checks draw
 })->group('integration', 'master');
 
 it('searches items by code prefix and name, filters by type, and lets part planners maintain them in any scope', function () {
-    // MAT holds master.part.create in plant 1 only: items are tenant-wide master data
-    orgUser($this, $this->t, 'MAT', ['PLANT', $this->t['plants'][0]]);
+    // a Supervisor held in plant 1 only still maintains tenant-wide items (D-128: master data has one door)
+    orgUser($this, $this->t, 'SUP', ['PLANT', $this->t['plants'][0]]);
     newItem($this, $this->t, 'BRK-100');
     newItem($this, $this->t, 'BRK-200', ['name' => 'Bracket left']);
     spa($this)->postJson('/api/v1/core/items', ['code' => 'SHEET-SPCC', 'name' => 'SPCC sheet 1.2', 'itemType' => 'RAW', 'baseUomId' => uomId($this->t, 'SHEET')])->assertCreated();
@@ -84,7 +84,7 @@ it('searches items by code prefix and name, filters by type, and lets part plann
     spa($this)->getJson('/api/v1/query/core.items?filter[itemType]=RAW')->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.baseUomCode', 'SHEET');
     spa($this)->postJson('/api/v1/auth/logout')->assertNoContent();
 
-    // QCS views items but does not maintain them
+    // QCS views items but does not maintain them; neither do the planner nor the warehouse any more (D-128)
     orgUser($this, $this->t, 'QCS', ['PLANT', $this->t['plants'][1]]);
     spa($this)->getJson('/api/v1/query/core.items')->assertOk()->assertJsonPath('meta.total', 3);
     spa($this)->postJson('/api/v1/core/items', ['code' => 'X', 'name' => 'x', 'itemType' => 'RAW', 'baseUomId' => uomId($this->t, 'KG')])
@@ -92,7 +92,7 @@ it('searches items by code prefix and name, filters by type, and lets part plann
 })->group('integration', 'master');
 
 it('creates the material specification once, then edits it at its version', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $item = spa($this)->postJson('/api/v1/core/items', ['code' => 'COIL-SPCC', 'name' => 'SPCC coil', 'itemType' => 'RAW', 'baseUomId' => uomId($this->t, 'KG')])->json('data');
     $uri = '/api/v1/core/items/'.$item['id'].'/material-spec';
 
@@ -108,7 +108,7 @@ it('creates the material specification once, then edits it at its version', func
 })->group('integration', 'master');
 
 it('versions unit conversions: one factor per unit pair per day, no back-dating, a new version closes the open one', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $item = spa($this)->postJson('/api/v1/core/items', ['code' => 'SHEET-A', 'name' => 'Sheet A', 'itemType' => 'RAW', 'baseUomId' => uomId($this->t, 'SHEET')])->json('data');
     [$sheet, $kg] = [uomId($this->t, 'SHEET'), uomId($this->t, 'KG')];
     $today = Date::now('Asia/Jakarta')->toDateString();
@@ -141,7 +141,7 @@ it('versions unit conversions: one factor per unit pair per day, no back-dating,
 
 it('links dies to the parts they make inside the die plant scope; other tenants stay unknown', function () {
     [$p1, $p2] = $this->t['plants'];
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $item = newItem($this, $this->t, 'BRK-300');
     $die = spa($this)->postJson('/api/v1/core/dies', ['plantId' => $p2, 'code' => 'D-300', 'name' => 'Bracket die', 'dieType' => 'DIE', 'cavities' => 2])->json('data');
     $link = spa($this)->postJson('/api/v1/core/die-items', ['dieId' => $die['id'], 'itemId' => $item['id'], 'partsPerStroke' => 2])->assertCreated()
@@ -151,7 +151,7 @@ it('links dies to the parts they make inside the die plant scope; other tenants 
     patchWith($this, '/api/v1/core/die-items/'.$link['id'], ['partsPerStroke' => 4], 1)->assertOk()->assertJsonPath('data.partsPerStroke', 4);
     spa($this)->postJson('/api/v1/auth/logout')->assertNoContent();
 
-    orgUser($this, $this->t, 'CSA', ['PLANT', $p1]);
+    orgUser($this, $this->t, 'SUP', ['PLANT', $p1]);
     patchWith($this, '/api/v1/core/die-items/'.$link['id'], ['status' => 'INACTIVE'], 2)->assertForbidden()->assertJsonPath('code', 'SCOPE_FORBIDDEN');
     spa($this)->getJson('/api/v1/query/core.die_items')->assertOk()->assertJsonPath('meta.total', 0);
 

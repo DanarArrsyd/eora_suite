@@ -166,7 +166,7 @@ it('keeps everyone who adjusted a planned order out of the approval, even after 
 
 it('plans an item with a safety stock even without demand: stock below it is replenished (G-MPS-2, Codex #87)', function () {
     $f = mpsFixture($this, $this->t);
-    rtSwitch($this, $this->t, 'CSA');
+    rtSwitch($this, $this->t, 'SUP'); // master data has one door (D-128)
     $pcs = (string) AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne("select id from uoms where code = 'PCS'")->id);
     $spare = spa($this)->postJson('/api/v1/core/items', ['code' => 'BRK-900', 'name' => 'Spare bracket', 'itemType' => 'FINISHED', 'baseUomId' => $pcs])->assertCreated()->json('data');
     mpsAs($this, $this->t, $f['ppc']);

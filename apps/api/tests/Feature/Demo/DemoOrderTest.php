@@ -29,8 +29,7 @@ it('runs one order from sales order to a partial shipment as the demo roles, onc
         $db->update("update bom_versions set effective_from = effective_from - 3 where status = 'DRAFT'");
         $db->update("update routing_versions set effective_from = effective_from - 3 where status = 'DRAFT'");
     }, 'pgsql_provisioner');
-    // csa@ committed the imported BOM and routing drafts: a second approver decides them (D-060)
-    $this->artisan('eora:demo:m4', ['--code' => $code])->expectsOutputToContain('eora:demo:uat-account')->assertFailed();
+    // sup@ imported the BOM and routing drafts (D-128): csa@ approves them, no second approver needed (D-060)
     $this->artisan('eora:demo:uat-account', ['--code' => $code, '--password' => DEMO_PASSWORD])->assertSuccessful();
     // no stock yet: the order and its work order are made, the issue stops; with the stock, running again finishes
     $this->artisan('eora:demo:m4', ['--code' => $code])->expectsOutputToContain('BOM of BRK-A100 moved to start')->expectsOutputToContain('WO-P1-')->expectsOutputToContain('Run eora:demo:stock')->assertFailed();

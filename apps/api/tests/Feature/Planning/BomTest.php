@@ -36,7 +36,7 @@ function bomDraft(object $test, array $t, array $item, array $lines, int $startI
 }
 
 it('drafts a BOM: same component on two lines needs a purpose; never its own item; units must fit (B2-AT-10)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     $coil = bomItem($this, $this->t, 'COIL-1', 'RAW', 'KG');
     $nut = bomItem($this, $this->t, 'NUT-M6', 'RAW');
@@ -63,14 +63,17 @@ it('drafts a BOM: same component on two lines needs a purpose; never its own ite
 
 it('approves a BOM by a second person in any scope, supersedes on revise, and refuses the preparer (D-078)', function () {
     [$p1, $p2] = $this->t['plants'];
-    $preparer = orgUser($this, $this->t, 'PPC', ['PLANT', $p1]);
-    rtSwitch($this, $this->t, 'CSA');
+    // the Supervisor prepares (D-128); one bound to plant 1 still keeps tenant-wide BOMs
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     $coil = bomItem($this, $this->t, 'COIL-1', 'RAW', 'KG');
-    rtSwitch($this, $this->t, 'PPC', ['PLANT', $p1]);
+    $preparer = rtSwitch($this, $this->t, 'SUP', ['PLANT', $p1]);
 
     $v1 = bomDraft($this, $this->t, $s['item'], [[$coil, '0.5']]);
-    spa($this)->postJson('/api/v1/planning/bom-versions/'.$v1['id'].'/actions/approve')->assertForbidden()->assertJsonPath('code', 'FORBIDDEN'); // PPC never approves
+    // the planner reads BOMs, never approves them
+    rtSwitch($this, $this->t, 'PPC');
+    spa($this)->postJson('/api/v1/planning/bom-versions/'.$v1['id'].'/actions/approve')->assertForbidden()->assertJsonPath('code', 'FORBIDDEN');
+    signIn($this, $preparer, $this->t);
     spa($this)->postJson('/api/v1/planning/bom-versions/'.$v1['id'].'/actions/submit')->assertOk()->assertJsonPath('data.status', 'SUBMITTED');
     patchWith($this, '/api/v1/planning/bom-versions/'.$v1['id'], ['changeReason' => 'late edit'], 99)->assertStatus(409);
 
@@ -79,6 +82,7 @@ it('approves a BOM by a second person in any scope, supersedes on revise, and re
     spa($this)->postJson('/api/v1/planning/bom-versions/'.$v1['id'].'/actions/approve')->assertOk()->assertJsonPath('data.status', 'APPROVED')
         ->assertJsonPath('data.inUse', true);
 
+    signIn($this, $preparer, $this->t);
     $v2 = spa($this)->postJson('/api/v1/planning/bom-versions', ['itemId' => $s['item']['id'], 'effectiveFrom' => rtDay($this->t, 1), 'changeReason' => 'Thinner coil'])
         ->assertCreated()->json('data');
     expect($v2['versionNo'])->toBe(2)->and($v2['lineCount'])->toBe(1);
@@ -105,7 +109,7 @@ it('approves a BOM by a second person in any scope, supersedes on revise, and re
 })->group('integration', 'master');
 
 it('refuses a component chain that comes back to the item (Option M acyclic)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $sf1 = bomItem($this, $this->t, 'PART-A-BLK', 'SEMI_FINISHED');
     $sf2 = bomItem($this, $this->t, 'PART-A-BND', 'SEMI_FINISHED');
     $b1 = bomDraft($this, $this->t, $sf2, [[$sf1, '1']]); // SF-2 consumes SF-1
@@ -133,7 +137,7 @@ function mapPair(object $test, array $t, array $s): array
 }
 
 it('draws a map only on locked versions of the same item (D-079)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     $draftBom = bomDraft($this, $this->t, $s['item'], [[bomItem($this, $this->t, 'PIN-1', 'RAW'), '1']]);
     [, $rv] = rtDraft($this, $this->t, $s);
@@ -147,7 +151,7 @@ it('draws a map only on locked versions of the same item (D-079)', function () {
 })->group('integration', 'master');
 
 it('runs a map revision through submit, approval by a second person and supersession', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     [$bom, $rv] = mapPair($this, $this->t, $s);
     $map = spa($this)->postJson('/api/v1/planning/bom-routing-maps', ['bomVersionId' => $bom['id'], 'routingVersionId' => $rv['id']])->assertCreated()->json('data');
@@ -180,7 +184,8 @@ it('runs a map revision through submit, approval by a second person and superses
     expect(fn () => AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->delete('delete from bom_routing_map_lines where map_id = ?', [$map['id']])))
         ->toThrow(QueryException::class);
 
-    // revision 2 copies the lines; approving it supersedes revision 1 (B2-AT-43)
+    // revision 2 copies the lines; approving it supersedes revision 1 (B2-AT-43); the Supervisor prepares it (D-128)
+    rtSwitch($this, $this->t, 'SUP');
     $rev2 = spa($this)->postJson('/api/v1/planning/bom-routing-maps', ['bomVersionId' => $bom['id'], 'routingVersionId' => $rv['id'], 'changeReason' => 'Nut 2 at blanking'])
         ->assertCreated()->json('data');
     expect($rev2['mapRevision'])->toBe(2)->and($rev2['lineCount'])->toBe(3);
@@ -201,7 +206,7 @@ it('runs a map revision through submit, approval by a second person and superses
 })->group('integration', 'master');
 
 it('keeps a map inside one item and one version pair (B2-AT-53..55, 57)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     [$bom, $rv] = mapPair($this, $this->t, $s);
     // a routing of another item
@@ -241,7 +246,7 @@ it('keeps a map inside one item and one version pair (B2-AT-53..55, 57)', functi
 })->group('integration', 'master');
 
 it('drops stale map lines when a withdrawn BOM version changes; the map cannot be submitted incomplete', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     [$bom, $rv] = mapPair($this, $this->t, $s);
     $map = spa($this)->postJson('/api/v1/planning/bom-routing-maps', ['bomVersionId' => $bom['id'], 'routingVersionId' => $rv['id']])->assertCreated()->json('data');
@@ -262,7 +267,7 @@ it('drops stale map lines when a withdrawn BOM version changes; the map cannot b
 })->group('integration', 'master');
 
 it('counts a superseded version that is still in force when checking for component cycles', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $a = bomItem($this, $this->t, 'PART-A-BLK', 'SEMI_FINISHED');
     $b = bomItem($this, $this->t, 'PART-A-BND', 'SEMI_FINISHED');
     $c = bomItem($this, $this->t, 'COIL-1', 'RAW', 'KG');
@@ -271,6 +276,7 @@ it('counts a superseded version that is still in force when checking for compone
     spa($this)->postJson('/api/v1/planning/bom-versions/'.$a1['id'].'/actions/submit')->assertOk();
     rtSwitch($this, $this->t, 'CSA');
     spa($this)->postJson('/api/v1/planning/bom-versions/'.$a1['id'].'/actions/approve')->assertOk();
+    rtSwitch($this, $this->t, 'SUP');
     $a2 = spa($this)->postJson('/api/v1/planning/bom-versions', ['itemId' => $a['id'], 'effectiveFrom' => rtDay($this->t, 1), 'changeReason' => 'coil instead'])->assertCreated()->json('data');
     spa($this)->putJson('/api/v1/planning/bom-versions/'.$a2['id'].'/lines', ['lines' => [['lineNo' => 10, 'componentItemId' => $c['id'], 'grossQtyPer' => '1', 'uomId' => $c['baseUomId']]]], ['If-Match' => '"'.$a2['version'].'"'])->assertOk();
     spa($this)->postJson('/api/v1/planning/bom-versions/'.$a2['id'].'/actions/submit')->assertOk();
@@ -279,6 +285,7 @@ it('counts a superseded version that is still in force when checking for compone
     spa($this)->getJson('/api/v1/planning/bom-versions/'.$a1['id'])->assertJsonPath('data.status', 'SUPERSEDED')->assertJsonPath('data.effectiveTo', rtDay($this->t));
 
     // B from today consuming A would close A v1 → B → A today
+    rtSwitch($this, $this->t, 'SUP');
     $b1 = bomDraft($this, $this->t, $b, [[$a, '1']]);
     spa($this)->postJson('/api/v1/planning/bom-versions/'.$b1['id'].'/actions/submit')->assertOk();
     rtSwitch($this, $this->t, 'CSA');

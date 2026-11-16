@@ -43,6 +43,7 @@ it('drafts a WO, asks for release, and a second person releases it with the BOM 
     expect($approver)->toBeArray();
 
     // the master changes after release (BOM v2 approved: more coil per piece); the released WO keeps its snapshot (doc 33 §4 item 4)
+    rtSwitch($this, $this->t, 'SUP'); // the Supervisor revises (D-128)
     $v2 = spa($this)->postJson('/api/v1/planning/bom-versions', ['itemId' => $s['item']['id'], 'effectiveFrom' => rtDayFrom($s['today'], 1), 'copyFromVersionId' => $s['bom']['id']])->assertCreated()->json('data');
     $v2 = spa($this)->putJson("/api/v1/planning/bom-versions/{$v2['id']}/lines", ['lines' => [
         ['lineNo' => 10, 'componentItemId' => $s['coil']['id'], 'grossQtyPer' => '0.6', 'uomId' => $s['coil']['baseUomId']],
@@ -219,8 +220,10 @@ it('checks the draft: finished item, due date from today, a note for Other, a fi
 
 it('refuses release without an approved BOM and routing, and cancels drafts and released orders with a reason', function () {
     $s = woFixture($this, $this->t);
-    // a finished item without approved BOM and routing
+    // a finished item without approved BOM and routing (the Supervisor adds it, D-128)
+    rtSwitch($this, $this->t, 'SUP');
     $newItem = spa($this)->postJson('/api/v1/core/items', ['code' => 'BRK-NEW', 'name' => 'New bracket', 'itemType' => 'FINISHED', 'baseUomId' => $s['item']['baseUomId']])->assertCreated()->json('data');
+    rtSwitch($this, $this->t, 'PPC');
     $bare = woCreate($this, $s, ['itemId' => $newItem['id']])->assertCreated()->json('data');
     $bareSent = woAct($this, $bare['id'], 'submit', $bare['version'])->assertOk()->json('data');
     $draft = woCreate($this, $s)->assertCreated()->json('data');
