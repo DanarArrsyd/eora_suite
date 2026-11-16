@@ -46,7 +46,7 @@ final class MpsInputs
         $monday = (new DateTimeImmutable($this->today))->modify('monday this week');
         $this->horizonStart = $monday->format('Y-m-d');
         $this->horizonEnd = $monday->modify('+'.(7 * self::WEEKS - 1).' days')->format('Y-m-d');
-        $this->days = new WorkingDays($this->exceptions($db, $plant));
+        $this->days = self::workingDays($db, $plant, $this->horizonStart, $this->horizonEnd);
         $this->reset();
 
         $delivered = "coalesce((select sum(m.qty_signed) from inventory_movements m join locations ml on ml.tenant_id = m.tenant_id and ml.id = m.location_id and ml.location_type = 'V_CUSTOMER'
@@ -188,34 +188,32 @@ final class MpsInputs
     }
 
     /**
-     * The working-day exceptions of each date from the start of the lead-time look-back to the horizon end, each from the
-     * business calendar version in force on that date (latest plant override, else latest tenant default, as
-     * BusinessCalendar): a version taking effect inside the horizon brings its own exceptions from its date on.
-     *
-     * @return array<string, string>
+     * The plant's working days with the exceptions of each date from the start of the lead-time look-back to the horizon
+     * end, each from the business calendar version in force on that date (latest plant override, else latest tenant
+     * default, as BusinessCalendar): a version taking effect inside the horizon brings its own exceptions from its date on.
      */
-    private function exceptions(EoraPostgresConnection $db, string $plant): array
+    public static function workingDays(EoraPostgresConnection $db, string $plant, string $horizonStart, string $horizonEnd): WorkingDays
     {
         // a lead time of up to 365 working days (Mon–Sat, plus holidays) reaches back at most ~ 1.25 years: load 2
-        $from = (new DateTimeImmutable($this->horizonStart))->modify('-730 days')->format('Y-m-d');
+        $from = (new DateTimeImmutable($horizonStart))->modify('-730 days')->format('Y-m-d');
         $versions = $db->select(
             'select id, plant_id is not null as override, effective_from::text as since from business_calendars
               where (plant_id = ? or plant_id is null) and effective_from <= ?::date order by effective_from desc',
-            [$plant, $this->horizonEnd],
+            [$plant, $horizonEnd],
         );
         if ($versions === []) {
-            return [];
+            return new WorkingDays;
         }
         $byCalendar = [];
         foreach ($db->select(
             'select calendar_id, exception_date::text as d, kind from calendar_exceptions where calendar_id in ('.implode(',', array_fill(0, count($versions), '?')).')
                and exception_date between ?::date and ?::date',
-            [...array_map(static fn (stdClass $v) => $v->id, $versions), $from, $this->horizonEnd],
+            [...array_map(static fn (stdClass $v) => $v->id, $versions), $from, $horizonEnd],
         ) as $r) {
             $byCalendar[(string) $r->calendar_id][(string) $r->d] = (string) $r->kind;
         }
         $out = [];
-        for ($d = new DateTimeImmutable($from); $d->format('Y-m-d') <= $this->horizonEnd; $d = $d->modify('+1 day')) {
+        for ($d = new DateTimeImmutable($from); $d->format('Y-m-d') <= $horizonEnd; $d = $d->modify('+1 day')) {
             $day = $d->format('Y-m-d');
             $calendar = self::inForce($versions, $day);
             if ($calendar !== null && isset($byCalendar[$calendar][$day])) {
@@ -223,7 +221,7 @@ final class MpsInputs
             }
         }
 
-        return $out;
+        return new WorkingDays($out);
     }
 
     /**

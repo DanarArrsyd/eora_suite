@@ -176,6 +176,7 @@ export const NAV_MODULES: readonly NavModule[] = [
             permission: ['planning.mps.view', 'planning.mps.approve'],
             phase: 5,
           },
+          { id: 'mrp', label: 'MRP Results', icon: Boxes, release: 'R1', permission: 'planning.mrp.view', phase: 5 },
           {
             id: 'work-orders',
             label: 'Work Orders',

@@ -20,6 +20,7 @@ use App\Modules\Planning\Http\BomRoutingMapController;
 use App\Modules\Planning\Http\ConversionProfileController;
 use App\Modules\Planning\Http\ItemWeightController;
 use App\Modules\Planning\Http\MpsController;
+use App\Modules\Planning\Http\MrpController;
 use App\Modules\Planning\Http\PlanParameterController;
 use App\Modules\Planning\Http\RoutingController;
 use App\Modules\Planning\Http\WoCloseExceptionController;
@@ -123,6 +124,9 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('mps-versions/{version}/actions/cancel', [MpsController::class, 'cancel'])->name('mps-versions.cancel');
         Route::post('mps-versions/{version}/actions/return', [MpsController::class, 'returnToDraft'])->name('mps-versions.return');
         Route::post('mps-versions/{version}/actions/approve', [MpsController::class, 'approve'])->name('mps-versions.approve');
+        // D-124: MRP runs from the approved MPS
+        Route::post('mrp-runs', [MrpController::class, 'store'])->name('mrp-runs.store');
+        Route::get('mrp-runs/{run}', [MrpController::class, 'show'])->name('mrp-runs.show');
         Route::post('process-types', [RoutingController::class, 'storeProcessType'])->name('process-types.store');
         Route::patch('process-types/{processType}', [RoutingController::class, 'updateProcessType'])->name('process-types.update');
         Route::post('routings', [RoutingController::class, 'storeRouting'])->name('routings.store');

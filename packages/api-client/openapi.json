@@ -37436,6 +37436,595 @@
                 }
             }
         },
+        "/planning/mrp-runs": {
+            "post": {
+                "operationId": "v1.planning.mrp-runs.store",
+                "summary": "Run MRP `MRP-<plant>-<year>-NNNN` from the plant's approved MPS (201); 409 when the MPS is not the approved one",
+                "tags": [
+                    "Mrp"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "mpsVersionId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    }
+                                },
+                                "required": [
+                                    "mpsVersionId"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": {}
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "UNAUTHENTICATED, SESSION_EXPIRED",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "format": "uri"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer",
+                                            "enum": [
+                                                401
+                                            ]
+                                        },
+                                        "code": {
+                                            "type": "string",
+                                            "enum": [
+                                                "UNAUTHENTICATED",
+                                                "SESSION_EXPIRED"
+                                            ]
+                                        },
+                                        "detail": {
+                                            "type": "string",
+                                            "description": "Safe to show; never names permissions, scopes or other tenants."
+                                        },
+                                        "correlationId": {
+                                            "type": "string"
+                                        },
+                                        "reference": {
+                                            "type": "string",
+                                            "description": "Short support reference derived from the correlation id."
+                                        }
+                                    },
+                                    "required": [
+                                        "type",
+                                        "title",
+                                        "status",
+                                        "code"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "FORBIDDEN, SCOPE_FORBIDDEN",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "format": "uri"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer",
+                                            "enum": [
+                                                403
+                                            ]
+                                        },
+                                        "code": {
+                                            "type": "string",
+                                            "enum": [
+                                                "FORBIDDEN",
+                                                "SCOPE_FORBIDDEN"
+                                            ]
+                                        },
+                                        "detail": {
+                                            "type": "string",
+                                            "description": "Safe to show; never names permissions, scopes or other tenants."
+                                        },
+                                        "correlationId": {
+                                            "type": "string"
+                                        },
+                                        "reference": {
+                                            "type": "string",
+                                            "description": "Short support reference derived from the correlation id."
+                                        }
+                                    },
+                                    "required": [
+                                        "type",
+                                        "title",
+                                        "status",
+                                        "code"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "NOT_FOUND",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "format": "uri"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer",
+                                            "enum": [
+                                                404
+                                            ]
+                                        },
+                                        "code": {
+                                            "type": "string",
+                                            "enum": [
+                                                "NOT_FOUND"
+                                            ]
+                                        },
+                                        "detail": {
+                                            "type": "string",
+                                            "description": "Safe to show; never names permissions, scopes or other tenants."
+                                        },
+                                        "correlationId": {
+                                            "type": "string"
+                                        },
+                                        "reference": {
+                                            "type": "string",
+                                            "description": "Short support reference derived from the correlation id."
+                                        }
+                                    },
+                                    "required": [
+                                        "type",
+                                        "title",
+                                        "status",
+                                        "code"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "INVALID_STATE_TRANSITION",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "format": "uri"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer",
+                                            "enum": [
+                                                409
+                                            ]
+                                        },
+                                        "code": {
+                                            "type": "string",
+                                            "enum": [
+                                                "INVALID_STATE_TRANSITION"
+                                            ]
+                                        },
+                                        "detail": {
+                                            "type": "string",
+                                            "description": "Safe to show; never names permissions, scopes or other tenants."
+                                        },
+                                        "correlationId": {
+                                            "type": "string"
+                                        },
+                                        "reference": {
+                                            "type": "string",
+                                            "description": "Short support reference derived from the correlation id."
+                                        }
+                                    },
+                                    "required": [
+                                        "type",
+                                        "title",
+                                        "status",
+                                        "code"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "419": {
+                        "description": "CSRF_TOKEN_MISMATCH",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "format": "uri"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer",
+                                            "enum": [
+                                                419
+                                            ]
+                                        },
+                                        "code": {
+                                            "type": "string",
+                                            "enum": [
+                                                "CSRF_TOKEN_MISMATCH"
+                                            ]
+                                        },
+                                        "detail": {
+                                            "type": "string",
+                                            "description": "Safe to show; never names permissions, scopes or other tenants."
+                                        },
+                                        "correlationId": {
+                                            "type": "string"
+                                        },
+                                        "reference": {
+                                            "type": "string",
+                                            "description": "Short support reference derived from the correlation id."
+                                        }
+                                    },
+                                    "required": [
+                                        "type",
+                                        "title",
+                                        "status",
+                                        "code"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "VALIDATION_FAILED",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "format": "uri"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer",
+                                            "enum": [
+                                                422
+                                            ]
+                                        },
+                                        "code": {
+                                            "type": "string",
+                                            "enum": [
+                                                "VALIDATION_FAILED"
+                                            ]
+                                        },
+                                        "detail": {
+                                            "type": "string",
+                                            "description": "Safe to show; never names permissions, scopes or other tenants."
+                                        },
+                                        "correlationId": {
+                                            "type": "string"
+                                        },
+                                        "reference": {
+                                            "type": "string",
+                                            "description": "Short support reference derived from the correlation id."
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "additionalProperties": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "type",
+                                        "title",
+                                        "status",
+                                        "code"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "RETRYABLE_CONFLICT",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "format": "uri"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer",
+                                            "enum": [
+                                                503
+                                            ]
+                                        },
+                                        "code": {
+                                            "type": "string",
+                                            "enum": [
+                                                "RETRYABLE_CONFLICT"
+                                            ]
+                                        },
+                                        "detail": {
+                                            "type": "string",
+                                            "description": "Safe to show; never names permissions, scopes or other tenants."
+                                        },
+                                        "correlationId": {
+                                            "type": "string"
+                                        },
+                                        "reference": {
+                                            "type": "string",
+                                            "description": "Short support reference derived from the correlation id."
+                                        }
+                                    },
+                                    "required": [
+                                        "type",
+                                        "title",
+                                        "status",
+                                        "code"
+                                    ]
+                                }
+                            }
+                        },
+                        "headers": {
+                            "Retry-After": {
+                                "description": "Seconds to wait before retrying.",
+                                "schema": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/planning/mrp-runs/{run}": {
+            "get": {
+                "operationId": "v1.planning.mrp-runs.show",
+                "summary": "The run with its items: requirements, supply, planned work orders and shortages, pegs",
+                "tags": [
+                    "Mrp"
+                ],
+                "parameters": [
+                    {
+                        "name": "run",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": {}
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "UNAUTHENTICATED, SESSION_EXPIRED",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "format": "uri"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer",
+                                            "enum": [
+                                                401
+                                            ]
+                                        },
+                                        "code": {
+                                            "type": "string",
+                                            "enum": [
+                                                "UNAUTHENTICATED",
+                                                "SESSION_EXPIRED"
+                                            ]
+                                        },
+                                        "detail": {
+                                            "type": "string",
+                                            "description": "Safe to show; never names permissions, scopes or other tenants."
+                                        },
+                                        "correlationId": {
+                                            "type": "string"
+                                        },
+                                        "reference": {
+                                            "type": "string",
+                                            "description": "Short support reference derived from the correlation id."
+                                        }
+                                    },
+                                    "required": [
+                                        "type",
+                                        "title",
+                                        "status",
+                                        "code"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "FORBIDDEN",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "format": "uri"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer",
+                                            "enum": [
+                                                403
+                                            ]
+                                        },
+                                        "code": {
+                                            "type": "string",
+                                            "enum": [
+                                                "FORBIDDEN"
+                                            ]
+                                        },
+                                        "detail": {
+                                            "type": "string",
+                                            "description": "Safe to show; never names permissions, scopes or other tenants."
+                                        },
+                                        "correlationId": {
+                                            "type": "string"
+                                        },
+                                        "reference": {
+                                            "type": "string",
+                                            "description": "Short support reference derived from the correlation id."
+                                        }
+                                    },
+                                    "required": [
+                                        "type",
+                                        "title",
+                                        "status",
+                                        "code"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "NOT_FOUND",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "format": "uri"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer",
+                                            "enum": [
+                                                404
+                                            ]
+                                        },
+                                        "code": {
+                                            "type": "string",
+                                            "enum": [
+                                                "NOT_FOUND"
+                                            ]
+                                        },
+                                        "detail": {
+                                            "type": "string",
+                                            "description": "Safe to show; never names permissions, scopes or other tenants."
+                                        },
+                                        "correlationId": {
+                                            "type": "string"
+                                        },
+                                        "reference": {
+                                            "type": "string",
+                                            "description": "Short support reference derived from the correlation id."
+                                        }
+                                    },
+                                    "required": [
+                                        "type",
+                                        "title",
+                                        "status",
+                                        "code"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/core/companies": {
             "post": {
                 "operationId": "v1.core.companies.store",

@@ -1818,6 +1818,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/planning/mrp-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run MRP `MRP-<plant>-<year>-NNNN` from the plant's approved MPS (201); 409 when the MPS is not the approved one */
+        post: operations["v1.planning.mrp-runs.store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/planning/mrp-runs/{run}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The run with its items: requirements, supply, planned work orders and shortages, pegs */
+        get: operations["v1.planning.mrp-runs.show"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/core/companies": {
         parameters: {
             query?: never;
@@ -20355,6 +20389,286 @@ export interface operations {
                         status: 503;
                         /** @enum {string} */
                         code: "RETRYABLE_CONFLICT";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+        };
+    };
+    "v1.planning.mrp-runs.store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    mpsVersionId: string;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description UNAUTHENTICATED, SESSION_EXPIRED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 401;
+                        /** @enum {string} */
+                        code: "UNAUTHENTICATED" | "SESSION_EXPIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description FORBIDDEN, SCOPE_FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 403;
+                        /** @enum {string} */
+                        code: "FORBIDDEN" | "SCOPE_FORBIDDEN";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 404;
+                        /** @enum {string} */
+                        code: "NOT_FOUND";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description INVALID_STATE_TRANSITION */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 409;
+                        /** @enum {string} */
+                        code: "INVALID_STATE_TRANSITION";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description CSRF_TOKEN_MISMATCH */
+            419: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 419;
+                        /** @enum {string} */
+                        code: "CSRF_TOKEN_MISMATCH";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description VALIDATION_FAILED */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 422;
+                        /** @enum {string} */
+                        code: "VALIDATION_FAILED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                        errors?: {
+                            [key: string]: string[];
+                        };
+                    };
+                };
+            };
+            /** @description RETRYABLE_CONFLICT */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before retrying. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 503;
+                        /** @enum {string} */
+                        code: "RETRYABLE_CONFLICT";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+        };
+    };
+    "v1.planning.mrp-runs.show": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description UNAUTHENTICATED, SESSION_EXPIRED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 401;
+                        /** @enum {string} */
+                        code: "UNAUTHENTICATED" | "SESSION_EXPIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 403;
+                        /** @enum {string} */
+                        code: "FORBIDDEN";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 404;
+                        /** @enum {string} */
+                        code: "NOT_FOUND";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;
