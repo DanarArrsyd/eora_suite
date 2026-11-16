@@ -20,7 +20,7 @@ const run = randomBytes(4).toString('hex');
 const TENANT = `e2e-m3-${run}`;
 const PASSWORD = `stack e2e m3 ${run} passphrase`;
 
-type Role = 'csa' | 'mat' | 'prl' | 'inv';
+type Role = 'csa' | 'mat' | 'prl' | 'inv' | 'sup';
 
 function artisan(...args: string[]): string {
   const [bin, ...prefix] = COMPOSE;
@@ -79,15 +79,21 @@ test('M3 ledger end to end on the real stack', async ({ browser }) => {
   });
 
   const admin = await signedIn(browser, 'csa');
+  const supervisor = await signedIn(browser, 'sup');
   const materials = await signedIn(browser, 'mat');
   const leader = await signedIn(browser, 'prl');
   const inventory = await signedIn(browser, 'inv');
   let released = '';
 
-  await test.step('the administrator adds a second raw-material rack', async () => {
-    const warehouses = await api<{ data: { id: string; code: string }[] }>(admin, 'GET', '/query/core.warehouses?q=RM-WH');
+  await test.step('the Supervisor adds a second raw-material rack (master data, D-128)', async () => {
+    const warehouses = await api<{ data: { id: string; code: string }[] }>(supervisor, 'GET', '/query/core.warehouses?q=RM-WH');
     const rm = warehouses.json.data.find((w) => w.code === 'RM-WH')!;
-    const created = await api(admin, 'POST', '/core/locations', { warehouseId: rm.id, code: 'RM-A02', name: 'Coil rack A02', locationType: 'RM_WAREHOUSE' });
+    const created = await api(supervisor, 'POST', '/core/locations', {
+      warehouseId: rm.id,
+      code: 'RM-A02',
+      name: 'Coil rack A02',
+      locationType: 'RM_WAREHOUSE',
+    });
     expect(created.status).toBe(201);
     const lines = await coilLines(admin);
     released = lines.find((l) => l.includes('UNRESTRICTED'))!.split(' ')[0]!;
