@@ -66,7 +66,7 @@ final class MrpPlanner
         [$this->runId, $this->plant, $this->today, $this->horizonStart, $this->weeks] = [$runId, $plant, $today, $horizonStart, $weeks];
         $end = (new DateTimeImmutable($horizonStart))->modify('+'.(7 * $weeks - 1).' days')->format('Y-m-d');
         $this->days = MpsInputs::workingDays($db, $plant, $horizonStart, $end);
-        $this->live = $this->inputs->load($db, $plant);
+        $this->live = $this->inputs->load($db, $plant, $horizonStart, $weeks);
         $this->reset();
 
         // the MPS's items (with or without planned orders) and its planned orders

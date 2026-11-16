@@ -41,12 +41,17 @@ final class MpsInputs
 
     public function __construct(private readonly BusinessCalendar $calendar) {}
 
-    public function load(EoraPostgresConnection $db, string $plant): self
+    /**
+     * Reads the plant's inputs for the horizon from the plant's this week (an MPS), or for a given horizon (an MRP run of
+     * an approved MPS keeps that MPS's horizon, so demand and allocations beyond it are judged against the same end).
+     */
+    public function load(EoraPostgresConnection $db, string $plant, ?string $horizonStart = null, ?int $weeks = null): self
     {
         $this->today = $this->calendar->resolve($db, $plant, new DateTimeImmutable)->calendarDate;
-        $monday = (new DateTimeImmutable($this->today))->modify('monday this week');
+        $monday = new DateTimeImmutable($horizonStart ?? $this->today);
+        $monday = $horizonStart === null ? $monday->modify('monday this week') : $monday;
         $this->horizonStart = $monday->format('Y-m-d');
-        $this->horizonEnd = $monday->modify('+'.(7 * self::WEEKS - 1).' days')->format('Y-m-d');
+        $this->horizonEnd = $monday->modify('+'.(7 * ($weeks ?? self::WEEKS) - 1).' days')->format('Y-m-d');
         $this->days = self::workingDays($db, $plant, $this->horizonStart, $this->horizonEnd);
         $this->reset();
 
