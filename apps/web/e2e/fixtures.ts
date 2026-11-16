@@ -1,4 +1,15 @@
 import { test as base, expect, type Locator, type Page, type Route } from '@playwright/test';
+import { NAV_MODULES } from '../../../packages/features/src/navigation/config';
+
+/** Every permission the navigation names (view and work): a Supervisor's menus (D-126). */
+export const ALL_PERMISSIONS: string[] = Array.from(
+  new Set(
+    NAV_MODULES.flatMap((m) => m.groups.flatMap((g) => g.items)).flatMap((i) => [
+      ...(typeof i.permission === 'string' ? [i.permission] : (i.permission ?? [])),
+      ...(i.menu ?? []),
+    ]),
+  ),
+);
 
 /**
  * Frontend E2E runs without the API (doc 22 §4): the workspace needs a session, so `/api/v1/auth/me` is answered with a
@@ -14,7 +25,8 @@ export const SESSION = {
     { id: '00000000-0000-7000-8000-0000000000b2', code: 'P2', name: 'Plant 2' },
   ],
   activePlantId: '00000000-0000-7000-8000-0000000000b1',
-  permissions: [] as string[],
+  // a Supervisor by default (D-126): every built page is a menu; specs that test a role pass their own permissions
+  permissions: ALL_PERMISSIONS,
 };
 
 /** Synthetic inbox (doc 07 shape): two items need action, one unread warning, one read. */

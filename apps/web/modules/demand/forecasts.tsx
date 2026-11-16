@@ -92,8 +92,7 @@ export const FORECASTS: MasterResource<ForecastRow> = {
   resource: 'demand.forecast_versions',
   permission: { view: 'demand.forecast.view', create: 'demand.forecast.create', label: 'forecasts' },
   title: 'Forecast',
-  description:
-    'Expected demand per customer part and week, one version per customer and plant. Firm orders of the same customer, part and week consume it; planning uses only what is left (net forecast), never both.',
+  description: 'Expected demand per customer part and week.',
   itemLabel: 'forecast versions',
   singular: 'forecast version',
   createLabel: 'New forecast version',

@@ -16,7 +16,8 @@ use Illuminate\Support\Facades\DB;
  * Operator command after a deployment whose migrations add per-tenant baseline data that forced RLS keeps out of the
  * migration owner's reach (D-072). For every provisioned tenant, in its own signed context as eora_provisioner
  * (system actor), each step adds only what is missing and is audited:
- *  1. template roles receive permissions added to their templates later (tenant roles have no editing path yet);
+ *  1. template roles receive permissions added to their templates later (tenant roles have no editing path yet), and
+ *     templates added later become roles of the tenant (D-126);
  *  2. every plant has its virtual locations (ADR-0002 §3) — new plants get them from a trigger;
  *  3. the starter units KG, PCS and SHEET exist (doc 24 §3.2) — new tenants get them from a trigger.
  * Idempotent: a second run changes nothing.
@@ -56,17 +57,31 @@ final class SyncTenants extends Command
               where not exists (select 1 from role_permissions rp where rp.role_id = r.id and rp.permission_code = tp.permission_code)
               group by r.id, r.code order by r.code',
         );
-        if ($missing === []) {
+        // template roles the tenant does not have yet (a template added later, e.g. SUP, D-126); only in a tenant whose
+        // template roles were made at provisioning (a provisioning record without a tenant behind it is left alone)
+        $absent = $db->select(
+            'select t.code from role_templates t
+              where not exists (select 1 from roles r where r.template_code = t.code)
+                and exists (select 1 from roles r where r.template_code is not null)
+              order by t.code',
+        );
+        if ($missing === [] && $absent === []) {
             return 0;
         }
         $templates->instantiate($db, $tenant);
+        foreach ($absent as $template) {
+            $role = $db->selectOne('select id from roles where template_code = ?', [$template->code]);
+            if ($role !== null) {
+                $audit->record($db, 'role.created_from_template', 'role', (string) $role->id, null, null, ['roleCode' => (string) $template->code]);
+            }
+        }
         foreach ($missing as $role) {
             /** @var list<string> $codes */
             $codes = json_decode((string) $role->codes, true);
             $audit->record($db, 'role.permissions_synced', 'role', (string) $role->id, null, null, ['roleCode' => (string) $role->code, 'added' => $codes]);
         }
 
-        return count($missing);
+        return count($missing) + count($absent);
     }
 
     private function starterUnits(EoraPostgresConnection $db, string $tenant, AuditRecorder $audit): int

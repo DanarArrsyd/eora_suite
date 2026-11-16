@@ -204,8 +204,7 @@ export const ADJUSTMENTS: MasterResource<AdjustmentRow & { code: string }> = {
     alsoView: ['inventory.adjustment.approve'],
   },
   title: 'Adjustments',
-  description:
-    'Corrections of stock on hand, each with its reason. Inventory control requests one; a second person approves it, and only then is the stock changed. Unexplained differences are investigated, not adjusted away.',
+  description: 'Stock corrections, approved by a second person.',
   itemLabel: 'adjustments',
   singular: 'adjustment request',
   searchPlaceholder: 'Search item…',

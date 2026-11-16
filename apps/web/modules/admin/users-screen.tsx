@@ -110,11 +110,7 @@ export function UsersScreen() {
   );
 
   return (
-    <EnterprisePage
-      title="Users"
-      description="People with access to this workspace, their status and the roles they hold. Inviting gives no access until a role is assigned."
-      actions={inviteButton}
-    >
+    <EnterprisePage title="Users" description="People with access and their roles." actions={inviteButton}>
       {notice ? (
         <InlineAlert
           tone={notice.tone}

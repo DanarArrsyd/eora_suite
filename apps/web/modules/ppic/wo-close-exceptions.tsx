@@ -47,8 +47,7 @@ export const WO_CLOSE_EXCEPTIONS: MasterResource<ExceptionRow> = {
   },
   noCreate: true,
   title: 'WO Close Exceptions',
-  description:
-    'Material left at production that will not be returned, asked to go to the scrap yard so its work order can close. A second person decides it on the work order.',
+  description: 'Leftover material sent to scrap so a work order can close.',
   itemLabel: 'exceptions',
   singular: 'exception',
   searchPlaceholder: 'Search exception…',

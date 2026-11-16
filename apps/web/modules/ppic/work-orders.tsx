@@ -168,8 +168,7 @@ function workOrders(base: string): MasterResource<WorkOrderRow> {
     resource: 'planning.work_orders',
     permission: { view: 'planning.wo.view', create: 'planning.wo.create', label: 'work orders', alsoView: ['planning.wo.approve'] },
     title: 'Work Orders',
-    description:
-      'Manual work orders outside the MPS, each with its reason. A planner asks for release; a second person releases it, and the approved BOM and routing are copied onto it.',
+    description: 'Work orders, from the plan or with a reason.',
     itemLabel: 'work orders',
     singular: 'work order',
     createLabel: 'New work order',

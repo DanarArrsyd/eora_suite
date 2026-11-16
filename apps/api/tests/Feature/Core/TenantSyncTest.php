@@ -41,3 +41,36 @@ it('adds template permissions introduced later to every provisioned tenant, audi
         ->and($inTenant(fn (EoraPostgresConnection $db) => (int) $db->selectOne("select count(*) as n from locations where location_type like 'V\\_%'")->n))->toBe(6)
         ->and(array_column($inTenant(fn (EoraPostgresConnection $db) => $db->select('select code from uoms order by code')), 'code'))->toBe(['KG', 'PCS', 'SHEET']);
 })->group('integration', 'master');
+
+it('gives the Supervisor template every permission, also one added later (D-126)', function () {
+    $owner = DB::connection('pgsql_owner');
+    $missing = fn () => (int) $owner->selectOne(
+        "select count(*) as n from permissions p where not exists (select 1 from role_template_permissions t where t.template_code = 'SUP' and t.permission_code = p.code)",
+    )->n;
+    expect($missing())->toBe(0);
+
+    $owner->insert("insert into permissions (code, module, action, sensitive) values ('zz_test.d_one_two_six.view', 'zz_test', 'view', false)");
+    try {
+        expect($missing())->toBe(0)
+            ->and($owner->selectOne("select exists (select 1 from role_template_permissions where template_code = 'SUP' and permission_code = 'zz_test.d_one_two_six.view') as given")->given)->toBeTrue();
+    } finally {
+        $owner->delete("delete from role_template_permissions where permission_code = 'zz_test.d_one_two_six.view'");
+        $owner->delete("delete from permissions where code = 'zz_test.d_one_two_six.view'");
+    }
+})->group('integration', 'master');
+
+it('gives a provisioned tenant the Supervisor role with every permission; sync has nothing to add (D-126)', function () {
+    $code = demoCode();
+    $this->artisan('eora:demo:seed', ['--code' => $code, '--password' => DEMO_PASSWORD])->assertSuccessful();
+    $tenant = demoState($code)['tenant'];
+    $inTenant = fn (Closure $work) => app(TenantTransaction::class)->run(TenantContext::forTenant($tenant, TenantProvisioner::SYSTEM_ACTOR), $work, 'pgsql_provisioner');
+    $sup = fn () => $inTenant(fn (EoraPostgresConnection $db) => $db->selectOne(
+        "select (select count(*) from role_permissions rp join roles r on r.id = rp.role_id where r.code = 'SUP') as granted,
+                (select count(*) from permissions) as catalogue,
+                (select count(*) from audit_events where action like 'role.%' and detail->>'roleCode' = 'SUP') as audits",
+    ));
+
+    expect((int) $sup()->granted)->toBe((int) $sup()->catalogue);
+    $this->artisan('eora:tenants:sync')->assertSuccessful();
+    expect((int) $sup()->audits)->toBe(0);
+})->group('integration', 'master');

@@ -117,8 +117,7 @@ export const PENDING_QC: MasterResource<QcLineRow> = {
   noCreate: true,
   fixedFilters: { stockStatus: ['PENDING_QC', 'HOLD', 'REJECTED'], locationType: ['QC_AREA', 'NG_AREA'] },
   title: 'Pending QC Queue',
-  description:
-    'Output waiting for a quality decision, held quantities, and rejected ones that may be released out of policy. Open a lot to release, hold, rework or reject part or all of it.',
+  description: 'Output waiting for a quality decision.',
   itemLabel: 'lots',
   singular: 'lot',
   searchPlaceholder: 'Search item…',
@@ -154,7 +153,7 @@ export const DISPOSITIONS: MasterResource<DispositionRow> = {
   },
   noCreate: true,
   title: 'Dispositions',
-  description: 'Quality decisions on output lots, and releases out of policy that wait for a second person. A posted disposition is corrected by its reversal.',
+  description: 'Quality decisions on output lots.',
   itemLabel: 'dispositions',
   singular: 'disposition',
   searchPlaceholder: 'Search disposition…',

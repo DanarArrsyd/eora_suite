@@ -192,7 +192,7 @@ function JobList() {
   return (
     <EnterprisePage
       title="Import"
-      description="Load master data from the Excel templates. Every job keeps its file, the result of each row and who submitted and committed it."
+      description="Load master data from Excel."
       actions={
         <Button variant="primary" onClick={() => router.push('/master/import?new')}>
           <Plus aria-hidden="true" className="size-4" />
@@ -326,7 +326,7 @@ function NewImport({ preset }: { preset: string }) {
   return (
     <EnterprisePage
       title="New import"
-      description="Pick the template, fill it in Excel without changing the header row, and upload it. Nothing is saved until the job is committed."
+      description="Choose a template, fill it in Excel and upload it."
       actions={
         <Button onClick={() => router.push('/master/import')}>
           <ArrowLeft aria-hidden="true" className="size-4" />

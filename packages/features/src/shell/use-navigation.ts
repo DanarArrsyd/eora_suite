@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { usePathname } from 'next/navigation';
-import { NAV_MODULES, isItemVisible, matchRoute, moduleBadge, visibleModules, type BadgeCounts, type NavModule, type RouteMatch } from '../navigation';
+import { NAV_MODULES, isMenuItem, matchRoute, moduleBadge, visibleModules, type BadgeCounts, type NavModule, type RouteMatch } from '../navigation';
 import { useShellSession } from './session';
 
 export type ShellNavigation = {
@@ -18,82 +18,26 @@ export type ShellNavigation = {
   pathname: string;
 };
 
-/** Modules running on the live API, whose menus follow the user's permission hints item by item. */
-const LIVE_MODULES = new Set(['master', 'admin', 'materials', 'inventory', 'production', 'quality', 'warehouse', 'delivery']);
-
-/**
- * Modules partly on the live API (M3): the view permissions of their live items. Their other items are still prototype
- * screens, shown only to prototype roles that open the module.
- */
-const PARTLY_LIVE: Record<string, readonly string[]> = {
-  demand: ['demand.sales_order.view'],
-  production: ['production.run.view', 'production.posting.view'],
-  quality: ['quality.inspection.view', 'quality.disposition_release.approve'],
-  warehouse: ['warehouse.fg_receipt.view'],
-  delivery: ['delivery.shipment.view'],
-  materials: ['materials.receipt.view', 'materials.incoming_release.view', 'production.lot_split.view', 'materials.issue.view', 'materials.return.view'],
-  inventory: [
-    'inventory.stock.view',
-    'inventory.adjustment.view',
-    'inventory.adjustment.approve',
-    'inventory.reversal.view',
-    'inventory.reversal.request_correction',
-    'inventory.reversal.approve',
-    'inventory.period_close.view',
-    'inventory.period_close.post',
-    'inventory.period_close.approve',
-    'inventory.period_reopen.view',
-    'inventory.period_reopen.request_correction',
-    'inventory.period_reopen.approve',
-  ],
-};
-
 /** Navigation state derived from the single config + session role + current route. */
 export function useShellNavigation(): ShellNavigation {
   const pathname = usePathname() ?? '/';
   const { role, source, identity } = useShellSession();
   const permissions = identity?.permissions;
   const modules = React.useMemo(() => {
-    let allowed = source.allowedModules(role);
-    // a user whose prototype role does not open a partly live module still reaches its live items (e.g. QC releasing
-    // incoming material), and only those
-    const liveOnly = new Set<string>();
-    // Administration and Master Data run on the live API: shown from the user's permission hints, not from the
-    // prototype role. Each page checks its own permission; the server enforces every call.
+    // a signed-in user (D-126): only pages on the live API, and of those only the ones whose permission the user holds;
+    // pages not built yet and mock screens stay out of the menu (the server still decides every call)
     if (permissions) {
-      const others = allowed === '*' ? NAV_MODULES.map((m) => m.id) : [...allowed];
-      const admin = permissions.includes('core.users_roles.view') || permissions.includes('master.org.view');
-      // Master Data (D-076): organisation, part/partner and engineering master, conversion data (D-080); each item carries
-      // its own view permission; Import (D-081) shows for whoever may upload
-      const master = ['master.org.view', 'master.part.view', 'master.routing.view', 'master.conversion.view', 'exchange.import.create'].some((p) =>
-        permissions.includes(p),
-      );
-      const partly = Object.entries(PARTLY_LIVE)
-        .filter(([id, views]) => !others.includes(id) && views.some((p) => permissions.includes(p)))
-        .map(([id]) => id);
-      partly.forEach((id) => liveOnly.add(id));
-      allowed = [...others.filter((id) => id !== 'admin' && id !== 'master'), ...(master ? ['master'] : []), ...(admin ? ['admin'] : []), ...partly];
+      return NAV_MODULES.map((m) => ({
+        ...m,
+        groups: m.groups.map((g) => ({ ...g, items: g.items.filter((i) => isMenuItem(i, permissions)) })).filter((g) => g.items.length > 0),
+      })).filter((m) => m.groups.length > 0);
     }
-    const visible = visibleModules(NAV_MODULES, { allowedModules: allowed, showPendingDecisions: false });
-    // live modules also hide the items whose own view permission the user lacks; prototype modules keep their menus
-    return visible
-      .map((m) =>
-        permissions && LIVE_MODULES.has(m.id)
-          ? {
-              ...m,
-              groups: m.groups
-                .map((g) => ({
-                  ...g,
-                  items: g.items.filter((i) => isItemVisible(i, { allowedModules: '*', permissions }) && !(liveOnly.has(m.id) && !i.permission)),
-                }))
-                .filter((g) => g.items.length > 0),
-            }
-          : m,
-      )
-      .filter((m) => m.groups.length > 0);
+    // the prototype without a session (design review): the prototype role's modules
+    return visibleModules(NAV_MODULES, { allowedModules: source.allowedModules(role), showPendingDecisions: false });
   }, [role, source, permissions]);
   const counts = React.useMemo(() => source.badgeCounts(role), [role, source]);
-  const match = React.useMemo(() => matchRoute(modules, pathname), [modules, pathname]);
+  // the route's place in the whole navigation (breadcrumb, title), also for a page that is not one of the user's menus
+  const match = React.useMemo(() => matchRoute(NAV_MODULES, pathname), [pathname]);
   // A module previewed from the primary sidebar applies only to the route it was chosen on.
   const [preview, setPreview] = React.useState<{ pathname: string; moduleId: string } | undefined>(undefined);
   const menuModuleId = preview?.pathname === pathname ? preview.moduleId : undefined;

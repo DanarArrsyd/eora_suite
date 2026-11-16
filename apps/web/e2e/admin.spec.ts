@@ -219,7 +219,7 @@ test('users: suspending asks for confirmation first', async ({ page }) => {
 });
 
 test('users: without the view permission the page says so instead of failing', async ({ page }) => {
-  await mockApi(page, '/auth/me', { status: 200, json: SESSION });
+  await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: [] } });
   await page.goto('/admin/users');
   await expect(page.getByText('Users is not available for your roles')).toBeVisible();
 });

@@ -130,8 +130,7 @@ export const PRODUCTION_RUNS: MasterResource<RunRow> = {
   resource: 'production.runs',
   permission: { view: 'production.run.view', create: 'production.run.post', label: 'production runs' },
   title: 'Production Runs',
-  description:
-    'A work order made at one work center. The production leader opens the run, posts what was consumed, made and scrapped, and closes it. Material is consumed only as measured.',
+  description: 'Production runs per work order and work center.',
   itemLabel: 'runs',
   singular: 'run',
   createLabel: 'Open run',
@@ -164,8 +163,7 @@ export const PRODUCTION_POSTINGS: MasterResource<PostingRow> = {
   permission: { view: 'production.posting.view', create: 'production.posting.post', label: 'production postings' },
   noCreate: true,
   title: 'Production Postings',
-  description:
-    'What each run consumed, made and scrapped, one document per run, production date and shift. A wrong posting is reversed and posted again as a correction.',
+  description: 'What each run consumed, made and scrapped.',
   itemLabel: 'postings',
   singular: 'posting',
   searchPlaceholder: 'Search posting, run or work order…',
@@ -278,7 +276,7 @@ function OpenRunPage({ initialWo }: { initialWo: string }) {
   return (
     <EnterprisePage
       title="Open run"
-      description="A run is one work order made at one work center. Its material must be issued to that work center first."
+      description="Open a run for a work order at a work center."
       actions={
         <Button onClick={() => router.push('/production/runs')}>
           <ArrowLeft aria-hidden="true" className="size-4" />

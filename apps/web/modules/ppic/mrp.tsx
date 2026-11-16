@@ -102,8 +102,7 @@ export const MRP_RUNS: MasterResource<RunRow> = {
   permission: { view: 'planning.mrp.view', create: 'planning.mrp.create', label: 'MRP runs' },
   noCreate: true,
   title: 'MRP Results',
-  description:
-    'What to make and what to buy for the approved MPS: planned work orders for finished and semi-finished items, and the materials that run short, with the day they are needed and the day to order by. Run MRP from an approved Master Production Schedule.',
+  description: 'What to make and what to buy for the approved MPS.',
   itemLabel: 'runs',
   singular: 'run',
   searchPlaceholder: 'Search MRP run…',

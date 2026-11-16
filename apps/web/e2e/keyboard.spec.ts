@@ -62,8 +62,11 @@ test('mobile navigation: focus management, scroll lock, Escape and backdrop', as
   await expect(trigger).toBeFocused();
   await trigger.click();
   await expect(sheet).toBeVisible();
-  await page.mouse.click(380, 400); // backdrop area right of the sheet
-  await expect(sheet).toBeHidden();
+  // backdrop area right of the sheet; the sheet starts listening for outside clicks a moment after it opens
+  await expect(async () => {
+    await page.mouse.click(380, 400);
+    await expect(sheet).toBeHidden({ timeout: 500 });
+  }).toPass();
 });
 
 test('mobile navigation drill-down navigates and closes', async ({ page }) => {
@@ -73,8 +76,8 @@ test('mobile navigation drill-down navigates and closes', async ({ page }) => {
   const sheet = page.getByRole('dialog', { name: 'EORA Suite' });
   await sheet.getByRole('button', { name: 'All modules' }).click();
   await sheet.getByRole('button', { name: /^Inventory/ }).click();
-  await sheet.getByRole('link', { name: 'Raw Material' }).click();
-  await expect(page).toHaveURL(/\/inventory\/raw-material$/);
+  await sheet.getByRole('link', { name: 'Stock Overview' }).click();
+  await expect(page).toHaveURL(/\/inventory\/stock-overview$/);
   await expect(sheet).toBeHidden();
 });
 
