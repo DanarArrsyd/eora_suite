@@ -168,8 +168,23 @@ final class MrpPlanner
         foreach ($db->select('select id, supply_date::text as d, trim_scale(qty)::text as q from mps_supplies where mps_item_id = ?', [$mpsItem]) as $s) {
             $in->supplies[] = ['key' => 'mps:'.$s->id, 'kind' => 'MPS', 'date' => (string) $s->d, 'qty' => MpsItemInput::num($s->q)];
         }
+        // an MPS order released to a live work order is that work order now: its current quantity (still to make) and due date
+        $ownWo = [];
+        foreach ($own->supplies as $sup) {
+            if ($sup['kind'] === 'WORK_ORDER') {
+                $ownWo[$sup['key']] = $sup;
+            }
+        }
         foreach ($orders as $o) {
-            $in->supplies[] = ['key' => 'mps:'.$o['mps'], 'kind' => 'MPS', 'date' => $o['due'], 'qty' => $o['qty']];
+            $wo = $db->selectOne(
+                "select w.id from work_orders w join mrp_orders x on x.id = w.mrp_order_id where w.status <> 'CANCELLED' and x.mps_planned_order_id = ? limit 1",
+                [$o['mps']],
+            );
+            if ($wo === null) {
+                $in->supplies[] = ['key' => 'mps:'.$o['mps'], 'kind' => 'MPS', 'date' => $o['due'], 'qty' => $o['qty']];
+            } elseif (isset($ownWo[(string) $wo->id])) {
+                $in->supplies[] = $ownWo[(string) $wo->id];
+            }
         }
         // live work orders of the item the MPS did not know (released since, e.g. child work orders from MRP); those it
         // counted, and those released from its own planned orders (counted as those orders above), are not added again
@@ -327,10 +342,11 @@ final class MrpPlanner
             $byOrder[$wo] = [bcadd($byOrder[$wo][0] ?? '0', $required, 6), MpsItemInput::num($m->issued)];
         }
         // work orders released from the plan, still Draft / Waiting for release, have no material lines yet: they need their
-        // components through the BOM in force (the one their release will take), on their planned start (D-125)
+        // components through the BOM in force (the one their release will take), on their current start (D-125)
         foreach ($db->select(
-            "select w.id, trim_scale(w.qty * l.gross_qty_per)::text as need, l.uom_id, i.base_uom_id, mo.start_date::text as start
-               from work_orders w join mrp_orders mo on mo.id = w.mrp_order_id
+            "select w.id, trim_scale(w.qty * l.gross_qty_per)::text as need, l.uom_id, i.base_uom_id, w.due_date::text as due,
+                    (select p.production_lead_time_days from item_plan_parameters p where p.plant_id = w.plant_id and p.item_id = w.item_id) as lead
+               from work_orders w
                join lateral (select v.id from bom_versions v where v.item_id = w.item_id and v.status in ('APPROVED', 'SUPERSEDED')
                                and v.effective_from <= ?::date and (v.effective_to is null or v.effective_to >= ?::date) order by v.effective_from desc limit 1) b on true
                join bom_lines l on l.bom_version_id = b.id and l.component_item_id = ?
@@ -344,8 +360,10 @@ final class MrpPlanner
 
                 continue;
             }
-            // dated like the planned order it came from, so dated supply (a child work order, inbound) can cover it
-            $in->demands[] = ['key' => 'wo:'.$d->id.':'.count($in->demands), 'kind' => 'FIRM', 'date' => (string) $d->start, 'qty' => $need];
+            // needed on the Draft's start as it stands now (its due date − the item's production lead time), so dated supply
+            // (a child work order, inbound) by then covers it and a rescheduled Draft moves its needs
+            $start = $this->days->back((string) $d->due, $d->lead === null ? 0 : (int) $d->lead);
+            $in->demands[] = ['key' => 'wo:'.$d->id.':'.count($in->demands), 'kind' => 'FIRM', 'date' => $start, 'qty' => $need];
         }
         foreach ($byOrder as [$required, $issued]) {
             $left = bcsub($required, $issued, 6);
