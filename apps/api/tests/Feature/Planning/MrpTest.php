@@ -112,8 +112,7 @@ it('plans a semi-finished component as a child work order after netting its stoc
     // SF-100: its MPS order (safety stock 10) stays, and the FG's 270 become a planned child WO due on the FG order's start,
     // started 1 working day before (Saturday)
     $blank = mrpItem($run, 'SF-100');
-    // (its row is the MPS item's, level 0)
-    expect($blank)->toMatchArray(['kind' => 'MAKE', 'level' => 0])
+    expect($blank)->toMatchArray(['kind' => 'MAKE', 'level' => 1])
         ->and(collect($blank['orders'])->where('source', 'MPS')->pluck('qty')->all())->toBe(['10'])
         ->and(array_values(array_map(static fn (array $o) => [$o['kind'], $o['qty'], $o['dueDate'], $o['startDate'], $o['bomVersionNo']],
             array_filter($blank['orders'], static fn (array $o) => $o['source'] === 'MRP'))))
