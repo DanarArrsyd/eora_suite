@@ -30,6 +30,8 @@ return new class extends Migration
     public function up(): void
     {
         DB::unprepared(<<<'SQL'
+            -- what work orders from the plan, still Draft / Waiting for release, need of an item (dated demand in the run)
+            ALTER TABLE mrp_items ADD COLUMN wo_need numeric(20, 6) NOT NULL DEFAULT 0 CHECK (wo_need >= 0);
             ALTER TABLE work_orders ADD COLUMN mrp_order_id uuid;
             ALTER TABLE work_orders ADD CONSTRAINT work_orders_mrp_order_fk FOREIGN KEY (tenant_id, mrp_order_id) REFERENCES mrp_orders (tenant_id, id);
             ALTER TABLE work_orders DROP CONSTRAINT work_orders_reason_code_check;
@@ -104,6 +106,7 @@ return new class extends Migration
               CHECK (reason_code IN ('URGENT_ORDER', 'NO_MPS_YET', 'SAMPLE_TRIAL', 'NG_REPLACEMENT', 'OTHER'));
             ALTER TABLE work_orders DROP CONSTRAINT IF EXISTS work_orders_mrp_order_fk;
             ALTER TABLE work_orders DROP COLUMN IF EXISTS mrp_order_id;
+            ALTER TABLE mrp_items DROP COLUMN IF EXISTS wo_need;
             SQL);
     }
 

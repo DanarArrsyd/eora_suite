@@ -77,6 +77,7 @@ type RunItem = {
   level: number;
   onHand: string;
   committed: string;
+  plannedWorkOrderNeed: string;
   safetyStock: string | null;
   leadTimeDays: number | null;
   warnings: string[];
@@ -417,6 +418,7 @@ function RunPage({ id }: { id: string }) {
                   <th className="px-2 py-2 text-right font-medium">Needed</th>
                   <th className="px-2 py-2 text-right font-medium">On hand</th>
                   <th className="px-2 py-2 text-right font-medium">For released WOs</th>
+                  <th className="px-2 py-2 text-right font-medium">For WOs from the plan</th>
                   <th className="px-2 py-2 text-right font-medium">Incoming</th>
                   <th className="px-2 py-2 text-right font-medium">Safety stock</th>
                   <th className="px-2 py-2 text-right font-medium">Lead time</th>
@@ -439,6 +441,7 @@ function RunPage({ id }: { id: string }) {
                       {i.onHand} {i.uomCode}
                     </td>
                     <td className="px-2 py-2 text-right tabular-nums">{i.committed}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{Number(i.plannedWorkOrderNeed) === 0 ? '—' : i.plannedWorkOrderNeed}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{sum(i.supplies.map((s) => s.qty)) || '—'}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{i.safetyStock ?? <Badge tone="neutral">Not configured</Badge>}</td>
                     <td className="px-2 py-2 text-right tabular-nums">
