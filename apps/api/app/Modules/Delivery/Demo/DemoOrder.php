@@ -106,8 +106,11 @@ final class DemoOrder
             if ($version->status === 'APPROVED') {
                 continue;
             }
-            $approver = $this->approver($tenant, $spec, $table, (string) $version->id)
-                ?? throw new RuntimeException("{$what} of BRK-A100 was prepared by its only approver (csa@). Add a second approver with eora:demo:uat-account, or approve it in UAT §2, then run again.");
+            // the Supervisor edits or submits the draft when it must start today or is still a draft: then it becomes a
+            // contributor and may not approve it, so the approver is someone else (Codex on #92)
+            $writes = $version->effective_from < $today || $version->status === 'DRAFT';
+            $approver = $this->approver($tenant, $spec, $table, (string) $version->id, $writes ? $sup : null)
+                ?? throw new RuntimeException("{$what} of BRK-A100 has no approver who neither prepared nor edits it (csa@ or uat@, distinct from the Supervisor). Approve it in UAT §2, or seed a new demo tenant (it has its own sup@), then run again.");
             // a draft imported days ago starts in the past: withdrawn when asked already, the Supervisor moves it to today
             if ($version->effective_from < $today) {
                 if ($version->status === 'SUBMITTED') {
@@ -241,16 +244,17 @@ final class DemoOrder
         return ['so' => (string) $line->so_no, 'wo' => (string) $flow->wo_no, 'shipment' => (string) $shipment['docNo'], 'lot' => (string) $posted['lotNo']];
     }
 
-    /** The first of csa@ and uat@ who may approve and neither prepared nor edited the version (SoD, D-060). */
-    private function approver(string $tenant, DemoSpec $spec, string $table, string $version): ?string
+    /** The first of csa@ and uat@ who may approve, neither prepared nor edited the version and is not $writer (SoD, D-060). */
+    private function approver(string $tenant, DemoSpec $spec, string $table, string $version, ?string $writer = null): ?string
     {
         $row = $this->system($tenant, fn (EoraPostgresConnection $db) => $db->selectOne(
             "select u.id from users u join memberships m on m.user_id = u.id and m.status = 'ACTIVE'
               where u.email_display in (?, ?)
                 and u.id is distinct from (select v.prepared_by from {$table}s v where v.id = ?)
                 and not exists (select 1 from {$table}_contributors c where c.{$table}_id = ? and c.actor = u.id)
+                and u.id is distinct from ?::uuid
               order by u.email_display = ? desc limit 1",
-            [$spec->email('csa'), $spec->email('uat'), $version, $version, $spec->email('csa')]));
+            [$spec->email('csa'), $spec->email('uat'), $version, $version, $writer, $spec->email('csa')]));
 
         return $row === null ? null : (string) $row->id;
     }
