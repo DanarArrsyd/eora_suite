@@ -132,3 +132,12 @@ it('lets the plan date receipts cover safety stock before planning to restore it
 
     expect($plan['plannedOrders'])->toBe([]);
 });
+
+it('covers shortages in whole units when asked, carrying what the rounding adds to the next demand (Codex #89)', function () {
+    $plan = (new MpsEngine(new WorkingDays))->plan(mpsItem([
+        'demands' => [firm('w1', '2026-10-06', '10.5'), firm('w2', '2026-10-13', '10.5')],
+    ]), '2026-10-05', 12, '2026-10-05', 0);
+
+    expect(planned($plan))->toBe(['2026-10-05' => '11', '2026-10-12' => '10'])
+        ->and(array_map(static fn (array $o) => (float) $o['pegs'][0]['qty'], $plan['plannedOrders']))->toBe([10.5, 10.0]);
+});

@@ -171,6 +171,22 @@ final class MrpPlanner
         foreach ($orders as $o) {
             $in->supplies[] = ['key' => 'mps:'.$o['mps'], 'kind' => 'MPS', 'date' => $o['due'], 'qty' => $o['qty']];
         }
+        // live work orders of the item the MPS did not know (released since, e.g. child work orders from MRP); those it
+        // counted, and those released from its own planned orders (counted as those orders above), are not added again
+        $known = [];
+        foreach ($db->select(
+            'select s.work_order_id as id from mps_supplies s where s.mps_item_id = ? and s.work_order_id is not null
+             union select w.id from work_orders w join mrp_orders x on x.id = w.mrp_order_id join mps_planned_orders p on p.id = x.mps_planned_order_id
+              where p.mps_item_id = ?',
+            [$mpsItem, $mpsItem],
+        ) as $k) {
+            $known[(string) $k->id] = true;
+        }
+        foreach ($own->supplies as $s) {
+            if ($s['kind'] === 'WORK_ORDER' && ! isset($known[$s['key']])) {
+                $in->supplies[] = $s;
+            }
+        }
         $this->netDependent($db, $item, $kind, $row, $in, false);
     }
 
@@ -210,7 +226,8 @@ final class MrpPlanner
             $input->demands[] = ['key' => $req, 'kind' => 'FIRM', 'date' => $d['date'], 'qty' => $d['qty']];
         }
         unset($this->pending[$item]);
-        $plan = (new MpsEngine($this->days))->plan($input->forEngine(), $this->horizonStart, $this->weeks, $this->today);
+        // a work order counts in its unit's decimals: MAKE shortages are covered in whole units (the rest carries on)
+        $plan = (new MpsEngine($this->days))->plan($input->forEngine(), $this->horizonStart, $this->weeks, $this->today, $kind === 'MAKE' ? $this->decimals($db, $item) : null);
         foreach ($writeSupply ? $plan['supplies'] : [] as $s) {
             $db->insert(
                 'insert into mrp_supplies (tenant_id, mrp_run_id, mrp_item_id, kind, inbound_line_id, work_order_id, supply_date, qty)
@@ -221,8 +238,7 @@ final class MrpPlanner
         foreach ($plan['plannedOrders'] as $o) {
             $warnings = array_values(array_filter([$o['startDate'] < $this->today ? 'LATE_START' : null, $input->leadTimeDays === null ? 'LEAD_TIME_NOT_CONFIGURED' : null]));
             $id = $kind === 'MAKE'
-                // a work order counts in its unit's decimals: the planned quantity is rounded up to them
-                ? $this->makeOrder($db, $item, 'MRP', null, $o['weekStart'], $this->roundUp($db, $item, $o['qty']), $o['dueDate'], $o['startDate'], $warnings)
+                ? $this->makeOrder($db, $item, 'MRP', null, $o['weekStart'], $o['qty'], $o['dueDate'], $o['startDate'], $warnings)
                 : $this->insertOrder($db, $item, 'BUY', 'MRP', null, $o['weekStart'], $o['qty'], $o['dueDate'], $o['startDate'], null, $warnings);
             foreach ($o['pegs'] as $p) {
                 if ($p['demand'] !== null && (str_starts_with($p['demand'], 'mps:') || str_starts_with($p['demand'], 'wo:'))) {
@@ -439,16 +455,9 @@ final class MrpPlanner
         $this->itemWarnings = [];
     }
 
-    /**
-     * @param  numeric-string  $qty
-     * @return numeric-string the quantity rounded up to the decimals of the item's base unit
-     */
-    private function roundUp(EoraPostgresConnection $db, string $item, string $qty): string
+    private function decimals(EoraPostgresConnection $db, string $item): int
     {
-        $decimals = (int) $db->selectOne('select u.decimals from items i join uoms u on u.id = i.base_uom_id where i.id = ?', [$item])->decimals;
-        $down = bcadd($qty, '0', $decimals);
-
-        return bccomp($down, $qty, 6) < 0 ? bcadd($down, bcpow('10', (string) -$decimals, $decimals), $decimals) : $down;
+        return (int) $db->selectOne('select u.decimals from items i join uoms u on u.id = i.base_uom_id where i.id = ?', [$item])->decimals;
     }
 
     /** @return numeric-string what work orders from the plan still Draft need of the item (its `wo:` demand) */
