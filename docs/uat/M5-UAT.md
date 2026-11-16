@@ -52,3 +52,22 @@ Persiapan: `eora:tenants:sync` (izin `demand.forecast`). Satu SO OEM-A confirmed
 | 8 | Alokasikan FG ke salah satu baris revisi (Delivery → Allocation & Pick), lalu coba **Revise** baris itu. | Ditolak: lepas alokasi / kembalikan yang di-stage dulu. | |
 | 9 | Login `dlv` → Demand → Forecast. | Daftar terlihat, tanpa tombol tambah. | |
 
+## 3. Master Production Schedule (langkah 3, D-123)
+Persiapan: forecast aktif OEM-A di P1 untuk BRK-A100 (§2), mis. 700 PCS dua minggu lagi. Hari kerja Senin–Sabtu.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `ppc` → PPIC → **Master Production Schedule** → **Calculate MPS** → P1 → simpan. | Halaman `MPS-P1-<tahun>-0001`, **Draft**, 12 minggu mulai Senin minggu ini. | |
+| 2 | Lihat kartu BRK-A100. | FG on hand dipakai sekali (baris Opening balance minggu pertama = on hand − safety stock); Firm orders dan Net forecast per minggu; **Pending QC (not netted)** tampil tapi tidak mengurangi kebutuhan; safety stock kosong tampil **Not configured**. | |
+| 3 | Lihat **Planned orders**. | Satu baris per minggu yang kurang; **Due** = hari pertama yang tidak tertutup; **Start** = lead time hari kerja sebelumnya (Sabtu dihitung kerja); **Covers** menyebut SO / forecast yang ditutup. | |
+| 4 | Buka **Daily due dates and supply**. | Tanggal harian tiap firm order, net forecast, sisa WO dan QC released. | |
+| 5 | **Adjust** satu planned order: qty dinaikkan, Reason "Full die run" → simpan. | "Planned order adjusted"; badge **Adjusted by ppc**, qty hitungan tetap terlihat. | |
+| 6 | Hitung MPS baru untuk P1 lagi (daftar → Calculate MPS). | Ditolak: masih ada draft/submitted; selesaikan atau batalkan dulu. | |
+| 7 | **Submit for approval**. | Status **Submitted**; tidak ada tombol Adjust. | |
+| 8 | Login `ppc` sebagai yang menyiapkan: tidak ada tombol Approve. Login `csa` → buka MPS itu. | Tombol **Return** dan **Approve**. | |
+| 9 | Sebelum approve: login `ppc`, ubah safety stock BRK-A100 di Master Data → Planning Parameters. Login `csa` → buka MPS. | Peringatan **Data changed since this calculation**; **Approve** tidak aktif. | |
+| 10 | **Return** dengan alasan "Safety stock berubah". Login `ppc` → **Recalculate** → **Submit for approval**. | Kembali Draft dengan alasan; setelah hitung ulang, adjustment hilang (diganti hasil hitung) dan kebutuhan naik sebesar perubahan safety stock. | |
+| 11 | Login `csa` → **Approve**. | Status **Approved**. MPS berikutnya yang di-approve membuat yang ini **Superseded**. | |
+| 12 | Lihat **Capacity load**. | Tanpa kalender shift: "Capacity not configured", jam beban per work center, tanpa persen. | |
+| 13 | Login `aud` → PPIC → Master Production Schedule. | Daftar dan halaman terlihat, tanpa tombol aksi. | |
+
