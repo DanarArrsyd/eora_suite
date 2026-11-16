@@ -14,8 +14,10 @@ use App\Platform\Exceptions\DomainProblem;
 use App\Platform\Http\MasterWrites;
 use App\Platform\Query\QueryRunner;
 use DateTimeImmutable;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use LogicException;
 
 /**
@@ -30,6 +32,8 @@ final class MrpController
     private const string VIEW = 'planning.mrp.view';
 
     private const string CREATE = 'planning.mrp.create';
+
+    private const string RELEASE = 'planning.planned_order_release.post';
 
     public function __construct(
         private readonly Authorizer $authorizer,
@@ -82,6 +86,82 @@ final class MrpController
         return $this->respondRun($db, $id);
     }
 
+    /**
+     * Release planned work orders of the run to WO Drafts (D-125), all or nothing: only from the latest run of the plant's
+     * approved MPS (409 otherwise), MAKE orders without a live WO (409 when one has); one WO per planned order, reason
+     * PLANNED, planned quantity and due date (today when passed), pegged to the firm delivery its MPS order covers alone.
+     */
+    public function release(Request $request, string $run): JsonResponse
+    {
+        $data = $request->validate(['orderIds' => ['required', 'array', 'min:1', 'max:200'], 'orderIds.*' => ['required', 'uuid', 'distinct']]);
+        $db = $this->db();
+        $this->authorizer->requireAnywhere($db, self::RELEASE);
+        $id = $this->existing($db, 'mrp_runs', $run);
+        $r = $db->selectOne('select r.id, r.plant_id, r.run_no, r.mps_version_id, r.created_at from mrp_runs r where r.id = ?', [$id]);
+        $this->authorizer->authorize($db, self::RELEASE, $this->plantScope($db, (string) $r->plant_id));
+        // the MPS stays approved while its planned orders are released (an approval of its successor waits)
+        $mps = $db->selectOne('select status from mps_versions where id = ? for share', [$r->mps_version_id]);
+        $latest = $db->selectOne('select id from mrp_runs where mps_version_id = ? order by created_at desc, id desc limit 1', [$r->mps_version_id]);
+        if ($mps->status !== 'APPROVED' || (string) $latest->id !== (string) $r->id) {
+            throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Not the current plan', "{$r->run_no} is not the latest MRP run of the plant’s approved MPS; release from the latest run.");
+        }
+        $plant = $db->selectOne('select code from plants where id = ?', [$r->plant_id]);
+        $today = $this->calendar->resolve($db, (string) $r->plant_id, new DateTimeImmutable)->calendarDate;
+        foreach (array_values(array_unique(array_map('strtolower', $data['orderIds']))) as $n => $orderId) {
+            $o = $db->selectOne(
+                'select o.id, o.kind, o.mps_planned_order_id, trim_scale(o.qty)::text as qty, o.due_date::text as due, mi.item_id, i.base_uom_id
+                   from mrp_orders o join mrp_items mi on mi.id = o.mrp_item_id join items i on i.id = mi.item_id where o.id = ? and o.mrp_run_id = ?',
+                [$orderId, $r->id],
+            ) ?? throw ValidationException::withMessages(["orderIds.{$n}" => 'This planned order is not in this run.']);
+            if ($o->kind !== 'MAKE') {
+                throw ValidationException::withMessages(["orderIds.{$n}" => 'A material shortage is bought, not released to a work order.']);
+            }
+            // one live WO per planned order, and per MPS planned order across MRP runs of the same MPS
+            if ($db->selectOne(
+                "select 1 as ok from work_orders w join mrp_orders x on x.id = w.mrp_order_id
+                  where w.status <> 'CANCELLED' and (x.id = ? or (?::uuid is not null and x.mps_planned_order_id = ?::uuid))",
+                [$o->id, $o->mps_planned_order_id, $o->mps_planned_order_id],
+            ) !== null) {
+                throw self::alreadyReleased();
+            }
+            // the firm delivery the MPS order covers alone (BR-DEM-12)
+            $line = $o->mps_planned_order_id === null ? null : $db->select(
+                "select distinct d.schedule_line_id from mps_pegs p join mps_demands d on d.id = p.mps_demand_id join delivery_schedule_lines s on s.id = d.schedule_line_id
+                  where p.planned_order_id = ? and d.kind = 'FIRM' and s.status in ('FIRM', 'PARTIALLY_FULFILLED')",
+                [$o->mps_planned_order_id],
+            );
+            $year = (int) substr($today, 0, 4);
+            $number = (int) $db->selectOne(
+                "insert into document_counters (tenant_id, plant_id, doc_type, year, last_no) values ((select c.tenant from ctx_api.context() c), ?, 'WORK_ORDER', ?, 1)
+                 on conflict (tenant_id, plant_id, doc_type, year) do update set last_no = document_counters.last_no + 1 returning last_no",
+                [$r->plant_id, $year],
+            )->last_no;
+            $woNo = sprintf('WO-%s-%d-%04d', $plant->code, $year, $number);
+            try {
+                $wo = (string) $db->selectOne(
+                    "insert into work_orders (tenant_id, plant_id, wo_no, item_id, uom_id, qty, due_date, reason_code, note, schedule_line_id, mrp_order_id)
+                     values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, 'PLANNED', ?, ?, ?) returning id",
+                    [$r->plant_id, $woNo, $o->item_id, $o->base_uom_id, $o->qty, max((string) $o->due, $today), "From {$r->run_no}",
+                        $line !== null && count($line) === 1 ? (string) $line[0]->schedule_line_id : null, $o->id],
+                )->id;
+            } catch (QueryException $e) {
+                // another planner released it at the same moment (work_orders_mrp_order_uq)
+                if ($e->getCode() === '23505') {
+                    throw self::alreadyReleased();
+                }
+                throw $e;
+            }
+            $this->audit->record($db, 'work_order.created', 'work_order', $wo, null, $this->state($db, 'work_orders', $wo), ['woNo' => $woNo, 'plannedFrom' => $r->run_no], (string) $r->plant_id);
+        }
+
+        return $this->respondRun($db, $id);
+    }
+
+    private static function alreadyReleased(): DomainProblem
+    {
+        return new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Already released', 'A selected planned order already has a work order; refresh and choose again.');
+    }
+
     private function respondRun(EoraPostgresConnection $db, string $id, int $status = 200): JsonResponse
     {
         $row = $this->rows->find($db, new MrpRunsQuery, $id) ?? throw new LogicException('Written row not visible.');
@@ -119,16 +199,22 @@ final class MrpController
             $pegs[(string) $p->order_id][] = ['requirementId' => $p->requirement_id === null ? null : (string) $p->requirement_id, 'qty' => (string) $p->qty];
         }
         foreach ($db->select(
-            'select o.id, o.mrp_item_id, o.kind, o.source, o.week_start::text as week, trim_scale(o.qty)::text as qty, o.due_date::text as due, o.start_date::text as start,
-                    o.warnings::text as warnings, b.version_no as bom_version
-               from mrp_orders o left join bom_versions b on b.id = o.bom_version_id where o.mrp_run_id = ? order by o.due_date, o.id',
+            "select o.id, o.mrp_item_id, o.kind, o.source, o.week_start::text as week, trim_scale(o.qty)::text as qty, o.due_date::text as due, o.start_date::text as start,
+                    o.warnings::text as warnings, b.version_no as bom_version, w.id as wo_id, w.wo_no, w.status as wo_status
+               from mrp_orders o left join bom_versions b on b.id = o.bom_version_id
+               left join work_orders w on w.mrp_order_id = o.id and w.status <> 'CANCELLED'
+              where o.mrp_run_id = ? order by o.due_date, o.id",
             [$id],
         ) as $o) {
             $items[(string) $o->mrp_item_id]['orders'][] = ['id' => (string) $o->id, 'kind' => (string) $o->kind, 'source' => (string) $o->source,
                 'weekStart' => (string) $o->week, 'qty' => (string) $o->qty, 'dueDate' => (string) $o->due, 'startDate' => (string) $o->start,
-                'bomVersionNo' => $o->bom_version === null ? null : (int) $o->bom_version, 'warnings' => self::list((string) $o->warnings), 'pegs' => $pegs[(string) $o->id] ?? []];
+                'bomVersionNo' => $o->bom_version === null ? null : (int) $o->bom_version, 'warnings' => self::list((string) $o->warnings), 'pegs' => $pegs[(string) $o->id] ?? [],
+                'workOrder' => $o->wo_id === null ? null : ['id' => (string) $o->wo_id, 'code' => (string) $o->wo_no, 'status' => (string) $o->wo_status]];
         }
         $row['items'] = array_values($items);
+        $r = $db->selectOne('select r.mps_version_id, m.status from mrp_runs r join mps_versions m on m.id = r.mps_version_id where r.id = ?', [$id]);
+        $latest = $db->selectOne('select id from mrp_runs where mps_version_id = ? order by created_at desc, id desc limit 1', [$r->mps_version_id]);
+        $row['releasable'] = $r->status === 'APPROVED' && (string) $latest->id === $id;
 
         return response()->json(['data' => $row], $status);
     }

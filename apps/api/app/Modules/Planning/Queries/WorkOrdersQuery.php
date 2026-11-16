@@ -52,7 +52,9 @@ final class WorkOrdersQuery extends QueryDefinition
                  left join users ucr on ucr.id = w.created_by
                  left join users usb on usb.id = w.submitted_by
                  left join users url on url.id = w.released_by
-                 left join users ucn on ucn.id = w.cancelled_by';
+                 left join users ucn on ucn.id = w.cancelled_by
+                 left join mrp_orders mo on mo.tenant_id = w.tenant_id and mo.id = w.mrp_order_id
+                 left join mrp_runs mr on mr.tenant_id = mo.tenant_id and mr.id = mo.mrp_run_id';
     }
 
     public function filterFrom(): string
@@ -91,7 +93,9 @@ final class WorkOrdersQuery extends QueryDefinition
             new Field('qty', 'trim_scale(w.qty)::text'),
             new Field('uomCode', 'u.code'),
             new Field('dueDate', 'w.due_date::text', sortable: true),
-            new Field('reasonCode', 'w.reason_code', Field::ENUM, filterable: true, options: WorkOrderController::REASONS),
+            new Field('reasonCode', 'w.reason_code', Field::ENUM, filterable: true, options: WorkOrderController::ALL_REASONS),
+            new Field('mrpOrderId', 'w.mrp_order_id', Field::UUID, filterable: true),
+            new Field('plannedFrom', 'mr.run_no'),
             new Field('note', 'w.note'),
             new Field('scheduleLineId', 'w.schedule_line_id', Field::UUID, filterable: true),
             new Field('salesOrderId', 'sh.id', Field::UUID),

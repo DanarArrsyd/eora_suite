@@ -156,6 +156,7 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         // D-124: MRP run (snapshot) from the approved MPS
         'v1.planning.mrp-runs.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.planning.mrp-runs.show' => self::TENANT_READ + [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN'], 404 => ['NOT_FOUND']],
+        'v1.planning.mrp-runs.release' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.inventory.inbound-lines.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 422 => ['VALIDATION_FAILED']],
         'v1.inventory.inbound-lines.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
         'v1.inventory.inbound-lines.cancel' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],

@@ -50,6 +50,9 @@ final class WorkOrderController
     /** G-MPS-6 planning-exception reasons (D-109; tenant configuration later); OTHER needs a note. */
     public const array REASONS = ['URGENT_ORDER', 'NO_MPS_YET', 'SAMPLE_TRIAL', 'NG_REPLACEMENT', 'OTHER'];
 
+    /** Reasons a work order shows: the exceptions, or PLANNED for one released from the plan (D-125). */
+    public const array ALL_REASONS = [...self::REASONS, 'PLANNED'];
+
     public const string QTY = '/^\d{1,14}(\.\d{1,6})?$/';
 
     /** Statuses a work order is closed from (D-117). */
@@ -122,6 +125,15 @@ final class WorkOrderController
         $db = $this->db();
         $wo = $this->writable($db, $order, ['DRAFT']);
         $this->authorizer->authorize($db, self::CREATE, $this->plantScope($db, (string) $wo->plant_id));
+        // a work order from the plan keeps its item and its source (D-125)
+        if ($wo->mrp_order_id !== null) {
+            if (isset($data['itemId']) && strtolower($data['itemId']) !== (string) $wo->item_id) {
+                throw ValidationException::withMessages(['itemId' => 'A work order from the plan keeps its item.']);
+            }
+            if (isset($data['reasonCode'])) {
+                throw ValidationException::withMessages(['reasonCode' => 'A work order from the plan has no planning-exception reason.']);
+            }
+        }
         $merged = [
             'itemId' => $data['itemId'] ?? $wo->item_id,
             'qty' => $data['qty'] ?? self::plain((string) $wo->qty),
@@ -319,8 +331,8 @@ final class WorkOrderController
             'select i.id, i.item_type, i.status, i.base_uom_id, u.code as uom, u.decimals from items i join uoms u on u.id = i.base_uom_id where i.id = ?',
             [strtolower((string) $data['itemId'])],
         );
-        if ($item === null || $item->item_type !== 'FINISHED' || $item->status !== 'ACTIVE') {
-            throw ValidationException::withMessages(['itemId' => 'Choose an active finished item (Semi-Finished work orders come with M5).']);
+        if ($item === null || ! in_array($item->item_type, ['FINISHED', 'SEMI_FINISHED'], true) || $item->status !== 'ACTIVE') {
+            throw ValidationException::withMessages(['itemId' => 'Choose an active finished or semi-finished item.']);
         }
         $qty = (string) $data['qty'];
         if (! is_numeric($qty) || bccomp($qty, '0', 6) <= 0) {

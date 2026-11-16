@@ -37,6 +37,7 @@ export type WorkOrderRow = {
   uomCode: string;
   dueDate: string;
   reasonCode: string;
+  plannedFrom: string | null;
   note: string | null;
   scheduleLineId: string | null;
   salesOrderId: string | null;
@@ -109,7 +110,7 @@ export const WO_REASONS: Option[] = [
   { value: 'NG_REPLACEMENT', label: 'Replacement of NG output' },
   { value: 'OTHER', label: 'Other (explain in the note)' },
 ];
-const reason = (code: string) => WO_REASONS.find((r) => r.value === code)?.label ?? code;
+const reason = (code: string) => (code === 'PLANNED' ? 'From the plan (MRP)' : (WO_REASONS.find((r) => r.value === code)?.label ?? code));
 const STATUS_OPTIONS: Option[] = [
   { value: 'DRAFT', label: 'Draft' },
   { value: 'SUBMITTED', label: 'Waiting for release' },
@@ -129,7 +130,7 @@ function fields(minDate?: string): MasterResource<WorkOrderRow>['fields'] {
       kind: 'select',
       required: true,
       options: 'finishedItems',
-      hint: 'A finished item; its approved BOM and routing are copied at release.',
+      hint: 'A finished or semi-finished item; its approved BOM and routing are copied at release.',
     },
     {
       key: 'qty',
@@ -323,7 +324,8 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
     });
   const editConfig: MasterResource<WorkOrderRow> = {
     ...workOrders(base),
-    fields: fields(o.plantToday).filter((f) => !f.createOnly),
+    // a work order from the plan keeps its item and has no planning-exception reason (D-125)
+    fields: fields(o.plantToday).filter((f) => !f.createOnly && !(o.plannedFrom && (f.key === 'itemId' || f.key === 'reasonCode'))),
     drawerTitle: () => `Edit ${o.code}`,
     update: (_row: WorkOrderRow, v: FormValues) =>
       call(() =>
@@ -331,10 +333,11 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
           params: { path: { order: id } },
           headers: ifMatch(o.version),
           body: {
-            itemId: v.itemId!,
+            ...(o.plannedFrom
+              ? {}
+              : { itemId: v.itemId!, reasonCode: v.reasonCode as 'URGENT_ORDER' | 'NO_MPS_YET' | 'SAMPLE_TRIAL' | 'NG_REPLACEMENT' | 'OTHER' }),
             qty: v.qty!,
             dueDate: v.dueDate!,
-            reasonCode: v.reasonCode as 'URGENT_ORDER' | 'NO_MPS_YET' | 'SAMPLE_TRIAL' | 'NG_REPLACEMENT' | 'OTHER',
             note: v.note || null,
             scheduleLineId: v.scheduleLineId || null,
           },
@@ -356,7 +359,7 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
     { label: 'Quantity', value: <span className="font-semibold tabular-nums">{`${o.qty} ${o.uomCode}`}</span> },
     { label: 'Due', value: o.dueDate },
     { label: 'Plant', value: o.plantCode },
-    { label: 'Reason', value: reason(o.reasonCode) },
+    { label: 'Reason', value: o.plannedFrom ? `From the plan (${o.plannedFrom})` : reason(o.reasonCode) },
     { label: 'Note', value: o.note ?? '—' },
     { label: 'For delivery', value: o.salesOrderCode ? `${o.salesOrderCode} · ${o.customerCode} · ${o.scheduleDate} · ${o.scheduleQty} ${o.uomCode}` : '—' },
     { label: 'Created', value: `${when(o.createdAt)}${o.createdByName ? ` · ${o.createdByName}` : ''}` },

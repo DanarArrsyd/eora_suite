@@ -84,3 +84,17 @@ Persiapan: `eora:tenants:sync` (izin baru `planning.mrp`). MPS P1 sudah **Approv
 | 6 | Coba Run MRP dari MPS Draft/Submitted. | Tidak ada tombol Run MRP. | |
 | 7 | Login `mat` → PPIC → MRP Results. | Daftar run dan halaman run terlihat, tanpa tombol Run MRP. | |
 
+## 5. Planned order → WO (langkah 5, D-125)
+Persiapan: MPS P1 Approved dan run MRP terbaru (§4).
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `ppc` → PPIC → MRP Results → run terbaru. | Di **Planned work orders** ada kotak centang dan tombol **Release to WO** (nonaktif sebelum ada yang dicentang). | |
+| 2 | Centang satu atau semua planned order → **Release to WO** → konfirmasi. | Pesan "Work order(s) WO-… drafted"; kolom **Work order** menampilkan nomornya; centangnya tidak bisa dipilih lagi. | |
+| 3 | Klik nomor WO. | WO **Draft**, qty dan due date sesuai plan, Reason "From the plan (MRP-…)". | |
+| 4 | **Edit** WO itu: ubah qty. | Tersimpan; field item dan reason tidak tampil (tetap dari plan). | |
+| 5 | Kembali ke MPS → hitung MPS baru untuk P1 (Calculate MPS). | Minggu yang sudah punya WO tidak direncanakan lagi; WO tampil di "Daily due dates and supply" sebagai supply. | |
+| 6 | **Run MRP** lagi dari MPS approved yang sama → coba rilis planned order FG yang sama dari run baru. | Ditolak "Already released". Dari run lama: ditolak "Not the current plan". | |
+| 7 | WO: **Submit for release**; login `csa` → **Release**. | Release seperti biasa oleh orang kedua (snapshot BOM/routing). | |
+| 8 | Login `mat` → MRP Results → run. | Tanpa kotak centang / tombol Release to WO. | |
+

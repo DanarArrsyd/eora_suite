@@ -22,8 +22,9 @@ use stdClass;
  *   per week, lead time in working days): semi-finished (MAKE) → planned child work orders, exploded in turn; raw
  *   material / consumable (BUY) → the shortage list, need date and order-by date = need − purchase lead time;
  * - supply: on hand UNRESTRICTED at the plant (not at production, staging, in transit or virtual) minus what released
- *   work orders still need of it (committed), plus supplier inbound (open, on its expected date) and the remaining output
- *   of released work orders (on their due date); safety stock per item + plant.
+ *   work orders still need of it (committed; a WO released from the plan and still Draft through the BOM in force), plus
+ *   supplier inbound (open, on its expected date) and the remaining output of released work orders and of WOs from the
+ *   plan (on their due date, D-125); safety stock per item + plant.
  * An item the MPS plans keeps its MPS orders; dependent demand on it is netted against the MPS's own position.
  */
 final class MrpPlanner
@@ -283,6 +284,26 @@ final class MrpPlanner
             }
             $byOrder[$wo] = [bcadd($byOrder[$wo][0] ?? '0', $required, 6), MpsItemInput::num($m->issued)];
         }
+        // work orders released from the plan, still Draft / Waiting for release, have no material lines yet: they need their
+        // components through the BOM in force (the one their release will take) (D-125)
+        foreach ($db->select(
+            "select w.id, trim_scale(w.qty * l.gross_qty_per)::text as need, l.uom_id, i.base_uom_id
+               from work_orders w
+               join lateral (select v.id from bom_versions v where v.item_id = w.item_id and v.status in ('APPROVED', 'SUPERSEDED')
+                               and v.effective_from <= ?::date and (v.effective_to is null or v.effective_to >= ?::date) order by v.effective_from desc limit 1) b on true
+               join bom_lines l on l.bom_version_id = b.id and l.component_item_id = ?
+               join items i on i.id = l.component_item_id
+              where w.plant_id = ? and w.status in ('DRAFT', 'SUBMITTED') and w.mrp_order_id is not null",
+            [$this->today, $this->today, $item, $this->plant],
+        ) as $d) {
+            $need = $this->toBase($db, $item, (string) $d->uom_id, (string) $d->base_uom_id, MpsItemInput::num($d->need), $this->today);
+            if ($need === null) {
+                $this->itemWarnings[$item]['UOM_CONVERSION_MISSING'] = true;
+
+                continue;
+            }
+            $byOrder['plan:'.$d->id] = [bcadd($byOrder['plan:'.$d->id][0] ?? '0', $need, 6), '0'];
+        }
         foreach ($byOrder as [$required, $issued]) {
             $left = bcsub($required, $issued, 6);
             if (bccomp($left, '0', 6) > 0) {
@@ -308,7 +329,8 @@ final class MrpPlanner
                                      join inventory_documents d on d.id = m.document_id and d.doc_type = 'PRODUCTION_POSTING' and d.status = 'POSTED'
                                      join production_runs r on r.id = d.source_id
                                     where r.work_order_id = w.id and m.movement_code = 'OUTPUT_GOOD' and m.qty_signed > 0) g
-              where w.plant_id = ? and w.item_id = ? and w.status in ('".implode("', '", self::OPEN_WO)."') and w.qty > g.good order by w.id",
+              where w.plant_id = ? and w.item_id = ? and (w.status in ('".implode("', '", self::OPEN_WO)."') or (w.status in ('DRAFT', 'SUBMITTED') and w.mrp_order_id is not null))
+                and w.qty > g.good order by w.id",
             [$this->plant, $item],
         ) as $w) {
             $in->supplies[] = ['key' => (string) $w->id, 'kind' => 'WORK_ORDER', 'date' => (string) $w->due, 'qty' => MpsItemInput::num($w->q)];
