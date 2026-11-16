@@ -80,6 +80,8 @@ return new class extends Migration
               committed numeric(20, 6) NOT NULL CHECK (committed >= 0),
               safety_stock numeric(20, 6) CHECK (safety_stock >= 0),
               lead_time_days integer CHECK (lead_time_days >= 0),
+              -- UOM_CONVERSION_MISSING: a released work order's requirement could not be converted (not netted)
+              warnings text[] NOT NULL DEFAULT '{}',
               created_at timestamptz NOT NULL,
               created_by uuid NOT NULL,
               updated_at timestamptz NOT NULL,

@@ -88,14 +88,14 @@ final class MrpController
         $items = [];
         foreach ($db->select(
             'select mi.id, mi.item_id, i.code, i.name, i.item_type, u.code as uom, u.decimals, mi.kind, mi.level, trim_scale(mi.on_hand)::text as on_hand,
-                    trim_scale(mi.committed)::text as committed, trim_scale(mi.safety_stock)::text as ss, mi.lead_time_days as lead
+                    trim_scale(mi.committed)::text as committed, trim_scale(mi.safety_stock)::text as ss, mi.lead_time_days as lead, mi.warnings::text as warnings
                from mrp_items mi join items i on i.id = mi.item_id join uoms u on u.id = mi.uom_id where mi.mrp_run_id = ? order by mi.level, i.code',
             [$id],
         ) as $r) {
             $items[(string) $r->id] = ['id' => (string) $r->id, 'itemId' => (string) $r->item_id, 'itemCode' => (string) $r->code, 'itemName' => (string) $r->name,
                 'itemType' => (string) $r->item_type, 'uomCode' => (string) $r->uom, 'uomDecimals' => (int) $r->decimals, 'kind' => (string) $r->kind, 'level' => (int) $r->level,
                 'onHand' => (string) $r->on_hand, 'committed' => (string) $r->committed, 'safetyStock' => $r->ss === null ? null : (string) $r->ss,
-                'leadTimeDays' => $r->lead === null ? null : (int) $r->lead, 'requirements' => [], 'supplies' => [], 'orders' => []];
+                'leadTimeDays' => $r->lead === null ? null : (int) $r->lead, 'warnings' => self::list((string) $r->warnings), 'requirements' => [], 'supplies' => [], 'orders' => []];
         }
         foreach ($db->select(
             'select q.id, q.mrp_item_id, q.due_date::text as due, trim_scale(q.qty)::text as qty, pi.code as parent_code, po.qty as parent_qty, po.id as parent_id

@@ -64,6 +64,7 @@ type RunItem = {
   committed: string;
   safetyStock: string | null;
   leadTimeDays: number | null;
+  warnings: string[];
   requirements: Requirement[];
   supplies: Supply[];
   orders: Order[];
@@ -335,6 +336,11 @@ function RunPage({ id }: { id: string }) {
                   <tr key={i.id} className="border-b border-line">
                     <td className="px-2 py-2">
                       <span className="font-mono">{i.itemCode}</span> <span className="text-ink-2">· {TYPE[i.itemType] ?? i.itemType}</span>
+                      {i.warnings.map((w) => (
+                        <Badge key={w} tone="warning" className="ml-1">
+                          {w === 'UOM_CONVERSION_MISSING' ? 'Released work order not netted: unit conversion missing' : (WARNING[w] ?? w)}
+                        </Badge>
+                      ))}
                     </td>
                     <td className="px-2 py-2 text-right tabular-nums">{i.level}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{sum(i.requirements.map((q) => q.qty)) || '—'}</td>

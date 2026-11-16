@@ -49,6 +49,9 @@ final class MrpPlanner
     /** @var array<string, list<array{parent: string, line: string, date: string, qty: numeric-string}>> item id => dependent demand not yet written */
     private array $pending = [];
 
+    /** @var array<string, array<string, true>> item id => warnings found while reading its inputs */
+    private array $itemWarnings = [];
+
     /**
      * Plans the run from the planned orders of its MPS.
      */
@@ -94,11 +97,7 @@ final class MrpPlanner
                 }
             }
         }
-        // components reached outside the levels (a BOM in force only before or after the horizon), and their descendants
-        for ($guard = 0; $this->pending !== [] && $guard < 1000; $guard++) {
-            $item = (string) array_key_first($this->pending);
-            $this->plan($db, $item, self::MAX_LEVEL, isset($orders[$item]) || isset($this->rows[$item]));
-        }
+        // items with a safety stock and no requirement are planned too, before the descendants are drained
         foreach ($db->select(
             "select p.item_id from item_plan_parameters p join items i on i.id = p.item_id
               where p.plant_id = ? and p.safety_stock > 0 and i.status = 'ACTIVE' and i.item_type in ('SEMI_FINISHED', 'RAW', 'CONSUMABLE') order by p.item_id",
@@ -107,6 +106,11 @@ final class MrpPlanner
             if (! isset($this->rows[(string) $r->item_id]) && ! isset($orders[(string) $r->item_id])) {
                 $this->plan($db, (string) $r->item_id, $levels[(string) $r->item_id] ?? 1);
             }
+        }
+        // components reached outside the levels (a BOM in force only before or after the horizon), and their descendants
+        for ($guard = 0; $this->pending !== [] && $guard < 1000; $guard++) {
+            $item = (string) array_key_first($this->pending);
+            $this->plan($db, $item, self::MAX_LEVEL, isset($orders[$item]) || isset($this->rows[$item]));
         }
     }
 
@@ -214,7 +218,7 @@ final class MrpPlanner
         $committed = '0';
         $byOrder = [];
         foreach ($db->select(
-            "select m.work_order_id, m.uom_id, trim_scale(m.required_qty)::text as required, i.base_uom_id,
+            "select m.work_order_id, m.uom_id, trim_scale(m.required_qty)::text as required, i.base_uom_id, coalesce(w.released_at::date, w.created_at::date)::text as released,
                     coalesce((select sum(g.qty_signed) from inventory_movements g join locations gl on gl.id = g.location_id and gl.location_type = 'MAT_AT_PROD'
                                where g.wo_id = m.work_order_id and g.item_id = m.component_item_id and g.movement_code in ('ISSUE_TO_PROD', 'RETURN_FROM_PROD')), 0) as issued
                from work_order_materials m join work_orders w on w.id = m.work_order_id join items i on i.id = m.component_item_id
@@ -223,7 +227,14 @@ final class MrpPlanner
         ) as $m) {
             // a component on several lines of one work order: its lines add up, what was issued to it (net of returns) once
             $wo = (string) $m->work_order_id;
-            $required = $this->toBase($db, $item, (string) $m->uom_id, (string) $m->base_uom_id, MpsItemInput::num($m->required), $this->today) ?? '0';
+            // the conversion the work order was released with (else the latest one); none: not netted, said on the item
+            $required = $this->toBase($db, $item, (string) $m->uom_id, (string) $m->base_uom_id, MpsItemInput::num($m->required), (string) $m->released)
+                ?? $this->toBase($db, $item, (string) $m->uom_id, (string) $m->base_uom_id, MpsItemInput::num($m->required), null);
+            if ($required === null) {
+                $this->itemWarnings[$item]['UOM_CONVERSION_MISSING'] = true;
+
+                continue;
+            }
             $byOrder[$wo] = [bcadd($byOrder[$wo][0] ?? '0', $required, 6), MpsItemInput::num($m->issued)];
         }
         foreach ($byOrder as [$required, $issued]) {
@@ -268,12 +279,12 @@ final class MrpPlanner
     }
 
     /**
-     * The quantity in the item's base unit: as is, or through the item's unit conversion in force on $date.
+     * The quantity in the item's base unit: as is, or through the item's unit conversion in force on $date (null: the latest).
      *
      * @param  numeric-string  $qty
      * @return ?numeric-string null when no conversion exists
      */
-    private function toBase(EoraPostgresConnection $db, string $item, string $uom, string $base, string $qty, string $date): ?string
+    private function toBase(EoraPostgresConnection $db, string $item, string $uom, string $base, string $qty, ?string $date): ?string
     {
         if ($uom === $base) {
             return $qty;
@@ -281,8 +292,8 @@ final class MrpPlanner
         $c = $db->selectOne(
             'select trim_scale(factor)::text as f, from_uom_id = ? as forward from uom_conversions
               where item_id = ? and ((from_uom_id = ? and to_uom_id = ?) or (from_uom_id = ? and to_uom_id = ?))
-                and effective_from <= ?::date and (effective_to is null or effective_to >= ?::date) order by effective_from desc limit 1',
-            [$uom, $item, $uom, $base, $base, $uom, $date, $date],
+                and (?::date is null or (effective_from <= ?::date and (effective_to is null or effective_to >= ?::date))) order by effective_from desc limit 1',
+            [$uom, $item, $uom, $base, $base, $uom, $date, $date, $date],
         );
         if ($c === null) {
             return null;
@@ -330,6 +341,7 @@ final class MrpPlanner
     {
         $this->rows = [];
         $this->pending = [];
+        $this->itemWarnings = [];
     }
 
     private function kindOf(EoraPostgresConnection $db, string $item): string
@@ -341,9 +353,10 @@ final class MrpPlanner
     private function insertItem(EoraPostgresConnection $db, string $item, string $kind, int $level, MpsItemInput $in): string
     {
         return $this->rows[$item] = (string) $db->selectOne(
-            'insert into mrp_items (tenant_id, mrp_run_id, item_id, uom_id, kind, level, on_hand, committed, safety_stock, lead_time_days)
-             values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?) returning id',
-            [$this->runId, $item, $in->uomId, $kind, min($level, self::MAX_LEVEL), $in->onHand, $in->outOfScope, $in->safetyStock, $in->leadTimeDays],
+            'insert into mrp_items (tenant_id, mrp_run_id, item_id, uom_id, kind, level, on_hand, committed, safety_stock, lead_time_days, warnings)
+             values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text[]) returning id',
+            [$this->runId, $item, $in->uomId, $kind, min($level, self::MAX_LEVEL), $in->onHand, $in->outOfScope, $in->safetyStock, $in->leadTimeDays,
+                '{'.implode(',', array_keys($this->itemWarnings[$item] ?? [])).'}'],
         )->id;
     }
 

@@ -43,6 +43,7 @@ const run = {
       committed: '0',
       safetyStock: null,
       leadTimeDays: null,
+      warnings: [],
       requirements: [],
       supplies: [],
       orders: [
@@ -73,6 +74,7 @@ const run = {
       committed: '0',
       safetyStock: null,
       leadTimeDays: 1,
+      warnings: [],
       requirements: [{ id: ID(41), dueDate: '2026-11-26', qty: '680', parentOrderId: ID(31), parentItemCode: 'BRK-A100' }],
       supplies: [],
       orders: [
@@ -103,6 +105,7 @@ const run = {
       committed: '40',
       safetyStock: '50',
       leadTimeDays: 3,
+      warnings: [],
       requirements: [{ id: ID(42), dueDate: '2026-11-25', qty: '192', parentOrderId: ID(32), parentItemCode: 'PLT-C300' }],
       supplies: [{ kind: 'INBOUND', reference: 'INB-P1-2026-0001', date: '2026-11-20', qty: '30' }],
       orders: [
