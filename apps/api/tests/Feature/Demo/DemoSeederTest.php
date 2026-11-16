@@ -17,14 +17,14 @@ it('creates one active user per role template with its default scope, every one 
     $code = demoCode();
 
     $this->artisan('eora:demo:seed', ['--code' => $code, '--password' => DEMO_PASSWORD])
-        ->expectsOutputToContain('created with 14 active users')
+        ->expectsOutputToContain('created with 15 active users')
         ->expectsOutputToContain('Password for every demo account (shown once, not stored): '.DEMO_PASSWORD)
         ->assertSuccessful();
 
     $state = demoState($code);
-    expect($state['members'])->toHaveCount(14)
+    expect($state['members'])->toHaveCount(15)
         ->and(array_unique(array_column($state['members'], 'status')))->toBe(['ACTIVE'])
-        ->and(array_column($state['members'], 'role'))->toBe(['APR', 'AUD', 'CSA', 'DLV', 'FGW', 'INV', 'MAD', 'MAT', 'OPR', 'PPC', 'PRL', 'QCI', 'QCS', 'TENANT_ADMIN']);
+        ->and(array_column($state['members'], 'role'))->toBe(['APR', 'AUD', 'CSA', 'DLV', 'FGW', 'INV', 'MAD', 'MAT', 'OPR', 'PPC', 'PRL', 'QCI', 'QCS', 'SUP', 'TENANT_ADMIN']);
     $byRole = array_column($state['members'], null, 'role');
     expect($byRole['QCI']->scope_type)->toBe('PLANT')->and($byRole['QCI']->plant)->toBe('P1')
         ->and($byRole['AUD']->scope_type)->toBe('TENANT')
@@ -54,7 +54,7 @@ it('refuses a complete demo tenant without writing anything', function () {
     $this->artisan('eora:demo:seed', ['--code' => $code, '--password' => DEMO_PASSWORD])
         ->expectsOutputToContain('already exists')
         ->assertFailed();
-    expect(demoWrites($tenant))->toBe($before)->and(demoState($code)['members'])->toHaveCount(14);
+    expect(demoWrites($tenant))->toBe($before)->and(demoState($code)['members'])->toHaveCount(15);
 })->group('integration', 'demo');
 
 it('completes an interrupted seed on the next run; a partly active tenant needs the original password', function () {
@@ -63,7 +63,7 @@ it('completes an interrupted seed on the next run; a partly active tenant needs 
     app(TenantProvisioner::class)->provision(new TenantSpec($code, 'Demo Stamping', "tenant-admin@{$code}.test", 'DEMO', 'Demo', 'P1', 'Plant 1', '07:00'), console: true);
 
     $this->artisan('eora:demo:seed', ['--code' => $code, '--password' => DEMO_PASSWORD])
-        ->expectsOutputToContain('completed with 14 active users')
+        ->expectsOutputToContain('completed with 15 active users')
         ->assertSuccessful();
     expect(array_unique(array_column(demoState($code)['members'], 'status')))->toBe(['ACTIVE']);
     spa($this)->postJson('/api/v1/auth/login', ['email' => "tenant-admin@{$code}.test", 'password' => DEMO_PASSWORD])->assertOk();
@@ -97,7 +97,7 @@ it('adds the all-roles UAT account to a demo tenant once; it signs in and holds 
         ->expectsOutputToContain('Approvals still need a second account')
         ->assertSuccessful();
     $uat = array_values(array_filter(demoState($code)['members'], fn ($m) => $m->email === "uat@{$code}.test"));
-    expect(array_column($uat, 'role'))->toBe(['APR', 'AUD', 'CSA', 'DLV', 'FGW', 'INV', 'MAD', 'MAT', 'OPR', 'PPC', 'PRL', 'QCI', 'QCS', 'TENANT_ADMIN'])
+    expect(array_column($uat, 'role'))->toBe(['APR', 'AUD', 'CSA', 'DLV', 'FGW', 'INV', 'MAD', 'MAT', 'OPR', 'PPC', 'PRL', 'QCI', 'QCS', 'SUP', 'TENANT_ADMIN'])
         ->and(array_unique(array_column($uat, 'status')))->toBe(['ACTIVE']);
 
     // a second run changes nothing (the password stays)

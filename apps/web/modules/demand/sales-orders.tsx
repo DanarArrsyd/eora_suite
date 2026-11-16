@@ -98,8 +98,7 @@ function salesOrders(base: string): MasterResource<SalesOrderRow> {
     resource: 'demand.sales_orders',
     permission: { view: 'demand.sales_order.view', create: 'demand.sales_order.create', label: 'sales orders' },
     title: 'Sales Orders',
-    description:
-      'Customer orders with their delivery schedule. Each line is a customer part from one customer PO line; once confirmed, its deliveries are firm demand and are changed only by adding or cancelling deliveries.',
+    description: 'Customer orders and their deliveries.',
     itemLabel: 'sales orders',
     singular: 'sales order',
     searchPlaceholder: 'Search order, customer or customer PO…',

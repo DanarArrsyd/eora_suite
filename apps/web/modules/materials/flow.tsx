@@ -133,8 +133,7 @@ export const MATERIAL_ISSUES: MasterResource<IssueRow> = {
   resource: 'materials.issues',
   permission: { view: 'materials.issue.view', create: 'materials.issue.post', label: 'material issues' },
   title: 'Material Issue',
-  description:
-    'Material moved from the raw-material warehouse to a work center for a released work order. It stays there as Material at Production until it is used or returned; issuing it consumes nothing.',
+  description: 'Material issued to a work center for a work order.',
   itemLabel: 'issues',
   singular: 'issue',
   createLabel: 'Issue material',
@@ -331,7 +330,7 @@ function IssuePage({ initialWo }: { initialWo: string }) {
   return (
     <EnterprisePage
       title="Issue material"
-      description="Move a released work order’s materials from raw-material racks to one work center of its routing. Nothing is consumed until production posts it."
+      description="Issue material to a work center."
       actions={
         <Button onClick={() => router.push('/materials/material-issue')}>
           <ArrowLeft aria-hidden="true" className="size-4" />
@@ -537,8 +536,7 @@ export const MATERIAL_RETURNS: MasterResource<ReturnRow> = {
   resource: 'materials.returns',
   permission: { view: 'materials.return.view', create: 'materials.return.submit', label: 'material returns' },
   title: 'Material Return',
-  description:
-    'Material at Production going back to the raw-material warehouse. Production asks for it; materials weighs or counts what comes back and receives it into a rack, or refuses it with the reason.',
+  description: 'Material returned from production to the warehouse.',
   itemLabel: 'returns',
   singular: 'return',
   createLabel: 'Ask for a return',
@@ -852,8 +850,7 @@ export const MATERIAL_AT_PRODUCTION: MasterResource<AtProductionRow> = {
   },
   noCreate: true,
   title: 'Material at Production',
-  description:
-    'Material issued to a work center for a work order and not yet used or returned. It is physical stock at the work center, kept per work order and lot.',
+  description: 'Material at work centers, not yet used or returned.',
   itemLabel: 'lines',
   singular: 'line',
   searchPlaceholder: 'Search work order or material…',

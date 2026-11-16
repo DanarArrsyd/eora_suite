@@ -45,8 +45,7 @@ export const PLAN_PARAMETERS: MasterResource<PlanParameterRow> = {
   resource: 'planning.plan_parameters',
   permission: { view: 'planning.plan_parameter.view', create: 'planning.plan_parameter.create', label: 'planning parameters' },
   title: 'Planning Parameters',
-  description:
-    'Lead time and safety stock per item and plant, used by the next MPS and MRP run. Made items take a production lead time, bought items a purchase lead time, in working days. An empty safety stock counts as 0 and shows as Not configured.',
+  description: 'Lead time and safety stock per item and plant.',
   itemLabel: 'parameter sets',
   singular: 'parameter set',
   searchPlaceholder: 'Search item…',

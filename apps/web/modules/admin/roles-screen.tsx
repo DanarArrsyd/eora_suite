@@ -207,10 +207,7 @@ export function RolesScreen() {
   ];
 
   return (
-    <EnterprisePage
-      title="Roles & Permissions"
-      description="Roles come from the EORA templates. Open a role to see what it permits and who holds it, or to assign it."
-    >
+    <EnterprisePage title="Roles & Permissions" description="Roles and who holds them.">
       <ListWorkspace
         label="Roles"
         toolbar={

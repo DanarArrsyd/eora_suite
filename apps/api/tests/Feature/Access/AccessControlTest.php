@@ -32,12 +32,12 @@ it('T-RBAC-05: seeds the doc 18 §1 templates (no platform role) and TENANT_ADMI
         'roles' => (int) $db->selectOne('select count(*) as n from roles')->n,
     ]);
 
-    expect($catalogue['templates'])->toBe(['APR', 'AUD', 'CSA', 'DLV', 'FGW', 'INV', 'MAD', 'MAT', 'OPR', 'PPC', 'PRL', 'QCI', 'QCS', 'TENANT_ADMIN'])
+    expect($catalogue['templates'])->toBe(['APR', 'AUD', 'CSA', 'DLV', 'FGW', 'INV', 'MAD', 'MAT', 'OPR', 'PPC', 'PRL', 'QCI', 'QCS', 'SUP', 'TENANT_ADMIN'])
         ->and($catalogue['admin'])->toBe(['core.audit.view', 'core.users_roles.create', 'core.users_roles.post', 'core.users_roles.view'])
         ->and($catalogue['empty'])->toBe(['APR', 'MAD'])
         ->and($catalogue['sensitive'])->toContain('core.users_roles.post', 'core.approval.approve', 'inventory.reversal.request_correction', 'quality.disposition_release.approve')
         ->and($catalogue['sensitive'])->not->toContain('planning.wo.view', 'core.audit.view')
-        ->and($catalogue['roles'])->toBe(14);
+        ->and($catalogue['roles'])->toBe(15);
 
     // idempotent: a second run adds nothing
     AccessFixtures::roles($this->t);
@@ -56,9 +56,9 @@ it('lists tenant roles and members with their assignments to an administrator', 
     $m = member($this, $this->t);
     signIn($this, $this->admin, $this->t);
 
-    spa($this)->getJson('/api/v1/core/roles')->assertOk()->assertJsonCount(14, 'data')
-        ->assertJsonPath('data.13.code', 'TENANT_ADMIN')
-        ->assertJsonPath('data.13.permissions', ['core.audit.view', 'core.users_roles.create', 'core.users_roles.post', 'core.users_roles.view']);
+    spa($this)->getJson('/api/v1/core/roles')->assertOk()->assertJsonCount(15, 'data')
+        ->assertJsonPath('data.14.code', 'TENANT_ADMIN')
+        ->assertJsonPath('data.14.permissions', ['core.audit.view', 'core.users_roles.create', 'core.users_roles.post', 'core.users_roles.view']);
 
     $members = collect(spa($this)->getJson('/api/v1/core/members')->assertOk()->json('data'))->keyBy('membershipId');
     expect($members)->toHaveCount(2)

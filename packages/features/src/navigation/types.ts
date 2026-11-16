@@ -16,6 +16,13 @@ export type NavItem = {
   badge?: BadgeSource;
   /** Depends on an OPEN decision in docs/13 — hidden in production builds. */
   decision?: `O-${string}`;
+  /** The page runs on the live API (D-126): only such items show in the sidebar, to holders of their permission. */
+  live?: true;
+  /**
+   * Work permissions that make the page a menu of the user's (D-126): any of them, besides the view `permission`. Without it
+   * the view permission alone suffices. An auditor (`core.audit.view`) sees every page they may read.
+   */
+  menu?: readonly string[];
   /** Delivery phase that builds the page (doc 22). */
   phase?: 3 | 4 | 5 | 'later';
   /** Page context shown in the topbar (navigation doc §5). */

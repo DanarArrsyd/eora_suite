@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { NAV_MODULES } from './config';
 import { mockNavigationSource } from './navigation.mock';
-import { allRouteParams, breadcrumbFor, isItemVisible, itemBadge, matchRoute, moduleBadge, visibleModules } from './selectors';
+import { allRouteParams, breadcrumbFor, isItemVisible, isMenuItem, itemBadge, matchRoute, moduleBadge, visibleModules } from './selectors';
 import type { NavModule } from './types';
 
 const all = { allowedModules: '*' as const };
@@ -103,5 +103,34 @@ describe('item permissions', () => {
     expect(isItemVisible(adjustments, { ...all, permissions: ['inventory.adjustment.view'] })).toBe(true);
     expect(isItemVisible(adjustments, { ...all, permissions: ['inventory.adjustment.approve'] })).toBe(true);
     expect(isItemVisible(adjustments, { ...all, permissions: ['inventory.stock.view'] })).toBe(false);
+  });
+});
+
+describe('menus of a signed-in user (D-126)', () => {
+  const live = NAV_MODULES.flatMap((m) => m.groups.flatMap((g) => g.items)).filter((i) => i.live);
+  const item = (id: string) => live.find((i) => i.id === id)!;
+
+  it('never lists a page that is not built, or a mock screen', () => {
+    const all = NAV_MODULES.flatMap((m) => m.groups.flatMap((g) => g.items));
+    const everything = Array.from(new Set(all.flatMap((i) => (typeof i.permission === 'string' ? [i.permission] : (i.permission ?? [])).concat(i.menu ?? []))));
+    expect(all.filter((i) => isMenuItem(i, [...everything, 'core.audit.view'])).every((i) => i.live)).toBe(true);
+    expect(
+      isMenuItem(
+        all.find((i) => i.id === 'control-tower')!,
+        everything,
+      ),
+    ).toBe(false);
+  });
+
+  it('needs the view permission and one of the work permissions; an auditor reads every page', () => {
+    expect(isMenuItem(item('items'), ['master.part.view'])).toBe(false);
+    expect(isMenuItem(item('items'), ['master.part.view', 'master.part.create'])).toBe(true);
+    expect(isMenuItem(item('items'), ['master.part.create'])).toBe(false);
+    expect(isMenuItem(item('items'), ['master.part.view', 'core.audit.view'])).toBe(true);
+    expect(isMenuItem(item('backward-trace'), ['traceability.lot_trace.view'])).toBe(true);
+  });
+
+  it('marks every live page with a permission', () => {
+    expect(live.filter((i) => !i.permission).map((i) => i.id)).toEqual([]);
   });
 });

@@ -98,8 +98,7 @@ export const REVERSALS: MasterResource<ReversalRow> = {
   resource: 'inventory.reversals',
   permission: { view: READ[0], create: 'inventory.reversal.request_correction', label: 'reversals', alsoView: READ.slice(1) },
   title: 'Reversals',
-  description:
-    'A posted document is corrected by its reversal: every leg is undone as it was posted. Anyone who may request corrections asks for one with the reason; a second person approves it, and only then does stock change.',
+  description: 'Undo a posted document, approved by a second person.',
   itemLabel: 'reversals',
   singular: 'reversal request',
   searchPlaceholder: 'Search reversal…',

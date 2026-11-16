@@ -96,8 +96,7 @@ export const MOVEMENT_LEDGER: MasterResource<MovementRow> = {
   // the stock side of every posting: the legs at physical locations (the supplier and adjustment counter-legs are left out)
   fixedFilters: { stockSide: 'true' },
   title: 'Movement Ledger',
-  description:
-    'Every movement of stock, newest first: what entered or left a location, by which document. The ledger is never edited; a wrong document is corrected by its reversal.',
+  description: 'Every stock movement, newest first.',
   itemLabel: 'movements',
   singular: 'movement',
   searchPlaceholder: 'Search document or item…',

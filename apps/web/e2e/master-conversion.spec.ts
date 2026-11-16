@@ -207,12 +207,21 @@ test("a refused input shows the server's reason on that input", async ({ page })
   await expect(drawer.getByText('Must be a whole number of at least 1.').first()).toBeVisible();
 });
 
-test('a role with conversion data only still reaches Master Data → Conversion Data', async ({ page }) => {
-  await setup(page, { ...SESSION, permissions: ['master.conversion.view'] });
+test('a role that approves conversion data only gets Master Data → Conversion Data as its menu (D-126)', async ({ page }) => {
+  await setup(page, { ...SESSION, permissions: ['master.conversion.view', 'master.conversion.approve'] });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/master/conversion-data');
-  await expect(page.getByRole('link', { name: 'Conversion Data' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'BOMs' })).toHaveCount(0);
+  const menu = page.getByRole('navigation', { name: 'Master Data menu' });
+  await expect(menu.getByRole('link', { name: 'Conversion Data' })).toBeVisible();
+  await expect(menu.getByRole('link', { name: 'BOMs' })).toHaveCount(0);
+});
+
+test('a link into a module outside the role shows the role menu, never the menu of that module (D-126)', async ({ page }) => {
+  await setup(page, { ...SESSION, permissions: ['master.conversion.view', 'master.conversion.approve'] });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/production/runs');
+  await expect(page.getByRole('navigation', { name: 'Production menu' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Master Data menu' }).getByRole('link', { name: 'Conversion Data' })).toBeVisible();
 });
 
 test('a link to an old version opens that version even when it is not on the first page', async ({ page }) => {

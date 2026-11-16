@@ -104,7 +104,8 @@ async function axe(page: Page) {
 }
 
 test('master data menu: Organization, Parts, Partners and Engineering; old Administration links redirect (D-076)', async ({ page }) => {
-  await setup(page, { ...APPROVER, permissions: [...APPROVER.permissions, 'master.org.view'] });
+  // menus need the work permission too (D-126): organisation maintenance, routing approval
+  await setup(page, { ...APPROVER, permissions: [...APPROVER.permissions, 'master.org.view', 'master.org.create'] });
   await mockApi(page, '/query/core.plants?*', page1([]));
   await mockApi(page, '/query/core.warehouses?*', page1([]));
   await page.setViewportSize({ width: 1440, height: 900 });

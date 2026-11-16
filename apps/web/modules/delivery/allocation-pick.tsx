@@ -102,8 +102,7 @@ export const OPEN_DEMAND: MasterResource<OpenLine> = {
   permission: { view: 'delivery.shipment.view', create: 'delivery.shipment.create', label: 'deliveries' },
   noCreate: true,
   title: 'Allocation & Pick',
-  description:
-    'Firm schedule lines still to deliver. Delivery allocates finished goods to a line (oldest lot first); the FG warehouse picks what is allocated to staging. Nothing leaves stock until shipment.',
+  description: 'Allocate finished goods to deliveries and pick them to staging.',
   itemLabel: 'schedule lines',
   singular: 'schedule line',
   searchPlaceholder: 'Search sales order…',

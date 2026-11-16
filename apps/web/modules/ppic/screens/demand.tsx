@@ -167,8 +167,7 @@ const DEMAND: CtScreenConfig<DemandLineRow> = {
   id: 'demand',
   code: 'CT-9',
   title: 'Demand & Fulfillment',
-  description:
-    'Customer PO → Sales Order line → delivery schedule lines and releases, with daily due dates, partial fulfilment and outstanding. One demand identity per SO line (D-034).',
+  description: 'Demand and fulfilment per order line.',
   source: (s) => s.demandLines,
   itemLabel: 'schedule lines',
   fields: [PLANT_FIELD, CUSTOMER_FIELD, PART_FIELD, BUCKET_FIELD, DUE_FIELD],
@@ -269,8 +268,7 @@ const DELIVERY: CtScreenConfig<DailyDeliveryRow> = {
   id: 'daily-delivery',
   code: 'CT-5',
   title: 'Daily Delivery & Outstanding',
-  description:
-    'What is due per day, what shipped (posted shipments), what is outstanding and whether free or allocated FG covers it. Daily dates are never rolled into weeks.',
+  description: 'Daily deliveries due and shipped.',
   source: (s) => s.dailyDelivery,
   itemLabel: 'delivery lines',
   fields: [PLANT_FIELD, CUSTOMER_FIELD, PART_FIELD, DUE_FIELD],
@@ -376,8 +374,7 @@ const RISK: CtScreenConfig<DeliveryRiskRow> = {
   id: 'delivery-risk',
   code: 'CT-8',
   title: 'Shortage & Delivery Risk',
-  description:
-    'Which demand lines will miss their due date, and why. Each supply contribution is its own column; daily risk is shown even when the week is covered (D-041).',
+  description: 'Deliveries at risk and why.',
   source: (s) => s.deliveryRisk,
   itemLabel: 'demand lines',
   fields: [PLANT_FIELD, CUSTOMER_FIELD, PART_FIELD, DUE_FIELD],

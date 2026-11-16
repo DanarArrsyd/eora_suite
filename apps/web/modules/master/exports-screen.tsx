@@ -146,10 +146,7 @@ export function ExportsScreen() {
   const focused = focus ? target.data : undefined;
 
   return (
-    <EnterprisePage
-      title="Exports"
-      description="Lists you exported to Excel. A file can be downloaded for 24 hours after it was written, by you only, while your roles still cover its data."
-    >
+    <EnterprisePage title="Exports" description="Your Excel exports (24 hours).">
       {failure ? <InlineAlert tone="danger" title={failure} className="mb-4" /> : null}
       {focused ? (
         <InlineAlert

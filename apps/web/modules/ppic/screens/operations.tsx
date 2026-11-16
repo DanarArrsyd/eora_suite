@@ -27,8 +27,7 @@ const WO: CtScreenConfig<WoProgressRow> = {
   id: 'wo',
   code: 'CT-10',
   title: 'Work Order Progress',
-  description:
-    'Good output against planned quantity per work order, with NG, process scrap and actual material consumption in material UOM. Pieces and kilograms are never combined.',
+  description: 'Work order progress.',
   source: (s) => s.woProgress,
   itemLabel: 'work orders',
   fields: [PLANT_FIELD, PART_FIELD],
@@ -132,8 +131,7 @@ const DAILY: CtScreenConfig<DailyProductionRow> = {
   id: 'daily-production',
   code: 'CT-10',
   title: 'Daily Production Results',
-  description:
-    'Production postings per production date and shift (plant shift calendar): good, NG reworkable, NG rejected, weighed process scrap and actual material consumption with its measurement method.',
+  description: 'Production results per date and shift.',
   source: (s) => s.dailyProduction,
   itemLabel: 'run postings',
   fields: [PLANT_FIELD, PART_FIELD, SHIFT_FIELD, DATE_FIELD],
@@ -207,7 +205,7 @@ const QC: CtScreenConfig<PendingQcRow> = {
   id: 'pending-qc',
   code: 'CT-3',
   title: 'Pending Quality',
-  description: 'Output waiting for or under quality disposition. None of these quantities is FG available; QC released stock still needs an FG receipt.',
+  description: 'Output waiting for quality.',
   source: (s) => s.pendingQc,
   itemLabel: 'inspection lots',
   fields: [PLANT_FIELD, PART_FIELD, AGING_FIELD],
@@ -285,8 +283,7 @@ const FGR: CtScreenConfig<DailyFgReceiptRow> = {
   id: 'daily-fg',
   code: 'CT-4',
   title: 'Daily Finished Goods',
-  description:
-    'Per production date, shift and part: planned output, good output posted, QC released and FG actually received. Released-not-received is shown separately.',
+  description: 'Finished goods per day.',
   source: (s) => s.dailyFgReceipt,
   itemLabel: 'day × shift × part rows',
   fields: [PLANT_FIELD, PART_FIELD, SHIFT_FIELD, DATE_FIELD],
@@ -360,8 +357,7 @@ const FGA: CtScreenConfig<FgAvailabilityRow> = {
   id: 'fg',
   code: 'CT-7',
   title: 'Finished Goods Availability',
-  description:
-    'FG stock by part, location and lot: unrestricted on hand, allocated to delivery lines, available, blocked, and QC-released stock still incoming from QC (not available).',
+  description: 'Finished goods availability.',
   source: (s) => s.fgAvailability,
   itemLabel: 'FG stock rows',
   fields: [PLANT_FIELD, PART_FIELD],
@@ -486,8 +482,7 @@ const MV: CtScreenConfig<MaterialVarianceRow> = {
   id: 'variance',
   code: 'CT-6',
   title: 'Material Variance',
-  description:
-    'Loss investigation per production run: material issued, consumed, remaining and returned; outputs; and the three variance indicators with their finality. Unexplained variance is not confirmed material loss.',
+  description: 'Material variance per run.',
   source: (s) => s.materialVariance,
   itemLabel: 'runs',
   fields: [PLANT_FIELD, PART_FIELD, GYV_FIELD, CASE_FIELD],

@@ -41,8 +41,7 @@ const RM: CtScreenConfig<RmLotRow> = {
   id: 'rm',
   code: 'CT-1',
   title: 'Raw Material Availability',
-  description:
-    'Coil (kg) and sheet stock by lot, location and stock status, with allocation and the planning estimate for the primary part. Estimated pieces are not stock.',
+  description: 'Raw material stock by lot.',
   source: (s) => s.rmLots,
   itemLabel: 'lots',
   fields: [PLANT_FIELD, WAREHOUSE_FIELD, FORM_FIELD, GRADE_FIELD],
@@ -140,8 +139,7 @@ const CONVERSION: CtScreenConfig<ConversionRow> = {
   id: 'conversion',
   code: 'CT-1 · Conversion',
   title: 'Coil / Sheet Conversion',
-  description:
-    'Planning estimate of pieces from available material per lot and part (doc 02). Alternative parts of the same lot are separate rows and never summed. Estimated pieces are not Finished Goods.',
+  description: 'Estimated pieces from available material.',
   source: (s) => s.conversion,
   itemLabel: 'lot × part estimates',
   fields: [PLANT_FIELD, FORM_FIELD, PART_FIELD],
@@ -275,8 +273,7 @@ const MAP: CtScreenConfig<MaterialAtProductionRow> = {
   id: 'map',
   code: 'CT-2',
   title: 'Material at Production',
-  description:
-    'Material issued to work centers and still physically there: remaining material, reusable remnants and material in transit. It is still material stock — never variance, never WIP.',
+  description: 'Material still at work centers.',
   source: (s) => s.materialAtProduction,
   itemLabel: 'lots at production',
   fields: [PLANT_FIELD, WC_FIELD],

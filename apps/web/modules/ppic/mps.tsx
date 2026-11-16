@@ -159,8 +159,7 @@ export const MPS: MasterResource<MpsRow> = {
   resource: 'planning.mps_versions',
   permission: { view: 'planning.mps.view', create: 'planning.mps.create', label: 'master production schedules' },
   title: 'Master Production Schedule',
-  description:
-    'What each plant must produce per week for the next 12 weeks: FG stock is used once, firm orders and net forecast are netted on their days, and Pending QC is never counted as supply. A planner prepares it; a second person approves it.',
+  description: 'What each plant must produce per week.',
   itemLabel: 'schedules',
   singular: 'schedule',
   createLabel: 'Calculate MPS',

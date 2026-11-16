@@ -96,7 +96,7 @@ export function ControlTowerOverview() {
     <EnterprisePage
       title="PPIC Control Tower"
       mock
-      description="What needs action now to protect the next deliveries. Read-only workspace: every figure drills to its source list; nothing here posts inventory."
+      description="What needs action for the next deliveries."
       meta={
         <>
           <span>

@@ -75,8 +75,7 @@ export const SHIPMENTS: MasterResource<ShipmentRow> = {
   resource: 'delivery.shipments',
   permission: { view: 'delivery.shipment.view', create: 'delivery.shipment.post', label: 'shipments' },
   title: 'Shipments',
-  description:
-    'Staged goods shipped to customers. Delivered quantities and schedule-line status follow the posted shipments; a wrong shipment is corrected by its reversal.',
+  description: 'Goods shipped to customers.',
   itemLabel: 'shipments',
   singular: 'shipment',
   createLabel: 'Ship',
@@ -212,7 +211,7 @@ function ShipPage() {
   return (
     <EnterprisePage
       title="Ship"
-      description="Ship what is staged for one customer. Every schedule line of that customer with staged goods is listed; change a quantity for a partial shipment."
+      description="Ship staged goods to one customer."
       actions={
         <Button onClick={() => router.push('/delivery/shipments')}>
           <ArrowLeft aria-hidden="true" className="size-4" />

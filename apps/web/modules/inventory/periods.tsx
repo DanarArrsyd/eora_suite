@@ -93,8 +93,7 @@ export const PERIODS: MasterResource<PeriodRow> = {
   resource: 'inventory.periods',
   permission: { view: READ[0], create: 'inventory.period_close.post', label: 'inventory periods', alsoView: READ.slice(1) },
   title: 'Period Close',
-  description:
-    'Monthly inventory periods per plant. A month that has ended is closed on a request approved by a second person; a closed month takes no postings, and its documents are corrected in the open month.',
+  description: 'Monthly inventory periods per plant.',
   itemLabel: 'periods',
   singular: 'period',
   createLabel: 'New close request',

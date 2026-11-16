@@ -21,6 +21,7 @@ Legend: **V** view · **C** create/edit draft · **S** submit · **P** post/exec
 | INV | Inventory Controller | plant |
 | APR | Approver (add-on role) | as assigned |
 | AUD | Auditor/Viewer | tenant read-only |
+| SUP | Supervisor (D-126) | tenant; every permission of the catalogue, also those added later |
 
 ## 2. Permission matrix (core vertical slice)
 | Permission (resource.action) | CSA | PPC | MAT | PRL | OPR | QCI | QCS | FGW | DLV | INV | AUD |
@@ -104,6 +105,8 @@ Break-glass: time-boxed grant, reason, approver, auto-expiry, full audit (doc 05
 - Catalogue code = `<resource>.<action>` with letters V `view`, C `create`, S `submit`, P `post`, A `approve`, R `request_correction`, X `export`; compound resources written with `_` (`quality.disposition_release`, `delivery.shipment`, `inventory.period_close`, `inventory.period_reopen`, `planning.planned_order_release`); §2 and §5 rows seeded.
 - Qualifiers in parentheses ("own WC", "≤ threshold", "pick", "count", "accept", "evidence", "revise", "after confirmation", "QC") grant the letter only; the condition is enforced by that resource's policy in its slice. "V (accept)" on `production.lot_split` for MAT grants V only.
 - Templates: §1 codes plus `TENANT_ADMIN` (D-B1-16: `core.users_roles` VCP, `core.audit` V). PSA has no tenant template (platform only). MAD and APR have no matrix column, so they start empty; their content is tenant configuration (D-060, D-068). Warehouse and work-center scopes (MAT, PRL, OPR, FGW) arrive with B2; in B1 an assignment scope is TENANT, COMPANY or PLANT.
+- **SUP (D-126, migration 004100):** holds every permission; a trigger on `permissions` gives each new one to the template, and `eora:tenants:sync` brings it to existing tenants (and creates the role in a tenant that does not have it yet). Separation of duties is unchanged: a Supervisor still never approves, releases or decides what they prepared themselves (SoD rules in SQL).
+- Sidebar (D-126): a signed-in user's menu lists only built screens they may open (`live` + view permission) and, where the item names work permissions (`menu`), only if they hold one of them; `core.audit.view` reads every built screen. Unbuilt or mock screens stay reachable by link but are not listed.
 - `sensitive` permissions (D-B1-25 proposed set): `core.users_roles.*`, every `*.approve`, `inventory.adjustment.*`, `inventory.reversal.*`.
 
 ## 4. Data ownership matrix (who writes, who reads)

@@ -71,8 +71,7 @@ export const STOCK_OVERVIEW: MasterResource<StockLineRow> = {
     needs: [{ permission: 'master.org.view', reason: 'Transfers choose a destination from the locations list, which your roles cannot read.' }],
   },
   title: 'Stock Overview',
-  description:
-    'Stock on hand from the ledger, per location, lot and status. Available is unrestricted stock not yet allocated; blocked, pending QC and held stock is never available.',
+  description: 'Stock on hand per location, lot and status.',
   itemLabel: 'stock lines',
   singular: 'stock line',
   searchPlaceholder: 'Search item…',

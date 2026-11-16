@@ -22,6 +22,16 @@ export function isItemVisible(item: NavItem, opts: VisibilityOptions): boolean {
   return true;
 }
 
+/**
+ * A menu of a signed-in user (D-126): a page on the live API whose view permission the user holds, and whose work
+ * permissions (`menu`) the user holds too — an auditor (`core.audit.view`) sees every page they may read. Pages not built
+ * yet and mock screens are never menus. The server still decides every call.
+ */
+export function isMenuItem(item: NavItem, permissions: readonly string[]): boolean {
+  if (!item.live || !item.permission || !isItemVisible(item, { allowedModules: '*', permissions })) return false;
+  return !item.menu || permissions.includes('core.audit.view') || item.menu.some((p) => permissions.includes(p));
+}
+
 /** Modules (with filtered groups/items) visible to the user. Empty groups and modules are dropped. */
 export function visibleModules(modules: readonly NavModule[], opts: VisibilityOptions): NavModule[] {
   return modules

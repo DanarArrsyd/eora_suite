@@ -63,7 +63,7 @@ it('T-PROV-01: creates tenant, company, plant, calendar, roles and an invited TE
     expect($state['tenant']->status)->toBe('ACTIVE')->and($state['tenant']->timezone)->toBe('Asia/Jakarta')
         ->and($state['companies'])->toBe(1)->and($state['plants'])->toBe(1)
         ->and($state['calendar']->plant_id)->toBeNull()->and($state['calendar']->starts)->toBe('07:00:00')
-        ->and($state['roles'])->toBe(14)
+        ->and($state['roles'])->toBe(15)
         ->and($state['memberships'])->toHaveCount(1)->and($state['memberships'][0]->status)->toBe('INVITED')
         ->and($state['admin'])->toHaveCount(1)
         ->and($state['admin'][0]->code)->toBe('TENANT_ADMIN')->and($state['admin'][0]->scope_type)->toBe('TENANT')
@@ -77,7 +77,7 @@ it('T-PROV-01: creates tenant, company, plant, calendar, roles and an invited TE
     spa($this)->postJson('/api/v1/auth/login', ['email' => $email, 'password' => $password])->assertOk()->assertJsonPath('tenants.0.code', $code);
     spa($this)->postJson('/api/v1/auth/tenant', ['tenantId' => $tenantId])->assertOk()
         ->assertJsonPath('permissions', ['core.audit.view', 'core.users_roles.create', 'core.users_roles.post', 'core.users_roles.view']);
-    spa($this)->getJson('/api/v1/core/roles')->assertOk()->assertJsonCount(14, 'data');
+    spa($this)->getJson('/api/v1/core/roles')->assertOk()->assertJsonCount(15, 'data');
 })->group('integration', 'provisioning');
 
 it('T-PROV-02: --deliver=console prints the one-time link; the e-mail worker never sends it', function () {

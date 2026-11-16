@@ -90,8 +90,7 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
   permission: RECEIPT,
   appendOnly: 'A posted receipt is never edited. A wrong receipt is corrected by its reversal, approved by a second person.',
   title: 'RM Receipts',
-  description:
-    'Raw material and consumables received from suppliers. A lot-controlled item gets its own lot; an item that needs its incoming release stays Blocked until QC releases it.',
+  description: 'Material received from suppliers.',
   itemLabel: 'receipts',
   singular: 'receipt',
   searchPlaceholder: 'Search receipt number or item…',
@@ -210,7 +209,7 @@ export const INCOMING_RELEASE: MasterResource<StockRow> = {
   rowAction: { label: 'Release', permission: 'materials.incoming_release.post', deniedReason: 'Your roles do not allow incoming releases.' },
   fixedFilters: { stockStatus: 'BLOCKED', locationType: 'RM_WAREHOUSE' },
   title: 'Incoming Release',
-  description: 'Received material waiting for its incoming release. Releasing makes it Unrestricted where it lies, so production can use it; nothing moves.',
+  description: 'Received material waiting for incoming release.',
   itemLabel: 'blocked lines',
   singular: 'blocked line',
   searchPlaceholder: 'Search item…',
@@ -324,8 +323,7 @@ export const MATERIAL_LOTS: MasterResource<LotLineRow> = {
   rowAction: { label: 'Split', permission: 'production.lot_split.post', deniedReason: 'Your roles do not allow lot splits.' },
   fixedFilters: { lotTracked: 'true' },
   title: 'Material Lots',
-  description:
-    'Lot-tracked stock per place and status. Split takes part of a lot into a child lot where it lies, e.g. a remnant or a cut length; the location total stays the same.',
+  description: 'Material lots per location and status.',
   itemLabel: 'lot lines',
   singular: 'lot line',
   searchPlaceholder: 'Search item…',
@@ -487,8 +485,7 @@ export const INBOUND_SCHEDULE: MasterResource<InboundRow> = {
   resource: 'materials.inbound_schedule',
   permission: { view: 'materials.inbound_schedule.view', create: 'materials.inbound_schedule.create', label: 'the inbound schedule' },
   title: 'Inbound Schedule',
-  description:
-    'What suppliers are expected to deliver, by day. Planning counts it as projected supply; a receipt names the line it arrives against. No prices or approvals: reference data only.',
+  description: 'What suppliers are expected to deliver.',
   itemLabel: 'inbound lines',
   singular: 'inbound line',
   searchPlaceholder: 'Search inbound number, supplier or item…',

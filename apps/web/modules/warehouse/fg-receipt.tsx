@@ -66,8 +66,7 @@ export const FG_RECEIPTS: MasterResource<ReceiptRow> = {
   resource: 'warehouse.fg_receipts',
   permission: { view: 'warehouse.fg_receipt.view', create: 'warehouse.fg_receipt.post', label: 'FG receipts' },
   title: 'FG Receipt',
-  description:
-    'QC-released finished goods received from the QC area into the FG warehouse. Only a receipt changes FG stock; a quality release alone does not. A wrong receipt is corrected by its reversal.',
+  description: 'Finished goods received into the FG warehouse.',
   itemLabel: 'receipts',
   singular: 'receipt',
   createLabel: 'Receive FG',
@@ -201,7 +200,7 @@ function ReceivePage() {
   return (
     <EnterprisePage
       title="Receive FG"
-      description="Move QC-released finished goods from the QC area into an FG rack. Enter what you counted; what you do not receive stays QC released."
+      description="Receive QC-released goods into an FG rack."
       actions={
         <Button onClick={() => router.push('/warehouse/fg-receipt')}>
           <ArrowLeft aria-hidden="true" className="size-4" />

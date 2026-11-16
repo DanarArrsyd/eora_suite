@@ -86,8 +86,7 @@ export const NET_WEIGHTS: MasterResource<ItemWeightRow> = {
   resource: 'planning.item_weights',
   permission: CONVERSION_PERMISSION,
   title: 'Net weights',
-  description:
-    'The validated weight of one finished piece, used to explain consumed material by mass. Each change is a new version, validated by a second person.',
+  description: 'Weight of one finished piece, by version.',
   itemLabel: 'net weight versions',
   singular: 'net weight',
   searchPlaceholder: 'Search item code or name…',
@@ -146,8 +145,7 @@ export const CONVERSION_PROFILES: MasterResource<ConversionProfileRow> = {
   resource: 'planning.conversion_profiles',
   permission: CONVERSION_PERMISSION,
   title: 'Conversion profiles',
-  description:
-    'How a coil or a sheet turns into pieces of one part: geometry, pitch or nesting, and parts per stroke or blank. Each change is a new version, validated by a second person.',
+  description: 'How a coil or sheet turns into pieces, by version.',
   itemLabel: 'conversion profiles',
   singular: 'conversion profile',
   searchPlaceholder: 'Search part or material code…',
