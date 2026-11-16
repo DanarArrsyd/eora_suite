@@ -202,7 +202,10 @@ final class MrpController
             "select o.id, o.mrp_item_id, o.kind, o.source, o.week_start::text as week, trim_scale(o.qty)::text as qty, o.due_date::text as due, o.start_date::text as start,
                     o.warnings::text as warnings, b.version_no as bom_version, w.id as wo_id, w.wo_no, w.status as wo_status
                from mrp_orders o left join bom_versions b on b.id = o.bom_version_id
-               left join work_orders w on w.mrp_order_id = o.id and w.status <> 'CANCELLED'
+               -- its live work order, released from this run or (for an MPS order) from another run of the same MPS
+               left join lateral (select w.id, w.wo_no, w.status from work_orders w join mrp_orders x on x.id = w.mrp_order_id
+                                   where w.status <> 'CANCELLED' and (x.id = o.id or (o.mps_planned_order_id is not null and x.mps_planned_order_id = o.mps_planned_order_id))
+                                   limit 1) w on true
               where o.mrp_run_id = ? order by o.due_date, o.id",
             [$id],
         ) as $o) {

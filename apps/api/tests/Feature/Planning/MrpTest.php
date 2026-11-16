@@ -168,8 +168,12 @@ it('releases planned work orders of the latest run to WO Drafts that count as su
     spa($this)->postJson("/api/v1/planning/mrp-runs/{$run['id']}/actions/release", ['orderIds' => [$fg['id']]])->assertStatus(409)->assertJsonPath('title', 'Not the current plan');
     spa($this)->postJson("/api/v1/planning/mrp-runs/{$next['id']}/actions/release", ['orderIds' => [mrpItem($next, 'BRK-100')['orders'][0]['id']]])->assertStatus(409)
         ->assertJsonPath('title', 'Already released');
-    // its components are committed through the BOM until it is released: coil 135 more than before
-    expect((float) mrpItem($next, 'COIL-9')['committed'] - (float) mrpItem($run, 'COIL-9')['committed'])->toBe(135.0);
+    // its components are committed through the BOM until it is released (coil 135 more than before), and its MPS order is
+    // not exploded again: the coil need counts once
+    expect((float) mrpItem($next, 'COIL-9')['committed'] - (float) mrpItem($run, 'COIL-9')['committed'])->toBe(135.0)
+        ->and(mrpItem($next, 'COIL-9')['requirements'])->toBe([])
+        // the newer run shows the work order of its MPS order (released from the earlier run): not selectable again
+        ->and(mrpItem($next, 'BRK-100')['orders'][0]['workOrder']['code'])->toBe($wo['code']);
 
     // the planner may change quantity and due date in the Draft, never its item or reason
     spa($this)->patchJson("/api/v1/planning/work-orders/{$wo['id']}", ['reasonCode' => 'URGENT_ORDER'], ['If-Match' => '"'.$order['version'].'"'])->assertStatus(422)->assertJsonValidationErrors(['reasonCode']);

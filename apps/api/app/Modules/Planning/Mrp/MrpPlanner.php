@@ -78,12 +78,28 @@ final class MrpPlanner
             $orders[(string) $o->item_id][] = ['mps' => (string) $o->id, 'qty' => MpsItemInput::num($o->qty), 'due' => (string) $o->due,
                 'start' => (string) $o->start, 'week' => (string) $o->week, 'warnings' => self::list((string) $o->warnings)];
         }
-        // materials with a safety stock are planned even without requirement
+        // materials with a safety stock are planned even without requirement (and, below, components of live work orders)
         $safety = array_map(static fn (stdClass $r) => (string) $r->item_id, $db->select(
             "select p.item_id from item_plan_parameters p join items i on i.id = p.item_id
               where p.plant_id = ? and p.safety_stock > 0 and i.status = 'ACTIVE' and i.item_type in ('SEMI_FINISHED', 'RAW', 'CONSUMABLE') order by p.item_id",
             [$plant],
         ));
+        // components live work orders still need (material lines of released ones, the BOM of Drafts from the plan) are
+        // planned even without new requirement: their need is committed against stock
+        foreach ($db->select(
+            "select distinct m.component_item_id as item_id from work_order_materials m join work_orders w on w.id = m.work_order_id
+              where w.plant_id = ? and w.status in ('".implode("', '", self::OPEN_WO)."')
+             union
+             select distinct l.component_item_id from work_orders w
+               join lateral (select v.id from bom_versions v where v.item_id = w.item_id and v.status in ('APPROVED', 'SUPERSEDED')
+                               and v.effective_from <= ?::date and (v.effective_to is null or v.effective_to >= ?::date) order by v.effective_from desc limit 1) b on true
+               join bom_lines l on l.bom_version_id = b.id join items i on i.id = l.component_item_id
+              where w.plant_id = ? and w.status in ('DRAFT', 'SUBMITTED') and w.mrp_order_id is not null and i.item_type <> 'SCRAP'",
+            [$plant, $today, $today, $plant],
+        ) as $r) {
+            $safety[] = (string) $r->item_id;
+        }
+        $safety = array_values(array_unique($safety));
         // every item once, by low-level code: all its parents are exploded before it is netted
         $levels = $this->levels($db, array_values(array_unique([...array_keys($mps), ...$safety])));
         foreach ($safety as $item) {
@@ -132,7 +148,13 @@ final class MrpPlanner
         $in->outOfScope = bcadd(MpsItemInput::num($m->oos), $this->input($db, $item, $kind)->outOfScope, 6);
         $row = $this->insertItem($db, $item, $kind, $level, $in);
         foreach ($orders as $o) {
-            $this->makeOrder($db, $item, 'MPS', $o['mps'], $o['week'], $o['qty'], $o['due'], $o['start'], $o['warnings']);
+            // an MPS order already released to a live work order (from any run of this MPS) is that work order now: its
+            // components are committed through the work order, not exploded again (D-125)
+            $converted = $db->selectOne(
+                "select 1 as ok from work_orders w join mrp_orders x on x.id = w.mrp_order_id where w.status <> 'CANCELLED' and x.mps_planned_order_id = ?",
+                [$o['mps']],
+            ) !== null;
+            $this->makeOrder($db, $item, 'MPS', $o['mps'], $o['week'], $o['qty'], $o['due'], $o['start'], $o['warnings'], ! $converted);
         }
         if (! isset($this->pending[$item])) {
             return;
@@ -217,7 +239,7 @@ final class MrpPlanner
      * @param  numeric-string  $qty
      * @param  list<string>  $warnings
      */
-    private function makeOrder(EoraPostgresConnection $db, string $item, string $source, ?string $mps, string $week, string $qty, string $due, string $start, array $warnings): string
+    private function makeOrder(EoraPostgresConnection $db, string $item, string $source, ?string $mps, string $week, string $qty, string $due, string $start, array $warnings, bool $explode = true): string
     {
         // an order whose start has passed starts today: the BOM in force today
         $on = max($start, $this->today);
@@ -244,7 +266,7 @@ final class MrpPlanner
             }
         }
         $id = $this->insertOrder($db, $item, 'MAKE', $source, $mps, $week, $qty, $due, $start, $bom === null ? null : (string) $bom->id, array_values(array_unique($warnings)));
-        foreach ($lines as [$component, $line, $need]) {
+        foreach ($explode ? $lines : [] as [$component, $line, $need]) {
             $this->pending[$component][] = ['parent' => $id, 'line' => $line, 'date' => $start, 'qty' => $need];
         }
 
