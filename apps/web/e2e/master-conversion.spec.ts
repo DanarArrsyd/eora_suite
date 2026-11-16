@@ -216,6 +216,14 @@ test('a role that approves conversion data only gets Master Data → Conversion 
   await expect(menu.getByRole('link', { name: 'BOMs' })).toHaveCount(0);
 });
 
+test('a link into a module outside the role shows the role menu, never the menu of that module (D-126)', async ({ page }) => {
+  await setup(page, { ...SESSION, permissions: ['master.conversion.view', 'master.conversion.approve'] });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/production/runs');
+  await expect(page.getByRole('navigation', { name: 'Production menu' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Master Data menu' }).getByRole('link', { name: 'Conversion Data' })).toBeVisible();
+});
+
 test('a link to an old version opens that version even when it is not on the first page', async ({ page }) => {
   await setup(page);
   const v2 = { ...NW, id: '00000000-0000-7000-8000-000000000512', versionNo: 2, status: 'VALIDATED', netWeightKg: '0.288000' };

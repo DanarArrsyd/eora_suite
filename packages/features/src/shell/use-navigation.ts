@@ -43,7 +43,8 @@ export function useShellNavigation(): ShellNavigation {
   const menuModuleId = preview?.pathname === pathname ? preview.moduleId : undefined;
   const setMenuModuleId = React.useCallback((id: string | undefined) => setPreview(id ? { pathname, moduleId: id } : undefined), [pathname]);
 
-  const menuModule = modules.find((m) => m.id === (menuModuleId ?? match?.module.id)) ?? match?.module ?? modules[0];
+  // the secondary menu comes from the user's own modules only: a deep link into another module never shows its full menu
+  const menuModule = modules.find((m) => m.id === (menuModuleId ?? match?.module.id)) ?? modules[0];
   const badgeFor = React.useCallback((m: NavModule) => moduleBadge(m, counts), [counts]);
   const activeModuleId = menuModuleId ?? match?.module.id;
   return { modules, counts, match, menuModule, activeModuleId, setMenuModuleId, badgeFor, pathname };
