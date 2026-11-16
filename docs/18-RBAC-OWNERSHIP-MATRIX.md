@@ -86,6 +86,7 @@ The role templates below are what `eora:tenants:sync` grants; they supersede the
 | `demand.forecast` *(M5)* | V: AUD CSA DLV PPC · C P: PPC | Draft forecast versions per customer + plant (C) and activate them (P), no approval (D-122) |
 | `demand.sales_order` revise *(M5)* | P: PPC | Revise a firm schedule line with a reason (D-122) |
 | `planning.mps` *(M5)* | V: AUD CSA MAT PPC PRL · C S: PPC · A: CSA | Calculate, recalculate, adjust a planned order with a reason and cancel a draft (C), submit (S); approve or return with a reason (A), never by anyone who ever calculated, submitted or adjusted it (`mps_contributors`), also in SQL (SoD-07, D-123) |
+| `planning.mrp` *(M5)* | V: AUD CSA INV MAT PPC PRL · C: PPC | Run MRP from the plant's approved MPS (C; a read-only snapshot, no approval) and read its planned work orders and material shortages (D-124) |
 
 ## 3. Separation-of-duties rules (enforced in policy layer)
 | SoD-ID | Conflict | Rule |

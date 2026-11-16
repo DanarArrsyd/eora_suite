@@ -57,6 +57,7 @@ use App\Modules\Planning\Queries\ConversionProfilesQuery;
 use App\Modules\Planning\Queries\ConversionProfileVersionsQuery;
 use App\Modules\Planning\Queries\ItemWeightsQuery;
 use App\Modules\Planning\Queries\MpsVersionsQuery;
+use App\Modules\Planning\Queries\MrpRunsQuery;
 use App\Modules\Planning\Queries\PlanParametersQuery;
 use App\Modules\Planning\Queries\ProcessTypesQuery;
 use App\Modules\Planning\Queries\RoutingsQuery;
@@ -152,6 +153,7 @@ return [
         'planning.wo_close_exceptions' => WoCloseExceptionsQuery::class,
         'planning.plan_parameters' => PlanParametersQuery::class,
         'planning.mps_versions' => MpsVersionsQuery::class,
+        'planning.mrp_runs' => MrpRunsQuery::class,
         'demand.forecast_versions' => ForecastVersionsQuery::class,
         'demand.forecast_lines' => ForecastLinesQuery::class,
         'materials.inbound_schedule' => InboundScheduleQuery::class,

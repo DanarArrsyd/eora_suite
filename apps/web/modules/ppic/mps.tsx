@@ -214,6 +214,9 @@ function MpsPage({ id }: { id: string }) {
   const canCreate = permissions.includes('planning.mps.create');
   const canSubmit = permissions.includes('planning.mps.submit');
   const canApprove = permissions.includes('planning.mps.approve');
+  const canRunMrp = permissions.includes('planning.mrp.create');
+  const [runningMrp, setRunningMrp] = React.useState(false);
+  const [mrpProblem, setMrpProblem] = React.useState<string | null>(null);
   const router = useRouter();
   const client = useQueryClient();
   const [notice, setNotice] = React.useState<string | null>(null);
@@ -286,6 +289,18 @@ function MpsPage({ id }: { id: string }) {
       }[name],
     );
   };
+  const runMrp = async () => {
+    setRunningMrp(true);
+    setMrpProblem(null);
+    try {
+      const result = (await call(() => api.POST('/planning/mrp-runs', { body: { mpsVersionId: id } }))) as unknown as { data: { id: string } };
+      void client.invalidateQueries({ queryKey: ['master'] });
+      router.push(`/ppic/mrp?run=${result.data.id}`);
+    } catch (e) {
+      setMrpProblem(failureMessage(e, 'MRP could not be run.'));
+      setRunningMrp(false);
+    }
+  };
   const notConfigured = m.capacity.length > 0 && m.capacity.every((c) => c.status === 'NOT_CONFIGURED');
 
   return (
@@ -313,6 +328,11 @@ function MpsPage({ id }: { id: string }) {
               Submit for approval
             </Button>
           ) : null}
+          {m.status === 'APPROVED' && canRunMrp ? (
+            <Button variant="primary" disabled={runningMrp} onClick={() => void runMrp()}>
+              Run MRP
+            </Button>
+          ) : null}
           {m.status === 'SUBMITTED' && canApprove ? (
             <>
               <Button onClick={() => setAction('return')}>Return</Button>
@@ -335,6 +355,11 @@ function MpsPage({ id }: { id: string }) {
             </Button>
           }
         />
+      ) : null}
+      {mrpProblem ? (
+        <InlineAlert tone="danger" title="MRP not run" className="mb-4">
+          {mrpProblem}
+        </InlineAlert>
       ) : null}
       {m.inputsChanged ? (
         <InlineAlert tone="warning" title="Data changed since this calculation" className="mb-4">

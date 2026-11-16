@@ -71,3 +71,16 @@ Persiapan: forecast aktif OEM-A di P1 untuk BRK-A100 (§2), mis. 700 PCS dua min
 | 12 | Lihat **Capacity load**. | Tanpa kalender shift: "Capacity not configured", jam beban per work center, tanpa persen. | |
 | 13 | Login `aud` → PPIC → Master Production Schedule. | Daftar dan halaman terlihat, tanpa tombol aksi. | |
 
+## 4. MRP dasar (langkah 4, D-124)
+Persiapan: `eora:tenants:sync` (izin baru `planning.mrp`). MPS P1 sudah **Approved** dengan planned order (§3). Opsional: Master Data → Planning Parameters → lead time beli untuk COIL-SPCC-12; Materials → Inbound Schedule untuk NUT-M8.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `ppc` → PPIC → Master Production Schedule → MPS yang Approved → **Run MRP**. | Pindah ke halaman `MRP-P1-<tahun>-0001`. | |
+| 2 | Lihat **Planned work orders**. | Planned order FG dari MPS (From: MPS, BOM v…); bila BOM memakai item Semi-Finished: planned WO anak (jatuh tempo = tanggal mulai induk). | |
+| 3 | Lihat **Material shortages**. | Per bahan: qty kurang dalam UOM bahan (kg / pcs), **Needed on** = tanggal mulai planned order pemakainya, **Order by** = dikurangi lead time beli (hari kerja Senin–Sabtu); lead time kosong tampil "Not configured". | |
+| 4 | Lihat **Per item**. | On hand, untuk WO released (sisa kebutuhan), incoming (inbound), safety stock. Kebutuhan = qty × BOM per pcs (scrap tidak dihitung dua kali). | |
+| 5 | Tambah inbound NUT-M8 yang cukup sebelum tanggal butuh → kembali ke MPS → **Run MRP** lagi. | Run baru `…-0002`; NUT-M8 tidak lagi kurang; run lama tetap tersimpan apa adanya. | |
+| 6 | Coba Run MRP dari MPS Draft/Submitted. | Tidak ada tombol Run MRP. | |
+| 7 | Login `mat` → PPIC → MRP Results. | Daftar run dan halaman run terlihat, tanpa tombol Run MRP. | |
+
