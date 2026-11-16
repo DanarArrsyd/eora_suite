@@ -29,6 +29,10 @@ use stdClass;
  */
 final class MrpPlanner
 {
+    private MpsInputs $live;
+
+    public function __construct(private readonly MpsInputs $inputs) {}
+
     private const array OPEN_WO = ['RELEASED', 'IN_PROGRESS', 'ON_HOLD'];
 
     private const int MAX_LEVEL = 20;
@@ -62,6 +66,7 @@ final class MrpPlanner
         [$this->runId, $this->plant, $this->today, $this->horizonStart, $this->weeks] = [$runId, $plant, $today, $horizonStart, $weeks];
         $end = (new DateTimeImmutable($horizonStart))->modify('+'.(7 * $weeks - 1).' days')->format('Y-m-d');
         $this->days = MpsInputs::workingDays($db, $plant, $horizonStart, $end);
+        $this->live = $this->inputs->load($db, $plant);
         $this->reset();
 
         // the MPS's items (with or without planned orders) and its planned orders
@@ -115,7 +120,7 @@ final class MrpPlanner
             sort($items);
             foreach ($items as $item) {
                 if (isset($mps[$item])) {
-                    $this->planMpsItem($db, $item, $level, $mps[$item], $orders[$item] ?? []);
+                    $this->planMpsItem($db, $item, $level, $orders[$item] ?? []);
                 } elseif (isset($this->pending[$item]) || isset($safetySet[$item])) {
                     $this->plan($db, $item, $level);
                 }
@@ -130,85 +135,47 @@ final class MrpPlanner
 
     /**
      * An item of the MPS: its MPS planned orders are written (and exploded) as approved; dependent demand on it is netted
-     * against the MPS's own position (opening, demand, supply and planned orders as supply), so stock its independent
-     * demand uses is never counted twice; what is still short becomes MRP orders on top.
+     * together with its independent demand against its live position and the MPS orders not yet released (as supply), so
+     * stock its independent demand uses is never counted twice; what is still short becomes MRP orders on top.
      *
      * @param  list<array{mps: string, qty: numeric-string, due: string, start: string, week: string, warnings: list<string>}>  $orders
      */
-    private function planMpsItem(EoraPostgresConnection $db, string $item, int $level, string $mpsItem, array $orders): void
+    private function planMpsItem(EoraPostgresConnection $db, string $item, int $level, array $orders): void
     {
         $kind = $this->kindOf($db, $item);
-        $m = $db->selectOne('select trim_scale(on_hand)::text as on_hand, trim_scale(out_of_scope_allocated)::text as oos, trim_scale(safety_stock)::text as ss,
-                                    production_lead_time_days as lead, uom_id from mps_items where id = ?', [$mpsItem]);
-        $in = new MpsItemInput($item, (string) $m->uom_id);
-        $in->onHand = MpsItemInput::num($m->on_hand);
-        $in->safetyStock = $m->ss === null ? null : MpsItemInput::num($m->ss);
-        $in->leadTimeDays = $m->lead === null ? null : (int) $m->lead;
-        // what released work orders still need of it is not in the MPS: it is committed on top of the MPS's allocations
+        // the item's live position as the MPS reads it: stock, allocations beyond the horizon, safety stock, its independent
+        // demand (firm + net forecast) and supply (QC released, every live work order incl. Drafts from the plan)
+        $live = $this->live->items[$item] ?? null;
         $own = $this->input($db, $item, $kind);
-        $in->outOfScope = bcadd(MpsItemInput::num($m->oos), $own->outOfScope, 6);
-        $drafts = $own->demands;
+        $in = new MpsItemInput($item, $live->uomId ?? $own->uomId);
+        $in->onHand = $live->onHand ?? $own->onHand;
+        $in->safetyStock = $live === null ? $own->safetyStock : $live->safetyStock;
+        $in->leadTimeDays = $live === null ? $own->leadTimeDays : $live->leadTimeDays;
+        // what released work orders still need of it, on top of the allocations beyond the horizon
+        $in->outOfScope = bcadd($live->outOfScope ?? '0', $own->outOfScope, 6);
+        $drafts = $own->demands; // what Drafts from the plan need of it (dated)
         $in->demands = $drafts;
         $row = $this->insertItem($db, $item, $kind, $level, $in);
+        $unreleased = [];
         foreach ($orders as $o) {
             // an MPS order already released to a live work order (from any run of this MPS) is that work order now: its
-            // components are committed through the work order, not exploded again (D-125)
+            // components count through the work order, it is not exploded again, and it supplies as the work order (D-125)
             $converted = $db->selectOne(
                 "select 1 as ok from work_orders w join mrp_orders x on x.id = w.mrp_order_id where w.status <> 'CANCELLED' and x.mps_planned_order_id = ?",
                 [$o['mps']],
             ) !== null;
             $this->makeOrder($db, $item, 'MPS', $o['mps'], $o['week'], $o['qty'], $o['due'], $o['start'], $o['warnings'], ! $converted);
+            if (! $converted) {
+                $unreleased[] = ['key' => 'mps:'.$o['mps'], 'kind' => 'MPS', 'date' => $o['due'], 'qty' => $o['qty']];
+            }
         }
         if (! isset($this->pending[$item]) && $drafts === []) {
             return;
         }
-        foreach ($db->select('select id, kind, due_date::text as d, trim_scale(qty)::text as q from mps_demands where mps_item_id = ?', [$mpsItem]) as $d) {
-            $in->demands[] = ['key' => 'mps:'.$d->id, 'kind' => 'FIRM', 'date' => (string) $d->d, 'qty' => MpsItemInput::num($d->q)];
+        foreach ($live === null ? [] : $live->demands as $d) {
+            $in->demands[] = [...$d, 'key' => 'mps:'.$d['key']];
         }
-        // live work orders of the item as they stand now (quantity still to make, due date)
-        $ownWo = [];
-        foreach ($own->supplies as $sup) {
-            if ($sup['kind'] === 'WORK_ORDER') {
-                $ownWo[$sup['key']] = $sup;
-            }
-        }
-        // the MPS's supply: a work order it captured counts as it stands now (edited, partly made or done), other supply as
-        // captured
-        foreach ($db->select('select id, work_order_id, supply_date::text as d, trim_scale(qty)::text as q from mps_supplies where mps_item_id = ?', [$mpsItem]) as $s) {
-            if ($s->work_order_id === null) {
-                $in->supplies[] = ['key' => 'mps:'.$s->id, 'kind' => 'MPS', 'date' => (string) $s->d, 'qty' => MpsItemInput::num($s->q)];
-            } elseif (isset($ownWo[(string) $s->work_order_id])) {
-                $in->supplies[] = $ownWo[(string) $s->work_order_id];
-            }
-        }
-        // an MPS order released to a live work order is that work order now: its current quantity (still to make) and due date
-        foreach ($orders as $o) {
-            $wo = $db->selectOne(
-                "select w.id from work_orders w join mrp_orders x on x.id = w.mrp_order_id where w.status <> 'CANCELLED' and x.mps_planned_order_id = ? limit 1",
-                [$o['mps']],
-            );
-            if ($wo === null) {
-                $in->supplies[] = ['key' => 'mps:'.$o['mps'], 'kind' => 'MPS', 'date' => $o['due'], 'qty' => $o['qty']];
-            } elseif (isset($ownWo[(string) $wo->id])) {
-                $in->supplies[] = $ownWo[(string) $wo->id];
-            }
-        }
-        // live work orders of the item the MPS did not know (released since, e.g. child work orders from MRP); those it
-        // counted, and those released from its own planned orders (counted as those orders above), are not added again
-        $known = [];
-        foreach ($db->select(
-            'select s.work_order_id as id from mps_supplies s where s.mps_item_id = ? and s.work_order_id is not null
-             union select w.id from work_orders w join mrp_orders x on x.id = w.mrp_order_id join mps_planned_orders p on p.id = x.mps_planned_order_id
-              where p.mps_item_id = ?',
-            [$mpsItem, $mpsItem],
-        ) as $k) {
-            $known[(string) $k->id] = true;
-        }
-        foreach ($own->supplies as $s) {
-            if ($s['kind'] === 'WORK_ORDER' && ! isset($known[$s['key']])) {
-                $in->supplies[] = $s;
-            }
-        }
+        $in->supplies = [...($live === null ? $own->supplies : $live->supplies), ...$unreleased];
         $this->netDependent($db, $item, $kind, $row, $in, false);
     }
 
