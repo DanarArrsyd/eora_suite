@@ -171,12 +171,14 @@ it('checks the draft: finished item, due date from today, a note for Other, a fi
     woCreate($this, $s, ['reasonCode' => 'OTHER'])->assertStatus(422)->assertJsonValidationErrors(['note']);
     woCreate($this, $s, ['qty' => '2.5'])->assertStatus(422)->assertJsonValidationErrors(['qty']);
 
-    // a firm delivery of the item, from a confirmed sales order
+    // a firm delivery of the item, from a sales order delivery confirmed (D-127)
+    $dlv = rtSwitch($this, $this->t, 'DLV');
     $so = spa($this)->postJson('/api/v1/demand/sales-orders', ['plantId' => $s['plant'], 'customerId' => $s['customer']])->assertCreated()->json('data');
     $so = spa($this)->putJson("/api/v1/demand/sales-orders/{$so['id']}/lines", ['lines' => [['customerItemId' => $s['part'], 'customerPoNo' => 'PO-9', 'customerPoLine' => '1',
         'schedules' => [['requirementDate' => rtDayFrom($s['today'], 7), 'qty' => '80']]]]], ['If-Match' => '"'.$so['version'].'"'])->assertOk()->json('data');
     $so = spa($this)->postJson("/api/v1/demand/sales-orders/{$so['id']}/actions/confirm", [], ['If-Match' => '"'.$so['version'].'"'])->assertOk()->json('data');
     $schedule = $so['lines'][0]['schedules'][0]['id'];
+    $ppc = rtSwitch($this, $this->t, 'PPC');
     spa($this)->getJson("/api/v1/query/demand.schedule_lines?filter[status]=FIRM&filter[itemId]={$s['item']['id']}")->assertOk()
         ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $schedule)->assertJsonPath('data.0.code', $so['code'])->assertJsonPath('data.0.qty', '80');
     woCreate($this, $s, ['scheduleLineId' => $s['bom']['id']])->assertStatus(422)->assertJsonValidationErrors(['scheduleLineId']);
@@ -195,8 +197,10 @@ it('checks the draft: finished item, due date from today, a note for Other, a fi
     }
     // a delivery cancelled while its WO waits for release: the request still goes back to draft, where the peg is changed
     $pegged = woAct($this, $wo['id'], 'submit', $wo['version'])->assertOk()->json('data');
+    signIn($this, $dlv, $this->t);
     spa($this)->postJson("/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$schedule}/actions/cancel", ['reason' => 'Customer cancelled'],
         ['If-Match' => '"'.$so['version'].'"'])->assertOk();
+    signIn($this, $ppc, $this->t);
     $wo = woAct($this, $wo['id'], 'withdraw', $pegged['version'])->assertOk()->assertJsonPath('data.status', 'DRAFT')->json('data');
     woAct($this, $wo['id'], 'submit', $wo['version'])->assertStatus(422)->assertJsonValidationErrors(['scheduleLineId']);
     $edited = spa($this)->patchJson("/api/v1/planning/work-orders/{$wo['id']}", ['qty' => '150', 'scheduleLineId' => null], ['If-Match' => '"'.$wo['version'].'"'])
