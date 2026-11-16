@@ -10,8 +10,8 @@ use Tests\Support\TenantFixtures;
 /*
  * M4 step 1 (doc 33 §1.1, D-107, D-034, BR-DEM-05/06/10, doc 16 §12): Sales Orders with Delivery Schedule Lines.
  * Owner rules 2026-11-12: customer PO as a reference on the line (one active SO line per PO line), line quantity =
- * sum of its schedule lines, finished items through an active customer part mapping, dates today or later, PPC
- * confirms alone, a confirmed order only gains or cancels lines, drafts are cancelled, never deleted.
+ * sum of its schedule lines, finished items through an active customer part mapping, dates today or later, delivery
+ * (DLV, D-127; PPC before) confirms alone, a confirmed order only gains or cancels lines, drafts are cancelled, never deleted.
  */
 
 beforeEach(function () {
@@ -58,7 +58,7 @@ function soWith(object $test, string $method, string $uri, array $body, int $ver
 
 it('drafts, fills and confirms an order into firm demand; the line quantity is the sum of its schedule lines', function () {
     $f = $this->f;
-    orgUser($this, $this->t, 'PPC');
+    orgUser($this, $this->t, 'DLV');
     $year = substr($f['today'], 0, 4);
     $draft = soCreate($this, $f, ['note' => 'Launch order'])->assertCreated()->assertJsonPath('data.status', 'DRAFT')
         ->assertJsonPath('data.code', "SO-P1-{$year}-0001")->assertJsonPath('data.customerCode', 'OEM-A');
@@ -88,7 +88,7 @@ it('drafts, fills and confirms an order into firm demand; the line quantity is t
 
 it('takes only an active finished customer part of the order\'s customer, today or later, each customer PO line once (BR-DEM-05)', function () {
     $f = $this->f;
-    orgUser($this, $this->t, 'PPC');
+    orgUser($this, $this->t, 'DLV');
     $a = soCreate($this, $f)->assertCreated()->json('data');
     $put = fn (array $lines, int $v) => soWith($this, 'PUT', "/api/v1/demand/sales-orders/{$a['id']}/lines", ['lines' => $lines], $v);
 
@@ -124,7 +124,7 @@ it('takes only an active finished customer part of the order\'s customer, today 
 
 it('cancels firm schedule lines with a reason and the line with its last one; refuses a past date and an allocated line', function () {
     $f = $this->f;
-    orgUser($this, $this->t, 'PPC');
+    orgUser($this, $this->t, 'DLV');
     $so = soCreate($this, $f)->assertCreated()->json('data');
     $uri = "/api/v1/demand/sales-orders/{$so['id']}";
     $v = soWith($this, 'PUT', "{$uri}/lines", ['lines' => [soLine($f)]], $so['version'])->json('data.version');
@@ -164,18 +164,18 @@ it('cancels firm schedule lines with a reason and the line with its last one; re
 
 it('keeps orders inside the plant scope and the confirm and edits with their permissions', function () {
     $f = $this->f;
-    orgUser($this, $this->t, 'PPC');
+    orgUser($this, $this->t, 'DLV');
     $so = soCreate($this, $f)->assertCreated()->json('data');
     soWith($this, 'PUT', "/api/v1/demand/sales-orders/{$so['id']}/lines", ['lines' => [soLine($f)]], $so['version'])->assertOk();
     $so = spa($this)->getJson("/api/v1/demand/sales-orders/{$so['id']}")->json('data');
     soCreate($this, $f, ['plantId' => $f['plant2']])->assertCreated();
 
-    // a planner of plant 2 neither sees nor changes the plant 1 order
-    rtSwitch($this, $this->t, 'PPC', ['PLANT', $f['plant2']]);
+    // delivery of plant 2 neither sees nor changes the plant 1 order
+    rtSwitch($this, $this->t, 'DLV', ['PLANT', $f['plant2']]);
     spa($this)->getJson("/api/v1/demand/sales-orders/{$so['id']}")->assertNotFound();
     spa($this)->getJson('/api/v1/query/demand.sales_orders')->assertOk()->assertJsonCount(1, 'data');
     soCreate($this, $f)->assertForbidden();
-    // the customer PO line stays unique across plants (BR-DEM-05), but the plant 1 order is not named to this planner
+    // the customer PO line stays unique across plants (BR-DEM-05), but the plant 1 order is not named to this user
     $own = soCreate($this, $f, ['plantId' => $f['plant2']])->assertCreated()->json('data');
     soWith($this, 'PUT', "/api/v1/demand/sales-orders/{$own['id']}/lines", ['lines' => [soLine($f)]], $own['version'])
         ->assertStatus(422)->assertJsonValidationErrors(['lines.0.customerPoLine' => 'Customer PO PO-1001 line 10 is already on another order.']);
@@ -189,7 +189,7 @@ it('keeps orders inside the plant scope and the confirm and edits with their per
 
 it('refuses in the database what the lifecycle forbids: editing a firm line, deleting from a confirmed order, reusing a PO line', function () {
     $f = $this->f;
-    orgUser($this, $this->t, 'PPC');
+    orgUser($this, $this->t, 'DLV');
     $so = soCreate($this, $f)->assertCreated()->json('data');
     $v = soWith($this, 'PUT', "/api/v1/demand/sales-orders/{$so['id']}/lines", ['lines' => [soLine($f)]], $so['version'])->json('data.version');
     $confirmed = soWith($this, 'POST', "/api/v1/demand/sales-orders/{$so['id']}/actions/confirm", [], $v)->assertOk()->json('data');
@@ -215,7 +215,7 @@ it('refuses in the database what the lifecycle forbids: editing a firm line, del
 
 it('revises a firm schedule line: superseded with its delivered quantity, new lines take the next revision and the outstanding (D-122, BR-DEM-11)', function () {
     $f = $this->f;
-    orgUser($this, $this->t, 'PPC');
+    orgUser($this, $this->t, 'DLV');
     $so = soCreate($this, $f)->assertCreated()->json('data');
     $filled = soWith($this, 'PUT', "/api/v1/demand/sales-orders/{$so['id']}/lines", ['lines' => [soLine($f, schedules: [['+3', '250']])]], $so['version'])->assertOk()->json('data');
     $order = soWith($this, 'POST', "/api/v1/demand/sales-orders/{$so['id']}/actions/confirm", [], $filled['version'])->assertOk()->json('data');
@@ -267,7 +267,7 @@ it('revises a firm schedule line: superseded with its delivered quantity, new li
 
 it('keeps forecast versions per customer and plant; firm demand of the same week consumes the forecast once (D-122, BR-DEM-08)', function () {
     $f = $this->f;
-    $planner = orgUser($this, $this->t, 'PPC');
+    $planner = orgUser($this, $this->t, 'DLV');
     // a firm order of OEM-A: 250 in the week of today + 3
     $so = soCreate($this, $f)->assertCreated()->json('data');
     $filled = soWith($this, 'PUT', "/api/v1/demand/sales-orders/{$so['id']}/lines", ['lines' => [soLine($f, schedules: [['+3', '250']])]], $so['version'])->assertOk()->json('data');
@@ -315,8 +315,8 @@ it('keeps forecast versions per customer and plant; firm demand of the same week
         ->assertOk()->json('data.lines');
     expect(collect($alts)->mapWithKeys(fn ($l) => [$l['customerPartNo'] => $l['netQty']])->all())->toBe(['A-77101' => '0', 'A-77101-ALT' => '100']);
 
-    // only a planner writes a forecast
-    rtSwitch($this, $this->t, 'DLV');
+    // delivery writes the forecast; the planner reads it (D-127)
+    rtSwitch($this, $this->t, 'PPC');
     spa($this)->getJson('/api/v1/query/demand.forecast_versions')->assertOk()->assertJsonCount(3, 'data');
     spa($this)->postJson('/api/v1/demand/forecast-versions', ['plantId' => $f['plant'], 'customerId' => $f['oemB']])->assertForbidden();
     expect($v2['status'])->toBe('ACTIVE');

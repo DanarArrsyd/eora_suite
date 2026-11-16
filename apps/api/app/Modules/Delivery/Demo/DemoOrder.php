@@ -29,7 +29,7 @@ use stdClass;
 /**
  * One full order for a demo tenant (doc 33 §1.9, D-118, M4 exit): with the sample master data and the opening stock
  * (`eora:demo:master`, `eora:demo:stock`), the M4 flow runs through the real endpoints, each step as the demo account of
- * its role — BOM and routing of BRK-A100 approved (ppc asks, csa decides), a sales order of OEM-A for 300 PCS (ppc), a
+ * its role — BOM and routing of BRK-A100 approved (ppc asks, csa decides), a sales order of OEM-A for 300 PCS (dlv), a
  * work order for it (ppc asks, csa releases), coil and nuts issued (mat), one run posted and closed (prl), its output
  * released by QC (qci), received into FG (fgw), 200 allocated (dlv) and picked (fgw), and 150 shipped (dlv) — so the
  * trace, the order's delivered quantity and the stock show a real, partly shipped order.
@@ -115,19 +115,19 @@ final class DemoOrder
             $progress("{$what} of BRK-A100 approved");
         }
 
-        // 2. the sales order: OEM-A, 300 PCS a week from today (ppc)
+        // 2. the sales order: OEM-A, 300 PCS a week from today (dlv enters demand, D-127)
         $so = $this->find($tenant, 'select id, so_no, status, version from sales_order_headers where note = ? order by created_at limit 1');
         if ($so === null) {
-            $so = (object) $this->call($tenant, $ppc, SalesOrderController::class, 'store', ['plantId' => $m['plant'], 'customerId' => $m['customer'], 'note' => self::NOTE]);
+            $so = (object) $this->call($tenant, $dlv, SalesOrderController::class, 'store', ['plantId' => $m['plant'], 'customerId' => $m['customer'], 'note' => self::NOTE]);
             $so->status = 'DRAFT';
         }
         $soId = (string) $so->id;
         if ($so->status === 'DRAFT') {
             $due = (new DateTimeImmutable('today'))->modify('+7 days')->format('Y-m-d');
-            $filled = $this->call($tenant, $ppc, SalesOrderController::class, 'putLines', ['lines' => [[
+            $filled = $this->call($tenant, $dlv, SalesOrderController::class, 'putLines', ['lines' => [[
                 'customerItemId' => $m['part'], 'customerPoNo' => 'PO-DEMO-M4', 'customerPoLine' => '10', 'schedules' => [['requirementDate' => $due, 'qty' => '300']],
             ]]], [$soId], ['If-Match' => '"'.$so->version.'"']);
-            $this->call($tenant, $ppc, SalesOrderController::class, 'confirm', [], [$soId], ['If-Match' => '"'.$filled['version'].'"']);
+            $this->call($tenant, $dlv, SalesOrderController::class, 'confirm', [], [$soId], ['If-Match' => '"'.$filled['version'].'"']);
         }
         $line = $this->system($tenant, fn (EoraPostgresConnection $db) => $db->selectOne(
             'select s.id, s.requirement_date::text as due, h.so_no from delivery_schedule_lines s join sales_order_lines ol on ol.id = s.so_line_id

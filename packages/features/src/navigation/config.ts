@@ -124,7 +124,8 @@ export const NAV_MODULES: readonly NavModule[] = [
           {
             id: 'sales-orders',
             live: true,
-            menu: ['demand.sales_order.create', 'demand.sales_order.post'],
+            // delivery enters demand; the planner reads it (D-127)
+            menu: ['demand.sales_order.create', 'demand.sales_order.post', 'planning.mps.create'],
             label: 'Sales Orders',
             icon: FileCheck,
             release: 'R1',
@@ -140,7 +141,7 @@ export const NAV_MODULES: readonly NavModule[] = [
           {
             id: 'forecast',
             live: true,
-            menu: ['demand.forecast.create'],
+            menu: ['demand.forecast.create', 'planning.mps.create'],
             label: 'Forecast',
             icon: TrendingUp,
             release: 'R1',
@@ -416,7 +417,8 @@ export const NAV_MODULES: readonly NavModule[] = [
           {
             id: 'pending-qc',
             live: true,
-            menu: ['quality.inspection.create', 'quality.disposition_release.approve'],
+            // the planner sees what waits for QC before planning more (D-127); read only
+            menu: ['quality.inspection.create', 'quality.disposition_release.approve', 'planning.mps.create', 'planning.wo.create'],
             label: 'Pending QC Queue',
             icon: Hourglass,
             release: 'R1',

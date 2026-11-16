@@ -71,7 +71,7 @@ The role templates below are what `eora:tenants:sync` grants; they supersede the
 
 | Resource | Templates | Used for |
 |---|---|---|
-| `demand.sales_order` | V: AUD CSA DLV FGW PPC · C S P: PPC | Draft/edit (C), confirm and change confirmed (P); no second approver (D-108) |
+| `demand.sales_order` | V: AUD CSA DLV FGW PPC · C S P: DLV *(PPC until D-127)* | Draft/edit (C), confirm and change confirmed (P); no second approver (D-108) |
 | `planning.wo` | V: all operational roles · C S P: PPC · A: CSA | Draft, ask release (PPC), release by a second person (CSA, D-109); close (P, D-117) |
 | `planning.wo_close_exception` | V: AUD CSA INV PPC · R: PPC · A: CSA INV | Ask with reason (PPC), decided by CSA/INV, never who asked (D-117) |
 | `materials.issue` | V: AUD CSA INV MAT PPC PRL · C S: MAT · P: MAT PRL | Issue to a work center (MAT, D-110) |
@@ -84,8 +84,8 @@ The role templates below are what `eora:tenants:sync` grants; they supersede the
 | `traceability.lot_trace` | V: AUD CSA INV | Backward/forward lot trace (D-118) |
 | `planning.plan_parameter` *(M5)* | V: AUD CSA INV MAT PPC PRL · C: PPC | Lead times and safety stock per item + plant, changed directly, audited (D-121) |
 | `materials.inbound_schedule` *(M5)* | V: AUD CSA INV MAT PPC · C: MAT PPC | Supplier inbound lines: add, edit, cancel with reason (D-087, D-121) |
-| `demand.forecast` *(M5)* | V: AUD CSA DLV PPC · C P: PPC | Draft forecast versions per customer + plant (C) and activate them (P), no approval (D-122) |
-| `demand.sales_order` revise *(M5)* | P: PPC | Revise a firm schedule line with a reason (D-122) |
+| `demand.forecast` *(M5)* | V: AUD CSA DLV PPC · C P: DLV *(PPC until D-127)* | Draft forecast versions per customer + plant (C) and activate them (P), no approval (D-122) |
+| `demand.sales_order` revise *(M5)* | P: DLV *(PPC until D-127)* | Revise a firm schedule line with a reason (D-122) |
 | `planning.mps` *(M5)* | V: AUD CSA MAT PPC PRL · C S: PPC · A: CSA | Calculate, recalculate, adjust a planned order with a reason and cancel a draft (C), submit (S); approve or return with a reason (A), never by anyone who ever calculated, submitted or adjusted it (`mps_contributors`), also in SQL (SoD-07, D-123) |
 | `planning.mrp` *(M5)* | V: AUD CSA INV MAT PPC PRL · C: PPC | Run MRP from the plant's approved MPS (C; a read-only snapshot, no approval) and read its planned work orders and material shortages (D-124) |
 | `planning.planned_order_release` *(M5)* | P: PPC | Release ticked planned work orders of the latest MRP run of the approved MPS to WO Drafts (D-125); the WO is released by a second person as before (D-109) |
@@ -106,6 +106,7 @@ Break-glass: time-boxed grant, reason, approver, auto-expiry, full audit (doc 05
 - Qualifiers in parentheses ("own WC", "≤ threshold", "pick", "count", "accept", "evidence", "revise", "after confirmation", "QC") grant the letter only; the condition is enforced by that resource's policy in its slice. "V (accept)" on `production.lot_split` for MAT grants V only.
 - Templates: §1 codes plus `TENANT_ADMIN` (D-B1-16: `core.users_roles` VCP, `core.audit` V). PSA has no tenant template (platform only). MAD and APR have no matrix column, so they start empty; their content is tenant configuration (D-060, D-068). Warehouse and work-center scopes (MAT, PRL, OPR, FGW) arrive with B2; in B1 an assignment scope is TENANT, COMPANY or PLANT.
 - **SUP (D-126, migration 004100):** holds every permission; a trigger on `permissions` gives each new one to the template, and `eora:tenants:sync` brings it to existing tenants (and creates the role in a tenant that does not have it yet). Separation of duties is unchanged: a Supervisor still never approves, releases or decides what they prepared themselves (SoD rules in SQL).
+- **D-127 (migration 004200):** demand entry (`demand.sales_order`, `demand.forecast`, `demand.po` create/submit/post) moved from PPC to DLV; PPC reads. `eora:tenants:sync` removes a permission from template roles once the template gave it up (audited); only `eora_provisioner` may delete `role_permissions` rows. The §2 matrix rows for `demand.*` above predate this move.
 - Sidebar (D-126): a signed-in user's menu lists only built screens they may open (`live` + view permission) and, where the item names work permissions (`menu`), only if they hold one of them; `core.audit.view` reads every built screen. Unbuilt or mock screens stay reachable by link but are not listed.
 - `sensitive` permissions (D-B1-25 proposed set): `core.users_roles.*`, every `*.approve`, `inventory.adjustment.*`, `inventory.reversal.*`.
 

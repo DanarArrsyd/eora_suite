@@ -8,7 +8,8 @@ const META = { total: 0, page: { number: 1, size: 20 }, asOf: '2026-11-12T02:00:
 const page1 = (rows: unknown[]) => ({ status: 200, json: { data: rows, meta: { ...META, total: rows.length } } });
 const ID = (n: number) => `00000000-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const ME = (permissions: string[]) => ({ status: 200, json: { ...SESSION, permissions } });
-const PLANNER = [
+// delivery enters demand (D-127)
+const DELIVERY = [
   'demand.sales_order.view',
   'demand.sales_order.create',
   'demand.sales_order.post',
@@ -78,10 +79,10 @@ async function axe(page: Page) {
   expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
 }
 
-test('sales orders: a planner drafts an order, adds a line with its delivery and confirms it', async ({ page }) => {
+test('sales orders: delivery drafts an order, adds a line with its delivery and confirms it', async ({ page }) => {
   let order: Record<string, unknown> = { ...ORDER };
   const writes: { method: string; url: string; body: unknown; ifMatch: string | undefined }[] = [];
-  await mockApi(page, '/auth/me', ME(PLANNER));
+  await mockApi(page, '/auth/me', ME(DELIVERY));
   await mockApi(page, '/query/demand.sales_orders?*', page1([]));
   await mockApi(page, '/query/core.plants?*', page1([{ id: ID(2), code: 'P1', name: 'Plant 1', status: 'ACTIVE', version: 1 }]));
   await mockApi(page, '/query/core.customers?*', page1([{ id: ID(3), code: 'OEM-A', name: 'Sample OEM customer A', status: 'ACTIVE', version: 1 }]));
@@ -172,7 +173,7 @@ test('sales orders: a firm delivery is cancelled only with a reason; a viewer on
     lines: [LINE],
   };
   const writes: { url: string; body: unknown; ifMatch: string | undefined }[] = [];
-  await mockApi(page, '/auth/me', ME(PLANNER));
+  await mockApi(page, '/auth/me', ME(DELIVERY));
   await mockApi(page, '/query/core.customer_items?*', page1([]));
   await page.route('**/api/v1/demand/sales-orders/**', (route) => {
     const req = route.request();
@@ -205,10 +206,13 @@ test('sales orders: a firm delivery is cancelled only with a reason; a viewer on
   await expect(page.getByText('Customer moved the call-off · Planner')).toBeVisible();
   await axe(page);
 
-  // a viewer (e.g. finished-goods warehouse) reads the order, nothing more
-  await mockApi(page, '/auth/me', ME(['demand.sales_order.view']));
+  // the planner reads the order from its menu, nothing more (D-127)
+  await mockApi(page, '/auth/me', ME(['demand.sales_order.view', 'demand.forecast.view', 'quality.inspection.view', 'planning.mps.create']));
   await page.goto(`/demand/sales-orders?order=${ID(1)}`);
   await expect(page.getByRole('heading', { level: 1, name: 'SO-P1-2026-0001' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add line' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Add delivery' })).toHaveCount(0);
+  const menu = page.getByRole('navigation', { name: 'Demand menu' });
+  await expect(menu.getByRole('link', { name: 'Sales Orders' })).toBeVisible();
+  await expect(menu.getByRole('link', { name: 'Forecast' })).toBeVisible();
 });

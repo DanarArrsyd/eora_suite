@@ -31,14 +31,15 @@ function dlFixture(object $test, array $t): array
             'customer' => $customer,
         ];
     });
+    // the planner reads demand; delivery enters and confirms it (D-127)
     $ppc = rtSwitch($test, $t, 'PPC');
+    $dlv = rtSwitch($test, $t, 'DLV');
     $so = spa($test)->postJson('/api/v1/demand/sales-orders', ['plantId' => $f['plant'], 'customerId' => $customer])->assertCreated()->json('data');
     $filled = spa($test)->json('PUT', "/api/v1/demand/sales-orders/{$so['id']}/lines", ['lines' => [[
         'customerItemId' => $part, 'customerPoNo' => 'PO-1', 'customerPoLine' => '10',
         'schedules' => [['requirementDate' => date('Y-m-d', strtotime($f['today'].' +3 days')), 'qty' => '100']],
     ]]], ['If-Match' => '"'.$so['version'].'"'])->assertOk()->json('data');
     $confirmed = spa($test)->json('POST', "/api/v1/demand/sales-orders/{$so['id']}/actions/confirm", [], ['If-Match' => '"'.$filled['version'].'"'])->assertOk()->json('data');
-    $dlv = rtSwitch($test, $t, 'DLV');
 
     // the delivery keys win over earlier fixtures' keys of the same name (an earlier fixture has its own customer)
     return ['so' => $confirmed, 'schedule' => $confirmed['lines'][0]['schedules'][0]['id'], 'staging' => $staging, 'customer' => $customer, 'dlv' => $dlv, 'ppc' => $ppc, 'part' => $part] + $f;
@@ -59,7 +60,7 @@ function shFixture(object $test, array $t): array
 {
     $f = dlFixture($test, $t);
     [$a, $b] = $f['lots'];
-    signIn($test, $f['ppc'], $t);
+    signIn($test, $f['dlv'], $t);
     $so = spa($test)->postJson('/api/v1/demand/sales-orders', ['plantId' => $f['plant'], 'customerId' => $f['customer']])->assertCreated()->json('data');
     $filled = spa($test)->json('PUT', "/api/v1/demand/sales-orders/{$so['id']}/lines", ['lines' => [[
         'customerItemId' => $f['part'], 'customerPoNo' => 'PO-2', 'customerPoLine' => '10',
