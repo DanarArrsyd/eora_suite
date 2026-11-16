@@ -103,20 +103,26 @@ it('plans a semi-finished component as a child work order after netting its stoc
     spa($this)->postJson("/api/v1/planning/bom-versions/{$sfBom['id']}/actions/approve")->assertOk();
     spa($this)->postJson("/api/v1/planning/bom-versions/{$fgBom['id']}/actions/approve")->assertOk();
     mpsAs($this, $this->t, $f['ppc']);
-    spa($this)->postJson('/api/v1/planning/plan-parameters', ['plantId' => $f['plant'], 'itemId' => $sf['id'], 'productionLeadTimeDays' => 1])->assertCreated();
+    // a safety stock of 10 makes the MPS plan SF-100 itself (independent), on top of which the FG needs 270 of it
+    spa($this)->postJson('/api/v1/planning/plan-parameters', ['plantId' => $f['plant'], 'itemId' => $sf['id'], 'productionLeadTimeDays' => 1, 'safetyStock' => '10'])->assertCreated();
     [$mps] = mrpApprovedMps($this, $this->t, $f);
 
     $run = spa($this)->postJson('/api/v1/planning/mrp-runs', ['mpsVersionId' => $mps['id']])->assertCreated()->json('data');
     expect(mrpItem($run, 'BRK-100')['orders'][0]['bomVersionNo'])->toBe(2);
-    // SF-100: no stock → a planned child WO of 270, due on the FG order's start, started 1 working day before (Saturday)
+    // SF-100: its MPS order (safety stock 10) stays, and the FG's 270 become a planned child WO due on the FG order's start,
+    // started 1 working day before (Saturday)
     $blank = mrpItem($run, 'SF-100');
-    expect($blank)->toMatchArray(['kind' => 'MAKE', 'level' => 1])
-        ->and(array_map(static fn (array $o) => [$o['kind'], $o['source'], $o['qty'], $o['dueDate'], $o['startDate'], $o['bomVersionNo']], $blank['orders']))
-        ->toBe([['MAKE', 'MRP', '270', $f['weekB'], date('Y-m-d', strtotime($f['weekB'].' -2 days')), 1]]);
+    // (its row is the MPS item's, level 0)
+    expect($blank)->toMatchArray(['kind' => 'MAKE', 'level' => 0])
+        ->and(collect($blank['orders'])->where('source', 'MPS')->pluck('qty')->all())->toBe(['10'])
+        ->and(array_values(array_map(static fn (array $o) => [$o['kind'], $o['qty'], $o['dueDate'], $o['startDate'], $o['bomVersionNo']],
+            array_filter($blank['orders'], static fn (array $o) => $o['source'] === 'MRP'))))
+        ->toBe([['MAKE', '270', $f['weekB'], date('Y-m-d', strtotime($f['weekB'].' -2 days')), 1]]);
     // coil now comes from the blank (level 2), needed on the blank's start date
     $coil = mrpItem($run, 'COIL-9');
     expect($coil['level'])->toBe(2)
-        ->and(array_map(static fn (array $q) => [$q['dueDate'], $q['qty'], $q['parentItemCode']], $coil['requirements']))->toBe([[date('Y-m-d', strtotime($f['weekB'].' -2 days')), '135', 'SF-100']]);
+        ->and(collect($coil['requirements'])->firstWhere('qty', '135'))->toMatchArray(['dueDate' => date('Y-m-d', strtotime($f['weekB'].' -2 days')), 'parentItemCode' => 'SF-100'])
+        ->and(collect($coil['requirements'])->pluck('qty')->sort()->values()->all())->toBe(['5', '135']);
     expect(array_column(mrpItem($run, 'NUT-9')['requirements'], 'qty'))->toBe(['540']);
 });
 

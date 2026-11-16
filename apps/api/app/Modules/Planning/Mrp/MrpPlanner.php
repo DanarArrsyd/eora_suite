@@ -23,7 +23,7 @@ use DateTimeImmutable;
  * - supply: on hand UNRESTRICTED at the plant (not at production, staging, in transit or virtual) minus what released
  *   work orders still need of it (committed), plus supplier inbound (open, on its expected date) and the remaining output
  *   of released work orders (on their due date); safety stock per item + plant.
- * An item the MPS plans (independent demand) is not netted again here.
+ * An item the MPS plans keeps its MPS orders; dependent demand on it is planned on top, from nothing.
  */
 final class MrpPlanner
 {
@@ -77,10 +77,11 @@ final class MrpPlanner
                 $this->makeOrder($db, $item, 'MPS', $o['mps'], $o['week'], $o['qty'], $o['due'], $o['start'], $o['warnings']);
             }
         }
-        // components deepest-use last: all their parents are exploded before they are netted
+        // components deepest-use last: all their parents are exploded before they are netted; an item the MPS plans keeps
+        // its MPS orders and gets its dependent demand planned on top (its stock serves the MPS demand)
         $byLevel = [];
         foreach ($levels as $item => $level) {
-            if ($level > 0 && ! isset($orders[$item])) {
+            if ($level > 0) {
                 $byLevel[$level][] = (string) $item;
             }
         }
@@ -89,15 +90,14 @@ final class MrpPlanner
             sort($items);
             foreach ($items as $item) {
                 if (isset($this->pending[$item])) {
-                    $this->plan($db, $item, $level);
+                    $this->plan($db, $item, $level, isset($orders[$item]));
                 }
             }
         }
-        // a component reached outside the levels (a BOM in force only later) and items with a safety stock are planned too
-        foreach (array_keys($this->pending) as $item) {
-            if (! isset($this->rows[$item])) {
-                $this->plan($db, $item, self::MAX_LEVEL);
-            }
+        // components reached outside the levels (a BOM in force only before or after the horizon), and their descendants
+        for ($guard = 0; $this->pending !== [] && $guard < 1000; $guard++) {
+            $item = (string) array_key_first($this->pending);
+            $this->plan($db, $item, self::MAX_LEVEL, isset($orders[$item]) || isset($this->rows[$item]));
         }
         foreach ($db->select(
             "select p.item_id from item_plan_parameters p join items i on i.id = p.item_id
@@ -110,12 +110,24 @@ final class MrpPlanner
         }
     }
 
-    /** Nets an item's dependent demand against its supply and writes its rows (MAKE orders exploded in turn). */
-    private function plan(EoraPostgresConnection $db, string $item, int $level): void
+    /**
+     * Nets an item's dependent demand against its supply and writes its rows (MAKE orders exploded in turn). With
+     * $dependentOnly (an item already in the run, e.g. planned by the MPS) its stock and supply already serve that plan:
+     * the dependent demand is planned on top, from nothing.
+     */
+    private function plan(EoraPostgresConnection $db, string $item, int $level, bool $dependentOnly = false): void
     {
         $kind = $this->kindOf($db, $item);
-        $input = $this->input($db, $item, $kind);
-        $row = $this->insertItem($db, $item, $kind, $level, $input);
+        if ($dependentOnly && isset($this->rows[$item])) {
+            $input = new MpsItemInput($item, (string) $db->selectOne('select base_uom_id from items where id = ?', [$item])->base_uom_id);
+            $p = $db->selectOne('select production_lead_time_days as made, purchase_lead_time_days as bought from item_plan_parameters where plant_id = ? and item_id = ?', [$this->plant, $item]);
+            $lead = $p === null ? null : ($kind === 'MAKE' ? $p->made : $p->bought);
+            $input->leadTimeDays = $lead === null ? null : (int) $lead;
+            $row = $this->rows[$item];
+        } else {
+            $input = $this->input($db, $item, $kind);
+            $row = $this->insertItem($db, $item, $kind, $level, $input);
+        }
         foreach ($this->pending[$item] ?? [] as $d) {
             $req = (string) $db->selectOne(
                 'insert into mrp_requirements (tenant_id, mrp_run_id, mrp_item_id, parent_order_id, bom_line_id, due_date, qty)
@@ -156,10 +168,12 @@ final class MrpPlanner
      */
     private function makeOrder(EoraPostgresConnection $db, string $item, string $source, ?string $mps, string $week, string $qty, string $due, string $start, array $warnings): string
     {
+        // an order whose start has passed starts today: the BOM in force today
+        $on = max($start, $this->today);
         $bom = $db->selectOne(
             "select id from bom_versions where item_id = ? and status in ('APPROVED', 'SUPERSEDED')
                 and effective_from <= ?::date and (effective_to is null or effective_to >= ?::date) order by effective_from desc limit 1",
-            [$item, $start, $start],
+            [$item, $on, $on],
         );
         $lines = [];
         if ($bom === null) {
@@ -170,7 +184,7 @@ final class MrpPlanner
                    from bom_lines l join items i on i.id = l.component_item_id where l.bom_version_id = ? and i.item_type <> 'SCRAP' order by l.line_no",
                 [$bom->id],
             ) as $l) {
-                $need = $this->toBase($db, (string) $l->component_item_id, (string) $l->uom_id, (string) $l->base_uom_id, bcmul($qty, MpsItemInput::num($l->per), 6), $start);
+                $need = $this->toBase($db, (string) $l->component_item_id, (string) $l->uom_id, (string) $l->base_uom_id, bcmul($qty, MpsItemInput::num($l->per), 6), $on);
                 if ($need === null) {
                     $warnings[] = 'UOM_CONVERSION_MISSING';
                 } elseif (bccomp($need, '0', 6) > 0) {
@@ -198,16 +212,22 @@ final class MrpPlanner
         )->q);
         // what released work orders still need of it: required (in the base unit) − issued to them
         $committed = '0';
+        $byOrder = [];
         foreach ($db->select(
             "select m.work_order_id, m.uom_id, trim_scale(m.required_qty)::text as required, i.base_uom_id,
                     coalesce((select sum(g.qty_signed) from inventory_movements g join locations gl on gl.id = g.location_id and gl.location_type = 'MAT_AT_PROD'
-                               where g.wo_id = m.work_order_id and g.item_id = m.component_item_id and g.movement_code = 'ISSUE_TO_PROD'), 0) as issued
+                               where g.wo_id = m.work_order_id and g.item_id = m.component_item_id and g.movement_code in ('ISSUE_TO_PROD', 'RETURN_FROM_PROD')), 0) as issued
                from work_order_materials m join work_orders w on w.id = m.work_order_id join items i on i.id = m.component_item_id
               where w.plant_id = ? and m.component_item_id = ? and w.status in ('".implode("', '", self::OPEN_WO)."')",
             [$this->plant, $item],
         ) as $m) {
+            // a component on several lines of one work order: its lines add up, what was issued to it (net of returns) once
+            $wo = (string) $m->work_order_id;
             $required = $this->toBase($db, $item, (string) $m->uom_id, (string) $m->base_uom_id, MpsItemInput::num($m->required), $this->today) ?? '0';
-            $left = bcsub($required, MpsItemInput::num($m->issued), 6);
+            $byOrder[$wo] = [bcadd($byOrder[$wo][0] ?? '0', $required, 6), MpsItemInput::num($m->issued)];
+        }
+        foreach ($byOrder as [$required, $issued]) {
+            $left = bcsub($required, $issued, 6);
             if (bccomp($left, '0', 6) > 0) {
                 $committed = bcadd($committed, $left, 6);
             }
@@ -283,7 +303,7 @@ final class MrpPlanner
         $children = [];
         foreach ($db->select(
             "select distinct v.item_id, l.component_item_id from bom_versions v join bom_lines l on l.bom_version_id = v.id join items i on i.id = l.component_item_id
-              where v.status in ('APPROVED', 'SUPERSEDED') and (v.effective_to is null or v.effective_to >= ?::date) and i.item_type <> 'SCRAP'",
+              where v.status in ('APPROVED', 'SUPERSEDED') and (v.effective_to is null or v.effective_to >= ?::date - 730) and i.item_type <> 'SCRAP'",
             [$this->horizonStart],
         ) as $e) {
             $children[(string) $e->item_id][] = (string) $e->component_item_id;
