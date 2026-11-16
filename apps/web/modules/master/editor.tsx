@@ -32,7 +32,8 @@ const PICKERS: Record<
     resource: 'core.items',
     label: (r) => `${String(r.code)} · ${String(r.name)} (${String(r.baseUomCode)})`,
     activeOnly: true,
-    filters: { itemType: ['FINISHED'] },
+    // made items a work order produces: finished and semi-finished (Option M, D-059, D-125)
+    filters: { itemType: ['FINISHED', 'SEMI_FINISHED'] },
   },
   // firm deliveries a work order may serve (D-109): order, customer, item, date and quantity
   firmDeliveries: {

@@ -17,7 +17,8 @@ use stdClass;
  *   due on the first working day of its week;
  * - class A: on hand UNRESTRICTED in FG warehouse and staging locations; minus what is allocated or staged for demand
  *   outside the horizon (`outOfScope`); class B dated: QC released stock (today: no expected receipt date is kept) and
- *   the remaining output (qty − good posted) of RELEASED / IN_PROGRESS / ON_HOLD work orders on their due date;
+ *   the remaining output (qty − good posted) of RELEASED / IN_PROGRESS / ON_HOLD work orders, and of work orders released
+ *   from the plan from their Draft on (D-125), on their due date;
  *   class C: Pending QC, shown only;
  * - per item + plant planning parameters (safety stock, production lead time; NULL = not configured), working days;
  *   an FG / semi-finished item with a safety stock is planned even without demand in the horizon.
@@ -40,12 +41,17 @@ final class MpsInputs
 
     public function __construct(private readonly BusinessCalendar $calendar) {}
 
-    public function load(EoraPostgresConnection $db, string $plant): self
+    /**
+     * Reads the plant's inputs for the horizon from the plant's this week (an MPS), or for a given horizon (an MRP run of
+     * an approved MPS keeps that MPS's horizon, so demand and allocations beyond it are judged against the same end).
+     */
+    public function load(EoraPostgresConnection $db, string $plant, ?string $horizonStart = null, ?int $weeks = null): self
     {
         $this->today = $this->calendar->resolve($db, $plant, new DateTimeImmutable)->calendarDate;
-        $monday = (new DateTimeImmutable($this->today))->modify('monday this week');
+        $monday = new DateTimeImmutable($horizonStart ?? $this->today);
+        $monday = $horizonStart === null ? $monday->modify('monday this week') : $monday;
         $this->horizonStart = $monday->format('Y-m-d');
-        $this->horizonEnd = $monday->modify('+'.(7 * self::WEEKS - 1).' days')->format('Y-m-d');
+        $this->horizonEnd = $monday->modify('+'.(7 * ($weeks ?? self::WEEKS) - 1).' days')->format('Y-m-d');
         $this->days = self::workingDays($db, $plant, $this->horizonStart, $this->horizonEnd);
         $this->reset();
 
@@ -129,7 +135,8 @@ final class MpsInputs
                                      join inventory_documents d on d.tenant_id = m.tenant_id and d.id = m.document_id and d.doc_type = 'PRODUCTION_POSTING' and d.status = 'POSTED'
                                      join production_runs r on r.tenant_id = d.tenant_id and r.id = d.source_id
                                     where r.tenant_id = w.tenant_id and r.work_order_id = w.id and m.movement_code = 'OUTPUT_GOOD' and m.qty_signed > 0) g
-              where w.plant_id = ? and w.item_id in ({$in}) and w.status in ('RELEASED', 'IN_PROGRESS', 'ON_HOLD') and w.qty > g.good
+              where w.plant_id = ? and w.item_id in ({$in}) and (w.status in ('RELEASED', 'IN_PROGRESS', 'ON_HOLD')
+                     or (w.status in ('DRAFT', 'SUBMITTED') and w.mrp_order_id is not null)) and w.qty > g.good
               order by w.id",
             [$plant, ...$ids],
         ) as $r) {

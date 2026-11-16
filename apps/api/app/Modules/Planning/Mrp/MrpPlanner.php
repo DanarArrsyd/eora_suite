@@ -22,12 +22,17 @@ use stdClass;
  *   per week, lead time in working days): semi-finished (MAKE) → planned child work orders, exploded in turn; raw
  *   material / consumable (BUY) → the shortage list, need date and order-by date = need − purchase lead time;
  * - supply: on hand UNRESTRICTED at the plant (not at production, staging, in transit or virtual) minus what released
- *   work orders still need of it (committed), plus supplier inbound (open, on its expected date) and the remaining output
- *   of released work orders (on their due date); safety stock per item + plant.
+ *   work orders still need of it (committed; a WO released from the plan and still Draft through the BOM in force), plus
+ *   supplier inbound (open, on its expected date) and the remaining output of released work orders and of WOs from the
+ *   plan (on their due date, D-125); safety stock per item + plant.
  * An item the MPS plans keeps its MPS orders; dependent demand on it is netted against the MPS's own position.
  */
 final class MrpPlanner
 {
+    private MpsInputs $live;
+
+    public function __construct(private readonly MpsInputs $inputs) {}
+
     private const array OPEN_WO = ['RELEASED', 'IN_PROGRESS', 'ON_HOLD'];
 
     private const int MAX_LEVEL = 20;
@@ -61,6 +66,7 @@ final class MrpPlanner
         [$this->runId, $this->plant, $this->today, $this->horizonStart, $this->weeks] = [$runId, $plant, $today, $horizonStart, $weeks];
         $end = (new DateTimeImmutable($horizonStart))->modify('+'.(7 * $weeks - 1).' days')->format('Y-m-d');
         $this->days = MpsInputs::workingDays($db, $plant, $horizonStart, $end);
+        $this->live = $this->inputs->load($db, $plant, $horizonStart, $weeks);
         $this->reset();
 
         // the MPS's items (with or without planned orders) and its planned orders
@@ -77,12 +83,28 @@ final class MrpPlanner
             $orders[(string) $o->item_id][] = ['mps' => (string) $o->id, 'qty' => MpsItemInput::num($o->qty), 'due' => (string) $o->due,
                 'start' => (string) $o->start, 'week' => (string) $o->week, 'warnings' => self::list((string) $o->warnings)];
         }
-        // materials with a safety stock are planned even without requirement
+        // materials with a safety stock are planned even without requirement (and, below, components of live work orders)
         $safety = array_map(static fn (stdClass $r) => (string) $r->item_id, $db->select(
             "select p.item_id from item_plan_parameters p join items i on i.id = p.item_id
               where p.plant_id = ? and p.safety_stock > 0 and i.status = 'ACTIVE' and i.item_type in ('SEMI_FINISHED', 'RAW', 'CONSUMABLE') order by p.item_id",
             [$plant],
         ));
+        // components live work orders still need (material lines of released ones, the BOM of Drafts from the plan) are
+        // planned even without new requirement: their need is committed against stock
+        foreach ($db->select(
+            "select distinct m.component_item_id as item_id from work_order_materials m join work_orders w on w.id = m.work_order_id
+              where w.plant_id = ? and w.status in ('".implode("', '", self::OPEN_WO)."')
+             union
+             select distinct l.component_item_id from work_orders w
+               join lateral (select v.id from bom_versions v where v.item_id = w.item_id and v.status in ('APPROVED', 'SUPERSEDED')
+                               and v.effective_from <= ?::date and (v.effective_to is null or v.effective_to >= ?::date) order by v.effective_from desc limit 1) b on true
+               join bom_lines l on l.bom_version_id = b.id join items i on i.id = l.component_item_id
+              where w.plant_id = ? and w.status in ('DRAFT', 'SUBMITTED') and w.mrp_order_id is not null and i.item_type <> 'SCRAP'",
+            [$plant, $today, $today, $plant],
+        ) as $r) {
+            $safety[] = (string) $r->item_id;
+        }
+        $safety = array_values(array_unique($safety));
         // every item once, by low-level code: all its parents are exploded before it is netted
         $levels = $this->levels($db, array_values(array_unique([...array_keys($mps), ...$safety])));
         foreach ($safety as $item) {
@@ -98,7 +120,7 @@ final class MrpPlanner
             sort($items);
             foreach ($items as $item) {
                 if (isset($mps[$item])) {
-                    $this->planMpsItem($db, $item, $level, $mps[$item], $orders[$item] ?? []);
+                    $this->planMpsItem($db, $item, $level, $orders[$item] ?? []);
                 } elseif (isset($this->pending[$item]) || isset($safetySet[$item])) {
                     $this->plan($db, $item, $level);
                 }
@@ -113,38 +135,47 @@ final class MrpPlanner
 
     /**
      * An item of the MPS: its MPS planned orders are written (and exploded) as approved; dependent demand on it is netted
-     * against the MPS's own position (opening, demand, supply and planned orders as supply), so stock its independent
-     * demand uses is never counted twice; what is still short becomes MRP orders on top.
+     * together with its independent demand against its live position and the MPS orders not yet released (as supply), so
+     * stock its independent demand uses is never counted twice; what is still short becomes MRP orders on top.
      *
      * @param  list<array{mps: string, qty: numeric-string, due: string, start: string, week: string, warnings: list<string>}>  $orders
      */
-    private function planMpsItem(EoraPostgresConnection $db, string $item, int $level, string $mpsItem, array $orders): void
+    private function planMpsItem(EoraPostgresConnection $db, string $item, int $level, array $orders): void
     {
         $kind = $this->kindOf($db, $item);
-        $m = $db->selectOne('select trim_scale(on_hand)::text as on_hand, trim_scale(out_of_scope_allocated)::text as oos, trim_scale(safety_stock)::text as ss,
-                                    production_lead_time_days as lead, uom_id from mps_items where id = ?', [$mpsItem]);
-        $in = new MpsItemInput($item, (string) $m->uom_id);
-        $in->onHand = MpsItemInput::num($m->on_hand);
-        $in->safetyStock = $m->ss === null ? null : MpsItemInput::num($m->ss);
-        $in->leadTimeDays = $m->lead === null ? null : (int) $m->lead;
-        // what released work orders still need of it is not in the MPS: it is committed on top of the MPS's allocations
-        $in->outOfScope = bcadd(MpsItemInput::num($m->oos), $this->input($db, $item, $kind)->outOfScope, 6);
+        // the item's live position as the MPS reads it: stock, allocations beyond the horizon, safety stock, its independent
+        // demand (firm + net forecast) and supply (QC released, every live work order incl. Drafts from the plan)
+        $live = $this->live->items[$item] ?? null;
+        $own = $this->input($db, $item, $kind);
+        $in = new MpsItemInput($item, $live->uomId ?? $own->uomId);
+        $in->onHand = $live->onHand ?? $own->onHand;
+        $in->safetyStock = $live === null ? $own->safetyStock : $live->safetyStock;
+        $in->leadTimeDays = $live === null ? $own->leadTimeDays : $live->leadTimeDays;
+        // what released work orders still need of it, on top of the allocations beyond the horizon
+        $in->outOfScope = bcadd($live->outOfScope ?? '0', $own->outOfScope, 6);
+        $drafts = $own->demands; // what Drafts from the plan need of it (dated)
+        $in->demands = $drafts;
         $row = $this->insertItem($db, $item, $kind, $level, $in);
+        $unreleased = [];
         foreach ($orders as $o) {
-            $this->makeOrder($db, $item, 'MPS', $o['mps'], $o['week'], $o['qty'], $o['due'], $o['start'], $o['warnings']);
+            // an MPS order already released to a live work order (from any run of this MPS) is that work order now: its
+            // components count through the work order, it is not exploded again, and it supplies as the work order (D-125)
+            $converted = $db->selectOne(
+                "select 1 as ok from work_orders w join mrp_orders x on x.id = w.mrp_order_id where w.status <> 'CANCELLED' and x.mps_planned_order_id = ?",
+                [$o['mps']],
+            ) !== null;
+            $this->makeOrder($db, $item, 'MPS', $o['mps'], $o['week'], $o['qty'], $o['due'], $o['start'], $o['warnings'], ! $converted);
+            if (! $converted) {
+                $unreleased[] = ['key' => 'mps:'.$o['mps'], 'kind' => 'MPS', 'date' => $o['due'], 'qty' => $o['qty']];
+            }
         }
-        if (! isset($this->pending[$item])) {
+        if (! isset($this->pending[$item]) && $drafts === []) {
             return;
         }
-        foreach ($db->select('select id, kind, due_date::text as d, trim_scale(qty)::text as q from mps_demands where mps_item_id = ?', [$mpsItem]) as $d) {
-            $in->demands[] = ['key' => 'mps:'.$d->id, 'kind' => 'FIRM', 'date' => (string) $d->d, 'qty' => MpsItemInput::num($d->q)];
+        foreach ($live === null ? [] : $live->demands as $d) {
+            $in->demands[] = [...$d, 'key' => 'mps:'.$d['key']];
         }
-        foreach ($db->select('select id, supply_date::text as d, trim_scale(qty)::text as q from mps_supplies where mps_item_id = ?', [$mpsItem]) as $s) {
-            $in->supplies[] = ['key' => 'mps:'.$s->id, 'kind' => 'MPS', 'date' => (string) $s->d, 'qty' => MpsItemInput::num($s->q)];
-        }
-        foreach ($orders as $o) {
-            $in->supplies[] = ['key' => 'mps:'.$o['mps'], 'kind' => 'MPS', 'date' => $o['due'], 'qty' => $o['qty']];
-        }
+        $in->supplies = [...($live === null ? $own->supplies : $live->supplies), ...$unreleased];
         $this->netDependent($db, $item, $kind, $row, $in, false);
     }
 
@@ -184,7 +215,8 @@ final class MrpPlanner
             $input->demands[] = ['key' => $req, 'kind' => 'FIRM', 'date' => $d['date'], 'qty' => $d['qty']];
         }
         unset($this->pending[$item]);
-        $plan = (new MpsEngine($this->days))->plan($input->forEngine(), $this->horizonStart, $this->weeks, $this->today);
+        // a work order counts in its unit's decimals: MAKE shortages are covered in whole units (the rest carries on)
+        $plan = (new MpsEngine($this->days))->plan($input->forEngine(), $this->horizonStart, $this->weeks, $this->today, $kind === 'MAKE' ? $this->decimals($db, $item) : null);
         foreach ($writeSupply ? $plan['supplies'] : [] as $s) {
             $db->insert(
                 'insert into mrp_supplies (tenant_id, mrp_run_id, mrp_item_id, kind, inbound_line_id, work_order_id, supply_date, qty)
@@ -198,8 +230,8 @@ final class MrpPlanner
                 ? $this->makeOrder($db, $item, 'MRP', null, $o['weekStart'], $o['qty'], $o['dueDate'], $o['startDate'], $warnings)
                 : $this->insertOrder($db, $item, 'BUY', 'MRP', null, $o['weekStart'], $o['qty'], $o['dueDate'], $o['startDate'], null, $warnings);
             foreach ($o['pegs'] as $p) {
-                if ($p['demand'] !== null && str_starts_with($p['demand'], 'mps:')) {
-                    continue; // the MPS's own (independent) demand: pegged in the MPS
+                if ($p['demand'] !== null && (str_starts_with($p['demand'], 'mps:') || str_starts_with($p['demand'], 'wo:'))) {
+                    continue; // the MPS's own demand, or a work order's need: pegged there, not to a requirement of this run
                 }
                 $db->insert(
                     'insert into mrp_pegs (tenant_id, mrp_run_id, order_id, requirement_id, qty) values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?)',
@@ -216,7 +248,7 @@ final class MrpPlanner
      * @param  numeric-string  $qty
      * @param  list<string>  $warnings
      */
-    private function makeOrder(EoraPostgresConnection $db, string $item, string $source, ?string $mps, string $week, string $qty, string $due, string $start, array $warnings): string
+    private function makeOrder(EoraPostgresConnection $db, string $item, string $source, ?string $mps, string $week, string $qty, string $due, string $start, array $warnings, bool $explode = true): string
     {
         // an order whose start has passed starts today: the BOM in force today
         $on = max($start, $this->today);
@@ -243,7 +275,7 @@ final class MrpPlanner
             }
         }
         $id = $this->insertOrder($db, $item, 'MAKE', $source, $mps, $week, $qty, $due, $start, $bom === null ? null : (string) $bom->id, array_values(array_unique($warnings)));
-        foreach ($lines as [$component, $line, $need]) {
+        foreach ($explode ? $lines : [] as [$component, $line, $need]) {
             $this->pending[$component][] = ['parent' => $id, 'line' => $line, 'date' => $start, 'qty' => $need];
         }
 
@@ -283,6 +315,30 @@ final class MrpPlanner
             }
             $byOrder[$wo] = [bcadd($byOrder[$wo][0] ?? '0', $required, 6), MpsItemInput::num($m->issued)];
         }
+        // work orders released from the plan, still Draft / Waiting for release, have no material lines yet: they need their
+        // components through the BOM in force (the one their release will take), on their current start (D-125)
+        foreach ($db->select(
+            "select w.id, trim_scale(w.qty * l.gross_qty_per)::text as need, l.uom_id, i.base_uom_id, w.due_date::text as due,
+                    (select p.production_lead_time_days from item_plan_parameters p where p.plant_id = w.plant_id and p.item_id = w.item_id) as lead
+               from work_orders w
+               join lateral (select v.id from bom_versions v where v.item_id = w.item_id and v.status in ('APPROVED', 'SUPERSEDED')
+                               and v.effective_from <= ?::date and (v.effective_to is null or v.effective_to >= ?::date) order by v.effective_from desc limit 1) b on true
+               join bom_lines l on l.bom_version_id = b.id and l.component_item_id = ?
+               join items i on i.id = l.component_item_id
+              where w.plant_id = ? and w.status in ('DRAFT', 'SUBMITTED') and w.mrp_order_id is not null",
+            [$this->today, $this->today, $item, $this->plant],
+        ) as $d) {
+            $need = $this->toBase($db, $item, (string) $d->uom_id, (string) $d->base_uom_id, MpsItemInput::num($d->need), $this->today);
+            if ($need === null) {
+                $this->itemWarnings[$item]['UOM_CONVERSION_MISSING'] = true;
+
+                continue;
+            }
+            // needed on the Draft's start as it stands now (its due date − the item's production lead time), so dated supply
+            // (a child work order, inbound) by then covers it and a rescheduled Draft moves its needs
+            $start = $this->days->back((string) $d->due, $d->lead === null ? 0 : (int) $d->lead);
+            $in->demands[] = ['key' => 'wo:'.$d->id.':'.count($in->demands), 'kind' => 'FIRM', 'date' => $start, 'qty' => $need];
+        }
         foreach ($byOrder as [$required, $issued]) {
             $left = bcsub($required, $issued, 6);
             if (bccomp($left, '0', 6) > 0) {
@@ -308,7 +364,8 @@ final class MrpPlanner
                                      join inventory_documents d on d.id = m.document_id and d.doc_type = 'PRODUCTION_POSTING' and d.status = 'POSTED'
                                      join production_runs r on r.id = d.source_id
                                     where r.work_order_id = w.id and m.movement_code = 'OUTPUT_GOOD' and m.qty_signed > 0) g
-              where w.plant_id = ? and w.item_id = ? and w.status in ('".implode("', '", self::OPEN_WO)."') and w.qty > g.good order by w.id",
+              where w.plant_id = ? and w.item_id = ? and (w.status in ('".implode("', '", self::OPEN_WO)."') or (w.status in ('DRAFT', 'SUBMITTED') and w.mrp_order_id is not null))
+                and w.qty > g.good order by w.id",
             [$this->plant, $item],
         ) as $w) {
             $in->supplies[] = ['key' => (string) $w->id, 'kind' => 'WORK_ORDER', 'date' => (string) $w->due, 'qty' => MpsItemInput::num($w->q)];
@@ -390,6 +447,24 @@ final class MrpPlanner
         $this->itemWarnings = [];
     }
 
+    private function decimals(EoraPostgresConnection $db, string $item): int
+    {
+        return (int) $db->selectOne('select u.decimals from items i join uoms u on u.id = i.base_uom_id where i.id = ?', [$item])->decimals;
+    }
+
+    /** @return numeric-string what work orders from the plan still Draft need of the item (its `wo:` demand) */
+    private function woNeed(MpsItemInput $in): string
+    {
+        $sum = '0';
+        foreach ($in->demands as $d) {
+            if (str_starts_with($d['key'], 'wo:')) {
+                $sum = bcadd($sum, $d['qty'], 6);
+            }
+        }
+
+        return $sum;
+    }
+
     private function kindOf(EoraPostgresConnection $db, string $item): string
     {
         return in_array($db->selectOne('select item_type from items where id = ?', [$item])->item_type, ['FINISHED', 'SEMI_FINISHED'], true) ? 'MAKE' : 'BUY';
@@ -399,9 +474,11 @@ final class MrpPlanner
     private function insertItem(EoraPostgresConnection $db, string $item, string $kind, int $level, MpsItemInput $in): string
     {
         return $this->rows[$item] = (string) $db->selectOne(
-            'insert into mrp_items (tenant_id, mrp_run_id, item_id, uom_id, kind, level, on_hand, committed, safety_stock, lead_time_days, warnings)
-             values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text[]) returning id',
-            [$this->runId, $item, $in->uomId, $kind, min($level, self::MAX_LEVEL), $in->onHand, $in->outOfScope, $in->safetyStock, $in->leadTimeDays,
+            'insert into mrp_items (tenant_id, mrp_run_id, item_id, uom_id, kind, level, on_hand, committed, wo_need, safety_stock, lead_time_days, warnings)
+             values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::text[]) returning id',
+            [$this->runId, $item, $in->uomId, $kind, min($level, self::MAX_LEVEL), $in->onHand, $in->outOfScope,
+                $this->woNeed($in),
+                $in->safetyStock, $in->leadTimeDays,
                 '{'.implode(',', array_keys($this->itemWarnings[$item] ?? [])).'}'],
         )->id;
     }

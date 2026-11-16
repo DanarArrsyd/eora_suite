@@ -127,6 +127,8 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         // D-124: MRP runs from the approved MPS
         Route::post('mrp-runs', [MrpController::class, 'store'])->name('mrp-runs.store');
         Route::get('mrp-runs/{run}', [MrpController::class, 'show'])->name('mrp-runs.show');
+        // D-125: planned work orders of the latest run → WO Drafts
+        Route::post('mrp-runs/{run}/actions/release', [MrpController::class, 'release'])->name('mrp-runs.release');
         Route::post('process-types', [RoutingController::class, 'storeProcessType'])->name('process-types.store');
         Route::patch('process-types/{processType}', [RoutingController::class, 'updateProcessType'])->name('process-types.update');
         Route::post('routings', [RoutingController::class, 'storeRouting'])->name('routings.store');

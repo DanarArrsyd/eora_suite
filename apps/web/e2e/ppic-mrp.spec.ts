@@ -29,6 +29,7 @@ const run = {
   createdAt: '2026-11-16T03:00:00Z',
   createdByName: 'Planner',
   version: 1,
+  releasable: true,
   items: [
     {
       id: ID(11),
@@ -41,6 +42,7 @@ const run = {
       level: 0,
       onHand: '0',
       committed: '0',
+      plannedWorkOrderNeed: '0',
       safetyStock: null,
       leadTimeDays: null,
       warnings: [],
@@ -58,6 +60,7 @@ const run = {
           bomVersionNo: 2,
           warnings: [],
           pegs: [],
+          workOrder: null,
         },
       ],
     },
@@ -72,6 +75,7 @@ const run = {
       level: 1,
       onHand: '80',
       committed: '0',
+      plannedWorkOrderNeed: '0',
       safetyStock: null,
       leadTimeDays: 1,
       warnings: [],
@@ -89,6 +93,7 @@ const run = {
           bomVersionNo: 1,
           warnings: [],
           pegs: [{ requirementId: ID(41), qty: '600' }],
+          workOrder: null,
         },
       ],
     },
@@ -103,6 +108,7 @@ const run = {
       level: 2,
       onHand: '120',
       committed: '40',
+      plannedWorkOrderNeed: '0',
       safetyStock: '50',
       leadTimeDays: 3,
       warnings: [],
@@ -120,6 +126,7 @@ const run = {
           bomVersionNo: null,
           warnings: [],
           pegs: [{ requirementId: ID(42), qty: '132' }],
+          workOrder: null,
         },
       ],
     },
@@ -193,5 +200,36 @@ test('the planner runs MRP from the approved MPS and lands on the run (mobile)',
   await expect(page.getByRole('heading', { level: 1, name: 'MRP-P1-2026-0001' })).toBeVisible();
   expect(posts).toEqual([{ mpsVersionId: ID(3) }]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await axe(page);
+});
+
+test('the planner releases ticked planned work orders to WO Drafts', async ({ page }) => {
+  const posts: unknown[] = [];
+  await mockApi(page, '/auth/me', {
+    status: 200,
+    json: { ...SESSION, permissions: ['planning.mrp.view', 'planning.planned_order_release.post', 'planning.wo.view'] },
+  });
+  await mockApi(page, `/planning/mrp-runs/${ID(1)}`, { status: 200, json: { data: run } });
+  const released = {
+    ...run,
+    items: run.items.map((i) => ({
+      ...i,
+      orders: i.orders.map((o) =>
+        o.kind === 'MAKE' ? { ...o, workOrder: { id: ID(90 + Number(o.id.slice(-2))), code: `WO-P1-2026-00${o.id.slice(-2)}`, status: 'DRAFT' } } : o,
+      ),
+    })),
+  };
+  await page.route(`**/api/v1/planning/mrp-runs/${ID(1)}/actions/release`, (route) => {
+    posts.push(route.request().postDataJSON());
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: released }) });
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/ppic/mrp?run=${ID(1)}`);
+  await expect(page.getByRole('button', { name: 'Release to WO' })).toBeDisabled();
+  await page.getByRole('checkbox', { name: 'Select all planned work orders without a work order' }).check();
+  await page.getByRole('button', { name: 'Release to WO (2)' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Release to WO' }).click();
+  await expect(page.getByText(/Work orders WO-P1-2026-0031, WO-P1-2026-0032 drafted/)).toBeVisible();
+  expect(posts).toEqual([{ orderIds: [ID(31), ID(32)] }]);
   await axe(page);
 });

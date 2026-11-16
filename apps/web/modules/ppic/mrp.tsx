@@ -1,11 +1,25 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import * as React from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ApiError, api, call, useMe } from '@eora/features/auth';
-import { EnterprisePage } from '@eora/features/patterns';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState, ErrorState, LoadingState, PermissionDeniedState } from '@eora/ui';
+import { ApiError, api, call, failureMessage, useMe } from '@eora/features/auth';
+import { ConfirmDialog, EnterprisePage } from '@eora/features/patterns';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  EmptyState,
+  ErrorState,
+  InlineAlert,
+  LoadingState,
+  PermissionDeniedState,
+} from '@eora/ui';
 import { MasterScreen } from '@/modules/master/master-screen';
 import { PLANT_FILTER } from '@/modules/master/resources';
 import type { MasterResource } from '@/modules/master/types';
@@ -48,6 +62,7 @@ type Order = {
   bomVersionNo: number | null;
   warnings: string[];
   pegs: { requirementId: string | null; qty: string }[];
+  workOrder: { id: string; code: string; status: string } | null;
 };
 type Requirement = { id: string; dueDate: string; qty: string; parentOrderId: string; parentItemCode: string };
 type Supply = { kind: 'INBOUND' | 'WORK_ORDER'; reference: string; date: string; qty: string };
@@ -62,6 +77,7 @@ type RunItem = {
   level: number;
   onHand: string;
   committed: string;
+  plannedWorkOrderNeed: string;
   safetyStock: string | null;
   leadTimeDays: number | null;
   warnings: string[];
@@ -69,7 +85,7 @@ type RunItem = {
   supplies: Supply[];
   orders: Order[];
 };
-type Run = RunRow & { items: RunItem[] };
+type Run = RunRow & { items: RunItem[]; releasable: boolean };
 
 const WARNING: Record<string, string> = {
   LATE_START: 'Start date passed',
@@ -120,7 +136,12 @@ export function MrpScreen() {
 function RunPage({ id }: { id: string }) {
   const me = useMe();
   const canView = (me.data?.permissions ?? []).includes('planning.mrp.view');
+  const canRelease = (me.data?.permissions ?? []).includes('planning.planned_order_release.post');
   const router = useRouter();
+  const client = useQueryClient();
+  const [picked, setPicked] = React.useState<string[]>([]);
+  const [confirming, setConfirming] = React.useState(false);
+  const [notice, setNotice] = React.useState<string | null>(null);
   const query = useQuery({
     queryKey: ['master', 'planning.mrp_runs', 'one', id],
     queryFn: async () => (await call(() => api.GET('/planning/mrp-runs/{run}', { params: { path: { run: id } } }))) as unknown as { data: Run },
@@ -167,6 +188,22 @@ function RunPage({ id }: { id: string }) {
 
   const make = r.items.flatMap((i) => i.orders.filter((o) => o.kind === 'MAKE').map((o) => ({ item: i, order: o })));
   const buy = r.items.flatMap((i) => i.orders.filter((o) => o.kind === 'BUY').map((o) => ({ item: i, order: o })));
+  const releasing = canRelease && r.releasable;
+  const open = make.filter(({ order }) => order.workOrder === null).map(({ order }) => order.id);
+  const toggle = (orderId: string) => setPicked(picked.includes(orderId) ? picked.filter((x) => x !== orderId) : [...picked, orderId]);
+  const release = async () => {
+    try {
+      const result = (await call(() =>
+        api.POST('/planning/mrp-runs/{run}/actions/release', { params: { path: { run: id } }, body: { orderIds: picked } }),
+      )) as unknown as { data: Run };
+      const codes = result.data.items.flatMap((i) => i.orders.filter((o) => picked.includes(o.id) && o.workOrder).map((o) => o.workOrder!.code));
+      setPicked([]);
+      setNotice(`${codes.length === 1 ? 'Work order' : 'Work orders'} ${codes.join(', ')} drafted; ask for their release on Work Orders.`);
+      void client.invalidateQueries({ queryKey: ['master'] });
+    } catch (e) {
+      throw new Error(failureMessage(e, 'The planned orders could not be released.'));
+    }
+  };
   const requirementById = new Map(r.items.flatMap((i) => i.requirements.map((q) => [q.id, q] as const)));
   const covers = (o: Order) =>
     o.pegs.map((p) => {
@@ -189,6 +226,23 @@ function RunPage({ id }: { id: string }) {
         </div>
       }
     >
+      {notice ? (
+        <InlineAlert
+          tone="success"
+          title={notice}
+          className="mb-4"
+          action={
+            <Button size="sm" onClick={() => setNotice(null)}>
+              Dismiss
+            </Button>
+          }
+        />
+      ) : null}
+      {!r.releasable ? (
+        <InlineAlert tone="info" title="Not the current plan" className="mb-4">
+          Planned work orders are released from the latest MRP run of the approved MPS.
+        </InlineAlert>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Material shortages ({buy.length})</CardTitle>
@@ -251,8 +305,13 @@ function RunPage({ id }: { id: string }) {
       </Card>
 
       <Card className="mt-4">
-        <CardHeader>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle>Planned work orders ({make.length})</CardTitle>
+          {releasing ? (
+            <Button variant="primary" size="sm" disabled={picked.length === 0} onClick={() => setConfirming(true)}>
+              Release to WO{picked.length > 0 ? ` (${picked.length})` : ''}
+            </Button>
+          ) : null}
         </CardHeader>
         <CardContent>
           {make.length === 0 ? (
@@ -262,17 +321,39 @@ function RunPage({ id }: { id: string }) {
               <table className="w-full border-collapse text-[13.5px]" aria-label="Planned work orders">
                 <thead>
                   <tr className="border-b border-line text-left text-ink-2">
+                    {releasing ? (
+                      <th className="w-8 px-2 py-2">
+                        <Checkbox
+                          aria-label="Select all planned work orders without a work order"
+                          checked={open.length > 0 && picked.length === open.length}
+                          indeterminate={picked.length > 0 && picked.length < open.length}
+                          disabled={open.length === 0}
+                          onChange={() => setPicked(picked.length === open.length ? [] : open)}
+                        />
+                      </th>
+                    ) : null}
                     <th className="px-2 py-2 font-medium">Item</th>
                     <th className="px-2 py-2 text-right font-medium">Quantity</th>
                     <th className="px-2 py-2 font-medium">Due</th>
                     <th className="px-2 py-2 font-medium">Start</th>
                     <th className="px-2 py-2 font-medium">From</th>
+                    <th className="px-2 py-2 font-medium">Work order</th>
                     <th className="px-2 py-2 font-medium">Notes</th>
                   </tr>
                 </thead>
                 <tbody>
                   {make.map(({ item, order }) => (
                     <tr key={order.id} className="border-b border-line align-top">
+                      {releasing ? (
+                        <td className="px-2 py-2">
+                          <Checkbox
+                            aria-label={`Select ${item.itemCode} ${order.qty} due ${order.dueDate}`}
+                            checked={picked.includes(order.id)}
+                            disabled={order.workOrder !== null}
+                            onChange={() => toggle(order.id)}
+                          />
+                        </td>
+                      ) : null}
                       <td className="px-2 py-2">
                         <span className="font-mono">{item.itemCode}</span> <span className="text-ink-2">· {TYPE[item.itemType] ?? item.itemType}</span>
                       </td>
@@ -294,6 +375,15 @@ function RunPage({ id }: { id: string }) {
                         {order.bomVersionNo !== null ? <span className="block text-ink-2">BOM v{order.bomVersionNo}</span> : null}
                       </td>
                       <td className="px-2 py-2">
+                        {order.workOrder ? (
+                          <a className="font-mono text-link" href={`/ppic/work-orders?order=${order.workOrder.id}`}>
+                            {order.workOrder.code}
+                          </a>
+                        ) : (
+                          <span className="text-ink-2">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2">
                         <div className="flex flex-wrap gap-1">
                           {order.warnings.map((w) => (
                             <Badge key={w} tone={w === 'LATE_START' || w === 'NO_BOM' ? 'danger' : 'warning'}>
@@ -308,7 +398,9 @@ function RunPage({ id }: { id: string }) {
               </table>
             </div>
           )}
-          <p className="mt-3 mb-0 text-[13px] text-ink-2">Released to work orders in the next step; until then they are planning records only.</p>
+          <p className="mt-3 mb-0 text-[13px] text-ink-2">
+            Released, a planned order becomes a work order Draft with its quantity and due date; a second person releases the work order as usual.
+          </p>
         </CardContent>
       </Card>
 
@@ -326,6 +418,7 @@ function RunPage({ id }: { id: string }) {
                   <th className="px-2 py-2 text-right font-medium">Needed</th>
                   <th className="px-2 py-2 text-right font-medium">On hand</th>
                   <th className="px-2 py-2 text-right font-medium">For released WOs</th>
+                  <th className="px-2 py-2 text-right font-medium">For WOs from the plan</th>
                   <th className="px-2 py-2 text-right font-medium">Incoming</th>
                   <th className="px-2 py-2 text-right font-medium">Safety stock</th>
                   <th className="px-2 py-2 text-right font-medium">Lead time</th>
@@ -348,6 +441,7 @@ function RunPage({ id }: { id: string }) {
                       {i.onHand} {i.uomCode}
                     </td>
                     <td className="px-2 py-2 text-right tabular-nums">{i.committed}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{Number(i.plannedWorkOrderNeed) === 0 ? '—' : i.plannedWorkOrderNeed}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{sum(i.supplies.map((s) => s.qty)) || '—'}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{i.safetyStock ?? <Badge tone="neutral">Not configured</Badge>}</td>
                     <td className="px-2 py-2 text-right tabular-nums">
@@ -360,6 +454,14 @@ function RunPage({ id }: { id: string }) {
           </div>
         </CardContent>
       </Card>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Release ${picked.length} planned ${picked.length === 1 ? 'order' : 'orders'} to work orders`}
+        description="Each becomes a work order Draft with the planned quantity and due date (reason: from the plan). From then on it counts as supply in the MPS and MRP."
+        confirmLabel="Release to WO"
+        onConfirm={release}
+      />
     </EnterprisePage>
   );
 }

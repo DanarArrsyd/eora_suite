@@ -36,7 +36,7 @@ final readonly class MpsEngine
      *               buckets: list<array{weekStart: string, opening: numeric-string, firm: numeric-string, forecast: numeric-string, receipts: numeric-string, planned: numeric-string, closing: numeric-string}>,
      *               plannedOrders: list<array{weekStart: string, qty: numeric-string, dueDate: string, startDate: string, pegs: list<array{demand: ?string, qty: numeric-string}>}>}
      */
-    public function plan(array $item, string $horizonStart, int $weeks, string $today): array
+    public function plan(array $item, string $horizonStart, int $weeks, string $today, ?int $decimals = null): array
     {
         $end = (new DateTimeImmutable($horizonStart))->modify('+'.(7 * $weeks - 1).' days')->format('Y-m-d');
         $demands = self::inside($item['demands'], $today, $end);
@@ -62,8 +62,7 @@ final readonly class MpsEngine
                 }
                 // a negative opening (safety stock above stock) not covered by the day's receipts is short on the plan's first day
                 if ($day === $today && bccomp($pab, '0', self::SCALE) < 0) {
-                    $order = $this->short($order, $day, bcmul($pab, '-1', self::SCALE), null);
-                    $pab = '0';
+                    [$order, $pab] = $this->cover($order, $day, $pab, null, $decimals);
                 }
                 for (; $di < count($demands) && $demands[$di]['date'] === $day; $di++) {
                     $dm = $demands[$di];
@@ -71,8 +70,7 @@ final readonly class MpsEngine
                     $field = $dm['kind'] === 'FIRM' ? 'firm' : 'forecast';
                     $bucket[$field] = bcadd($bucket[$field], $dm['qty'], self::SCALE);
                     if (bccomp($pab, '0', self::SCALE) < 0) {
-                        $order = $this->short($order, $day, bcmul($pab, '-1', self::SCALE), $dm['key']);
-                        $pab = '0';
+                        [$order, $pab] = $this->cover($order, $day, $pab, $dm['key'], $decimals);
                     }
                 }
             }
@@ -106,6 +104,28 @@ final readonly class MpsEngine
         }
 
         return $out;
+    }
+
+    /**
+     * Covers a negative balance: the shortage is pegged; the order grows by it, rounded up to $decimals when given (a work
+     * order counts in its unit's decimals), and what the rounding adds stays in the balance for the next demand.
+     *
+     * @param  ?array{weekStart: string, qty: numeric-string, dueDate: string, startDate: string, pegs: list<array{demand: ?string, qty: numeric-string}>}  $order
+     * @param  numeric-string  $pab
+     * @return array{0: array{weekStart: string, qty: numeric-string, dueDate: string, startDate: string, pegs: list<array{demand: ?string, qty: numeric-string}>}, 1: numeric-string}
+     */
+    private function cover(?array $order, string $day, string $pab, ?string $demand, ?int $decimals): array
+    {
+        $short = bcmul($pab, '-1', self::SCALE);
+        $make = $short;
+        if ($decimals !== null) {
+            $down = bcadd($short, '0', $decimals);
+            $make = bccomp($down, $short, self::SCALE) < 0 ? bcadd($down, bcpow('10', (string) -$decimals, $decimals), self::SCALE) : bcadd($down, '0', self::SCALE);
+        }
+        $order = $this->short($order, $day, $short, $demand);
+        $order['qty'] = bcadd(bcsub($order['qty'], $short, self::SCALE), $make, self::SCALE);
+
+        return [$order, bcsub($make, $short, self::SCALE)];
     }
 
     /**

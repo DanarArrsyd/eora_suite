@@ -146,3 +146,67 @@ it('runs only from the plant\'s approved MPS, by a planner; materials and others
     rtSwitch($this, $this->t, 'PPC', ['PLANT', $this->t['plants'][1]]);
     spa($this)->getJson("/api/v1/planning/mrp-runs/{$run['id']}")->assertForbidden();
 });
+
+it('releases planned work orders of the latest run to WO Drafts that count as supply from then on (D-125)', function () {
+    $f = mpsFixture($this, $this->t);
+    [$mps, $csa] = mrpApprovedMps($this, $this->t, $f);
+    $run = spa($this)->postJson('/api/v1/planning/mrp-runs', ['mpsVersionId' => $mps['id']])->assertCreated()->assertJsonPath('data.releasable', true)->json('data');
+    $fg = mrpItem($run, 'BRK-100')['orders'][0];
+    $shortage = collect(mrpItem($run, 'COIL-9')['orders'])->first();
+    if ($shortage !== null) {
+        spa($this)->postJson("/api/v1/planning/mrp-runs/{$run['id']}/actions/release", ['orderIds' => [$shortage['id']]])->assertStatus(422);
+    }
+
+    $run = spa($this)->postJson("/api/v1/planning/mrp-runs/{$run['id']}/actions/release", ['orderIds' => [$fg['id']]])->assertOk()->json('data');
+    $wo = mrpItem($run, 'BRK-100')['orders'][0]['workOrder'];
+    expect($wo)->toMatchArray(['status' => 'DRAFT'])->and($wo['code'])->toMatch('/^WO-/');
+    $order = spa($this)->getJson("/api/v1/planning/work-orders/{$wo['id']}")->assertOk()->json('data');
+    expect($order)->toMatchArray(['qty' => '270', 'dueDate' => $f['weekB'], 'reasonCode' => 'PLANNED', 'plannedFrom' => $run['code'], 'scheduleLineId' => null]);
+    // released once: again from this run, or from a later run of the same MPS, is refused
+    spa($this)->postJson("/api/v1/planning/mrp-runs/{$run['id']}/actions/release", ['orderIds' => [$fg['id']]])->assertStatus(409);
+    $next = spa($this)->postJson('/api/v1/planning/mrp-runs', ['mpsVersionId' => $mps['id']])->assertCreated()->json('data');
+    spa($this)->postJson("/api/v1/planning/mrp-runs/{$run['id']}/actions/release", ['orderIds' => [$fg['id']]])->assertStatus(409)->assertJsonPath('title', 'Not the current plan');
+    spa($this)->postJson("/api/v1/planning/mrp-runs/{$next['id']}/actions/release", ['orderIds' => [mrpItem($next, 'BRK-100')['orders'][0]['id']]])->assertStatus(409)
+        ->assertJsonPath('title', 'Already released');
+    // its components are needed through the BOM until it is released (coil 135, dated on its planned start), and its MPS
+    // order is not exploded again: the coil need counts once
+    expect(mrpItem($next, 'COIL-9')['plannedWorkOrderNeed'])->toBe('135')
+        ->and(mrpItem($next, 'COIL-9')['committed'])->toBe(mrpItem($run, 'COIL-9')['committed'])
+        ->and(mrpItem($next, 'COIL-9')['requirements'])->toBe([])
+        // the newer run shows the work order of its MPS order (released from the earlier run): not selectable again
+        ->and(mrpItem($next, 'BRK-100')['orders'][0]['workOrder']['code'])->toBe($wo['code']);
+
+    // the planner may change quantity and due date in the Draft, never its item or reason
+    spa($this)->patchJson("/api/v1/planning/work-orders/{$wo['id']}", ['reasonCode' => 'URGENT_ORDER'], ['If-Match' => '"'.$order['version'].'"'])->assertStatus(422)->assertJsonValidationErrors(['reasonCode']);
+    spa($this)->patchJson("/api/v1/planning/work-orders/{$wo['id']}", ['qty' => '300'], ['If-Match' => '"'.$order['version'].'"'])->assertOk()->assertJsonPath('data.qty', '300');
+    try {
+        asApp($this->t, (string) $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update("update work_orders set reason_code = 'URGENT_ORDER' where id = ?", [$wo['id']]));
+        $this->fail('changed the source of a planned work order');
+    } catch (QueryException $e) {
+        expect($e->getMessage())->toContain('keeps its item and source');
+    }
+
+    // the next MPS counts the Draft from the plan as supply: week B needs nothing more
+    $again = spa($this)->postJson('/api/v1/planning/mps-versions', ['plantId' => $f['plant']])->assertCreated()->json('data');
+    expect(collect($again['items'][0]['plannedOrders'])->firstWhere('weekStart', $f['weekB']))->toBeNull()
+        ->and(collect($again['items'][0]['supplies'])->pluck('reference')->all())->toContain($wo['code']);
+});
+
+it('refuses a release from a run that is not the current plan, or by someone who does not plan', function () {
+    $f = mpsFixture($this, $this->t);
+    [$mps] = mrpApprovedMps($this, $this->t, $f);
+    $run = spa($this)->postJson('/api/v1/planning/mrp-runs', ['mpsVersionId' => $mps['id']])->assertCreated()->json('data');
+    $fg = mrpItem($run, 'BRK-100')['orders'][0];
+    rtSwitch($this, $this->t, 'MAT');
+    spa($this)->postJson("/api/v1/planning/mrp-runs/{$run['id']}/actions/release", ['orderIds' => [$fg['id']]])->assertForbidden();
+    $csa = rtSwitch($this, $this->t, 'CSA');
+    try {
+        asApp($this->t, (string) $csa['id'], fn (EoraPostgresConnection $db) => $db->insert(
+            "insert into work_orders (tenant_id, plant_id, wo_no, item_id, uom_id, qty, due_date, reason_code, mrp_order_id)
+             values (?, ?, 'WO-X-2026-9999', ?, ?, 270, ?, 'PLANNED', ?)",
+            [$this->t['tenant'], $f['plant'], $f['item']['id'], $f['item']['baseUomId'], $f['weekB'], $fg['id']]));
+        $this->fail('released without the permission');
+    } catch (QueryException $e) {
+        expect($e->getMessage())->toContain('by a planner of');
+    }
+});
