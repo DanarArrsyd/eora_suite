@@ -267,6 +267,16 @@ it('lets nobody write another user into the preparers of an MPS (Codex #87)', fu
             expect($e->getMessage())->toContain('recorded by its own planner');
         }
     }
+    // nor through a planned order inserted already "adjusted" by the approver
+    try {
+        asApp($this->t, (string) $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->insert(
+            "insert into mps_planned_orders (tenant_id, mps_version_id, mps_item_id, week_start, calc_qty, calc_due_date, qty, due_date, start_date, adjust_reason, adjusted_at, adjusted_by)
+             select tenant_id, mps_version_id, mps_item_id, week_start + 7, 1, due_date + 7, 1, due_date + 7, due_date + 7, 'x-reason', now(), ? from mps_planned_orders where mps_version_id = ? limit 1",
+            [$csa['id'], $m['id']]));
+        $this->fail('inserted an adjusted planned order');
+    } catch (QueryException $e) {
+        expect($e->getMessage())->toContain('calculated unadjusted');
+    }
     mpsAs($this, $this->t, $f['ppc']);
     $m = mpsAct($this, $m, 'submit')->assertOk()->json('data');
     mpsAs($this, $this->t, $csa);

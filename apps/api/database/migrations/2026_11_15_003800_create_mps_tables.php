@@ -425,6 +425,13 @@ return new class extends Migration
               INSERT INTO public.mps_contributors (tenant_id, mps_version_id, user_id, contribution)
               VALUES (COALESCE(NEW.tenant_id, OLD.tenant_id), COALESCE(NEW.mps_version_id, OLD.mps_version_id), (SELECT c.actor FROM ctx_api.context() c), 'CALCULATED')
               ON CONFLICT DO NOTHING;
+              -- a calculated planned order starts unadjusted: an adjustment is the planner's own later update
+              -- (nested IF: plpgsql resolves NEW.adjusted_by even in an untaken AND operand of another table's row)
+              IF TG_OP = 'INSERT' AND TG_TABLE_NAME = 'mps_planned_orders' THEN
+                IF NEW.adjusted_by IS NOT NULL OR NEW.adjusted_at IS NOT NULL OR NEW.adjust_reason IS NOT NULL THEN
+                  RAISE EXCEPTION 'a planned order is calculated unadjusted' USING ERRCODE = '23514';
+                END IF;
+              END IF;
               IF TG_OP = 'UPDATE' THEN
                 IF TG_TABLE_NAME <> 'mps_planned_orders' OR (NEW.mps_version_id, NEW.mps_item_id, NEW.week_start, NEW.calc_qty, NEW.calc_due_date)
                      IS DISTINCT FROM (OLD.mps_version_id, OLD.mps_item_id, OLD.week_start, OLD.calc_qty, OLD.calc_due_date) THEN
