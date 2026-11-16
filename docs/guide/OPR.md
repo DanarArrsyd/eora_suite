@@ -24,7 +24,7 @@ Membantu pencatatan produksi di lini.
 
 ## Langkah kerja
 
-1. Production → Production Runs → buka run yang berjalan → catat hasil sesuai instruksi leader.
+1. Production → Production Runs → lihat run yang berjalan. Hasil produksi diposting oleh Production Leader (PRL); pencatatan oleh operator menyusul.
 2. Inventory → Material at Production → cek bahan yang ada di work center.
 
 Kembali ke [Panduan Pengguna](README.md).

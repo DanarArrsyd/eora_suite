@@ -1,13 +1,13 @@
 # PPIC Planner (PPC)
 
-Merencanakan produksi: order customer, forecast, MPS, MRP, dan work order.
+Merencanakan produksi dari order dan forecast yang dicatat Delivery: MPS, MRP, dan work order.
 
 ## Menu Anda
 
 **Demand**
 
-- **Sales Orders** — Sales Order dari PO customer beserta jadwal kirimnya; revisi jadwal kirim.
-- **Forecast** — Perkiraan kebutuhan per part customer per minggu; versi aktif dipakai MPS.
+- **Sales Orders** — Order customer dan jadwal kirimnya (hanya lihat; dicatat Delivery).
+- **Forecast** — Forecast per part customer per minggu (hanya lihat; diaktifkan Delivery).
 
 **PPIC / Planning**
 
@@ -19,6 +19,10 @@ Merencanakan produksi: order customer, forecast, MPS, MRP, dan work order.
 **Materials**
 
 - **Inbound Schedule** — Jadwal kedatangan bahan dari supplier.
+
+**Quality**
+
+- **Pending QC Queue** — Barang hasil produksi yang masih menunggu QC (hanya lihat). Belum dihitung sebagai stok tersedia.
 
 **Inventory**
 
@@ -41,8 +45,8 @@ Merencanakan produksi: order customer, forecast, MPS, MRP, dan work order.
 
 ## Langkah kerja
 
-1. Demand → Sales Orders → catat PO customer (line, jadwal kirim) → **Confirm**. Ubah jadwal Firm lewat **Revise** dengan alasan.
-2. Demand → Forecast → versi baru per customer → isi qty per minggu → **Activate**.
+1. Demand → Sales Orders dan Forecast → periksa order Confirmed dan forecast Active yang dicatat Delivery.
+2. Quality → Pending QC Queue → lihat barang yang masih di QC sebelum menambah produksi.
 3. Master Data → Planning Parameters → lead time dan safety stock per item.
 4. PPIC → Master Production Schedule → **Calculate MPS** → periksa planned order (boleh **Adjust** dengan alasan) → **Submit for approval**.
 5. Setelah MPS Approved: **Run MRP** → PPIC → MRP Results → lihat kekurangan bahan → centang planned order → **Release to WO**.

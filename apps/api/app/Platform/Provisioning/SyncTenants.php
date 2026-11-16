@@ -15,9 +15,10 @@ use Illuminate\Support\Facades\DB;
 /**
  * Operator command after a deployment whose migrations add per-tenant baseline data that forced RLS keeps out of the
  * migration owner's reach (D-072). For every provisioned tenant, in its own signed context as eora_provisioner
- * (system actor), each step adds only what is missing and is audited:
- *  1. template roles receive permissions added to their templates later (tenant roles have no editing path yet), and
- *     templates added later become roles of the tenant (D-126);
+ * (system actor), each step changes only what differs from the baseline and is audited:
+ *  1. template roles receive permissions added to their templates later (tenant roles have no editing path yet),
+ *     templates added later become roles of the tenant (D-126), and a permission a template gave up leaves its roles
+ *     (D-127);
  *  2. every plant has its virtual locations (ADR-0002 §3) — new plants get them from a trigger;
  *  3. the starter units KG, PCS and SHEET exist (doc 24 §3.2) — new tenants get them from a trigger.
  * Idempotent: a second run changes nothing.
@@ -66,7 +67,7 @@ final class SyncTenants extends Command
               order by t.code',
         );
         if ($missing === [] && $absent === []) {
-            return 0;
+            return $this->revokeRemoved($db, $audit);
         }
         $templates->instantiate($db, $tenant);
         foreach ($absent as $template) {
@@ -81,7 +82,34 @@ final class SyncTenants extends Command
             $audit->record($db, 'role.permissions_synced', 'role', (string) $role->id, null, null, ['roleCode' => (string) $role->code, 'added' => $codes]);
         }
 
-        return count($missing) + count($absent);
+        return count($missing) + count($absent) + $this->revokeRemoved($db, $audit);
+    }
+
+    /**
+     * A permission its template no longer holds leaves the template role too (e.g. demand entry moved from PPC to DLV,
+     * D-127); tenant roles mirror their template, so nothing tenant-made is lost. Audited per role.
+     */
+    private function revokeRemoved(EoraPostgresConnection $db, AuditRecorder $audit): int
+    {
+        $stale = $db->select(
+            'select r.id, r.code, r.template_code, array_to_json(array_agg(rp.permission_code order by rp.permission_code)) as codes
+               from roles r join role_permissions rp on rp.role_id = r.id
+              where r.template_code is not null
+                and not exists (select 1 from role_template_permissions tp where tp.template_code = r.template_code and tp.permission_code = rp.permission_code)
+              group by r.id, r.code, r.template_code order by r.code',
+        );
+        foreach ($stale as $role) {
+            /** @var list<string> $codes */
+            $codes = json_decode((string) $role->codes, true);
+            $db->delete(
+                'delete from role_permissions rp where rp.role_id = ?
+                    and not exists (select 1 from role_template_permissions tp where tp.template_code = ? and tp.permission_code = rp.permission_code)',
+                [$role->id, $role->template_code],
+            );
+            $audit->record($db, 'role.permissions_revoked', 'role', (string) $role->id, null, null, ['roleCode' => (string) $role->code, 'removed' => $codes]);
+        }
+
+        return count($stale);
     }
 
     private function starterUnits(EoraPostgresConnection $db, string $tenant, AuditRecorder $audit): int

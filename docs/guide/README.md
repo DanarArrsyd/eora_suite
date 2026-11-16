@@ -4,7 +4,7 @@ Panduan singkat per role: menu yang terlihat, untuk apa, langkah kerja harian, d
 
 ## Alur kerja utama
 
-1. **Demand** — PPC mencatat Sales Order dari PO customer dan forecast per minggu.
+1. **Demand** — DLV mencatat Sales Order dari PO customer (dengan kanban / jadwal kirim) dan forecast per minggu; PPC membacanya.
 2. **Perencanaan** — PPC menghitung **MPS** (apa yang dibuat per minggu); CSA menyetujui. PPC menjalankan **MRP** (apa yang dibuat dan dibeli) lalu merilis planned order menjadi **Work Order** Draft.
 3. **Rilis WO** — PPC meminta rilis; orang kedua (CSA) merilis. Saat rilis, BOM dan routing yang berlaku disalin ke WO.
 4. **Bahan** — MAT menerima bahan dari supplier, QC melepas bahan yang perlu inspeksi, MAT mengeluarkan bahan ke work center.
@@ -18,6 +18,7 @@ Panduan singkat per role: menu yang terlihat, untuk apa, langkah kerja harian, d
 
 | Pekerjaan | Dibuat oleh | Disetujui / dirilis oleh |
 |---|---|---|
+| Sales Order dan forecast | DLV | — (DLV confirm / activate sendiri) |
 | MPS | PPC | CSA |
 | Work Order | PPC | CSA |
 | Koreksi stok (adjustment) | INV | CSA |

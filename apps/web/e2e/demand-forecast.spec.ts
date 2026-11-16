@@ -76,7 +76,7 @@ test('an active forecast shows forecast, firm orders and net per week, read-only
   await axe(page);
 });
 
-test('a draft forecast is edited by the planner: lines saved with If-Match, then activated', async ({ page }) => {
+test('a draft forecast is edited by delivery: lines saved with If-Match, then activated', async ({ page }) => {
   const puts: unknown[] = [];
   await mockApi(page, '/auth/me', {
     status: 200,

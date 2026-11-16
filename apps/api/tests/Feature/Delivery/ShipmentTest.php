@@ -114,8 +114,8 @@ it('reverses a shipment of a line revised since: back to staging for the superse
         'lines' => [['scheduleLineId' => $l1, 'stockLineId' => $stock, 'qty' => $qty]]], ['Idempotency-Key' => $key]);
     $unpick($f['stgB'], '10', 'rs-unpick-0001')->assertCreated();
 
-    // the planner revises what the line still needs: 10 a week later
-    signIn($this, $f['ppc'], $this->t);
+    // delivery revises what the line still needs: 10 a week later (D-127)
+    signIn($this, $f['dlv'], $this->t);
     $so = spa($this)->getJson("/api/v1/demand/sales-orders/{$f['so']['id']}")->assertOk()->json('data');
     spa($this)->postJson("/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$l1}/actions/revise", ['reason' => 'Customer moved the rest',
         'schedules' => [['requirementDate' => date('Y-m-d', strtotime($f['today'].' +10 days')), 'qty' => '10']]], ['If-Match' => '"'.$so['version'].'"'])
@@ -146,8 +146,8 @@ it('keeps what a revised line delivered consuming the forecast of its week (Code
     spa($this)->postJson('/api/v1/delivery/unpicks', ['plantId' => $f['plant'], 'locationId' => $f['fg2'],
         'lines' => [['scheduleLineId' => $l1, 'stockLineId' => $f['stgB'], 'qty' => '10']]], ['Idempotency-Key' => 'fr-unpick-0001'])->assertCreated();
 
-    // the rest (10) is revised to the same day: the week still has 90 delivered + 10 firm
-    signIn($this, $f['ppc'], $this->t);
+    // the rest (10) is revised to the same day: the week still has 90 delivered + 10 firm (delivery revises, D-127)
+    signIn($this, $f['dlv'], $this->t);
     $due = $f['so']['lines'][0]['schedules'][0]['requirementDate'];
     $so = spa($this)->getJson("/api/v1/demand/sales-orders/{$f['so']['id']}")->assertOk()->json('data');
     spa($this)->postJson("/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$l1}/actions/revise", ['reason' => 'Rest moved',

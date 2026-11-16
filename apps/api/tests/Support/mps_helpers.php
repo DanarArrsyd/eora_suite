@@ -27,7 +27,6 @@ function mpsAct(object $test, array $m, string $action, array $body = [])
 function mpsFixture(object $test, array $t): array
 {
     $f = dlFixture($test, $t);
-    mpsAs($test, $t, $f['ppc']);
     $weekA = date('Y-m-d', strtotime('monday this week', strtotime($f['today'].' +3 days')));
     $weekB = date('Y-m-d', strtotime($weekA.' +14 days'));
     $fc = spa($test)->postJson('/api/v1/demand/forecast-versions', ['plantId' => $f['plant'], 'customerId' => $f['customer']])->assertCreated()->json('data');
@@ -36,6 +35,8 @@ function mpsFixture(object $test, array $t): array
         ['customerItemId' => $f['part'], 'weekStart' => $weekB, 'qty' => '300'],
     ]], ['If-Match' => '"'.$fc['version'].'"'])->assertOk()->json('data');
     spa($test)->postJson("/api/v1/demand/forecast-versions/{$fc['id']}/actions/activate", [], ['If-Match' => '"'.$fc['version'].'"'])->assertOk();
+    // delivery entered the forecast (D-127); the planner takes over
+    mpsAs($test, $t, $f['ppc']);
     // the fixture signed in nine new users; the tests below add their own within the invitation limit
     RateLimiter::clear(md5('invitation-accept'.'invite:ip:'.app(SecurityHasher::class)->hash('127.0.0.1')));
 

@@ -38,12 +38,10 @@ it('proposes FIFO, allocates, picks part of an allocation, keeps the rest alloca
     dlAllocate($this, $f, $lines)->assertOk()->assertJsonPath('data.allocationIds', $alloc)->assertJsonPath('data.replayed', true);
     dlAllocate($this, $f, [['stockLineId' => $fg2, 'qty' => '1']], 'dl-alloc-0002')->assertStatus(409)->assertJsonPath('code', 'OVER_ALLOCATION');
     spa($this)->getJson('/api/v1/query/inventory.stock?filter[id]='.$fg2)->assertOk()->assertJsonPath('data.0.qty', '90')->assertJsonPath('data.0.availableQty', '80');
-    // a schedule line with FG allocated is not cancelled (D-108 (3))
-    signIn($this, $f['ppc'], $this->t);
+    // a schedule line with FG allocated is not cancelled (D-108 (3)); delivery owns the order (D-127)
     $so = spa($this)->getJson("/api/v1/demand/sales-orders/{$f['so']['id']}")->assertOk()->json('data');
     spa($this)->json('POST', "/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$f['schedule']}/actions/cancel", ['reason' => 'Customer cancelled'], ['If-Match' => '"'.$so['version'].'"'])
         ->assertStatus(409)->assertJsonPath('code', 'SCHEDULE_LINE_ALLOCATED');
-    signIn($this, $f['dlv'], $this->t);
     // allocated FG cannot be moved away by anything else (BR-FG-02)
     spa($this)->getJson("/api/v1/delivery/schedule-lines/{$f['schedule']}")->assertOk()->assertJsonPath('data.allocatedQty', '100')->assertJsonPath('data.toAllocateQty', '0')
         ->assertJsonCount(2, 'data.allocations');
@@ -92,7 +90,6 @@ it('proposes FIFO, allocates, picks part of an allocation, keeps the rest alloca
         ->assertJsonPath('data.0.direction', 'PICK')->assertJsonPath('data.1.direction', 'UNPICK');
 
     // a schedule line with staged goods is not cancelled
-    signIn($this, $f['ppc'], $this->t);
     $so = spa($this)->getJson("/api/v1/demand/sales-orders/{$f['so']['id']}")->assertOk()->json('data');
     spa($this)->json('POST', "/api/v1/demand/sales-orders/{$so['id']}/schedule-lines/{$f['schedule']}/actions/cancel", ['reason' => 'Customer cancelled'], ['If-Match' => '"'.$so['version'].'"'])
         ->assertStatus(409)->assertJsonPath('code', 'SCHEDULE_LINE_ALLOCATED');

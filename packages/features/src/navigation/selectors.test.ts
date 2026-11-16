@@ -130,6 +130,21 @@ describe('menus of a signed-in user (D-126)', () => {
     expect(isMenuItem(item('backward-trace'), ['traceability.lot_trace.view'])).toBe(true);
   });
 
+  it('gives demand entry to delivery and lets the planner read it, with the Pending QC queue (D-127)', () => {
+    const dlv = ['demand.sales_order.view', 'demand.sales_order.create', 'demand.sales_order.post', 'demand.forecast.view', 'demand.forecast.create'];
+    const ppc = ['demand.sales_order.view', 'demand.forecast.view', 'quality.inspection.view', 'planning.mps.create', 'planning.wo.create'];
+    const fgw = ['demand.sales_order.view', 'quality.inspection.view', 'warehouse.fg_receipt.create'];
+    for (const id of ['sales-orders', 'forecast']) {
+      expect(isMenuItem(item(id), dlv)).toBe(true);
+      expect(isMenuItem(item(id), ppc)).toBe(true);
+    }
+    expect(isMenuItem(item('pending-qc'), ppc)).toBe(true);
+    expect(isMenuItem(item('pending-qc'), dlv)).toBe(false);
+    // reading alone is not a menu: the FG warehouse may see orders and QC lots without them in its sidebar
+    expect(isMenuItem(item('sales-orders'), fgw)).toBe(false);
+    expect(isMenuItem(item('pending-qc'), fgw)).toBe(false);
+  });
+
   it('marks every live page with a permission', () => {
     expect(live.filter((i) => !i.permission).map((i) => i.id)).toEqual([]);
   });
