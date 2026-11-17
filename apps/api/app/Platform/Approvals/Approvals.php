@@ -4,20 +4,9 @@ declare(strict_types=1);
 
 namespace App\Platform\Approvals;
 
-use App\Modules\Inventory\Queries\AdjustmentsQuery;
-use App\Modules\Inventory\Queries\PeriodsQuery;
-use App\Modules\Inventory\Queries\ReversalsQuery;
-use App\Modules\Planning\Queries\BomRoutingMapsQuery;
-use App\Modules\Planning\Queries\BomVersionsQuery;
-use App\Modules\Planning\Queries\ConversionProfileVersionsQuery;
-use App\Modules\Planning\Queries\ItemWeightsQuery;
-use App\Modules\Planning\Queries\MpsVersionsQuery;
-use App\Modules\Planning\Queries\RoutingVersionsQuery;
-use App\Modules\Planning\Queries\WoCloseExceptionsQuery;
-use App\Modules\Planning\Queries\WorkOrdersQuery;
-use App\Modules\Quality\Queries\DispositionsQuery;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Query\QueryDefinition;
+use LogicException;
 use stdClass;
 
 /**
@@ -29,63 +18,63 @@ use stdClass;
  */
 final class Approvals
 {
-    /** kind => [the list query whose read permissions show the document, decide permission, what it is, select of one document by id] */
+    /** kind => [the list query (resource) whose read permissions show the document, decide permission, what it is, select of one document by id] */
     private const array KINDS = [
-        'routing_version' => [RoutingVersionsQuery::class, 'master.routing.approve', 'routing version',
+        'routing_version' => ['planning.routing_versions', 'master.routing.approve', 'routing version',
             "select v.id, i.code || ' routing ' || r.routing_code || ' v' || v.version_no as label, v.plant_id, v.prepared_by as requester,
                     v.submitted_at as requested_at, '/master/routings?routing=' || r.id || '&version=' || v.id as link,
                     array(select c.actor from routing_version_contributors c where c.routing_version_id = v.id) || array[v.prepared_by] as excluded
                from routing_versions v join routings r on r.id = v.routing_id join items i on i.id = r.item_id where v.id = ?", ],
-        'bom_version' => [BomVersionsQuery::class, 'master.routing.approve', 'BOM version',
+        'bom_version' => ['planning.bom_versions', 'master.routing.approve', 'BOM version',
             "select v.id, i.code || ' BOM v' || v.version_no as label, null::uuid as plant_id, v.prepared_by as requester,
                     v.submitted_at as requested_at, '/master/boms?item=' || v.item_id || '&version=' || v.id as link,
                     array(select c.actor from bom_version_contributors c where c.bom_version_id = v.id) || array[v.prepared_by] as excluded
                from bom_versions v join items i on i.id = v.item_id where v.id = ?", ],
-        'bom_routing_map' => [BomRoutingMapsQuery::class, 'master.routing.approve', 'BOM–routing map',
+        'bom_routing_map' => ['planning.bom_routing_maps', 'master.routing.approve', 'BOM–routing map',
             "select m.id, i.code || ' BOM–routing map r' || m.map_revision as label, m.plant_id, m.prepared_by as requester,
                     m.submitted_at as requested_at, '/master/boms?item=' || b.item_id || '&version=' || b.id || '&map=' || m.id as link,
                     array(select c.actor from bom_map_contributors c where c.map_id = m.id) || array[m.prepared_by] as excluded
                from bom_routing_maps m join bom_versions b on b.id = m.bom_version_id join items i on i.id = b.item_id where m.id = ?", ],
-        'item_weight' => [ItemWeightsQuery::class, 'master.conversion.approve', 'net weight',
+        'item_weight' => ['planning.item_weights', 'master.conversion.approve', 'net weight',
             "select v.id, i.code || ' net weight v' || v.version_no as label, null::uuid as plant_id, v.prepared_by as requester,
                     v.submitted_at as requested_at, '/master/conversion-data?weight=' || v.item_id || '&version=' || v.id as link,
                     array(select c.actor from item_weight_contributors c where c.item_weight_id = v.id) || array[v.prepared_by] as excluded
                from item_weights v join items i on i.id = v.item_id where v.id = ?", ],
-        'conversion_profile_version' => [ConversionProfileVersionsQuery::class, 'master.conversion.approve', 'conversion profile',
+        'conversion_profile_version' => ['planning.conversion_profile_versions', 'master.conversion.approve', 'conversion profile',
             "select v.id, i.code || ' conversion profile v' || v.version_no as label, null::uuid as plant_id, v.prepared_by as requester,
                     v.submitted_at as requested_at, '/master/conversion-data?profile=' || v.profile_id || '&version=' || v.id as link,
                     array(select c.actor from conversion_profile_version_contributors c where c.profile_version_id = v.id) || array[v.prepared_by] as excluded
                from conversion_profile_versions v join conversion_profiles p on p.id = v.profile_id join items i on i.id = p.item_id where v.id = ?", ],
-        'mps_version' => [MpsVersionsQuery::class, 'planning.mps.approve', 'MPS',
+        'mps_version' => ['planning.mps_versions', 'planning.mps.approve', 'MPS',
             "select v.id, v.mps_no as label, v.plant_id, v.submitted_by as requester, v.submitted_at as requested_at,
                     '/ppic/mps?version=' || v.id as link,
                     array(select c.user_id from mps_contributors c where c.mps_version_id = v.id) || array[v.submitted_by] as excluded
                from mps_versions v where v.id = ?", ],
-        'work_order' => [WorkOrdersQuery::class, 'planning.wo.approve', 'work order release',
+        'work_order' => ['planning.work_orders', 'planning.wo.approve', 'work order release',
             "select w.id, w.wo_no as label, w.plant_id, w.submitted_by as requester, w.submitted_at as requested_at,
                     '/ppic/work-orders?order=' || w.id as link, array[w.submitted_by] as excluded
                from work_orders w where w.id = ?", ],
-        'stock_adjustment' => [AdjustmentsQuery::class, 'inventory.adjustment.approve', 'stock adjustment',
+        'stock_adjustment' => ['inventory.adjustments', 'inventory.adjustment.approve', 'stock adjustment',
             "select d.id, coalesce(d.doc_no, 'Adjustment request') as label, d.plant_id, d.requested_by as requester, d.submitted_at as requested_at,
                     '/inventory/adjustments?request=' || d.id as link, array[d.requested_by] as excluded
                from inventory_documents d where d.id = ? and d.doc_type = 'STOCK_ADJUSTMENT'", ],
-        'reversal' => [ReversalsQuery::class, 'inventory.reversal.approve', 'reversal',
+        'reversal' => ['inventory.reversals', 'inventory.reversal.approve', 'reversal',
             "select d.id, coalesce(d.doc_no, 'Reversal request') as label, d.plant_id, d.requested_by as requester, d.submitted_at as requested_at,
                     '/inventory/reversals?request=' || d.id as link, array[d.requested_by] as excluded
                from inventory_documents d where d.id = ? and d.doc_type = 'REVERSAL'", ],
-        'quality_release' => [DispositionsQuery::class, 'quality.disposition_release.approve', 'QC release',
+        'quality_release' => ['quality.dispositions', 'quality.disposition_release.approve', 'QC release',
             "select d.id, coalesce(d.doc_no, 'QC release request') as label, d.plant_id, d.requested_by as requester, d.submitted_at as requested_at,
                     '/quality/inspection-lots?request=' || d.id as link, array[d.requested_by] as excluded
                from inventory_documents d where d.id = ? and d.doc_type = 'QC_DISPOSITION'", ],
-        'wo_close_exception' => [WoCloseExceptionsQuery::class, 'planning.wo_close_exception.approve', 'work order close exception',
+        'wo_close_exception' => ['planning.wo_close_exceptions', 'planning.wo_close_exception.approve', 'work order close exception',
             "select d.id, coalesce(d.doc_no, 'WO close exception') as label, d.plant_id, d.requested_by as requester, d.submitted_at as requested_at,
                     '/ppic/wo-close-exceptions' as link, array[d.requested_by] as excluded
                from inventory_documents d where d.id = ? and d.doc_type = 'WO_CLOSE_EXCEPTION'", ],
-        'period_close' => [PeriodsQuery::class, 'inventory.period_close.approve', 'month close',
+        'period_close' => ['inventory.periods', 'inventory.period_close.approve', 'month close',
             "select p.id, pl.code || ' ' || to_char(p.period, 'YYYY-MM') || ' close' as label, p.plant_id, p.close_requested_by as requester,
                     p.close_requested_at as requested_at, '/inventory/period-close?period=' || p.id as link, array[p.close_requested_by] as excluded
                from inventory_periods p join plants pl on pl.id = p.plant_id where p.id = ?", ],
-        'period_reopen' => [PeriodsQuery::class, 'inventory.period_reopen.approve', 'month reopen',
+        'period_reopen' => ['inventory.periods', 'inventory.period_reopen.approve', 'month reopen',
             "select p.id, pl.code || ' ' || to_char(p.period, 'YYYY-MM') || ' reopen' as label, p.plant_id, p.reopen_requested_by as requester,
                     p.reopen_requested_at as requested_at, '/inventory/period-close?period=' || p.id as link, array[p.reopen_requested_by] as excluded
                from inventory_periods p join plants pl on pl.id = p.plant_id where p.id = ?", ],
@@ -110,8 +99,11 @@ final class Approvals
      */
     public static function viewPermissions(string $kind): array
     {
+        // the query registry (config eora.queries) keeps the platform free of module classes
+        /** @var array<string, class-string<QueryDefinition>> $registry */
+        $registry = config('eora.queries', []);
         /** @var QueryDefinition $query */
-        $query = app(self::KINDS[$kind][0]);
+        $query = app($registry[self::KINDS[$kind][0]] ?? throw new LogicException('Unknown query resource '.self::KINDS[$kind][0]));
 
         return $query->permissions();
     }
