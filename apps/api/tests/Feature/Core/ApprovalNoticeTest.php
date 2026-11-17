@@ -93,6 +93,8 @@ it('asks an approver for a stock adjustment and tells the requester why it was r
         ->assertJsonPath('data.approvers.0.name', apName($this->t, $approver['id']));
 
     signIn($this, $approver, $this->t);
+    // the approver reads the request through its approve permission (no adjustment view), and so its notice too
+    spa($this)->getJson("/api/v1/approvals/stock_adjustment/{$id}")->assertOk()->assertJsonPath('data.waiting', true);
     spa($this)->postJson("/api/v1/inventory/adjustments/{$id}/reject", ['reason' => 'Count it again'])->assertNoContent();
     $told = apInbox($this->t, $requester['id']);
     expect($told)->toHaveCount(1)->and($told[0]->kind)->toBe('approval.rejected')->and($told[0]->body)->toContain('Reason: Count it again');

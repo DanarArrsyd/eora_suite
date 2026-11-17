@@ -16,7 +16,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Who decides a document waiting for a second person (D-129): the screen of the requester says it, by role and by name,
- * so nobody guesses whom to ask. Read with the view permission of the document's kind.
+ * so nobody guesses whom to ask. Read with any permission that reads the document's list, within the document's plant.
  */
 final class ApprovalController
 {
@@ -33,9 +33,8 @@ final class ApprovalController
             throw new NotFoundHttpException;
         }
         $db = $this->db();
-        $permission = Approvals::viewPermission($kind);
-        // nothing is looked up for a caller without the view permission anywhere
-        $this->authorizer->requireAnywhere($db, $permission);
+        // nothing is looked up for a caller who reads the document's list with none of its permissions
+        $scopes = $this->authorizer->requireAnyOf($db, Approvals::viewPermissions($kind));
         [$exists, $plant] = $this->approvals->locate($db, $kind, $id);
         if (! $exists) {
             throw new NotFoundHttpException;
@@ -43,7 +42,7 @@ final class ApprovalController
         // a plant document is shown only within the caller's scope of that plant; outside it, it does not exist
         if ($plant !== null) {
             try {
-                $this->authorizer->authorize($db, $permission, Scope::plant($plant, (string) $db->selectOne('select company_id from plants where id = ?', [$plant])->company_id));
+                $this->authorizer->requireCovered($scopes, Scope::plant($plant, (string) $db->selectOne('select company_id from plants where id = ?', [$plant])->company_id));
             } catch (DomainProblem) {
                 throw new NotFoundHttpException;
             }
