@@ -31,6 +31,7 @@ use App\Modules\Traceability\Http\LotTraceController;
 use App\Modules\Warehouse\Http\FgReceiptController;
 use App\Platform\Access\Http\AccessController;
 use App\Platform\Access\Http\MemberController;
+use App\Platform\Approvals\Http\ApprovalController;
 use App\Platform\Auth\Http\AuthController;
 use App\Platform\Export\ExportController;
 use App\Platform\Http\Controllers\HealthController;
@@ -62,6 +63,11 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
     Route::middleware('tenant')->group(function (): void {
         Route::get('inbox', [InboxController::class, 'index'])->name('inbox.index');
         Route::post('inbox/read', [InboxController::class, 'markRead'])->name('inbox.read');
+    });
+
+    // Who decides a document waiting for a second person (D-129).
+    Route::middleware('tenant')->group(function (): void {
+        Route::get('approvals/{kind}/{id}', [ApprovalController::class, 'show'])->name('approvals.show');
     });
 
     // Administration → Users, Roles & Permissions (doc 25 §2.4, §3, §13; doc 18). One TenantTransaction per request.

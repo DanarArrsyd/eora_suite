@@ -471,6 +471,7 @@ function VersionBody({ version, can, onChanged, onNotice }: { version: BomDetail
         </Card>
         <ApprovalPanel
           label={`Version ${version.versionNo}`}
+          approval={{ kind: 'bom_version', id: version.id }}
           record={version}
           can={can}
           missing={version.lines.length === 0 ? ['at least one line'] : []}
@@ -1211,6 +1212,7 @@ function MapDrawer({
               </section>
               <ApprovalPanel
                 label={`Map revision ${m.mapRevision}`}
+                approval={{ kind: 'bom_routing_map', id: m.id }}
                 record={m}
                 can={can}
                 missing={unmapped > 0 || dirty ? ['an operation for every line, saved'] : []}

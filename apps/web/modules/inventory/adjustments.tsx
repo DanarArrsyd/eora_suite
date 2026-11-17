@@ -445,6 +445,7 @@ function AdjustmentPage({ id }: { id: string }) {
         </Card>
         <ApprovalPanel
           label="Adjustment"
+          approval={{ kind: 'stock_adjustment', id: r.id }}
           record={{
             status: r.status === 'POSTED' || r.status === 'REVERSED' ? 'APPROVED' : r.status,
             preparedByName: r.requestedByName,

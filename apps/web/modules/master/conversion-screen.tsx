@@ -414,6 +414,7 @@ function WeightPage({ itemId }: { itemId: string }) {
         </FactsCard>
         <ApprovalPanel
           label={`Version ${row.versionNo}`}
+          approval={{ kind: 'item_weight', id: row.id }}
           record={{ status: row.status, preparedByName: row.preparedByName, approvedByName: row.validatedByName, approvedAt: row.validatedAt }}
           can={can}
           verb="validate"
@@ -681,6 +682,7 @@ function ProfilePage({ profileId }: { profileId: string }) {
             </FactsCard>
             <ApprovalPanel
               label={`Version ${detail.data.versionNo}`}
+              approval={{ kind: 'conversion_profile_version', id: detail.data.id }}
               record={{
                 status: detail.data.status,
                 preparedByName: detail.data.preparedByName,

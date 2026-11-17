@@ -7,6 +7,7 @@ namespace App\Modules\Planning\Http;
 use App\Modules\Planning\Queries\WorkOrdersQuery;
 use App\Platform\Access\Authorizer;
 use App\Platform\Access\Scope;
+use App\Platform\Approvals\Approvals;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Calendar\BusinessCalendar;
 use App\Platform\Database\EoraPostgresConnection;
@@ -159,6 +160,7 @@ final class WorkOrderController
             'reasonCode' => $wo->reason_code, 'note' => $wo->note, 'scheduleLineId' => $wo->schedule_line_id]);
         $this->transition($db, $wo, $expected, "status = 'SUBMITTED', submitted_by = ?, submitted_at = now(), return_reason = null", [$this->actor($db)], 'work_order.submitted');
         $this->outbox->publish($db, 'wo.release_requested', 'work_order', (string) $wo->id, ['plantId' => $wo->plant_id]);
+        app(Approvals::class)->requested($db, 'work_order', (string) $wo->id); // D-129
 
         return $this->respondOrder($db, (string) $wo->id);
     }
@@ -187,6 +189,8 @@ final class WorkOrderController
         $wo = $this->writable($db, $order, ['SUBMITTED']);
         $this->authorizer->authorize($db, self::APPROVE, $this->plantScope($db, (string) $wo->plant_id));
         $this->authorizer->refuseSelf($db, (string) $wo->submitted_by);
+        // told while the requester is still on the order (D-129)
+        app(Approvals::class)->decided($db, 'work_order', (string) $wo->id, 'returned', trim($data['reason']));
         $this->transition($db, $wo, $expected, "status = 'DRAFT', submitted_by = null, submitted_at = null, return_reason = ?", [trim($data['reason'])], 'work_order.returned');
         $this->outbox->publish($db, 'wo.release_returned', 'work_order', (string) $wo->id, ['plantId' => $wo->plant_id]);
 
@@ -243,6 +247,7 @@ final class WorkOrderController
         // the deferred database checks (every BOM line in the snapshot) run now, before the answer
         $db->statement('set constraints all immediate');
         $this->outbox->publish($db, 'wo.released', 'work_order', (string) $wo->id, ['plantId' => $wo->plant_id, 'itemId' => $wo->item_id]);
+        app(Approvals::class)->decided($db, 'work_order', (string) $wo->id, 'approved'); // D-129: released
 
         return $this->respondOrder($db, (string) $wo->id);
     }

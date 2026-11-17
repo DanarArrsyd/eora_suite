@@ -13,6 +13,7 @@ import { MasterScreen } from '@/modules/master/master-screen';
 import { PLANT_FILTER } from '@/modules/master/resources';
 import type { FormValues, MasterResource } from '@/modules/master/types';
 import { ApprovalPanel, when } from '@/modules/master/version-ui';
+import { ApprovalNotice } from '@/components/approval-notice';
 
 /*
  * M4 step 2 (doc 33 §1.2, D-109, G-MPS-6, BR-PLN-01): PPIC → Work Orders on the live API. A planner drafts a manual WO for
@@ -477,6 +478,7 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
           Another person releases or returns it.
         </InlineAlert>
       ) : null}
+      <ApprovalNotice kind="work_order" id={o.id} waiting={o.status === 'SUBMITTED'} className="mb-4" />
       <div className="grid grid-cols-[minmax(0,1fr)_340px] gap-4 max-lg:grid-cols-1">
         <Card>
           <CardHeader>
@@ -567,6 +569,7 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
           {pendingException ? (
             <ApprovalPanel
               label="Exception"
+              approval={{ kind: 'wo_close_exception', id: exception.id }}
               record={{ status: 'SUBMITTED', preparedByName: exception.requestedByName, approvedByName: null, approvedAt: null }}
               can={{ view: true, create: false, submit: false, approve: canDecideException && me.data?.user.id !== exception.requestedById }}
               approvedNote="Posted: the material went to the scrap yard."

@@ -32,6 +32,8 @@ Panduan singkat per role: menu yang terlihat, untuk apa, langkah kerja harian, d
 
 Aturan ini juga dijaga database: siapa pun — termasuk Supervisor — tidak bisa menyetujui pekerjaannya sendiri.
 
+Setelah Anda mengajukan sesuatu, layar dokumen menampilkan **siapa yang harus menyetujui** (role dan nama orangnya), dan mereka langsung menerima pesan di **lonceng** dengan link ke dokumen itu. Saat diputuskan, Anda menerima pesan **Approved / Returned / Rejected** beserta alasannya. Tidak perlu menebak harus minta ke siapa (D-129).
+
 ## Panduan per role
 
 | Role | File |

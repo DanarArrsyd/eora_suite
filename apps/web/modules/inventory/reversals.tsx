@@ -382,6 +382,7 @@ function ReversalPage({ id }: { id: string }) {
         </div>
         <ApprovalPanel
           label="Reversal"
+          approval={{ kind: 'reversal', id: r.id }}
           record={{
             status: r.status === 'POSTED' ? 'APPROVED' : r.status,
             preparedByName: r.requestedByName,

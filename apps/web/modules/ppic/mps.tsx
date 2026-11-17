@@ -31,6 +31,7 @@ import {
 import { MasterScreen } from '@/modules/master/master-screen';
 import { PLANT_FILTER } from '@/modules/master/resources';
 import type { MasterResource } from '@/modules/master/types';
+import { ApprovalNotice } from '@/components/approval-notice';
 import { when } from '@/modules/master/version-ui';
 
 /*
@@ -355,6 +356,7 @@ function MpsPage({ id }: { id: string }) {
           }
         />
       ) : null}
+      <ApprovalNotice kind="mps_version" id={m.id} waiting={m.status === 'SUBMITTED'} className="mb-4" />
       {mrpProblem ? (
         <InlineAlert tone="danger" title="MRP not run" className="mb-4">
           {mrpProblem}
