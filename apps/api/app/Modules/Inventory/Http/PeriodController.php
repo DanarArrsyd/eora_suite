@@ -51,6 +51,8 @@ final class PeriodController
         $db = $this->db();
 
         $id = $this->scoped($db, $period, 'inventory.period_close.approve');
+        // locked from reading whom to tell through the transition: both see the same request (Codex on #93)
+        $db->selectOne('select id from inventory_periods where id = ? for update', [$id]);
         // D-129: told while the request is still on the period (the same transaction: no word if it fails)
         app(Approvals::class)->decided($db, 'period_close', $id, 'approved');
         $row = $this->periods->close($db, $id);
@@ -89,6 +91,8 @@ final class PeriodController
         $db = $this->db();
 
         $id = $this->scoped($db, $period, 'inventory.period_reopen.approve');
+        // locked from reading whom to tell through the transition: both see the same request (Codex on #93)
+        $db->selectOne('select id from inventory_periods where id = ? for update', [$id]);
         // D-129: told while the request is still on the period (the same transaction: no word if it fails)
         app(Approvals::class)->decided($db, 'period_reopen', $id, 'approved');
         $row = $this->periods->reopen($db, $id);

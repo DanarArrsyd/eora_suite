@@ -139,3 +139,30 @@ it('counts only the current submission as a task: a request returned and asked a
     expect(array_map(fn ($n) => [$n['kind'], $n['actionRequired']], array_values(array_filter($inbox, fn ($n) => $n['kind'] === 'approval.requested'))))
         ->toBe([['approval.requested', true], ['approval.requested', false]]);
 })->group('integration', 'planning');
+
+it('never names the output reporter as the approver of a QC release, and sends a QC reversal to quality approvers (Codex on #93)', function () {
+    $f = qcFixture($this, $this->t);
+    $qcs = member($this, $this->t);
+    AccessFixtures::grant($this->t, $qcs['id'], 'QCS');
+    // the production leader who reported the output also holds QCS: SoD-01 keeps it out of the release decision
+    AccessFixtures::grant($this->t, $f['prl']['id'], 'QCS');
+    signIn($this, $f['qci'], $this->t);
+    qcDispose($this, $f['pending'], [['outcome' => 'HOLD', 'qty' => '10', 'reasonCode' => 'VISUAL']])->assertCreated();
+    $asked = spa($this)->postJson('/api/v1/quality/release-requests', ['stockLineId' => ($f['line'])('QC_AREA', 'HOLD'), 'qty' => '10', 'reason' => 'Customer accepted the deviation'],
+        ['Idempotency-Key' => 'ap-qc-0001'])->assertCreated()->json('data.documentId');
+    $names = array_column(spa($this)->getJson("/api/v1/approvals/quality_release/{$asked}")->assertOk()->json('data.approvers'), 'name');
+    expect($names)->toContain(apName($this->t, $qcs['id']))->not->toContain(apName($this->t, $f['prl']['id']))
+        ->and(apInbox($this->t, $f['prl']['id']))->toBe([]);
+
+    // a disposition reversal is decided by a quality approver, not by inventory control or the administrator
+    $hold = qcDispose($this, $f['pending'], [['outcome' => 'HOLD', 'qty' => '5', 'reasonCode' => 'VISUAL']], 'ap-qc-0003')->assertCreated()->json('data.documentId');
+    $csa = member($this, $this->t);
+    AccessFixtures::grant($this->t, $csa['id'], 'CSA');
+    rtSwitch($this, $this->t, 'INV', ['PLANT', $f['plant']]);
+    $undo = spa($this)->postJson('/api/v1/inventory/reversals', ['documentId' => $hold, 'reason' => 'Held the wrong quantity'], ['Idempotency-Key' => 'ap-qc-0002'])
+        ->assertCreated()->json('data.documentId');
+    $status = spa($this)->getJson("/api/v1/approvals/reversal/{$undo}")->assertOk()->json('data');
+    expect(array_column($status['roles'], 'code'))->toBe(['QCS'])
+        ->and(array_column($status['approvers'], 'name'))->toContain(apName($this->t, $qcs['id']))->not->toContain(apName($this->t, $csa['id']))
+        ->and(apInbox($this->t, $csa['id']))->toBe([])->and(apInbox($this->t, $qcs['id']))->not->toBe([]);
+})->group('integration', 'quality');

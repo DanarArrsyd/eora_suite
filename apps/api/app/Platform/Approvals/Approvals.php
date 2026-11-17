@@ -59,12 +59,26 @@ final class Approvals
                     '/inventory/adjustments?request=' || d.id as link, array[d.requested_by] as excluded
                from inventory_documents d where d.id = ? and d.doc_type = 'STOCK_ADJUSTMENT'", ],
         'reversal' => ['inventory.reversals', 'inventory.reversal.approve', 'reversal',
+            // a QC disposition is reversed by a quality approver (ReversalController::approver, migration 003000)
             "select d.id, coalesce(d.doc_no, 'Reversal request') as label, d.plant_id, d.requested_by as requester, d.submitted_at as requested_at,
-                    '/inventory/reversals?request=' || d.id as link, array[d.requested_by] as excluded
-               from inventory_documents d where d.id = ? and d.doc_type = 'REVERSAL'", ],
+                    '/inventory/reversals?request=' || d.id as link, array[d.requested_by] as excluded,
+                    case when o.doc_type = 'QC_DISPOSITION' then 'quality.disposition_release.approve' else 'inventory.reversal.approve' end as decide_permission
+               from inventory_documents d left join inventory_documents o on o.id = d.reverses_document_id where d.id = ? and d.doc_type = 'REVERSAL'", ],
         'quality_release' => ['quality.dispositions', 'quality.disposition_release.approve', 'QC release',
+            // SoD-01: who reported the lot's output (its split-lot origin, or the lotless item at the plant) never releases it
             "select d.id, coalesce(d.doc_no, 'QC release request') as label, d.plant_id, d.requested_by as requester, d.submitted_at as requested_at,
-                    '/quality/inspection-lots?request=' || d.id as link, array[d.requested_by] as excluded
+                    '/quality/inspection-lots?request=' || d.id as link,
+                    array[d.requested_by] || array(
+                      with recursive line (lot_id) as (
+                        select (d.request -> 'legs' -> 0 ->> 'lotId')::uuid where d.request -> 'legs' -> 0 ->> 'lotId' is not null
+                        union
+                        select g.from_lot_id from line join genealogy_edges g on g.to_lot_id = line.lot_id
+                          join inventory_documents gd on gd.id = g.document_id and gd.doc_type = 'LOT_SPLIT')
+                      select distinct od.posted_by from inventory_movements m join inventory_documents od on od.id = m.document_id
+                       where m.movement_code in ('OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT') and m.qty_signed > 0 and od.posted_by is not null
+                         and (m.lot_id in (select lot_id from line)
+                              or (d.request -> 'legs' -> 0 ->> 'lotId' is null and m.lot_id is null
+                                  and m.item_id = (d.request -> 'legs' -> 0 ->> 'itemId')::uuid and od.plant_id = d.plant_id))) as excluded
                from inventory_documents d where d.id = ? and d.doc_type = 'QC_DISPOSITION'", ],
         'wo_close_exception' => ['planning.wo_close_exceptions', 'planning.wo_close_exception.approve', 'work order close exception',
             "select d.id, coalesce(d.doc_no, 'WO close exception') as label, d.plant_id, d.requested_by as requester, d.submitted_at as requested_at,
@@ -121,7 +135,7 @@ final class Approvals
         $roles = $db->select(
             'select distinct r.code, r.name from roles r join role_permissions rp on rp.role_id = r.id and rp.permission_code = ?
               where r.template_code is distinct from ? order by r.name',
-            [self::KINDS[$kind][1], 'SUP'],
+            [$doc !== null ? self::decidedWith($kind, $doc) : self::KINDS[$kind][1], 'SUP'],
         );
         $byPerson = [];
         foreach ($people as $p) {
@@ -194,6 +208,12 @@ final class Approvals
             $title, mb_substr($body, 0, 1000), (string) $doc->link, null, null, null);
     }
 
+    /** The permission that decides this document: the kind's, unless the document names another (a QC reversal). */
+    private static function decidedWith(string $kind, stdClass $doc): string
+    {
+        return isset($doc->decide_permission) ? (string) $doc->decide_permission : self::KINDS[$kind][1];
+    }
+
     private function document(EoraPostgresConnection $db, string $kind, string $id): ?stdClass
     {
         return $db->selectOne(self::KINDS[$kind][3], [strtolower($id)]);
@@ -228,7 +248,7 @@ final class Approvals
                      or (ra.scope_type = 'COMPANY' and ra.company_id = (select p.company_id from plants p where p.id = ?::uuid)))
                 and not (m.user_id = any(array_remove(coalesce(?::uuid[], '{}'), null)))
               order by u.display_name, r.name",
-            [self::KINDS[$kind][1], $doc->plant_id, $doc->plant_id, $doc->plant_id, $doc->excluded === null ? null : (string) $doc->excluded],
+            [self::decidedWith($kind, $doc), $doc->plant_id, $doc->plant_id, $doc->plant_id, $doc->excluded === null ? null : (string) $doc->excluded],
         ));
     }
 
