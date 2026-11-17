@@ -53,9 +53,9 @@ it('refuses a key used for another request on every M4 posting endpoint; a retry
     // another endpoint's key, with a request that would otherwise be valid
     $key($post('/api/v1/delivery/shipments', ['plantId' => $f['plant'], 'customerId' => $f['customer'],
         'lines' => [['scheduleLineId' => $f['schedule'], 'stockLineId' => $f['stgA'], 'qty' => '1']]], $used));
-    $key($post('/api/v1/delivery/allocations', ['scheduleLineId' => $f['line2'], 'lines' => [['stockLineId' => ($f['line'])($b, 'UNRESTRICTED'), 'qty' => '1']]], $used));
-    $key($post('/api/v1/warehouse/fg-receipts', ['plantId' => $f['plant'], 'lines' => [['stockLineId' => ($f['line'])($b, 'UNRESTRICTED'), 'qty' => '1']]], $used));
-    $key($post('/api/v1/quality/dispositions', ['stockLineId' => ($f['line'])($b, 'UNRESTRICTED'), 'lines' => [['outcome' => 'RELEASE', 'qty' => '1']]], $used));
+    $key($post('/api/v1/delivery/allocations', ['scheduleLineId' => $f['line2'], 'lines' => [['stockLineId' => ($f['line'])($b, 'UNRESTRICTED', $f['fg2']), 'qty' => '1']]], $used));
+    $key($post('/api/v1/warehouse/fg-receipts', ['plantId' => $f['plant'], 'lines' => [['stockLineId' => ($f['line'])($b, 'UNRESTRICTED', $f['fg2']), 'qty' => '1']]], $used));
+    $key($post('/api/v1/quality/dispositions', ['stockLineId' => ($f['line'])($b, 'UNRESTRICTED', $f['fg2']), 'lines' => [['outcome' => 'RELEASE', 'qty' => '1']]], $used));
     $key($post('/api/v1/production/postings', ['runId' => $f['runId'],
         'consumptions' => [['itemId' => $f['coil']['id'], 'lotId' => $f['lot'], 'method' => 'WEIGHED_CONSUMED', 'qty' => '1', 'evidence' => 'Scale S-01']], 'goodQty' => '1'], $used));
     $key($post('/api/v1/inventory/material-issues', ['workOrderId' => $f['wo']['id'], 'workCenterId' => $f['wc']['id'],
@@ -70,7 +70,7 @@ it('refuses a key used for another request on every M4 posting endpoint; a retry
     $posted = $ship('10')->assertCreated()->json('data.documentId');
     $key($ship('5'));
     $ship('10')->assertOk()->assertJsonPath('data.documentId', $posted);
-    $allocate = fn (string $qty) => $post('/api/v1/delivery/allocations', ['scheduleLineId' => $f['line3'], 'lines' => [['stockLineId' => ($f['line'])($b, 'UNRESTRICTED'), 'qty' => $qty]]], 'pc-alloc-0001');
+    $allocate = fn (string $qty) => $post('/api/v1/delivery/allocations', ['scheduleLineId' => $f['line3'], 'lines' => [['stockLineId' => ($f['line'])($b, 'UNRESTRICTED', $f['fg2']), 'qty' => $qty]]], 'pc-alloc-0001');
     $allocation = $allocate('5')->assertCreated()->json('data.allocationIds.0');
     $key($allocate('4'));
     $pick = fn (string $qty) => $post('/api/v1/delivery/picks', ['plantId' => $f['plant'], 'lines' => [['allocationId' => $allocation, 'qty' => $qty]]], 'pc-pick-0001');
@@ -82,13 +82,13 @@ it('refuses a key used for another request on every M4 posting endpoint; a retry
 it('makes a shipment and a pick wait for a posting that holds their stock (ADR-0014 §4)', function () {
     $f = pcFixture($this, $this->t);
     [, $b] = $f['lots'];
-    $allocation = spa($this)->postJson('/api/v1/delivery/allocations', ['scheduleLineId' => $f['line3'], 'lines' => [['stockLineId' => ($f['line'])($b, 'UNRESTRICTED'), 'qty' => '5']]],
+    $allocation = spa($this)->postJson('/api/v1/delivery/allocations', ['scheduleLineId' => $f['line3'], 'lines' => [['stockLineId' => ($f['line'])($b, 'UNRESTRICTED', $f['fg2']), 'qty' => '5']]],
         ['Idempotency-Key' => 'pc-alloc-0002'])->assertCreated()->json('data.allocationIds.0');
     $tx = app(TenantTransaction::class);
     config(['database.connections.pgsql_takeover' => config('database.connections.pgsql')]);
     // another posting holds the staged lot and the FG rack line while these requests come in: both wait, then give up
     $tx->run(TenantContext::forTenant($this->t['tenant'], (string) $f['dlv']['id']), function (EoraPostgresConnection $db) use ($f, $b, $allocation) {
-        $db->select('select 1 from stock_balances where id in (?, ?) for update', [$f['stgA'], ($f['line'])($b, 'UNRESTRICTED')]);
+        $db->select('select 1 from stock_balances where id in (?, ?) for update', [$f['stgA'], ($f['line'])($b, 'UNRESTRICTED', $f['fg2'])]);
         shShip($this, $f, [['scheduleLineId' => $f['schedule'], 'stockLineId' => $f['stgA'], 'qty' => '10']], [], 'pc-ship-0002')->assertStatus(409)->assertJsonPath('code', 'STOCK_BUSY');
         spa($this)->postJson('/api/v1/delivery/picks', ['plantId' => $f['plant'], 'lines' => [['allocationId' => $allocation, 'qty' => '5']]], ['Idempotency-Key' => 'pc-pick-0002'])
             ->assertStatus(409)->assertJsonPath('code', 'STOCK_BUSY');
