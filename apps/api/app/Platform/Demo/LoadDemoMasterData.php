@@ -52,7 +52,7 @@ final class LoadDemoMasterData extends Command
             return self::FAILURE;
         }
 
-        $this->info(sprintf('Demo master data loaded into %s: %d files, %d rows. Routings and BOMs are Draft: submit (ppc@) and approve (csa@) them in UAT.',
+        $this->info(sprintf('Demo master data loaded into %s: %d files, %d rows. Routings and BOMs are Draft: submit (sup@) and approve (csa@) them in UAT.',
             $spec->code, count($loaded), array_sum(array_column($loaded, 'rows'))));
 
         return self::SUCCESS;

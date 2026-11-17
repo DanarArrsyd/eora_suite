@@ -27,8 +27,10 @@ it('maps the master-data permissions to the templates (M2-D1); approve is sensit
     foreach ($rows as $r) {
         $by[$r->t][] = $r->p;
     }
-    expect($by['CSA'])->toContain('master.org.create', 'master.routing.approve', 'master.conversion.approve')
-        ->and($by['PPC'])->toContain('master.part.create', 'master.routing.submit')->not->toContain('master.routing.approve', 'master.org.create')
+    // D-128: only the Supervisor writes master data; CSA approves
+    expect($by['SUP'])->toContain('master.org.create', 'master.part.create', 'master.routing.create', 'master.conversion.create')
+        ->and($by['CSA'])->toContain('master.routing.approve', 'master.conversion.approve')->not->toContain('master.org.create', 'master.part.create', 'master.routing.create')
+        ->and($by['PPC'])->toBe(['master.conversion.view', 'master.org.view', 'master.part.view', 'master.routing.view'])
         ->and($by['QCS'])->toContain('master.conversion.approve')->not->toContain('master.conversion.create')
         ->and($by['AUD'])->toBe(['master.conversion.view', 'master.org.view', 'master.part.view', 'master.routing.view'])
         ->and($by)->not->toHaveKeys(['TENANT_ADMIN', 'OPR', 'MAD', 'APR']);
@@ -43,7 +45,7 @@ it('creates every plant with its six virtual locations, which cannot be changed'
     ));
     expect($count)->toHaveCount(2)->and(array_map(static fn ($r) => (int) $r->n, $count))->toBe([6, 6]);
 
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $virtual = spa($this)->getJson('/api/v1/query/core.locations?filter[virtual]=true&filter[plantId]='.$this->t['plants'][0].'&sort=code')
         ->assertOk()->assertJsonPath('meta.total', 6)->json('data');
     expect(array_column($virtual, 'code'))->toBe(['V_ADJUSTMENT', 'V_CONSUMED', 'V_CUSTOMER', 'V_OPENING', 'V_PRODUCED', 'V_SUPPLIER']);
@@ -57,7 +59,7 @@ it('creates every plant with its six virtual locations, which cannot be changed'
 })->group('integration', 'master');
 
 it('lets a company administrator build plant → warehouse → location, audited, listed through the query resources', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
 
     $plant = spa($this)->postJson('/api/v1/core/plants', ['companyId' => $this->t['company'], 'code' => 'P9', 'name' => 'Plant 9'])
         ->assertCreated()->assertHeader('ETag', '"1"')
@@ -89,7 +91,7 @@ it('lets a company administrator build plant → warehouse → location, audited
 })->group('integration', 'master');
 
 it('edits with If-Match versions: missing → 428, stale → 412, current → 200 with the next ETag', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $wh = spa($this)->postJson('/api/v1/core/warehouses', ['plantId' => $this->t['plants'][0], 'code' => 'FG1', 'name' => 'FG', 'warehouseType' => 'FINISHED_GOODS'])->json('data');
     $uri = '/api/v1/core/warehouses/'.$wh['id'];
 
@@ -110,7 +112,7 @@ it('edits with If-Match versions: missing → 428, stale → 412, current → 20
 
 it('keeps plant-scoped users inside their plant, and users without the permission out', function () {
     $csa = member($this, $this->t);
-    AccessFixtures::grant($this->t, $csa['id'], 'CSA');
+    AccessFixtures::grant($this->t, $csa['id'], 'SUP');
     signIn($this, $csa, $this->t);
     foreach ($this->t['plants'] as $i => $plant) {
         spa($this)->postJson('/api/v1/core/warehouses', ['plantId' => $plant, 'code' => "W{$i}", 'name' => "W{$i}", 'warehouseType' => 'GENERAL'])->assertCreated();
@@ -138,7 +140,7 @@ it('keeps plant-scoped users inside their plant, and users without the permissio
 
 it('refuses a plant-scoped writer outside its plant (SCOPE_FORBIDDEN) and hides other tenants (404 / unknown)', function () {
     // a CSA copy bound to plant 1 (template roles keep the template permissions; the scope narrows them)
-    orgUser($this, $this->t, 'CSA', ['PLANT', $this->t['plants'][0]]);
+    orgUser($this, $this->t, 'SUP', ['PLANT', $this->t['plants'][0]]);
     spa($this)->postJson('/api/v1/core/warehouses', ['plantId' => $this->t['plants'][1], 'code' => 'X', 'name' => 'X', 'warehouseType' => 'GENERAL'])
         ->assertForbidden()->assertJsonPath('code', 'SCOPE_FORBIDDEN');
     spa($this)->postJson('/api/v1/core/companies', ['code' => 'CO2', 'legalName' => 'Second'])->assertForbidden()->assertJsonPath('code', 'SCOPE_FORBIDDEN');
@@ -155,7 +157,7 @@ it('refuses a plant-scoped writer outside its plant (SCOPE_FORBIDDEN) and hides 
 })->group('integration', 'master');
 
 it('applies the query grammar strictly (doc 24 §3.1)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
 
     spa($this)->getJson('/api/v1/query/core.nothing')->assertNotFound();
     spa($this)->getJson('/api/v1/query/core.locations?filter[name]=x')->assertStatus(422)->assertJsonPath('code', 'FILTER_NOT_ALLOWED');

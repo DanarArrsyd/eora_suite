@@ -20,9 +20,8 @@ use stdClass;
 
 /**
  * Master data for a seeded demo tenant (doc 29 §2, M2 exit): the sample files (ImportSamples) go through the real import
- * pipeline — uploaded and submitted by the planner (`ppc@`) where the planner may create that master data, by the
- * master-data administrator (`csa@`) otherwise (D-081), and committed by the administrator; the import worker validates
- * and commits each file. Units, items, customers and the rest become Active; routings and
+ * pipeline — uploaded, submitted and committed by the Supervisor, the one door for master data (D-128): `sup@`, or
+ * `uat@` once it holds the Supervisor role (eora:demo:uat-account); the import worker validates and commits each file. Units, items, customers and the rest become Active; routings and
  * BOMs stay Draft, so the two-person approval is left to UAT; maps need submitted versions and are left to UAT too.
  */
 final class DemoMasterData
@@ -55,8 +54,7 @@ final class DemoMasterData
             throw new RuntimeException("No complete demo tenant {$spec->code}. Run eora:demo:seed --code={$spec->code} first.");
         }
         $tenant = (string) $tenant->tenant_id;
-        $planner = $this->member($tenant, $spec->email('ppc'));
-        $admin = $this->member($tenant, $spec->email('csa'));
+        $supervisor = $this->supervisor($tenant, $spec);
         $state = $this->system($tenant, fn (EoraPostgresConnection $db) => $db->selectOne(
             "select exists (select 1 from items where code = ?) as loaded,
                     (select (now() at time zone timezone)::date::text from plants where code = 'P1') as today",
@@ -75,7 +73,7 @@ final class DemoMasterData
                 if (str_starts_with(basename($file['path']), '99-') || in_array($file['template'], self::SKIPPED, true)) {
                     continue;
                 }
-                $rows = $this->import($tenant, $planner, $admin, $file['template'], $file['path'], $waitSeconds);
+                $rows = $this->import($tenant, $supervisor, $file['template'], $file['path'], $waitSeconds);
                 $progress($file['template'], $rows);
                 $loaded[] = ['template' => $file['template'], 'rows' => $rows];
             }
@@ -87,10 +85,10 @@ final class DemoMasterData
         }
     }
 
-    /** Upload and submit as the planner (or the administrator), commit as the administrator; returns the committed rows. */
-    private function import(string $tenant, string $planner, string $admin, string $template, string $path, int $waitSeconds): int
+    /** Upload, submit and commit as the Supervisor; returns the committed rows. */
+    private function import(string $tenant, string $supervisor, string $template, string $path, int $waitSeconds): int
     {
-        $uploader = $this->may($tenant, $planner, $this->templates->get($template)->targetPermission()) ? $planner : $admin;
+        $uploader = $supervisor;
         $upload = Request::create('/api/v1/exchange/imports', 'POST', ['template' => $template], [], [
             'file' => new UploadedFile($path, basename($path), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true),
         ]);
@@ -106,7 +104,7 @@ final class DemoMasterData
                 basename($path), $job->error_rows, $first->row_no, $first->errors));
         }
         $this->as($tenant, $uploader, fn () => $this->imports->submit($id));
-        $this->as($tenant, $admin, fn () => $this->imports->commit($id));
+        $this->as($tenant, $supervisor, fn () => $this->imports->commit($id));
 
         return (int) $this->await($tenant, $id, ['COMMITTED'], $waitSeconds)->committed_rows;
     }
@@ -140,6 +138,23 @@ final class DemoMasterData
     private function may(string $tenant, string $user, string $permission): bool
     {
         return $this->as($tenant, $user, fn (EoraPostgresConnection $db) => $this->authorizer->scopes($db, $permission) !== []);
+    }
+
+    /** The demo account that keeps master data: sup@, else uat@ when it holds the Supervisor role (D-128). */
+    private function supervisor(string $tenant, DemoSpec $spec): string
+    {
+        foreach (['sup', 'uat'] as $who) {
+            try {
+                $user = $this->member($tenant, $spec->email($who));
+            } catch (RuntimeException) {
+                continue;
+            }
+            if ($this->may($tenant, $user, 'exchange.import.post') && $this->may($tenant, $user, 'master.routing.create')) {
+                return $user;
+            }
+        }
+
+        throw new RuntimeException("No demo Supervisor account. Add one with eora:demo:uat-account --code={$spec->code} (uat@ gets every role, the Supervisor too), then run again.");
     }
 
     private function member(string $tenant, string $email): string

@@ -31,17 +31,9 @@ Merencanakan produksi dari order dan forecast yang dicatat Delivery: MPS, MRP, d
 
 **Master Data**
 
-- **Items** — Part dan material.
-- **Units & Conversions** — Satuan dan konversi satuan per item.
-- **Customers** — Data customer.
-- **Customer Part Mapping** — Nomor part customer → item internal.
-- **Suppliers** — Data supplier.
-- **Process Types** — Jenis proses operasi (blanking, bending, inspeksi, …).
-- **Routings** — Urutan operasi per item dan plant (berversi, disetujui orang kedua).
-- **BOMs** — Kebutuhan bahan per pcs (berversi, disetujui orang kedua).
 - **Planning Parameters** — Lead time dan safety stock per item dan plant.
-- **Import** — Impor master data dari template Excel.
-- **Exports** — File Excel hasil ekspor Anda (24 jam).
+
+Item, customer, routing, BOM, dan master lain diubah oleh **Supervisor** (D-128). Bila ada part, BOM, atau routing baru / berubah, sampaikan ke Supervisor.
 
 ## Langkah kerja
 
@@ -54,6 +46,6 @@ Merencanakan produksi dari order dan forecast yang dicatat Delivery: MPS, MRP, d
 
 ## Persetujuan
 
-- MPS dan rilis WO disetujui CSA. Routing / BOM yang Anda buat disetujui CSA.
+- MPS dan rilis WO disetujui CSA.
 
 Kembali ke [Panduan Pengguna](README.md).

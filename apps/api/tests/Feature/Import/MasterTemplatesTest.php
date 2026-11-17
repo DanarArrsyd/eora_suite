@@ -34,7 +34,7 @@ function mtErrors(object $test, string $job): array
 }
 
 it('imports the plant layout in order: warehouses, locations, work centers with their MAP location, machines', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $wh = mtImport($this, $this->t, 'warehouses', ['Plant code', 'Code', 'Name', 'Warehouse type'], [
         ['P1', 'RM', 'Raw material', 'RAW_MATERIAL'], ['P1', 'FG', 'Finished goods', 'finished_goods'], ['P9', 'X', 'Nowhere', 'GENERAL'], ['P1', 'RM', 'Again', 'GENERAL'],
     ]);
@@ -63,7 +63,7 @@ it('imports the plant layout in order: warehouses, locations, work centers with 
 
 it('keeps org imports inside the user\'s plant scope', function () {
     [$p1, $p2] = $this->t['plants'];
-    orgUser($this, $this->t, 'CSA', ['PLANT', $p1]);
+    orgUser($this, $this->t, 'SUP', ['PLANT', $p1]);
     $wh = mtImport($this, $this->t, 'warehouses', ['Plant code', 'Code', 'Name', 'Warehouse type'], [['P1', 'RM', 'Raw', 'RAW_MATERIAL'], ['P2', 'RM', 'Raw', 'RAW_MATERIAL']]);
     expect($wh)->committed_rows->toBe(1);
     expect(mtErrors($this, $wh->id))->toBe(['Plant P2 is outside your roles.']);
@@ -71,7 +71,7 @@ it('keeps org imports inside the user\'s plant scope', function () {
 })->group('integration', 'import');
 
 it('imports dies (codes unique in the tenant) and the parts each die makes', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     impThrough($this, $this->t, impFile(IMP_ITEM_HEADER, impItems(2)));
     $dies = mtImport($this, $this->t, 'dies', ['Plant code', 'Code', 'Name', 'Die type', 'Cavities', 'Stroke life', 'Current strokes'], [
         ['P1', 'D-100', 'Bracket die', 'DIE', '2', '500000', ''], ['P2', 'D-100', 'Same code', 'DIE', '', '', ''], ['P2', 'J-1', 'Jig', 'JIG', '0', '', ''],
@@ -86,7 +86,7 @@ it('imports dies (codes unique in the tenant) and the parts each die makes', fun
 })->group('integration', 'import');
 
 it('imports customers, suppliers and customer part mapping with the screen\'s version rule', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     impThrough($this, $this->t, impFile(IMP_ITEM_HEADER, impItems(2)));
     $c = mtImport($this, $this->t, 'customers', ['Code', 'Name'], [['ASTRA', 'Astra'], ['astra', 'Twice'], ['BAD CODE', 'x']]);
     expect($c)->committed_rows->toBe(1)->error_rows->toBe(2);
@@ -109,7 +109,7 @@ it('imports customers, suppliers and customer part mapping with the screen\'s ve
 })->group('integration', 'import');
 
 it('imports unit conversions from today, closing the open version, and process types with the routing permission', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     impThrough($this, $this->t, impFile(IMP_ITEM_HEADER, impItems(1)));
     $conv = mtImport($this, $this->t, 'uom_conversions', ['Item code', 'From unit', 'To unit', 'Factor', 'Effective from'], [
         ['PART-0001', 'SHEET', 'KG', '12.5', rtDay($this->t)], ['PART-0001', 'KG', 'KG', '1', rtDay($this->t)], ['PART-0001', 'SHEET', 'PCS', '10', '2020-01-01'],
@@ -126,7 +126,7 @@ it('imports unit conversions from today, closing the open version, and process t
 })->group('integration', 'import');
 
 it('lists every template with its permission and columns', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $codes = array_column(spa($this)->getJson('/api/v1/exchange/import-templates')->assertOk()->json('data'), 'permission', 'code');
     expect($codes)->toMatchArray([
         'uoms' => 'master.part.create', 'items' => 'master.part.create', 'material_specs' => 'master.part.create', 'uom_conversions' => 'master.part.create',

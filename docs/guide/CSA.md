@@ -85,7 +85,9 @@ Penyetuju utama dan admin perusahaan: menyetujui pekerjaan sensitif dan mengelol
 1. PPIC → Master Production Schedule → buka MPS **Submitted** → periksa → **Approve** atau **Return** dengan alasan.
 2. PPIC → Work Orders → WO **Waiting for release** → **Release** (BOM dan routing disalin) atau **Return**.
 3. Inventory → Adjustments / Reversals / Period Close → setujui permintaan yang menunggu.
-4. Master Data → Routings / BOMs / Conversion Data → setujui versi yang disubmit orang lain.
+4. Master Data → Routings / BOMs / Conversion Data → setujui versi yang disubmit Supervisor.
+
+Master data diubah oleh **Supervisor** (D-128); CSA menyetujui, tidak menginput master.
 
 ## Persetujuan
 

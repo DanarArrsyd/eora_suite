@@ -29,7 +29,7 @@ use stdClass;
 /**
  * One full order for a demo tenant (doc 33 §1.9, D-118, M4 exit): with the sample master data and the opening stock
  * (`eora:demo:master`, `eora:demo:stock`), the M4 flow runs through the real endpoints, each step as the demo account of
- * its role — BOM and routing of BRK-A100 approved (ppc asks, csa decides), a sales order of OEM-A for 300 PCS (dlv), a
+ * its role — BOM and routing of BRK-A100 approved (sup asks, csa decides), a sales order of OEM-A for 300 PCS (dlv), a
  * work order for it (ppc asks, csa releases), coil and nuts issued (mat), one run posted and closed (prl), its output
  * released by QC (qci), received into FG (fgw), 200 allocated (dlv) and picked (fgw), and 150 shipped (dlv) — so the
  * trace, the order's delivered quantity and the stock show a real, partly shipped order.
@@ -82,12 +82,22 @@ final class DemoOrder
         });
         $who = fn (string $role) => $this->member($tenant, $spec->email($role));
         [$ppc, $csa, $mat, $prl, $qci, $fgw, $dlv] = array_map($who, ['ppc', 'csa', 'mat', 'prl', 'qci', 'fgw', 'dlv']);
+        // master data has one door (D-128): sup@, or uat@ once it holds the Supervisor role
+        $sup = null;
+        foreach (['sup', 'uat'] as $keeper) {
+            try {
+                $sup = $who($keeper);
+                break;
+            } catch (RuntimeException) {
+            }
+        }
+        $sup ?? throw new RuntimeException('No demo Supervisor account. Add one with eora:demo:uat-account, then run again.');
 
         $today = (string) $this->system($tenant, fn (EoraPostgresConnection $db) => $db->selectOne(
             'select (now() at time zone t.timezone)::date::text as d from tenants t where t.id = ?', [$tenant])->d);
 
-        // 1. the master of BRK-A100 approved: the planner asks, an approver who neither prepared nor edited it decides
-        //    (D-060) — csa@, or uat@ (eora:demo:uat-account) when csa@ committed the imported draft itself
+        // 1. the master of BRK-A100 approved: the Supervisor asks (D-128), an approver who neither prepared nor edited it
+        //    decides (D-060) — csa@, or uat@ (eora:demo:uat-account) when csa@ committed the imported draft itself
         foreach ([[BomController::class, $this->bom($tenant), 'bom_version'], [RoutingController::class, $this->routing($tenant), 'routing_version']] as [$controller, $version, $table]) {
             $what = $controller === BomController::class ? 'BOM' : 'Primary routing';
             if ($version === null) {
@@ -96,20 +106,23 @@ final class DemoOrder
             if ($version->status === 'APPROVED') {
                 continue;
             }
-            $approver = $this->approver($tenant, $spec, $table, (string) $version->id)
-                ?? throw new RuntimeException("{$what} of BRK-A100 was prepared by its only approver (csa@). Add a second approver with eora:demo:uat-account, or approve it in UAT §2, then run again.");
-            // a draft imported days ago starts in the past: withdrawn when asked already, the planner moves it to today
+            // the Supervisor edits or submits the draft when it must start today or is still a draft: then it becomes a
+            // contributor and may not approve it, so the approver is someone else (Codex on #92)
+            $writes = $version->effective_from < $today || $version->status === 'DRAFT';
+            $approver = $this->approver($tenant, $spec, $table, (string) $version->id, $writes ? $sup : null)
+                ?? throw new RuntimeException("{$what} of BRK-A100 has no approver who neither prepared nor edits it (csa@ or uat@, distinct from the Supervisor). Approve it in UAT §2, or seed a new demo tenant (it has its own sup@), then run again.");
+            // a draft imported days ago starts in the past: withdrawn when asked already, the Supervisor moves it to today
             if ($version->effective_from < $today) {
                 if ($version->status === 'SUBMITTED') {
-                    $this->as($tenant, $ppc, fn () => app($controller)->withdraw((string) $version->id));
+                    $this->as($tenant, $sup, fn () => app($controller)->withdraw((string) $version->id));
                     $version->status = 'DRAFT';
                 }
                 $row = $this->system($tenant, fn (EoraPostgresConnection $db) => $db->selectOne("select version from {$table}s where id = ?", [$version->id]));
-                $this->call($tenant, $ppc, $controller, 'updateVersion', ['effectiveFrom' => $today], [(string) $version->id], ['If-Match' => '"'.$row->version.'"']);
+                $this->call($tenant, $sup, $controller, 'updateVersion', ['effectiveFrom' => $today], [(string) $version->id], ['If-Match' => '"'.$row->version.'"']);
                 $progress("{$what} of BRK-A100 moved to start {$today}");
             }
             if ($version->status === 'DRAFT') {
-                $this->as($tenant, $ppc, fn () => app($controller)->submit((string) $version->id));
+                $this->as($tenant, $sup, fn () => app($controller)->submit((string) $version->id));
             }
             $this->as($tenant, $approver, fn () => app($controller)->approve((string) $version->id));
             $progress("{$what} of BRK-A100 approved");
@@ -231,16 +244,17 @@ final class DemoOrder
         return ['so' => (string) $line->so_no, 'wo' => (string) $flow->wo_no, 'shipment' => (string) $shipment['docNo'], 'lot' => (string) $posted['lotNo']];
     }
 
-    /** The first of csa@ and uat@ who may approve and neither prepared nor edited the version (SoD, D-060). */
-    private function approver(string $tenant, DemoSpec $spec, string $table, string $version): ?string
+    /** The first of csa@ and uat@ who may approve, neither prepared nor edited the version and is not $writer (SoD, D-060). */
+    private function approver(string $tenant, DemoSpec $spec, string $table, string $version, ?string $writer = null): ?string
     {
         $row = $this->system($tenant, fn (EoraPostgresConnection $db) => $db->selectOne(
             "select u.id from users u join memberships m on m.user_id = u.id and m.status = 'ACTIVE'
               where u.email_display in (?, ?)
                 and u.id is distinct from (select v.prepared_by from {$table}s v where v.id = ?)
                 and not exists (select 1 from {$table}_contributors c where c.{$table}_id = ? and c.actor = u.id)
+                and u.id is distinct from ?::uuid
               order by u.email_display = ? desc limit 1",
-            [$spec->email('csa'), $spec->email('uat'), $version, $version, $spec->email('csa')]));
+            [$spec->email('csa'), $spec->email('uat'), $version, $version, $writer, $spec->email('csa')]));
 
         return $row === null ? null : (string) $row->id;
     }

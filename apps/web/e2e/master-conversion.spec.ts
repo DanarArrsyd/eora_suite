@@ -136,7 +136,7 @@ test('net weight page: a Draft weight is edited at its ETag and submitted', asyn
   await expect(page.getByText('Version 1 submitted for approval')).toBeVisible();
 });
 
-test('a validator validates a submitted weight and retires a validated one after confirming', async ({ page }) => {
+test('a validator validates a submitted weight; the master-data keeper retires a validated one after confirming (D-128)', async ({ page }) => {
   await setup(page, VALIDATOR, { ...NW, status: 'SUBMITTED' });
   const calls: string[] = [];
   await page.route('**/api/v1/planning/item-weights/*/actions/*', (route) => {
@@ -148,7 +148,16 @@ test('a validator validates a submitted weight and retires a validated one after
   await page.getByRole('button', { name: 'Validate' }).click();
   await expect(page.getByText('Version 1 validated')).toBeVisible();
 
+  // the validator does not retire: that changes master data
   await setup(page, VALIDATOR, { ...NW, status: 'VALIDATED', inUse: true, validatedByName: 'qcs', validatedAt: '2026-10-17T03:00:00Z' });
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Retire' })).toHaveCount(0);
+  await setup(
+    page,
+    { ...SESSION, permissions: ['master.conversion.view', 'master.conversion.create'] },
+    { ...NW, status: 'VALIDATED', inUse: true, validatedByName: 'qcs', validatedAt: '2026-10-17T03:00:00Z' },
+  );
   await page.reload();
   await page.getByRole('button', { name: 'Retire' }).click();
   const confirm = page.getByRole('dialog', { name: 'Retire version 1' });

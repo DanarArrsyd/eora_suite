@@ -51,7 +51,7 @@ test('M4 order end to end on the real stack', async ({ browser }) => {
     expect(artisan('eora:demo:seed', `--code=${TENANT}`, `--password=${PASSWORD}`)).toContain('active users');
     expect(artisan('eora:demo:master', `--code=${TENANT}`, '--wait=120')).toContain('Demo master data loaded');
     expect(artisan('eora:demo:stock', `--code=${TENANT}`)).toContain('Demo stock loaded');
-    // csa@ committed the imported BOM and routing: the all-roles UAT account is the second approver (D-060, D-112)
+    // sup@ imported the BOM and routing (D-128) and csa@ approves them; the all-roles UAT account stays for UAT (D-112)
     expect(artisan('eora:demo:uat-account', `--code=${TENANT}`, `--password=${PASSWORD}`)).toContain(`uat@${TENANT}.test`);
     const out = artisan('eora:demo:m4', `--code=${TENANT}`);
     const done = /Demo order done in \S+: (SO-P1-\d{4}-\d{4}) → (WO-P1-\d{4}-\d{4}) → lot (L\d{4}-\d{4}) → (SHP-P1-\d{4}-\d{4})/.exec(out);

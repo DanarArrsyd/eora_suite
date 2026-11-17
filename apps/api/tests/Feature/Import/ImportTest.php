@@ -33,7 +33,7 @@ beforeEach(function () {
 });
 
 it('refuses files that are not plain xlsx workbooks before storing anything', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $text = UploadedFile::fake()->createWithContent('items.xlsx', 'code,name');
     impUpload($this, $text)->assertStatus(422)->assertJsonValidationErrors(['file']);
 
@@ -55,7 +55,7 @@ it('refuses files that are not plain xlsx workbooks before storing anything', fu
 })->group('integration', 'import');
 
 it('imports items: validation with an error file, submit, commit by a poster, audit per row (D-081)', function () {
-    orgUser($this, $this->t, 'CSA');
+    $sup = orgUser($this, $this->t, 'SUP');
     spa($this)->getJson('/api/v1/exchange/import-templates')->assertOk()->assertJsonPath('data.1.code', 'items')->assertJsonPath('data.1.columns.3.header', 'Base unit');
     $rows = [...impItems(3), ['PART-0002', 'Duplicate', 'FINISHED', 'PCS', '', '', '', '', ''], ['bad code', 'x', 'WIDGET', 'BOX', 'maybe', '', '', '', 'B']];
     $job = impUpload($this, impFile(IMP_ITEM_HEADER, $rows))->assertCreated()->assertJsonPath('data.status', 'RESERVED')->json('data');
@@ -69,11 +69,13 @@ it('imports items: validation with an error file, submit, commit by a poster, au
         ->and($errors[1]['errors'])->toContain('Item type: use one of RAW, SEMI_FINISHED, FINISHED, SCRAP, CONSUMABLE.', 'Unit BOX does not exist. Import or create it first.', 'Drawing rev needs a drawing no.');
     spa($this)->get("/api/v1/exchange/imports/{$job['id']}/error-file")->assertOk()->assertDownload('eora-items-errors.xlsx');
 
-    // PPC uploads and submits, but only a poster commits
+    // only the Supervisor imports master data (D-128): neither the planner nor the approver submits or commits
     rtSwitch($this, $this->t, 'PPC');
-    spa($this)->postJson("/api/v1/exchange/imports/{$job['id']}/actions/submit")->assertOk()->assertJsonPath('data.status', 'SUBMITTED');
-    spa($this)->postJson("/api/v1/exchange/imports/{$job['id']}/actions/commit")->assertForbidden();
+    spa($this)->postJson("/api/v1/exchange/imports/{$job['id']}/actions/submit")->assertForbidden();
     rtSwitch($this, $this->t, 'CSA');
+    spa($this)->postJson("/api/v1/exchange/imports/{$job['id']}/actions/commit")->assertForbidden();
+    signIn($this, $sup, $this->t);
+    spa($this)->postJson("/api/v1/exchange/imports/{$job['id']}/actions/submit")->assertOk()->assertJsonPath('data.status', 'SUBMITTED');
     spa($this)->postJson("/api/v1/exchange/imports/{$job['id']}/actions/commit")->assertOk()->assertJsonPath('data.status', 'COMMITTING');
     Queue::assertPushed(ProcessImport::class, fn (ProcessImport $m) => $m->jobId === $job['id'] && $m->phase === 'commit');
     impWork($this->t, $job['id'], 'commit');
@@ -89,7 +91,7 @@ it('imports items: validation with an error file, submit, commit by a poster, au
 })->group('integration', 'import');
 
 it('fails a file whose header does not match the template version', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $id = impUpload($this, impFile(['Code', 'Name', 'Type'], [['A', 'B', 'C']]))->assertCreated()->json('data.id');
     impWork($this->t, $id, 'validate');
     spa($this)->getJson("/api/v1/exchange/imports/{$id}")->assertOk()->assertJsonPath('data.status', 'FAILED')->assertJsonPath('data.failureCode', 'HEADER_MISMATCH')
@@ -97,7 +99,7 @@ it('fails a file whose header does not match the template version', function () 
 })->group('integration', 'import');
 
 it('reserves one job per file: identical uploads share it while active or committed; a rejected one is retried (B2-AT-47..50)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $file = impFile(IMP_ITEM_HEADER, impItems(2));
     $first = impUpload($this, impAgain($file))->assertCreated()->json('data.id');
     impUpload($this, impAgain($file))->assertOk()->assertJsonPath('data.id', $first); // RESERVED (AT-47)
@@ -127,18 +129,18 @@ it('reserves one job per file: identical uploads share it while active or commit
 it('keeps the same file of two tenants apart (B2-AT-52)', function () {
     $t2 = TenantFixtures::provision(1);
     AccessFixtures::roles($t2);
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $file = impFile(IMP_ITEM_HEADER, impItems(1));
     $a = impUpload($this, impAgain($file))->assertCreated()->json('data.id');
     spa($this)->postJson('/api/v1/auth/logout')->assertNoContent();
-    orgUser($this, $t2, 'CSA');
+    orgUser($this, $t2, 'SUP');
     $b = impUpload($this, impAgain($file))->assertCreated()->json('data.id');
     expect($b)->not->toBe($a);
     spa($this)->getJson("/api/v1/exchange/imports/{$a}")->assertNotFound();
 })->group('integration', 'import');
 
 it('fences workers: a takeover after an expired lease bumps the generation and the paused worker can no longer write (B2-AT-58, 60)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $file = impFile(IMP_ITEM_HEADER, impItems(2));
     $id = impUpload($this, impAgain($file))->assertCreated()->json('data.id');
     $context = TenantContext::forTenant($this->t['tenant'], (string) impJob($this->t, $id)->created_by_user);
@@ -161,7 +163,7 @@ it('fences workers: a takeover after an expired lease bumps the generation and t
 
 it('resumes after a crash between chunks without committing a chunk twice (B2-AT-62)', function () {
     config(['eora.import_templates.crash_items' => CrashingItemsTemplate::class, 'eora.test.crash_at_code' => 'PART-0501']);
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $id = impUpload($this, impFile(IMP_ITEM_HEADER, impItems(700)), 'crash_items')->assertCreated()->json('data.id');
     impWork($this->t, $id, 'validate');
     spa($this)->postJson("/api/v1/exchange/imports/{$id}/actions/submit")->assertOk();
@@ -182,7 +184,7 @@ it('resumes after a crash between chunks without committing a chunk twice (B2-AT
 
 it('retries a dead job: committed rows are skipped, rows fixed since are committed once (B2-AT-69..72)', function () {
     config(['eora.import_templates.crash_items' => CrashingItemsTemplate::class, 'eora.test.crash_at_code' => 'PART-1001']);
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $rows = impItems(2000);
     $rows[1499][3] = 'BOX'; // row 1501 of the sheet: unknown unit in the first job
     $file = impFile(IMP_ITEM_HEADER, $rows);
@@ -227,7 +229,7 @@ it('retries a dead job: committed rows are skipped, rows fixed since are committ
 })->group('integration', 'import');
 
 it('imports units and material specifications, and serves the empty template of each version', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     spa($this)->get('/api/v1/exchange/import-templates/material_specs/file')->assertOk()->assertDownload('eora-material-specs-v1.xlsx');
 
     $uoms = impThrough($this, $this->t, impFile(['Code', 'Name', 'Unit class', 'Decimals'], [['COIL', 'Coil', 'COUNT', '0'], ['KG', 'Kilogram again', 'MASS', '3'], ['MM', 'Millimetre', 'LENGTH', '7']], 'uoms.xlsx'), 'uoms');
@@ -244,7 +246,7 @@ it('imports units and material specifications, and serves the empty template of 
 })->group('integration', 'import');
 
 it('keeps a redelivered message waiting while another worker holds a live lease', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $id = impUpload($this, impFile(IMP_ITEM_HEADER, impItems(1)))->assertCreated()->json('data.id');
     $context = TenantContext::forTenant($this->t['tenant'], (string) impJob($this->t, $id)->created_by_user);
     app(TenantTransaction::class)->run($context, fn (EoraPostgresConnection $db) => ImportLease::claim($db, $id, ['RESERVED'], 'VALIDATING', 'w1'));
@@ -257,7 +259,7 @@ it('keeps a redelivered message waiting while another worker holds a live lease'
 })->group('integration', 'import');
 
 it('rechecks the commit permissions in every chunk and reports rows refused at commit in a fresh error file', function () {
-    $csa = orgUser($this, $this->t, 'CSA');
+    $csa = orgUser($this, $this->t, 'SUP');
     $id = impUpload($this, impFile(IMP_ITEM_HEADER, [...impItems(2), ['DRW-0', 'Drawing zero', 'FINISHED', 'PCS', '', '', '', '0', 'A']]))->assertCreated()->json('data.id');
     impWork($this->t, $id, 'validate');
     expect(impJob($this->t, $id))->error_rows->toBe(0)->error_file_key->toBeNull();
@@ -288,7 +290,7 @@ it('rechecks the commit permissions in every chunk and reports rows refused at c
 })->group('integration', 'import');
 
 it('refuses material-spec values that do not fit their columns instead of failing the chunk', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $kg = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne("select id from uoms where code = 'KG'")->id);
     spa($this)->postJson('/api/v1/core/items', ['code' => 'COIL-A', 'name' => 'Coil A', 'itemType' => 'RAW', 'baseUomId' => $kg])->assertCreated();
     $id = impUpload($this, impFile(['Item code', 'Grade', 'Thickness mm', 'Width mm', 'Density g/cm3'], [['COIL-A', '0', '10000000', '120', '7.85']], 'specs.xlsx'), 'material_specs')

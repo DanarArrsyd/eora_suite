@@ -100,7 +100,7 @@ it('gives every exportable master list export columns that read only its own fie
 })->group('integration', 'export');
 
 it('exports the item list as the list shows it: filter, search and sort, typed cells, escaped formulas, an About sheet', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $pcs = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne("select id from uoms where code = 'PCS'")->id);
     foreach ([['BRK-200', 'Bracket rear', 'FINISHED'], ['BRK-100', '=HYPERLINK("x")', 'FINISHED'], ['COIL-1', 'Coil', 'RAW']] as [$code, $name, $type]) {
         spa($this)->postJson('/api/v1/core/items', ['code' => $code, 'name' => $name, 'itemType' => $type, 'baseUomId' => $pcs, 'lotControlled' => false])->assertCreated();
@@ -128,7 +128,7 @@ it('exports the item list as the list shows it: filter, search and sort, typed c
 })->group('integration', 'export');
 
 it('writes dates as dates and numbers as numbers', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $pcs = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne("select id from uoms where code = 'SHEET'")->id);
     $item = spa($this)->postJson('/api/v1/core/items', ['code' => 'SHT-1', 'name' => 'Sheet', 'itemType' => 'RAW', 'baseUomId' => $pcs])->assertCreated()->json('data');
     $kg = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne("select id from uoms where code = 'KG'")->id);
@@ -141,7 +141,7 @@ it('writes dates as dates and numbers as numbers', function () {
 })->group('integration', 'export');
 
 it('hands the file out through a signed 15-minute link in the requester\'s session only, and deletes it after 24 hours', function () {
-    $owner = orgUser($this, $this->t, 'CSA');
+    $owner = orgUser($this, $this->t, 'SUP');
     $id = spa($this)->postJson('/api/v1/exchange/exports', ['resource' => 'core.plants'])->assertCreated()->json('data.id');
     spa($this)->postJson("/api/v1/exchange/exports/{$id}/link")->assertStatus(409); // not written yet
     expRun($this->t, $id);
@@ -155,7 +155,7 @@ it('hands the file out through a signed 15-minute link in the requester\'s sessi
     $this->travelBack();
 
     // another member of the tenant cannot see, link or fetch it
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     spa($this)->getJson("/api/v1/exchange/exports/{$id}")->assertNotFound();
     spa($this)->postJson("/api/v1/exchange/exports/{$id}/link")->assertNotFound();
     signIn($this, $owner, $this->t);
@@ -171,7 +171,7 @@ it('hands the file out through a signed 15-minute link in the requester\'s sessi
 })->group('integration', 'export');
 
 it('refuses more than the row limit up front, and again when the list grew before the worker ran', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     config(['eora.export.max_rows' => 2]);
     spa($this)->postJson('/api/v1/exchange/exports', ['resource' => 'core.uoms'])->assertStatus(422)
         ->assertJsonPath('errors.query.0', 'This list has 3 rows; an export holds at most 2. Narrow the filter or the search.');
@@ -184,7 +184,7 @@ it('refuses more than the row limit up front, and again when the list grew befor
 
 it('exports only what the requester may see, checks the permissions again when the job runs, and refuses lists that cannot be exported', function () {
     [$p1] = $this->t['plants'];
-    $admin = orgUser($this, $this->t, 'CSA');
+    $admin = orgUser($this, $this->t, 'SUP');
     foreach ($this->t['plants'] as $i => $plant) {
         spa($this)->postJson('/api/v1/core/warehouses', ['plantId' => $plant, 'code' => 'WH'.($i + 1), 'name' => 'Store', 'warehouseType' => 'GENERAL'])->assertCreated();
     }
@@ -212,7 +212,7 @@ it('exports only what the requester may see, checks the permissions again when t
 })->group('integration', 'export');
 
 it('exports routings with the version in use and the open version of each row', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     spa($this)->postJson('/api/v1/planning/routings', ['plantId' => $s['plant'], 'itemId' => $s['item']['id'], 'routingCode' => 'R1', 'routingKind' => 'PRIMARY', 'effectiveFrom' => rtDay($this->t)])->assertCreated();
 
@@ -262,7 +262,7 @@ it('fails a queued export whose requester lost the export permission but kept th
 })->group('integration', 'export');
 
 it('lets one attempt at a time write a job and takes over only after its lease ran out (Codex P2)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $id = spa($this)->postJson('/api/v1/exchange/exports', ['resource' => 'core.plants'])->assertCreated()->json('data.id');
     $actor = (string) expJob($this->t, $id)->requested_by_user;
     // another attempt holds a live lease: this one writes nothing and waits for the lease
@@ -281,7 +281,7 @@ it('lets one attempt at a time write a job and takes over only after its lease r
 })->group('integration', 'export');
 
 it('keeps no file of an attempt that did not finish the job (Codex P2)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $id = spa($this)->postJson('/api/v1/exchange/exports', ['resource' => 'core.uoms'])->assertCreated()->json('data.id');
     $folder = "tenant/{$this->t['tenant']}/exports/{$id}";
     // an earlier attempt uploaded, then crashed before its commit: the next attempt leaves only its own file
@@ -298,7 +298,7 @@ it('keeps no file of an attempt that did not finish the job (Codex P2)', functio
 })->group('integration', 'export');
 
 it('streams a list of several chunks in list order, each chunk read in its own short transaction (Codex P2)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->statement("
         insert into items (tenant_id, code, name, item_type, base_uom_id, created_at, created_by, updated_at, updated_by, version)
         select c.tenant, 'P'||lpad(g::text, 5, '0'), 'Part '||g, 'FINISHED', (select id from uoms where code = 'PCS'), now(), c.actor, now(), c.actor, 1
@@ -312,7 +312,7 @@ it('streams a list of several chunks in list order, each chunk read in its own s
 
 it('reads each chunk with the requester\'s scope again: a row that moved out of it is not exported (Codex P1)', function () {
     [$p1, $p2] = $this->t['plants'];
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $die = spa($this)->postJson('/api/v1/core/dies', ['plantId' => $p1, 'code' => 'D-1', 'name' => 'Die', 'dieType' => 'DIE'])->assertCreated()->json('data');
     $planner = member($this, $this->t);
     AccessFixtures::grant($this->t, $planner['id'], 'INV', ['PLANT', $p1]);
@@ -327,7 +327,7 @@ it('reads each chunk with the requester\'s scope again: a row that moved out of 
 })->group('integration', 'export');
 
 it('never deletes the file of the attempt that finished the job (Codex P2)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $id = spa($this)->postJson('/api/v1/exchange/exports', ['resource' => 'core.plants'])->assertCreated()->json('data.id');
     $done = expRun($this->t, $id);
     app(ExportProcessor::class)->fail($this->t['tenant'], $id, (string) $done->requested_by_user, 'EXPORT_FAILED', 'late', (int) $done->claim_generation);

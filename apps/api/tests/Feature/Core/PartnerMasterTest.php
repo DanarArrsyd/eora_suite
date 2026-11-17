@@ -26,7 +26,7 @@ function partnerItem(object $test, array $t, string $code): array
 }
 
 it('keeps customers and suppliers as separate masters with fixed codes', function () {
-    orgUser($this, $this->t, 'PPC', ['PLANT', $this->t['plants'][0]]); // D-073: any scope
+    orgUser($this, $this->t, 'SUP', ['PLANT', $this->t['plants'][0]]); // D-073: any scope; D-128: the Supervisor
     $c = spa($this)->postJson('/api/v1/core/customers', ['code' => 'ASTRA', 'name' => 'PT Astra (sample)'])->assertCreated()->json('data');
     spa($this)->postJson('/api/v1/core/suppliers', ['code' => 'ASTRA', 'name' => 'Same code, other master'])->assertCreated();
     spa($this)->postJson('/api/v1/core/customers', ['code' => 'ASTRA', 'name' => 'Again'])
@@ -42,7 +42,7 @@ it('keeps customers and suppliers as separate masters with fixed codes', functio
 })->group('integration', 'master');
 
 it('maps one customer part number to exactly one item on every day; a new mapping closes the open one', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $customer = spa($this)->postJson('/api/v1/core/customers', ['code' => 'C1', 'name' => 'Customer 1'])->json('data');
     $a = partnerItem($this, $this->t, 'BRK-A');
     $b = partnerItem($this, $this->t, 'BRK-B');
@@ -78,7 +78,7 @@ it('maps one customer part number to exactly one item on every day; a new mappin
 })->group('integration', 'master');
 
 it('refuses mappings to inactive customers or items and hides other tenants', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $customer = spa($this)->postJson('/api/v1/core/customers', ['code' => 'C2', 'name' => 'Customer 2'])->json('data');
     $item = partnerItem($this, $this->t, 'BRK-C');
     patchWith($this, '/api/v1/core/items/'.$item['id'], ['status' => 'OBSOLETE'], 1)->assertOk();

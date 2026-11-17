@@ -19,7 +19,7 @@ beforeEach(function () {
 });
 
 it('drafts a routing with operations, machines, tools and inspections (B2-AT-02, 03, 20)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     [$routing, $v] = rtDraft($this, $this->t, $s);
 
@@ -44,7 +44,7 @@ it('drafts a routing with operations, machines, tools and inspections (B2-AT-02,
 })->group('integration', 'master');
 
 it('refuses invalid operation lists: duplicate sequence, foreign machine, unlinked die (B2-AT-04, 05, 06, 40)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     [, $v] = rtDraft($this, $this->t, $s);
     $put = fn (array $ops) => spa($this)->putJson('/api/v1/planning/routing-versions/'.$v['id'].'/operations', ['operations' => $ops], ['If-Match' => '"'.$v['version'].'"']);
@@ -82,7 +82,7 @@ it('refuses invalid operation lists: duplicate sequence, foreign machine, unlink
 })->group('integration', 'master');
 
 it('submits complete versions only; the preparer cannot approve or reject (B2-AT-07, 21, 29)', function () {
-    $preparer = orgUser($this, $this->t, 'CSA');
+    $preparer = orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     $routing = spa($this)->postJson('/api/v1/planning/routings', ['plantId' => $s['plant'], 'itemId' => $s['item']['id'], 'routingCode' => 'R1',
         'routingKind' => 'PRIMARY', 'effectiveFrom' => rtDay($this->t)])->assertCreated()->json('data');
@@ -110,13 +110,13 @@ it('submits complete versions only; the preparer cannot approve or reject (B2-AT
         "update routing_versions set status = 'APPROVED', approved_by = ?, approved_at = now() where id = ?", [$preparer['id'], $v['id']],
     )))->toThrow(QueryException::class);
 
-    // a PPC planner may prepare and submit, never approve
+    // the planner reads routings, never approves them (D-128: the Supervisor prepares, CSA approves)
     rtSwitch($this, $this->t, 'PPC');
     spa($this)->postJson('/api/v1/planning/routing-versions/'.$v['id'].'/actions/approve')->assertForbidden()->assertJsonPath('code', 'FORBIDDEN');
 })->group('integration', 'master');
 
 it('approves by a second person, audits it, and supersedes the previous version on revise (B2-AT-08, 22, 23, 30)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     [$routing, $v1] = rtDraft($this, $this->t, $s);
     spa($this)->postJson('/api/v1/planning/routing-versions/'.$v1['id'].'/actions/submit')->assertOk();
@@ -126,7 +126,8 @@ it('approves by a second person, audits it, and supersedes the previous version 
     expect($approved['status'])->toBe('APPROVED')->and($approved['approvedByName'])->not->toBeNull()->and($approved['effectiveTo'])->toBeNull();
     spa($this)->getJson('/api/v1/query/planning.routings?filter[id]='.$routing['id'])->assertJsonPath('data.0.currentVersionNo', 1);
 
-    // revise: v2 starts tomorrow, copied from v1
+    // revise: v2 starts tomorrow, copied from v1, prepared by the Supervisor (D-128)
+    rtSwitch($this, $this->t, 'SUP');
     $v2 = spa($this)->postJson('/api/v1/planning/routings/'.$routing['id'].'/versions', ['effectiveFrom' => rtDay($this->t, 1), 'changeReason' => 'Faster cycle'])
         ->assertCreated()->json('data');
     expect($v2['versionNo'])->toBe(2)->and($v2['status'])->toBe('DRAFT')->and($v2['standardYield'])->toBe('0.98000')
@@ -157,7 +158,7 @@ it('approves by a second person, audits it, and supersedes the previous version 
 })->group('integration', 'master');
 
 it('rejects with a reason, reopens and withdraws; never back-dates (B2-AT-25, 26, 27)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     [$routing, $v] = rtDraft($this, $this->t, $s);
 
@@ -175,6 +176,8 @@ it('rejects with a reason, reopens and withdraws; never back-dates (B2-AT-25, 26
     spa($this)->postJson('/api/v1/planning/routing-versions/'.$v['id'].'/actions/reject', ['reason' => 'Cycle time too optimistic'])->assertOk()
         ->assertJsonPath('data.status', 'REJECTED')->assertJsonPath('data.rejectReason', 'Cycle time too optimistic');
     spa($this)->postJson('/api/v1/planning/routing-versions/'.$v['id'].'/actions/approve')->assertStatus(409)->assertJsonPath('code', 'INVALID_STATE_TRANSITION');
+    // the Supervisor reopens it for changes (D-128)
+    rtSwitch($this, $this->t, 'SUP');
     spa($this)->postJson('/api/v1/planning/routing-versions/'.$v['id'].'/actions/reopen')->assertOk()->assertJsonPath('data.status', 'DRAFT')
         ->assertJsonPath('data.rejectReason', null);
 
@@ -186,7 +189,7 @@ it('rejects with a reason, reopens and withdraws; never back-dates (B2-AT-25, 26
 })->group('integration', 'master');
 
 it('re-checks content at approval: a machine moved away after submit blocks approval (B2-AT-28)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     [, $v] = rtDraft($this, $this->t, $s);
     spa($this)->postJson('/api/v1/planning/routing-versions/'.$v['id'].'/actions/submit')->assertOk();
@@ -200,7 +203,7 @@ it('re-checks content at approval: a machine moved away after submit blocks appr
 
 it('keeps routings inside the plant scope and the tenant (B2-AT-31..37)', function () {
     [$p1, $p2] = $this->t['plants'];
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     [$routing, $v] = rtDraft($this, $this->t, $s);
     spa($this)->postJson('/api/v1/planning/routing-versions/'.$v['id'].'/actions/submit')->assertOk();
@@ -229,7 +232,7 @@ it('keeps routings inside the plant scope and the tenant (B2-AT-31..37)', functi
 })->group('integration', 'master');
 
 it('keeps process type codes unique and edits them at their version', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $pt = spa($this)->postJson('/api/v1/planning/process-types', ['code' => 'BEND', 'name' => 'Bending', 'category' => 'TRANSFORMATION'])->assertCreated()->json('data');
     spa($this)->postJson('/api/v1/planning/process-types', ['code' => 'BEND', 'name' => 'x', 'category' => 'TRANSFORMATION'])
         ->assertStatus(422)->assertJsonPath('errors.code.0', 'A process type with this code already exists.');
@@ -241,12 +244,12 @@ it('keeps process type codes unique and edits them at their version', function (
 })->group('integration', 'master');
 
 it('refuses approval by anyone who edited the version, not only its preparer (maker ≠ checker)', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);
     [, $v] = rtDraft($this, $this->t, $s);
 
-    // a second author changes the operations of the draft the first one prepared
-    rtSwitch($this, $this->t, 'CSA');
+    // a second author (another Supervisor) changes the operations of the draft the first one prepared
+    rtSwitch($this, $this->t, 'SUP');
     $ops = rtOperations($s);
     $ops[0]['stdCycleSeconds'] = 3;
     $v = spa($this)->putJson('/api/v1/planning/routing-versions/'.$v['id'].'/operations', ['operations' => $ops], ['If-Match' => '"'.$v['version'].'"'])

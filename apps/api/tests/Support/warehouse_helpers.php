@@ -32,8 +32,10 @@ function fgFixture(object $test, array $t): array
 
         return [$loc('FG-01'), $loc('FG-02')];
     });
-    $line = fn (string $lot, string $status = 'QC_RELEASED') => (string) AccessFixtures::run($t, fn (EoraPostgresConnection $db) => $db->selectOne(
-        'select id from stock_balances where lot_id = ? and stock_status = ?', [$lot, $status])->id);
+    // a lot can sit in several places with one status (e.g. FG rack and staging after a pick): name the place then,
+    // or the row returned is arbitrary
+    $line = fn (string $lot, string $status = 'QC_RELEASED', ?string $location = null) => (string) AccessFixtures::run($t, fn (EoraPostgresConnection $db) => $db->selectOne(
+        'select id from stock_balances where lot_id = ? and stock_status = ? and (?::uuid is null or location_id = ?::uuid)', [$lot, $status, $location, $location])->id);
     $fgw = rtSwitch($test, $t, 'FGW');
 
     return $f + ['lots' => $lots, 'fg1' => $fg1, 'fg2' => $fg2, 'line' => $line, 'fgw' => $fgw];

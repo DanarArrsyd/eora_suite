@@ -23,15 +23,7 @@ Mengurus bahan baku: kedatangan, penerimaan, pengeluaran ke produksi, dan pengem
 - **Material at Production** — Bahan yang ada di work center dan belum dipakai / dikembalikan.
 - **Reversals** — Membatalkan dokumen yang sudah diposting, disetujui orang kedua.
 
-**Master Data**
-
-- **Items** — Part dan material.
-- **Units & Conversions** — Satuan dan konversi satuan per item.
-- **Customers** — Data customer.
-- **Customer Part Mapping** — Nomor part customer → item internal.
-- **Suppliers** — Data supplier.
-- **Import** — Impor master data dari template Excel.
-- **Exports** — File Excel hasil ekspor Anda (24 jam).
+Master data (item, supplier, satuan) diubah oleh **Supervisor** (D-128); minta ke Supervisor bila ada bahan atau supplier baru.
 
 ## Langkah kerja
 

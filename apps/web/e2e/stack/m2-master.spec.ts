@@ -7,8 +7,9 @@ import { choose } from '../fixtures';
 /*
  * M2 exit (doc 29 §4): master data end to end on the real stack, nothing mocked. A demo tenant is seeded and its sample
  * master data loaded through the import pipeline (`eora:demo:master`, the import worker); then, in the browser, the
- * master-data administrator creates an item, the planner prepares and submits its routing, the administrator approves
- * it (two people, D-B2), and imports the sample file with deliberate errors — valid rows commit, error rows say why.
+ * Supervisor — the one door for master data (D-128) — creates an item, prepares and submits its routing, the
+ * administrator approves it (two people, D-B2), and the Supervisor imports the sample file with deliberate errors —
+ * valid rows commit, error rows say why. The planner only reads master data.
  *
  * Same environment variables as m1-access.spec.ts (EORA_STACK_COMPOSE, EORA_STACK_RUN_ARGS).
  */
@@ -32,7 +33,7 @@ function artisan(...args: string[]): string {
 }
 
 /** A signed-in page of its own (own cookies) for one demo account. */
-async function signedIn(browser: Browser, role: 'csa' | 'ppc'): Promise<Page> {
+async function signedIn(browser: Browser, role: 'csa' | 'ppc' | 'sup'): Promise<Page> {
   const page = await (await browser.newContext({ baseURL: 'http://localhost:3100', viewport: { width: 1440, height: 900 } })).newPage();
   await page.goto('/login');
   // the form is filled once it is interactive (a fill before hydration is reset)
@@ -55,24 +56,29 @@ test('M2 master data end to end on the real stack', async ({ browser }) => {
   });
 
   const admin = await signedIn(browser, 'csa');
-  const planner = await signedIn(browser, 'ppc');
+  const supervisor = await signedIn(browser, 'sup');
+  const reader = await signedIn(browser, 'ppc');
 
-  await test.step('the administrator creates an item', async () => {
-    await admin.goto('/master/items');
-    await expect(admin.getByRole('table', { name: 'Items' }).getByRole('row', { name: /BRK-A100/ })).toBeVisible();
-    await admin.getByRole('button', { name: 'New item' }).click();
-    const drawer = admin.getByRole('dialog', { name: 'New item' });
+  await test.step('the Supervisor creates an item; the planner only reads items', async () => {
+    await reader.goto('/master/items');
+    await expect(reader.getByRole('table', { name: 'Items' }).getByRole('row', { name: /BRK-A100/ })).toBeVisible();
+    await expect(reader.getByRole('button', { name: 'New item' })).toHaveAttribute('aria-disabled', 'true');
+
+    await supervisor.goto('/master/items');
+    await supervisor.getByRole('button', { name: 'New item' }).click();
+    const drawer = supervisor.getByRole('dialog', { name: 'New item' });
     await drawer.getByRole('textbox', { name: 'Code', exact: true }).fill(ITEM);
     await drawer.getByRole('textbox', { name: 'Name', exact: true }).fill(`Stack e2e bracket ${run}`);
-    await choose(admin, drawer.getByRole('combobox', { name: 'Type' }), 'Finished good');
-    await choose(admin, drawer.getByRole('combobox', { name: 'Base unit' }), /^PCS · /);
+    await choose(supervisor, drawer.getByRole('combobox', { name: 'Type' }), 'Finished good');
+    await choose(supervisor, drawer.getByRole('combobox', { name: 'Base unit' }), /^PCS · /);
     await drawer.getByRole('button', { name: 'Create item' }).click();
     await expect(drawer).toBeHidden();
-    await admin.getByRole('searchbox').first().fill(ITEM);
-    await expect(admin.getByRole('table', { name: 'Items' }).getByRole('row', { name: new RegExp(ITEM) })).toContainText('Active');
+    await supervisor.getByRole('searchbox').first().fill(ITEM);
+    await expect(supervisor.getByRole('table', { name: 'Items' }).getByRole('row', { name: new RegExp(ITEM) })).toContainText('Active');
   });
 
-  await test.step('the planner prepares its routing and submits it', async () => {
+  const planner = supervisor;
+  await test.step('the Supervisor prepares its routing and submits it', async () => {
     await planner.goto('/master/routings');
     await planner.getByRole('button', { name: 'New routing' }).click();
     const drawer = planner.getByRole('dialog', { name: 'New routing' });
@@ -101,8 +107,6 @@ test('M2 master data end to end on the real stack', async ({ browser }) => {
 
     await planner.getByRole('button', { name: 'Submit for approval' }).click();
     await expect(planner.getByText('Waiting for a second person')).toBeVisible();
-    // the planner may prepare, never approve
-    await expect(planner.getByRole('button', { name: 'Approve' })).toHaveCount(0);
   });
 
   await test.step('the administrator approves it: a second person', async () => {
@@ -117,7 +121,8 @@ test('M2 master data end to end on the real stack', async ({ browser }) => {
     await expect(admin.getByText('Approved versions never change. Use New version to change the routing.')).toBeVisible();
   });
 
-  await test.step('the administrator imports the sample file with errors: valid rows commit, the others say why', async () => {
+  await test.step('the Supervisor imports the sample file with errors: valid rows commit, the others say why', async () => {
+    const admin = supervisor;
     await admin.goto('/master/import?new');
     await choose(admin, admin.getByRole('combobox', { name: 'Template' }), 'Items');
     await admin.locator('input[type=file]').setInputFiles(ERROR_FILE);

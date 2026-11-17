@@ -23,7 +23,7 @@ beforeEach(function () {
 });
 
 it('writes the sample files in import order and every row of every file commits', function () {
-    orgUser($this, $this->t, 'CSA');
+    orgUser($this, $this->t, 'SUP');
     $dir = sys_get_temp_dir().'/eora-samples-'.bin2hex(random_bytes(4));
     expect(Artisan::call('eora:demo:import-samples', ['dir' => $dir, '--from' => rtDay($this->t)]))->toBe(0);
     $files = glob("{$dir}/*.xlsx") ?: [];

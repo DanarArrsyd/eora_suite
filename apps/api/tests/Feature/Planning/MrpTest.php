@@ -82,8 +82,8 @@ it('nets materials against stock minus released work orders plus inbound, with n
 
 it('plans a semi-finished component as a child work order after netting its stock, exploding it in turn (Option M, D-059)', function () {
     $f = mpsFixture($this, $this->t);
-    // engineering: SF-100 (blank) from coil 0.5 KG; BRK-100 from tomorrow = 1 SF-100 + 2 nuts
-    rtSwitch($this, $this->t, 'CSA');
+    // engineering: SF-100 (blank) from coil 0.5 KG; BRK-100 from tomorrow = 1 SF-100 + 2 nuts; the Supervisor prepares (D-128)
+    rtSwitch($this, $this->t, 'SUP');
     $pcs = $f['nut']['baseUomId'];
     $sf = spa($this)->postJson('/api/v1/core/items', ['code' => 'SF-100', 'name' => 'Bracket blank', 'itemType' => 'SEMI_FINISHED', 'baseUomId' => $pcs])->assertCreated()->json('data');
     $tomorrow = date('Y-m-d', strtotime($f['today'].' +1 day'));

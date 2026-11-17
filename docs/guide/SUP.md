@@ -1,6 +1,6 @@
 # Supervisor (SUP)
 
-Akun pemilik / kepala operasional. Melihat semua menu yang sudah jalan dan bisa menginput apa saja: planning, produksi, gudang, kualitas, master data, dan user.
+Akun pemilik / kepala operasional. Melihat semua menu yang sudah jalan dan bisa menginput apa saja: planning, produksi, gudang, kualitas, dan user. **Satu-satunya pengubah master data** (D-128): item, satuan, customer, part customer, supplier, gudang/lokasi, work center, mesin, dies, process type, routing, BOM, conversion data, dan import Excel.
 
 ## Menu Anda
 
@@ -83,12 +83,15 @@ Akun pemilik / kepala operasional. Melihat semua menu yang sudah jalan dan bisa 
 
 ## Langkah kerja
 
-1. Kerjakan tugas role mana pun dari menu yang sesuai (lihat panduan role terkait).
-2. Setujui pekerjaan orang lain: MPS, rilis WO, koreksi stok, reversal, tutup buku, routing / BOM, conversion data.
-3. Kelola user: Administration → Users → undang, lalu beri role.
+1. Master data: tambah / ubah / nonaktifkan item, customer, supplier, dan master lain di menu Master Data, atau lewat **Import** template Excel (urutan: Units → Customers → Items → Material specs → Unit conversions → Customer parts → Process types → Routings → BOMs).
+2. Routing, BOM, dan conversion data yang Anda siapkan → **Submit** → disetujui **CSA**.
+3. Kerjakan tugas role mana pun dari menu yang sesuai (lihat panduan role terkait).
+4. Setujui pekerjaan orang lain: MPS, rilis WO, koreksi stok, reversal, tutup buku, routing / BOM, conversion data.
+5. Kelola user: Administration → Users → undang, lalu beri role.
 
 ## Persetujuan
 
-- Anda **tidak bisa** menyetujui atau merilis pekerjaan yang Anda buat sendiri (MPS yang Anda hitung, WO yang Anda minta rilis, koreksi yang Anda ajukan). Minta orang kedua — atau, untuk uji coba, pakai akun kedua (mis. CSA).
+- Anda **tidak bisa** menyetujui atau merilis pekerjaan yang Anda buat sendiri (routing / BOM / conversion data yang Anda siapkan, MPS yang Anda hitung, WO yang Anda minta rilis, koreksi yang Anda ajukan). Penyetujunya **CSA**.
+- Data master tidak dihapus permanen: item, customer, supplier **dinonaktifkan**; routing, BOM, conversion data diganti **versi baru**; draft yang belum dipakai bisa dibatalkan.
 
 Kembali ke [Panduan Pengguna](README.md).
