@@ -6,6 +6,7 @@ namespace App\Modules\Planning\Http;
 
 use App\Modules\Planning\Queries\BomVersionsQuery;
 use App\Platform\Access\Authorizer;
+use App\Platform\Approvals\Approvals;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
@@ -231,6 +232,7 @@ final class BomController
         } catch (QueryException $e) {
             throw self::approvalFailure($e, 'A BOM version is approved by someone who did not prepare or edit it.');
         }
+        app(Approvals::class)->decided($db, 'bom_version', $id, 'approved');
 
         return $this->respondVersion($db, $id);
     }

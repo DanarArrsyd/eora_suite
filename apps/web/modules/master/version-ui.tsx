@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { z } from 'zod';
 import { DomainStatusBadge, EoraForm, FormTextareaField } from '@eora/features/patterns';
 import { Button, Card, CardContent, CardHeader, CardTitle, InlineAlert, Modal, ModalBody, ModalContent } from '@eora/ui';
+import { ApprovalNotice, type ApprovalKind } from '@/components/approval-notice';
 import { actionMessage, formFailure } from '@/modules/admin/errors';
 
 /*
@@ -59,6 +60,7 @@ export function ApprovalPanel({
   verb = 'approve',
   retire,
   rejectNote = 'The preparer sees the reason and can reopen it to rework it.',
+  approval,
 }: {
   /** e.g. "Version 2", "Map revision 1" — used in buttons' results and the reject dialog. */
   label: string;
@@ -77,6 +79,8 @@ export function ApprovalPanel({
   retire?: { effect: string; run: () => Promise<unknown> };
   /** What happens after a rejection, shown in the reject dialog. */
   rejectNote?: string;
+  /** The record as the approvals API names it: while submitted, the panel names who decides it (D-129). */
+  approval?: { kind: ApprovalKind; id: string };
 }) {
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<LifecycleAction | 'retire' | null>(null);
@@ -129,6 +133,7 @@ export function ApprovalPanel({
         <p className="m-0 text-[12.5px] text-ink-2">
           {words.step} by someone who did not prepare or edit this {noun}.
         </p>
+        {approval ? <ApprovalNotice kind={approval.kind} id={approval.id} waiting={status === 'SUBMITTED'} /> : null}
         {error ? (
           <InlineAlert tone="danger" title="Not done">
             {error}

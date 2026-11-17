@@ -6,6 +6,7 @@ namespace App\Modules\Inventory\Http;
 
 use App\Modules\Inventory\Application\InventoryPeriods;
 use App\Platform\Access\Authorizer;
+use App\Platform\Approvals\Approvals;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
 use Illuminate\Http\JsonResponse;
@@ -38,7 +39,10 @@ final class PeriodController
         $db = $this->db();
         $plant = $this->plant($db, $data['plantId'], 'inventory.period_close.post');
 
-        return self::period($this->periods->requestClose($db, $plant, $data['period']), 201);
+        $row = $this->periods->requestClose($db, $plant, $data['period']);
+        app(Approvals::class)->requested($db, 'period_close', (string) $row->id); // D-129
+
+        return self::period($row, 201);
     }
 
     /** Close a month whose close someone else asked for. */
@@ -46,7 +50,14 @@ final class PeriodController
     {
         $db = $this->db();
 
-        return self::period($this->periods->close($db, $this->scoped($db, $period, 'inventory.period_close.approve')));
+        $id = $this->scoped($db, $period, 'inventory.period_close.approve');
+        // locked from reading whom to tell through the transition: both see the same request (Codex on #93)
+        $db->selectOne('select id from inventory_periods where id = ? for update', [$id]);
+        // D-129: told while the request is still on the period (the same transaction: no word if it fails)
+        app(Approvals::class)->decided($db, 'period_close', $id, 'approved');
+        $row = $this->periods->close($db, $id);
+
+        return self::period($row);
     }
 
     /** Withdraw a close request (its requester) or reject it with the reason (an approver); the month stays open. */
@@ -56,6 +67,7 @@ final class PeriodController
         $reason = self::optionalText($data['reason'] ?? null);
         $db = $this->db();
         $id = $this->returner($db, $period, 'inventory.period_close.post', 'inventory.period_close.approve', 'close_requested_by', $reason);
+        app(Approvals::class)->decided($db, 'period_close', $id, 'returned', $reason); // D-129: before the request is cleared; never to oneself
 
         return self::period($this->periods->returnClose($db, $id, $reason));
     }
@@ -66,7 +78,11 @@ final class PeriodController
         $data = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
         $db = $this->db();
 
-        return self::period($this->periods->requestReopen($db, $this->scoped($db, $period, 'inventory.period_reopen.request_correction'), trim($data['reason'])));
+        $id = $this->scoped($db, $period, 'inventory.period_reopen.request_correction');
+        $row = $this->periods->requestReopen($db, $id, trim($data['reason']));
+        app(Approvals::class)->requested($db, 'period_reopen', $id); // D-129
+
+        return self::period($row);
     }
 
     /** Reopen a closed month on a request someone else made. */
@@ -74,7 +90,14 @@ final class PeriodController
     {
         $db = $this->db();
 
-        return self::period($this->periods->reopen($db, $this->scoped($db, $period, 'inventory.period_reopen.approve')));
+        $id = $this->scoped($db, $period, 'inventory.period_reopen.approve');
+        // locked from reading whom to tell through the transition: both see the same request (Codex on #93)
+        $db->selectOne('select id from inventory_periods where id = ? for update', [$id]);
+        // D-129: told while the request is still on the period (the same transaction: no word if it fails)
+        app(Approvals::class)->decided($db, 'period_reopen', $id, 'approved');
+        $row = $this->periods->reopen($db, $id);
+
+        return self::period($row);
     }
 
     /** Withdraw a reopen request (its requester) or reject it with the reason (an approver); the month stays closed. */
@@ -84,6 +107,7 @@ final class PeriodController
         $reason = self::optionalText($data['reason'] ?? null);
         $db = $this->db();
         $id = $this->returner($db, $period, 'inventory.period_reopen.request_correction', 'inventory.period_reopen.approve', 'reopen_requested_by', $reason);
+        app(Approvals::class)->decided($db, 'period_reopen', $id, 'returned', $reason); // D-129: before the request is cleared; never to oneself
 
         return self::period($this->periods->returnReopen($db, $id, $reason));
     }

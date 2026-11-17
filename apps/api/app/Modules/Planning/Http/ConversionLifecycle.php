@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Planning\Http;
 
+use App\Platform\Approvals\Approvals;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
 use Illuminate\Database\QueryException;
@@ -58,6 +59,7 @@ trait ConversionLifecycle
         } catch (QueryException $e) {
             throw self::approvalFailure($e, 'Conversion data is validated by someone who did not prepare or edit it.');
         }
+        app(Approvals::class)->decided($db, $table === 'item_weights' ? 'item_weight' : 'conversion_profile_version', $id, 'approved');
 
         return $id;
     }

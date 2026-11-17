@@ -16,12 +16,16 @@ use LogicException;
  */
 final class InboxController
 {
+    private const string NOW_REQUIRED = 'select id, kind, severity, action_required and (subject_kind is null or eora_approval_waiting(subject_kind, subject_id, subject_since)) as action_required,
+                title, body, deep_link, created_at, read_at from inbox_notifications';
+
     public function index(): JsonResponse
     {
         $db = $this->db();
-        $rows = $db->select('select id, kind, severity, action_required, title, body, deep_link, created_at, read_at from inbox_notifications order by created_at desc, id desc limit 50');
+        // an approval request needs action only while its document still waits for a decision (D-129)
+        $rows = $db->select(self::NOW_REQUIRED.' order by created_at desc, id desc limit 50');
         // totals over the whole inbox, not the latest-50 page: the bell badge and dot must not lose older items
-        $totals = $db->selectOne('select count(*) filter (where read_at is null) as unread, count(*) filter (where action_required) as action_required from inbox_notifications');
+        $totals = $db->selectOne('select count(*) filter (where read_at is null) as unread, count(*) filter (where action_required) as action_required from ('.self::NOW_REQUIRED.') n');
 
         return response()->json([
             /** The latest 50 notifications, newest first. */

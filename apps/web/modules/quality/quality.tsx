@@ -620,6 +620,7 @@ function DispositionPage({ id }: { id: string }) {
           {r.outOfPolicy ? (
             <ApprovalPanel
               label="Release"
+              approval={{ kind: 'quality_release', id: r.id }}
               record={{
                 status: r.status === 'POSTED' || r.status === 'REVERSED' ? 'APPROVED' : r.status,
                 preparedByName: r.requestedByName,
@@ -646,6 +647,7 @@ function DispositionPage({ id }: { id: string }) {
           {r.reversalId ? (
             <ApprovalPanel
               label="Reversal"
+              approval={r.reversalId ? { kind: 'reversal', id: r.reversalId } : undefined}
               record={{ status: 'SUBMITTED', preparedByName: r.reversalRequestedByName, approvedByName: null, approvedAt: null }}
               can={{ view: true, create: false, submit: false, approve: canApprove && me.data?.user.id !== r.reversalRequestedById }}
               approvedNote="Reversed: the stock is back where it was before this disposition."

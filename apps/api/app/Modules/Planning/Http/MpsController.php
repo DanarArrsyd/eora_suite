@@ -10,6 +10,7 @@ use App\Modules\Planning\Mps\MpsInputs;
 use App\Modules\Planning\Mps\MpsItemInput;
 use App\Modules\Planning\Queries\MpsVersionsQuery;
 use App\Platform\Access\Authorizer;
+use App\Platform\Approvals\Approvals;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
@@ -187,6 +188,7 @@ final class MpsController
         $db = $this->db();
         $m = $this->locked($db, $version, self::SUBMIT, ['DRAFT']);
         $this->transition($db, $m, $expected, "status = 'SUBMITTED', submitted_at = now(), submitted_by = (select c.actor from ctx_api.context() c), return_reason = null", [], 'mps.submitted');
+        app(Approvals::class)->requested($db, 'mps_version', (string) $m->id); // D-129
 
         return $this->respondVersion($db, (string) $m->id);
     }
@@ -209,6 +211,8 @@ final class MpsController
         $expected = Concurrency::expectedVersion($request);
         $db = $this->db();
         $m = $this->locked($db, $version, self::APPROVE, ['SUBMITTED']);
+        // told while the requester is still on the version (D-129)
+        app(Approvals::class)->decided($db, 'mps_version', (string) $m->id, 'returned', trim($data['reason']));
         $this->transition($db, $m, $expected, "status = 'DRAFT', submitted_at = null, submitted_by = null, return_reason = ?", [trim($data['reason'])], 'mps.returned');
 
         return $this->respondVersion($db, (string) $m->id);
@@ -241,6 +245,7 @@ final class MpsController
             $this->audit->record($db, 'mps.superseded', 'mps_version', (string) $old->id, $before, $this->state($db, 'mps_versions', (string) $old->id), [], (string) $m->plant_id);
         }
         $this->transition($db, $m, $expected, "status = 'APPROVED', approved_at = now(), approved_by = (select c.actor from ctx_api.context() c)", [], 'mps.approved');
+        app(Approvals::class)->decided($db, 'mps_version', (string) $m->id, 'approved'); // D-129
 
         return $this->respondVersion($db, (string) $m->id);
     }

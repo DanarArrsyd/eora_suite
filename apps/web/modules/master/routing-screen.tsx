@@ -350,6 +350,7 @@ function RoutingPage({ id }: { id: string }) {
           approval={
             <ApprovalPanel
               label={`Version ${detail.data.versionNo}`}
+              approval={{ kind: 'routing_version', id: detail.data.id }}
               record={detail.data}
               can={can}
               missing={[!detail.data.standardYield ? 'the standard yield' : null, detail.data.operations.length === 0 ? 'at least one operation' : null].filter(

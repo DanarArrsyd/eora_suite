@@ -103,6 +103,22 @@ test('work orders: a planner drafts a manual work order with its reason and asks
     page1([{ id: ID(3), code: 'BRK-A100', name: 'Bracket front A100', baseUomCode: 'PCS', status: 'ACTIVE', version: 1 }]),
   );
   await mockApi(page, '/query/demand.schedule_lines?*', page1([]));
+  // who decides the release (D-129): role and names from the approvals API
+  await mockApi(page, '/approvals/work_order/*', {
+    status: 200,
+    json: {
+      data: {
+        waiting: true,
+        requestedBy: 'Planner',
+        requestedAt: '2026-11-12T07:05:00Z',
+        roles: [{ code: 'CSA', name: 'Company Super Admin' }],
+        approvers: [
+          { name: 'Budi', roles: ['Company Super Admin'] },
+          { name: 'Sari', roles: ['Company Super Admin'] },
+        ],
+      },
+    },
+  });
   await page.route('**/api/v1/planning/work-orders**', (route) => {
     const req = route.request();
     if (req.method() === 'GET') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: wo }) });
@@ -140,6 +156,10 @@ test('work orders: a planner drafts a manual work order with its reason and asks
   expect(writes[1]!.url).toMatch(/\/actions\/submit$/);
   await expect(page.getByText('You asked for this release')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Release', exact: true })).toHaveCount(0);
+  // the planner sees who decides it, so nobody guesses whom to ask (D-129)
+  await expect(page.getByText('Waiting for approval by Company Super Admin')).toBeVisible();
+  await expect(page.getByText('Approvers: Budi and Sari. They were notified in their inbox.')).toBeVisible();
+  await axe(page);
 });
 
 test('work orders: a second person releases it (materials fixed) or returns it with a reason', async ({ page }) => {

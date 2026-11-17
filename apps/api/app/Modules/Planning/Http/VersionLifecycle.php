@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Planning\Http;
 
+use App\Platform\Approvals\Approvals;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
 use Illuminate\Database\QueryException;
@@ -59,6 +60,12 @@ trait VersionLifecycle
         $set = implode(', ', array_map(static fn (string $c) => "{$c} = ?", ['status', ...array_keys($extra)]));
         $db->update("update {$table} set {$set} where id = ?", [$to, ...array_values($extra), $id]);
         $this->audit->record($db, $action, $entity, $id, $before, $this->state($db, $table, $id), ['from' => $row->status, 'to' => $to], $plant);
+        // D-129: a submitted version asks its deciders; a rejected one tells its preparer why
+        if ($to === 'SUBMITTED') {
+            app(Approvals::class)->requested($db, $entity, $id);
+        } elseif ($to === 'REJECTED' && $row->status === 'SUBMITTED') {
+            app(Approvals::class)->decided($db, $entity, $id, 'rejected', isset($extra['reject_reason']) ? (string) $extra['reject_reason'] : null);
+        }
     }
 
     /** SQLSTATEs of the lifecycle_api approval functions in the error catalogue's words. */

@@ -8,6 +8,7 @@ use App\Modules\Planning\Queries\ProcessTypesQuery;
 use App\Modules\Planning\Queries\RoutingsQuery;
 use App\Modules\Planning\Queries\RoutingVersionsQuery;
 use App\Platform\Access\Authorizer;
+use App\Platform\Approvals\Approvals;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
@@ -351,6 +352,7 @@ final class RoutingController
                 default => $e,
             };
         }
+        app(Approvals::class)->decided($db, 'routing_version', $id, 'approved');
 
         return $this->respondVersion($db, $id);
     }
@@ -499,6 +501,12 @@ final class RoutingController
         $set = implode(', ', array_map(static fn (string $c) => "{$c} = ?", ['status', ...array_keys($extra)]));
         $db->update("update routing_versions set {$set} where id = ?", [$to, ...array_values($extra), $id]);
         $this->audit->record($db, $action, 'routing_version', $id, $before, $this->state($db, 'routing_versions', $id), ['from' => $ver->status, 'to' => $to], (string) $ver->plant_id);
+        // D-129: a submitted version asks its deciders; a rejected one tells its preparer why
+        if ($to === 'SUBMITTED') {
+            app(Approvals::class)->requested($db, 'routing_version', $id);
+        } elseif ($to === 'REJECTED') {
+            app(Approvals::class)->decided($db, 'routing_version', $id, 'rejected', isset($extra['reject_reason']) ? (string) $extra['reject_reason'] : null);
+        }
 
         return $this->respondVersion($db, $id);
     }

@@ -28,6 +28,7 @@ import { MasterScreen } from '@/modules/master/master-screen';
 import { PLANT_FILTER } from '@/modules/master/resources';
 import { querySource } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
+import { ApprovalNotice } from '@/components/approval-notice';
 import { when } from '@/modules/master/version-ui';
 
 /*
@@ -372,6 +373,8 @@ function PeriodPage({ id }: { id: string }) {
           {waiting}
         </InlineAlert>
       ) : null}
+      <ApprovalNotice kind="period_close" id={r.id} waiting={r.status === 'CLOSING'} className="mb-4" />
+      <ApprovalNotice kind="period_reopen" id={r.id} waiting={r.status === 'CLOSED' && r.reopenRequestedById !== null} className="mb-4" />
       <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-lg:grid-cols-1">
         <Card>
           <CardHeader>

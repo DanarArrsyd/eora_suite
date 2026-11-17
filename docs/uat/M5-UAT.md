@@ -98,3 +98,16 @@ Persiapan: MPS P1 Approved dan run MRP terbaru (§4).
 | 7 | WO: **Submit for release**; login `csa` → **Release**. | Release seperti biasa oleh orang kedua (snapshot BOM/routing). | |
 | 8 | Login `mat` → MRP Results → run. | Tanpa kotak centang / tombol Release to WO. | |
 
+## 6. Notice dan inbox persetujuan (D-129)
+Berlaku di setiap dokumen yang menunggu orang kedua: routing, BOM, map, net weight, conversion profile, MPS, rilis WO, WO close exception, adjustment, reversal, release QC, tutup/buka periode. Contoh di bawah memakai rilis WO.
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `ppc` → WO Draft → **Ask for release**. | Kotak **Waiting for approval by Company Super Admin** dengan nama penyetuju di plant itu: "Approvers: … They were notified in their inbox." Nama `ppc` sendiri tidak ada. | |
+| 2 | Login `csa` → ikon lonceng. | Pesan **Approval requested: WO-…** ("… asks you to approve this work order release."), bertanda perlu tindakan; klik membuka WO itu. | |
+| 3 | `csa` → **Release**. | WO Released. | |
+| 4 | Login `ppc` → lonceng. | Pesan **Approved: WO-…** dari `csa`. | |
+| 5 | Penyetuju lain (mis. `sup`) → lonceng. | Pesan permintaan tadi tidak lagi dihitung "perlu tindakan" (sudah diputuskan orang lain). | |
+| 6 | Ulangi 1 lalu `csa` → **Return** dengan alasan. | `ppc` menerima **Returned: WO-…** berisi alasannya. | |
+| 7 | Di tenant tanpa penyetuju (role CSA tidak dipegang siapa pun di plant itu), ajukan rilis WO. | Kotak kuning **No one can approve this yet**: minta admin memberi role penyetuju. | |
+

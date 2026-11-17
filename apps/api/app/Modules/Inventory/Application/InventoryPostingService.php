@@ -7,6 +7,7 @@ namespace App\Modules\Inventory\Application;
 use App\Modules\Inventory\Contracts\PostingCommand;
 use App\Modules\Inventory\Contracts\PostingLeg;
 use App\Modules\Inventory\Contracts\PostingResult;
+use App\Platform\Approvals\Approvals;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Calendar\BusinessCalendar;
 use App\Platform\Database\EoraPostgresConnection;
@@ -316,6 +317,7 @@ final class InventoryPostingService
         $this->audit->record($db, 'inventory_document.submitted', 'inventory_document', $id, null,
             (array) $db->selectOne('select * from inventory_documents where id = ?', [$id]), ['docType' => $command->docType, 'reasonCode' => $reasonCode], $command->plantId);
         $this->outbox->publish($db, 'inventory.request_submitted', 'inventory_document', $id, ['docType' => $command->docType, 'plantId' => $command->plantId]);
+        self::tellDeciders($db, $command->docType, $id);
 
         return ['documentId' => $id, 'replayed' => false];
     }
@@ -378,6 +380,8 @@ final class InventoryPostingService
         $this->audit->record($db, 'inventory_document.submitted', 'inventory_document', $id, null,
             (array) $db->selectOne('select * from inventory_documents where id = ?', [$id]), ['docType' => 'REVERSAL', 'reverses' => $original->doc_no], $plant);
         $this->outbox->publish($db, 'inventory.request_submitted', 'inventory_document', $id, ['docType' => 'REVERSAL', 'plantId' => $plant]);
+
+        self::tellDeciders($db, 'REVERSAL', $id);
 
         return ['documentId' => $id, 'replayed' => false];
     }
@@ -460,6 +464,8 @@ final class InventoryPostingService
             throw $e;
         }
 
+        self::tellRequester($db, (string) $doc->doc_type, $requestId, 'approved');
+
         return $result;
     }
 
@@ -477,6 +483,23 @@ final class InventoryPostingService
         $this->audit->record($db, 'inventory_document.rejected', 'inventory_document', $requestId, (array) $doc,
             (array) $db->selectOne('select * from inventory_documents where id = ?', [$requestId]), ['reason' => $reason], (string) $doc->plant_id);
         $this->outbox->publish($db, 'inventory.request_rejected', 'inventory_document', $requestId, ['docType' => $doc->doc_type, 'plantId' => $doc->plant_id]);
+        self::tellRequester($db, (string) $doc->doc_type, $requestId, 'rejected', $reason);
+    }
+
+    /** D-129: a request that waits for a second person reaches everyone who may decide it. */
+    private static function tellDeciders(EoraPostgresConnection $db, string $docType, string $id): void
+    {
+        if (isset(Approvals::DOCUMENT_KINDS[$docType])) {
+            app(Approvals::class)->requested($db, Approvals::DOCUMENT_KINDS[$docType], $id);
+        }
+    }
+
+    /** D-129: the requester hears the decision. */
+    private static function tellRequester(EoraPostgresConnection $db, string $docType, string $id, string $outcome, ?string $reason = null): void
+    {
+        if (isset(Approvals::DOCUMENT_KINDS[$docType])) {
+            app(Approvals::class)->decided($db, Approvals::DOCUMENT_KINDS[$docType], $id, $outcome, $reason);
+        }
     }
 
     /**
