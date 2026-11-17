@@ -10,8 +10,8 @@ use stdClass;
 /**
  * Who decides a document that waits for a second person, and telling them (D-129).
  *
- * Every kind names the permission that decides it, the plant whose scope must cover the decider (null: any scope, e.g.
- * tenant-wide BOMs, D-078), the requester, the people who may never decide it (requester, preparer, contributors,
+ * Every kind names the permission that decides it, the plant whose scope must cover the decider and the reader (the
+ * plant the owning controller authorizes against; null: any scope, e.g. tenant-wide BOMs and conversion data, D-078), the requester, the people who may never decide it (requester, preparer, contributors,
  * D-060), a label and the page to open. Everything runs as the signed-in user under row-level security.
  */
 final class Approvals
@@ -29,7 +29,7 @@ final class Approvals
                     array(select c.actor from bom_version_contributors c where c.bom_version_id = v.id) || array[v.prepared_by] as excluded
                from bom_versions v join items i on i.id = v.item_id where v.id = ?", ],
         'bom_routing_map' => ['master.routing.view', 'master.routing.approve', 'BOM–routing map',
-            "select m.id, i.code || ' BOM–routing map r' || m.map_revision as label, null::uuid as plant_id, m.prepared_by as requester,
+            "select m.id, i.code || ' BOM–routing map r' || m.map_revision as label, m.plant_id, m.prepared_by as requester,
                     m.submitted_at as requested_at, '/master/boms?item=' || b.item_id || '&version=' || b.id || '&map=' || m.id as link,
                     array(select c.actor from bom_map_contributors c where c.map_id = m.id) || array[m.prepared_by] as excluded
                from bom_routing_maps m join bom_versions b on b.id = m.bom_version_id join items i on i.id = b.item_id where m.id = ?", ],
