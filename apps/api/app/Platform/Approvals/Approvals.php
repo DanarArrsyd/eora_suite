@@ -102,7 +102,7 @@ final class Approvals
     public function status(EoraPostgresConnection $db, string $kind, string $id): array
     {
         $doc = $this->document($db, $kind, $id);
-        $waiting = $doc !== null && $this->waiting($db, $kind, $id);
+        $waiting = $doc !== null && $this->waiting($db, $kind, $id, $doc->requested_at);
         $people = $waiting ? $this->deciders($db, $kind, $doc) : [];
         $roles = $db->select(
             'select distinct r.code, r.name from roles r join role_permissions rp on rp.role_id = r.id and rp.permission_code = ?
@@ -153,7 +153,7 @@ final class Approvals
         $sent = 0;
         foreach ($this->recipients($this->deciders($db, $kind, $doc)) as $membership => $user) {
             $sent += $this->send($db, $membership, $user, $event, 'approval.requested', 'INFO', true,
-                "Approval requested: {$doc->label}", "{$actor} asks you to approve this {$what}.", (string) $doc->link, $kind, $id);
+                "Approval requested: {$doc->label}", "{$actor} asks you to approve this {$what}.", (string) $doc->link, $kind, $id, $doc->requested_at === null ? null : (string) $doc->requested_at);
         }
 
         return $sent;
@@ -177,7 +177,7 @@ final class Approvals
         $body = "{$by} {$outcome} your ".self::KINDS[$kind][2].'.'.($reason !== null && $reason !== '' ? " Reason: {$reason}" : '');
 
         return $this->send($db, (string) $member->id, (string) $doc->requester, $event, "approval.{$outcome}", $outcome === 'approved' ? 'INFO' : 'WARNING', false,
-            $title, mb_substr($body, 0, 1000), (string) $doc->link, null, null);
+            $title, mb_substr($body, 0, 1000), (string) $doc->link, null, null, null);
     }
 
     private function document(EoraPostgresConnection $db, string $kind, string $id): ?stdClass
@@ -185,11 +185,11 @@ final class Approvals
         return $db->selectOne(self::KINDS[$kind][3], [strtolower($id)]);
     }
 
-    private function waiting(EoraPostgresConnection $db, string $kind, string $id): bool
+    private function waiting(EoraPostgresConnection $db, string $kind, string $id, mixed $since): bool
     {
         $subject = in_array($kind, self::DOCUMENT_KINDS, true) ? 'inventory_document' : $kind;
 
-        return (bool) $db->selectOne('select eora_approval_waiting(?, ?::uuid) as w', [$subject, strtolower($id)])->w;
+        return (bool) $db->selectOne('select eora_approval_waiting(?, ?::uuid, ?::timestamptz) as w', [$subject, strtolower($id), $since])->w;
     }
 
     /**
@@ -233,16 +233,16 @@ final class Approvals
     }
 
     private function send(EoraPostgresConnection $db, string $membership, string $user, string $event, string $kind, string $severity, bool $action,
-        string $title, string $body, string $link, ?string $subjectKind, ?string $subjectId): int
+        string $title, string $body, string $link, ?string $subjectKind, ?string $subjectId, ?string $since): int
     {
         if ($subjectKind !== null && in_array($subjectKind, self::DOCUMENT_KINDS, true)) {
             $subjectKind = 'inventory_document';
         }
 
         return $db->affectingStatement(
-            'insert into inbox_notifications (tenant_id, membership_id, user_id, event_id, kind, severity, action_required, title, body, deep_link, subject_kind, subject_id)
-             values ((select c.tenant from ctx_api.context() c), ?, ?, ?::uuid, ?, ?, ?, ?, ?, ?, ?, ?::uuid)',
-            [$membership, $user, $event, $kind, $severity, $action, mb_substr($title, 0, 200), $body, $link, $subjectKind, $subjectId],
+            'insert into inbox_notifications (tenant_id, membership_id, user_id, event_id, kind, severity, action_required, title, body, deep_link, subject_kind, subject_id, subject_since)
+             values ((select c.tenant from ctx_api.context() c), ?, ?, ?::uuid, ?, ?, ?, ?, ?, ?, ?, ?::uuid, ?::timestamptz)',
+            [$membership, $user, $event, $kind, $severity, $action, mb_substr($title, 0, 200), $body, $link, $subjectKind, $subjectId, $since],
         );
     }
 }

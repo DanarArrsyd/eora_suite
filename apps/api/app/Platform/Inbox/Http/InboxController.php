@@ -16,7 +16,7 @@ use LogicException;
  */
 final class InboxController
 {
-    private const string NOW_REQUIRED = 'select id, kind, severity, action_required and (subject_kind is null or eora_approval_waiting(subject_kind, subject_id)) as action_required,
+    private const string NOW_REQUIRED = 'select id, kind, severity, action_required and (subject_kind is null or eora_approval_waiting(subject_kind, subject_id, subject_since)) as action_required,
                 title, body, deep_link, created_at, read_at from inbox_notifications';
 
     public function index(): JsonResponse

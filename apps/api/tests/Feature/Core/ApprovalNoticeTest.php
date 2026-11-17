@@ -116,3 +116,24 @@ it('asks CSA for a routing the Supervisor submitted, never the Supervisor itself
     rtSwitch($this, $this->t, 'TENANT_ADMIN');
     spa($this)->getJson("/api/v1/approvals/routing_version/{$v['id']}")->assertForbidden();
 })->group('integration', 'master');
+
+it('counts only the current submission as a task: a request returned and asked again is one task, not two (Codex on #93)', function () {
+    $s = woFixture($this, $this->t);
+    $planner = rtSwitch($this, $this->t, 'PPC');
+    $approver = member($this, $this->t);
+    AccessFixtures::grant($this->t, $approver['id'], 'CSA');
+    $wo = woCreate($this, $s)->assertCreated()->json('data');
+    $wo = woAct($this, $wo['id'], 'submit', $wo['version'])->assertOk()->json('data');
+
+    signIn($this, $approver, $this->t);
+    $wo = woAct($this, $wo['id'], 'return', $wo['version'], ['reason' => 'Check the quantity'])->assertOk()->json('data');
+    spa($this)->getJson('/api/v1/inbox')->assertOk()->assertJsonPath('meta.actionRequired', 0);
+
+    signIn($this, $planner, $this->t);
+    woAct($this, $wo['id'], 'submit', $wo['version'])->assertOk();
+    signIn($this, $approver, $this->t);
+    $inbox = spa($this)->getJson('/api/v1/inbox')->assertOk()->assertJsonPath('meta.actionRequired', 1)->json('data');
+    // both requests stay in the inbox; only the newest one is a task
+    expect(array_map(fn ($n) => [$n['kind'], $n['actionRequired']], array_values(array_filter($inbox, fn ($n) => $n['kind'] === 'approval.requested'))))
+        ->toBe([['approval.requested', true], ['approval.requested', false]]);
+})->group('integration', 'planning');
