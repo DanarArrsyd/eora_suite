@@ -153,7 +153,11 @@ test('a validator validates a submitted weight; the master-data keeper retires a
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retire' })).toHaveCount(0);
-  await setup(page, { ...SESSION, permissions: ['master.conversion.view', 'master.conversion.create'] }, { ...NW, status: 'VALIDATED', inUse: true, validatedByName: 'qcs', validatedAt: '2026-10-17T03:00:00Z' });
+  await setup(
+    page,
+    { ...SESSION, permissions: ['master.conversion.view', 'master.conversion.create'] },
+    { ...NW, status: 'VALIDATED', inUse: true, validatedByName: 'qcs', validatedAt: '2026-10-17T03:00:00Z' },
+  );
   await page.reload();
   await page.getByRole('button', { name: 'Retire' }).click();
   const confirm = page.getByRole('dialog', { name: 'Retire version 1' });
