@@ -31,7 +31,7 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
    ```bash
    npx pnpm@12.10.1 --filter @eora/web dev
    ```
-4. Login pakai password demo. Akun: `ppc@demo-stamping.test` (planner: membuat dan mengonfirmasi SO, membuat WO), `csa@demo-stamping.test` (admin: me-release WO; juga menyetujui BOM/routing dan reversal), `fgw@demo-stamping.test` (gudang FG: hanya melihat SO), `mat@demo-stamping.test` (gudang bahan: terima, issue, terima return), `prl@demo-stamping.test` (production leader: minta return), `inv@demo-stamping.test` (inventory control: minta reversal).
+4. Login pakai password demo. Akun: `ppc@demo-stamping.test` (planner: membuat dan mengonfirmasi SO, membuat WO), `csa@demo-stamping.test` (admin: me-release WO; juga menyetujui BOM/routing dan reversal), `sup@demo-stamping.test` (Supervisor: menyiapkan dan mengajukan BOM/routing, D-128), `fgw@demo-stamping.test` (gudang FG: hanya melihat SO), `mat@demo-stamping.test` (gudang bahan: terima, issue, terima return), `prl@demo-stamping.test` (production leader: minta return), `inv@demo-stamping.test` (inventory control: minta reversal).
 
 ## 1. Sales Order (langkah 1, D-107, D-108)
 | # | Langkah | Yang diharapkan | Hasil |
@@ -51,7 +51,7 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
 | 13 | Login `fgw` → Demand → Sales Orders → buka SO pertama. | Bisa melihat; tidak ada tombol Add line, Add delivery, Confirm atau Cancel. | |
 
 ## 2. Work Order manual (langkah 2, D-109)
-Persiapan: BOM dan routing BRK-A100 dari data demo masih **Draft**. Sebagai `ppc` ajukan (Master Data → BOMs / Routings → Submit), lalu sebagai `csa` setujui keduanya. Di tenant demo yang baru di-seed, draf hasil import disiapkan oleh `csa` sendiri — `csa` tidak boleh menyetujuinya (D-060); setujui dengan akun `uat` (§0).
+Persiapan: BOM dan routing BRK-A100 dari data demo masih **Draft**. Sebagai `sup` ajukan (Master Data → BOMs / Routings → Submit; master data hanya oleh Supervisor, D-128), lalu sebagai `csa` setujui keduanya. Di tenant demo yang di-seed setelah D-128, draf hasil import disiapkan oleh `sup`, jadi `csa` boleh langsung menyetujuinya. Di tenant lama yang draf-nya disiapkan `csa`, setujui dengan akun `uat` (§0).
 
 | # | Langkah | Yang diharapkan | Hasil |
 |---|---|---|---|
@@ -176,7 +176,7 @@ Persiapan: jalankan `eora:tenants:sync` setelah migrate (izin baru `traceability
 ```bash
 docker compose run --rm --entrypoint php db-migrate artisan eora:demo:m4
 ```
-Di tenant demo yang baru di-seed, BOM dan routing BRK-A100 hasil import disiapkan oleh `csa`, jadi `csa` tidak boleh menyetujuinya sendiri (D-060): buat dulu akun `uat` (§0) — perintah di atas memakainya sebagai approver kedua. Hasil akhirnya mencetak nomor SO, WO, lot FG dan SHP.
+Di tenant demo yang di-seed setelah D-128, BOM dan routing BRK-A100 hasil import disiapkan oleh `sup` dan disetujui `csa`; tidak perlu akun tambahan. Di tenant lama yang draf-nya disiapkan `csa`, buat dulu akun `uat` (§0) — perintah di atas memakainya sebagai approver kedua. Hasil akhirnya mencetak nomor SO, WO, lot FG dan SHP.
 
 | # | Langkah | Yang diharapkan | Hasil |
 |---|---|---|---|

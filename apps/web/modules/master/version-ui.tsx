@@ -164,7 +164,7 @@ export function ApprovalPanel({
             </Button>
           ) : null}
           {DONE.includes(status) ? <p className="m-0 text-[13px] text-ink-2">{approvedNote}</p> : null}
-          {status === 'VALIDATED' && can.approve && retire ? (
+          {status === 'VALIDATED' && can.create && retire ? (
             <Button disabled={!!busy} onClick={() => setRetiring(true)}>
               Retire
             </Button>

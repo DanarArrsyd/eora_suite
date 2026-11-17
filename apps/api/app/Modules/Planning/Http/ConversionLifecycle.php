@@ -12,7 +12,7 @@ use stdClass;
 /**
  * Lifecycle steps shared by the two kinds of conversion data (doc 29 §1.5, D-080): net weight versions and conversion
  * profile versions. DRAFT → SUBMITTED → VALIDATED (a second person, `lifecycle_api`), withdraw, reject, reopen, and
- * RETIRED by a validator. Conversion data is tenant-wide: permissions are held in any scope. Requires VersionLifecycle,
+ * RETIRED by the master-data keeper (the Supervisor, D-128), not the validator. Conversion data is tenant-wide: permissions are held in any scope. Requires VersionLifecycle,
  * MasterWrites and `$authorizer` / `$audit` on the using class.
  */
 trait ConversionLifecycle
@@ -64,11 +64,12 @@ trait ConversionLifecycle
 
     /**
      * VALIDATED → RETIRED: no longer in force after today; a version that has not started yet never takes effect
-     * (`effective_to = effective_from − 1`). A version that already ended stays as it is.
+     * (`effective_to = effective_from − 1`). A version that already ended stays as it is. Retiring changes master data,
+     * so it needs the writer's permission, not the validator's (D-128, Codex on #92).
      */
     private function retireVersion(string $table, string $entity, string $id): string
     {
-        [$db, $row] = $this->lockedVersion($table, $id, self::APPROVE, 'VALIDATED');
+        [$db, $row] = $this->lockedVersion($table, $id, self::CREATE, 'VALIDATED');
         $today = $this->today($db);
         if ($row->effective_to !== null && $row->effective_to < $today) {
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Already ended', 'This version is no longer in force; nothing to retire.');

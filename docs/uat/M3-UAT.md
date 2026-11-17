@@ -52,7 +52,7 @@ Isi kolom **Hasil** dengan OK / Tidak OK + catatan singkat.
 
 ## 3. Transfer dalam plant — Stock Overview (langkah 4, D-048, D-098)
 Siapkan dulu:
-- sebagai `csa`: rak RM kedua di gudang RM plant P1 (Master Data → Plants & Warehouses → Locations, mis. `RM-A02`);
+- sebagai `sup` (master data hanya oleh Supervisor, D-128): rak RM kedua di gudang RM plant P1 (Master Data → Plants & Warehouses → Locations, mis. `RM-A02`);
 - sebagai `mat`: satu penerimaan coil lagi (Materials → RM Receipts, coil SPCC, rak `RM-A01`, quantity `1000`, nomor heat `HEAT-002`) dan **jangan di-release** — §2 sudah me-release semua coil dari §1, dan langkah 1 dan 5 di bawah butuh stok **Blocked**.
 
 | # | Langkah | Yang diharapkan | Hasil |

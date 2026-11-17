@@ -195,6 +195,9 @@ it('retires a validated version: from tomorrow when in force, never when not yet
     };
     $now = $make(0);
     $later = $make(10);
+    // the validator does not retire (D-128): retiring changes master data, the Supervisor's job
+    cvAct($this, 'item-weights', $later['id'], 'retire')->assertForbidden();
+    rtSwitch($this, $this->t, 'SUP');
 
     $retired = cvAct($this, 'item-weights', $later['id'], 'retire')->assertOk()->json('data');
     expect($retired['status'])->toBe('RETIRED')->and($retired['effectiveTo'])->toBe(rtDay($this->t, 9))->and($retired['inUse'])->toBeFalse();
