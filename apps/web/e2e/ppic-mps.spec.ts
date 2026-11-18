@@ -102,7 +102,7 @@ const mps = (status: string, inputsChanged: boolean | null) => ({
   ],
 });
 
-test('an approver sees the time-phased plan, Pending QC not netted, and approves it with If-Match', async ({ page }) => {
+test('an approver sees the time-phased plan, Before Check provisional, and approves it with If-Match', async ({ page }) => {
   const posts: unknown[] = [];
   await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['planning.mps.view', 'planning.mps.approve'] } });
   await page.route(`**/api/v1/planning/mps-versions/${ID(1)}/actions/approve`, (route) => {
@@ -116,7 +116,7 @@ test('an approver sees the time-phased plan, Pending QC not netted, and approves
   const grid = page.getByRole('table', { name: 'BRK-A100 projected balance per week' });
   await expect(grid.getByRole('columnheader', { name: /W49/ })).toBeVisible();
   await expect(grid.getByRole('row', { name: /^Planned/ })).toContainText('270');
-  await expect(page.getByText('Pending QC (not netted)')).toBeVisible();
+  await expect(page.getByText('Before Check (provisional)')).toBeVisible();
   await expect(page.getByRole('table', { name: 'BRK-A100 planned orders' })).toContainText('Forecast FC-P1-2026-0001');
   await expect(page.getByText('Capacity not configured')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Adjust' })).toHaveCount(0);

@@ -397,6 +397,9 @@ final class MpsController
                from mps_capacity c join work_centers w on w.id = c.work_center_id where c.mps_version_id = ? order by w.code, c.week_start',
             [$id],
         ));
+        $mrp = $db->selectOne('select id, run_no from mrp_runs where mps_version_id = ? order by created_at desc, id desc limit 1', [$id]);
+        $row['pairedBlanking'] = $mrp === null ? null : ['runCode' => (string) $mrp->run_no,
+            'workloads' => array_values(MpsCapacity::pairedWorkloads($db, (string) $mrp->id))];
 
         return Concurrency::withVersion(response()->json(['data' => $row], $status), (int) $row['version']);
     }

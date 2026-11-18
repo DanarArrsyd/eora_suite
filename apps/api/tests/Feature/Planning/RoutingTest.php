@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Modules\Planning\Mps\MpsCapacity;
+use App\Modules\Planning\Mps\WorkingDays;
 use App\Platform\Database\EoraPostgresConnection;
 use Illuminate\Database\QueryException;
 use Tests\Support\AccessFixtures;
@@ -41,6 +43,73 @@ it('drafts a routing with operations, machines, tools and inspections (B2-AT-02,
     // replacing the list needs the version's ETag; the old one is now stale
     spa($this)->putJson('/api/v1/planning/routing-versions/'.$v['id'].'/operations', ['operations' => []])->assertStatus(428);
     spa($this)->putJson('/api/v1/planning/routing-versions/'.$v['id'].'/operations', ['operations' => []], ['If-Match' => '"1"'])->assertStatus(412);
+})->group('integration', 'master');
+
+it('uses the approved routing rate on its effective date without applying yield or parts per cycle again (D-130)', function () {
+    orgUser($this, $this->t, 'SUP');
+    $s = rtSetup($this, $this->t);
+    [$routing, $v1] = rtDraft($this, $this->t, $s);
+    $today = rtDay($this->t);
+    $tomorrow = rtDay($this->t, 1);
+    spa($this)->postJson("/api/v1/planning/routing-versions/{$v1['id']}/actions/submit")->assertOk();
+    rtSwitch($this, $this->t, 'CSA');
+    spa($this)->postJson("/api/v1/planning/routing-versions/{$v1['id']}/actions/approve")->assertOk();
+
+    rtSwitch($this, $this->t, 'SUP');
+    $v2 = spa($this)->postJson("/api/v1/planning/routings/{$routing['id']}/versions", ['effectiveFrom' => $tomorrow, 'changeReason' => 'Measured good output'])
+        ->assertCreated()->json('data');
+    $put = fn (array $ops) => spa($this)->putJson("/api/v1/planning/routing-versions/{$v2['id']}/operations", ['operations' => $ops], ['If-Match' => '"'.$v2['version'].'"']);
+    $ops = rtOperations($s);
+    $ops[0]['stdGoodOutputPerHour'] = 600;
+    $put($ops)->assertUnprocessable()->assertJsonValidationErrors(['operations.0.stdGoodOutputPerHour']);
+    unset($ops[0]['stdCycleSeconds']);
+    $ops[0]['stdGoodOutputPerHour'] = 0;
+    $put($ops)->assertUnprocessable()->assertJsonValidationErrors(['operations.0.stdGoodOutputPerHour']);
+    unset($ops[0]['stdGoodOutputPerHour']);
+    $put($ops)->assertUnprocessable()->assertJsonValidationErrors(['operations.0.stdCycleSeconds']);
+
+    $ops[0]['stdGoodOutputPerHour'] = 600;
+    $ops[0]['stdSetupMinutes'] = 15;
+    $put($ops)->assertOk()->assertJsonPath('data.operations.0.stdGoodOutputPerHour', '600.000')->assertJsonPath('data.operations.0.stdCycleSeconds', null);
+    $capacity = fn (string $startDate) => AccessFixtures::run($this->t, function (EoraPostgresConnection $db) use ($s, $today, $startDate): array {
+        $load = app(MpsCapacity::class)->compute($db, $s['plant'], $today, $today, new WorkingDays, [
+            ['itemId' => $s['item']['id'], 'qty' => '1200', 'startDate' => $startDate],
+        ]);
+
+        return array_column($load['rows'], 'load', 'workCenterId');
+    });
+    expect($capacity($tomorrow)[$s['wc']['id']])->toBe('1.250000'); // draft is ignored
+
+    spa($this)->postJson("/api/v1/planning/routing-versions/{$v2['id']}/actions/submit")->assertOk();
+    rtSwitch($this, $this->t, 'CSA');
+    spa($this)->postJson("/api/v1/planning/routing-versions/{$v2['id']}/actions/approve")->assertOk();
+    expect($capacity($today)[$s['wc']['id']])->toBe('1.250000')
+        ->and($capacity($tomorrow)[$s['wc']['id']])->toBe('2.250000')
+        ->and($capacity($tomorrow)[$s['wc2']['id']])->toBe('4.000000');
+
+    rtSwitch($this, $this->t, 'SUP');
+    spa($this)->postJson("/api/v1/planning/routings/{$routing['id']}/versions", [
+        'effectiveFrom' => rtDay($this->t, 2), 'changeReason' => 'New routing version', 'copyFromVersionId' => $v2['id'],
+    ])->assertCreated()->assertJsonPath('data.operations.0.stdGoodOutputPerHour', '600.000');
+})->group('integration', 'master');
+
+it('rejects a good-piece rate when the routing item is measured in another unit (D-130)', function () {
+    $preparer = orgUser($this, $this->t, 'SUP');
+    $s = rtSetup($this, $this->t);
+    $kg = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne("select id from uoms where code = 'KG'")->id);
+    $s['item'] = spa($this)->postJson('/api/v1/core/items', ['code' => 'COIL-1', 'name' => 'Coil', 'itemType' => 'RAW', 'baseUomId' => $kg])->assertCreated()->json('data');
+    $routing = spa($this)->postJson('/api/v1/planning/routings', ['plantId' => $s['plant'], 'itemId' => $s['item']['id'], 'routingCode' => 'RM',
+        'routingKind' => 'PRIMARY', 'effectiveFrom' => rtDay($this->t)])->assertCreated()->json('data');
+    $v = spa($this)->getJson('/api/v1/query/planning.routing_versions?filter[routingId]='.$routing['id'])->assertOk()->json('data.0');
+    $op = ['opSeq' => 10, 'processTypeId' => $s['blank']['id'], 'workCenterId' => $s['wc']['id'], 'cycleBasis' => 'PER_PIECE', 'stdGoodOutputPerHour' => 600];
+    spa($this)->putJson("/api/v1/planning/routing-versions/{$v['id']}/operations", ['operations' => [$op]], ['If-Match' => '"'.$v['version'].'"'])
+        ->assertUnprocessable()->assertJsonValidationErrors(['operations.0.stdGoodOutputPerHour']);
+
+    expect(fn () => asApp($this->t, $preparer['id'], fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into routing_operations (tenant_id, plant_id, routing_version_id, op_seq, process_type_id, work_center_id, cycle_basis, std_good_output_per_hour)
+         values (?, ?, ?, 10, ?, ?, 'PER_PIECE', 600)",
+        [$this->t['tenant'], $s['plant'], $v['id'], $s['blank']['id'], $s['wc']['id']],
+    )))->toThrow(QueryException::class, 'good pieces per hour requires an item with base unit PCS');
 })->group('integration', 'master');
 
 it('refuses invalid operation lists: duplicate sequence, foreign machine, unlinked die (B2-AT-04, 05, 06, 40)', function () {

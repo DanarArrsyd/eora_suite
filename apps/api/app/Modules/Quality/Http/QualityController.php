@@ -63,6 +63,7 @@ final class QualityController
             // an outcome's note: 3 to 500 characters, or none
             'lines.*.note' => ['nullable', 'string', 'min:3', 'max:500'],
             'ngLocationId' => ['nullable', 'uuid'],
+            'semiFinishedLocationId' => ['nullable', 'uuid'],
             'note' => ['nullable', 'string', 'max:500'],
         ]);
         $key = $this->key($request);
@@ -105,13 +106,18 @@ final class QualityController
                 throw ValidationException::withMessages(["lines.{$i}.note" => 'Explain it when the reason is Other.']);
             }
             $to = (string) $line->location_id;
+            $status = self::STATUS[$outcome];
+            if ($outcome === 'RELEASE' && $line->item_type === 'SEMI_FINISHED') {
+                $to = $this->semiFinishedDestination($db, (string) $line->plant_id, $data['semiFinishedLocationId'] ?? null);
+                $status = 'UNRESTRICTED';
+            }
             if (in_array($outcome, ['REWORK', 'REJECT'], true)) {
                 $ng ??= $this->ngArea($db, (string) $line->plant_id, $data['ngLocationId'] ?? null);
                 $to = $ng;
             }
             $code = self::CODE[$outcome];
             $legs[] = new PostingLeg($code, (string) $line->location_id, (string) $line->item_id, $line->lot_id, (string) $line->stock_status, '-'.$l['qty']);
-            $legs[] = new PostingLeg($code, $to, (string) $line->item_id, $line->lot_id, self::STATUS[$outcome], $l['qty'], reasonCode: $reason, reasonNote: $note);
+            $legs[] = new PostingLeg($code, $to, (string) $line->item_id, $line->lot_id, $status, $l['qty'], reasonCode: $reason, reasonNote: $note);
         }
 
         return $this->posted($this->postings->post($db, new PostingCommand('QC_DISPOSITION', (string) $line->plant_id, $key, $legs,
@@ -129,6 +135,7 @@ final class QualityController
             'qty' => ['required', 'string', 'regex:'.ReceiptController::QTY],
             'reason' => ['required', 'string', 'min:3', 'max:500'],
             'qcLocationId' => ['nullable', 'uuid'],
+            'semiFinishedLocationId' => ['nullable', 'uuid'],
         ]);
         $key = $this->key($request);
         $db = $this->db();
@@ -148,10 +155,13 @@ final class QualityController
         if (bccomp(self::num((string) $line->qty), self::num($data['qty']), 6) < 0) {
             throw ValidationException::withMessages(['qty' => 'Only '.$this->plain((string) $line->qty)." {$line->uom} is there."]);
         }
-        $qc = $line->location_type === 'QC_AREA' ? (string) $line->location_id : $this->area($db, (string) $line->plant_id, 'QC_AREA', $data['qcLocationId'] ?? null, 'qcLocationId');
+        $semiFinished = $line->item_type === 'SEMI_FINISHED';
+        $to = $semiFinished
+            ? $this->semiFinishedDestination($db, (string) $line->plant_id, $data['semiFinishedLocationId'] ?? null)
+            : ($line->location_type === 'QC_AREA' ? (string) $line->location_id : $this->area($db, (string) $line->plant_id, 'QC_AREA', $data['qcLocationId'] ?? null, 'qcLocationId'));
         $result = $this->postings->submit($db, new PostingCommand('QC_DISPOSITION', (string) $line->plant_id, $key, [
             new PostingLeg('QC_RELEASE', (string) $line->location_id, (string) $line->item_id, $line->lot_id, (string) $line->stock_status, '-'.$data['qty']),
-            new PostingLeg('QC_RELEASE', $qc, (string) $line->item_id, $line->lot_id, 'QC_RELEASED', $data['qty']),
+            new PostingLeg('QC_RELEASE', $to, (string) $line->item_id, $line->lot_id, $semiFinished ? 'UNRESTRICTED' : 'QC_RELEASED', $data['qty']),
         ], note: trim($data['reason']), requestHash: $hash), 'OUT_OF_POLICY');
 
         return response()->json(['data' => $result + ['status' => 'SUBMITTED']], $result['replayed'] ? 200 : 201);
@@ -203,7 +213,7 @@ final class QualityController
     private function stockLine(EoraPostgresConnection $db, string $id, string $permission): stdClass
     {
         $line = $db->selectOne(
-            'select b.id, b.plant_id, b.location_id, b.item_id, b.lot_id, b.stock_status, trim_scale(b.qty)::text as qty, l.location_type, u.code as uom, u.decimals, p.company_id
+            'select b.id, b.plant_id, b.location_id, b.item_id, b.lot_id, b.stock_status, trim_scale(b.qty)::text as qty, l.location_type, i.item_type, u.code as uom, u.decimals, p.company_id
                from stock_balances b join locations l on l.id = b.location_id join items i on i.id = b.item_id join uoms u on u.id = i.base_uom_id
                join plants p on p.id = b.plant_id where b.id = ?',
             [strtolower($id)],
@@ -242,6 +252,15 @@ final class QualityController
     private function ngArea(EoraPostgresConnection $db, string $plant, ?string $id): string
     {
         return $this->area($db, $plant, 'NG_AREA', $id, 'ngLocationId');
+    }
+
+    private function semiFinishedDestination(EoraPostgresConnection $db, string $plant, ?string $id): string
+    {
+        if ($id === null) {
+            throw ValidationException::withMessages(['semiFinishedLocationId' => 'Choose where the released semi-finished lot is received.']);
+        }
+
+        return $this->area($db, $plant, 'RM_WAREHOUSE', $id, 'semiFinishedLocationId');
     }
 
     private function area(EoraPostgresConnection $db, string $plant, string $type, ?string $id, string $field): string

@@ -17,7 +17,7 @@ use DateTimeImmutable;
  * A receipt later than a due date therefore never covers it (G-MPS-4). Lot-for-lot per week: the planned order of a
  * week is the sum of its shortages, due on its first shortage day (the earliest uncovered daily due date) and started
  * the item's production lead time in working days before (NULL = not configured = 0). Opening FG is used once (F-1),
- * allocations inside the horizon stay covered by their own demand (F-2), Pending QC is never supply (D-043).
+ * allocations inside the horizon stay covered by their own demand (F-2), Before Check may be dated provisional supply (D-134).
  * Quantities are decimal strings (scale 6, bcmath).
  */
 final readonly class MpsEngine

@@ -23,6 +23,7 @@ const RUN = {
   itemId: ID(4),
   itemCode: 'BRK-A100',
   itemName: 'Bracket front A100',
+  itemType: 'FINISHED',
   uomCode: 'PCS',
   uomDecimals: 0,
   inspectionRequired: true,
@@ -115,3 +116,71 @@ test('production runs: the leader posts measured consumption, output and scrap o
     note: null,
   });
 });
+
+for (const paired of [false, true]) {
+  test(`semi-finished production records ${paired ? 'separate paired lots' : 'the output lot'} at a selected materials location`, async ({ page }) => {
+    const writes: unknown[] = [];
+    await mockApi(page, '/auth/me', ME([...PRL, 'master.org.view']));
+    await mockApi(page, '/query/production.postings?*', page1([]));
+    await mockApi(page, '/query/core.items?*', page1([]));
+    await mockApi(page, '/query/core.locations?*', page1([{ id: ID(52), code: 'SF-01', name: 'Blank shelf' }]));
+    await mockApi(page, `/production/runs/${RUN.id}`, {
+      status: 200,
+      json: {
+        data: {
+          ...RUN,
+          itemType: 'SEMI_FINISHED',
+          inspectionRequired: false,
+          pairedOutput: paired ? { itemCode: 'BLANK-LH', itemName: 'Blank left', inspectionRequired: false } : null,
+        },
+      },
+    });
+    await page.route('**/api/v1/production/postings', (route) => {
+      writes.push(route.request().postDataJSON());
+      return route.fulfill({
+        json: {
+          data: {
+            docNo: 'PRD-P1-2026-0001',
+            lotNo: paired ? null : 'L2611-0001',
+            replayed: false,
+            outputLots: paired
+              ? [
+                  { itemCode: RUN.itemCode, lotNo: 'L2611-0001' },
+                  { itemCode: 'BLANK-LH', lotNo: 'L2611-0002' },
+                ]
+              : [],
+          },
+        },
+      });
+    });
+
+    await page.goto(`/production/runs?run=${RUN.id}`);
+    await page.getByRole('button', { name: 'Add consumed material' }).click();
+    await choose(page, page.getByRole('combobox', { name: 'Material and lot 1' }), 'COIL-SPCC-12 · L2611-0001 · 335.5 KG here');
+    await choose(page, page.getByRole('combobox', { name: 'How measured 1' }), 'Weighed what is left');
+    await page.getByRole('textbox', { name: 'Left 1 (KG)' }).fill('15');
+    await page.getByRole('textbox', { name: 'Evidence 1' }).fill('Scale S-01');
+    await page.getByRole('textbox', { name: 'Good (PCS)', exact: true }).fill(paired ? '350' : '650');
+    if (paired) {
+      await page.getByRole('textbox', { name: 'Second output good (PCS)' }).fill('340');
+      await page.getByRole('textbox', { name: 'Second output NG reject (PCS)' }).fill('10');
+    }
+    await page.getByRole('button', { name: 'Post production', exact: true }).click();
+    await expect(page.getByText('Choose where the semi-finished lot was put.')).toBeVisible();
+    await choose(page, page.getByRole('combobox', { name: 'Semi-finished destination' }), 'SF-01 · Blank shelf');
+    await page.getByRole('button', { name: 'Post production', exact: true }).click();
+    await page.getByRole('alertdialog', { name: 'Post this production' }).getByRole('button', { name: 'Post production' }).click();
+    await expect(
+      page.getByText(
+        paired ? `PRD-P1-2026-0001 posted, output lots ${RUN.itemCode} · L2611-0001, BLANK-LH · L2611-0002` : 'PRD-P1-2026-0001 posted, output lot L2611-0001',
+      ),
+    ).toBeVisible();
+    expect(writes).toEqual([
+      expect.objectContaining(
+        paired
+          ? { goodQty: '350', pairedGoodQty: '340', pairedNgRejectQty: '10', semiFinishedLocationId: ID(52) }
+          : { goodQty: '650', semiFinishedLocationId: ID(52) },
+      ),
+    ]);
+  });
+}

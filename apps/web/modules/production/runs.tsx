@@ -27,6 +27,7 @@ import { queryAll } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
 import { when } from '@/modules/master/version-ui';
 import { unitPrecisionError } from '@/modules/materials/resources';
+import { SemiFinishedLocationField } from '@/modules/materials/semi-finished-location-field';
 
 /*
  * M4 step 4 (doc 33 §1.4, D-111, doc 04 rows 5 and 8, ADR-0003): Production → Production Runs and Production Postings on
@@ -50,6 +51,7 @@ export type RunRow = {
   itemId: string;
   itemCode: string;
   itemName: string;
+  itemType: string;
   uomCode: string;
   uomDecimals: number;
   inspectionRequired: boolean;
@@ -77,7 +79,11 @@ type AtWorkCenter = {
   uomCode: string;
   uomDecimals: number;
 };
-type Run = RunRow & { atWorkCenter: AtWorkCenter[]; plantToday: string };
+type Run = RunRow & {
+  atWorkCenter: AtWorkCenter[];
+  plantToday: string;
+  pairedOutput?: { itemCode: string; itemName: string; inspectionRequired: boolean } | null;
+};
 
 type PostingRow = {
   id: string;
@@ -351,8 +357,12 @@ function RunPage({ id }: { id: string }) {
   const [ask, setAsk] = React.useState<null | 'post' | 'close' | 'cancel'>(null);
   const [consumptions, setConsumptions] = React.useState<Consumption[]>([]);
   const [good, setGood] = React.useState('');
+  const [semiFinishedLocationId, setSemiFinishedLocationId] = React.useState('');
   const [ngRework, setNgRework] = React.useState('');
   const [ngReject, setNgReject] = React.useState('');
+  const [pairedGood, setPairedGood] = React.useState('');
+  const [pairedNgRework, setPairedNgRework] = React.useState('');
+  const [pairedNgReject, setPairedNgReject] = React.useState('');
   const [scrap, setScrap] = React.useState<Scrap[]>([]);
   const [corrects, setCorrects] = React.useState('');
   const [note, setNote] = React.useState('');
@@ -431,6 +441,9 @@ function RunPage({ id }: { id: string }) {
   const reversed = (postings.data ?? []).filter((p) => p.status === 'REVERSED');
   const scrapItem = (itemId: string) => scrapItems.data?.find((i) => i.id === itemId);
 
+  const needsDestination =
+    r.itemType === 'SEMI_FINISHED' &&
+    ((!r.inspectionRequired && Number(good) > 0) || (Boolean(r.pairedOutput) && !r.pairedOutput?.inspectionRequired && Number(pairedGood) > 0));
   const check = (): string | null => {
     if (r.status === 'CLOSED' && !corrects) return 'A closed run takes only the correction of a reversed posting: choose it under Corrects.';
     if (consumptions.length === 0) return 'Enter what was consumed: at least one material line, measured.';
@@ -457,6 +470,9 @@ function RunPage({ id }: { id: string }) {
       ['Good', good],
       ['NG rework', ngRework],
       ['NG reject', ngReject],
+      ['Second output good', pairedGood],
+      ['Second output NG rework', pairedNgRework],
+      ['Second output NG reject', pairedNgReject],
     ] as const) {
       if (v && (!/^\d+(\.\d+)?$/.test(v) || unitPrecisionError(v, r.uomCode, r.uomDecimals))) return `${label}: enter a quantity in ${r.uomCode}.`;
     }
@@ -467,7 +483,11 @@ function RunPage({ id }: { id: string }) {
       if (!s.reasonCode) return `${item.code}: choose the reason.`;
       if (s.reasonCode === 'OTHER' && s.note.trim().length < 3) return `${item.code}: explain the scrap when the reason is Other.`;
     }
-    if (!Number(good) && !Number(ngRework) && !Number(ngReject) && scrap.length === 0) return 'Enter what was made: good, NG or scrap.';
+    if (![good, ngRework, ngReject, pairedGood, pairedNgRework, pairedNgReject].some(Number) && scrap.length === 0)
+      return 'Enter what was made: good, NG or scrap.';
+    if (needsDestination && !semiFinishedLocationId) {
+      return 'Choose where the semi-finished lot was put.';
+    }
     return null;
   };
 
@@ -482,6 +502,10 @@ function RunPage({ id }: { id: string }) {
             return { itemId: m.itemId, lotId: m.lotId, method: c.method as 'WEIGHED_REMAINING', qty: c.qty, evidence: c.evidence.trim() };
           }),
           goodQty: good || null,
+          ...(needsDestination && semiFinishedLocationId ? { semiFinishedLocationId } : {}),
+          ...(r.pairedOutput
+            ? { pairedGoodQty: pairedGood || null, pairedNgReworkQty: pairedNgRework || null, pairedNgRejectQty: pairedNgReject || null }
+            : {}),
           ngReworkQty: ngRework || null,
           ngRejectQty: ngReject || null,
           scrap: scrap.map((s) => ({ itemId: s.itemId, qty: s.qty, reasonCode: s.reasonCode as 'SKELETON', note: s.note.trim() || null })),
@@ -489,19 +513,23 @@ function RunPage({ id }: { id: string }) {
           note: note.trim() || null,
         },
       }),
-    )) as { data: { docNo: string; replayed: boolean; lotNo: string | null } };
+    )) as { data: { docNo: string; replayed: boolean; lotNo: string | null; outputLots?: { itemCode: string; lotNo: string }[] } };
     key.current = `prd-${crypto.randomUUID()}`;
     setConsumptions([]);
     setGood('');
     setNgRework('');
     setNgReject('');
+    setPairedGood('');
+    setPairedNgRework('');
+    setPairedNgReject('');
     setScrap([]);
     setCorrects('');
     setNote('');
+    const pairedLots = r.pairedOutput ? posted.data.outputLots?.map((lot) => `${lot.itemCode} · ${lot.lotNo}`).join(', ') : null;
     changed(
       posted.data.replayed
         ? `${posted.data.docNo} was already posted; nothing new was posted`
-        : `${posted.data.docNo} posted${posted.data.lotNo ? `, output lot ${posted.data.lotNo}` : ''}`,
+        : `${posted.data.docNo} posted${pairedLots ? `, output lots ${pairedLots}` : posted.data.lotNo ? `, output lot ${posted.data.lotNo}` : ''}`,
     );
   };
   const act = (action: 'close' | 'cancel', body?: { reason: string }) =>
@@ -536,9 +564,16 @@ function RunPage({ id }: { id: string }) {
   ];
   const facts: { label: string; value: React.ReactNode }[] = [
     { label: 'Work order', value: <span className="font-mono">{r.workOrderCode}</span> },
-    { label: 'Makes', value: `${r.itemCode} · ${r.itemName}` },
+    { label: 'Makes', value: r.pairedOutput ? `${r.itemCode} + ${r.pairedOutput.itemCode}` : `${r.itemCode} · ${r.itemName}` },
     { label: 'Work center', value: `${r.workCenterCode}${r.machineCode ? ` · ${r.machineCode}` : ''} · ${r.plantCode}` },
-    { label: 'Good output goes to', value: r.inspectionRequired ? 'QC area, waiting for inspection' : 'QC area, released (no inspection)' },
+    {
+      label: 'Good output goes to',
+      value: r.inspectionRequired
+        ? 'QC area, waiting for inspection'
+        : r.itemType === 'SEMI_FINISHED'
+          ? 'Materials location, available for issue'
+          : 'QC area, released (no inspection)',
+    },
     { label: 'Made so far', value: `Good ${r.goodQty} · NG rework ${r.ngReworkQty} · NG reject ${r.ngRejectQty} ${r.uomCode}` },
     { label: 'Opened', value: `${when(r.openedAt)}${r.openedByName ? ` · ${r.openedByName}` : ''}` },
     ...(r.closedAt
@@ -689,12 +724,27 @@ function RunPage({ id }: { id: string }) {
                   Add consumed material
                 </Button>
 
-                <h3 className="m-0 mt-5 text-[13.5px] font-semibold text-ink">Made</h3>
+                <h3 className="m-0 mt-5 text-[13.5px] font-semibold text-ink">{r.pairedOutput ? r.itemCode : 'Made'}</h3>
                 <div className="mt-2 grid grid-cols-3 gap-3 max-md:grid-cols-1">
                   {qtyField('Good', good, setGood)}
                   {qtyField('NG rework', ngRework, setNgRework)}
                   {qtyField('NG reject', ngReject, setNgReject)}
                 </div>
+                {r.pairedOutput ? (
+                  <fieldset className="m-0 mt-4 min-w-0 border-0 p-0">
+                    <legend className="p-0 text-[13.5px] font-semibold text-ink">{r.pairedOutput.itemCode}</legend>
+                    <div className="mt-2 grid grid-cols-3 gap-3 max-md:grid-cols-1">
+                      {qtyField('Second output good', pairedGood, setPairedGood)}
+                      {qtyField('Second output NG rework', pairedNgRework, setPairedNgRework)}
+                      {qtyField('Second output NG reject', pairedNgReject, setPairedNgReject)}
+                    </div>
+                  </fieldset>
+                ) : null}
+                {needsDestination ? (
+                  <div className="mt-3">
+                    <SemiFinishedLocationField plantId={r.plantId} value={semiFinishedLocationId} onValueChange={setSemiFinishedLocationId} />
+                  </div>
+                ) : null}
 
                 <h3 className="m-0 mt-5 text-[13.5px] font-semibold text-ink">Scrap</h3>
                 {scrap.map((s, i) => (

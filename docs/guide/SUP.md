@@ -85,6 +85,7 @@ Akun pemilik / kepala operasional. Melihat semua menu yang sudah jalan dan bisa 
 
 1. Master data: tambah / ubah / nonaktifkan item, customer, supplier, dan master lain di menu Master Data, atau lewat **Import** template Excel (urutan: Units → Customers → Items → Material specs → Unit conversions → Customer parts → Process types → Routings → BOMs).
 2. Routing, BOM, dan conversion data yang Anda siapkan → **Submit** → disetujui **CSA**.
+   - Di operasi routing untuk item dengan satuan dasar PCS, isi **Standard Good Output (pcs/h)** dengan jumlah pcs good per jam mesin berjalan. Isi **Setup time (min)** terpisah. Di template Excel Routings, isi salah satu antara **Standard Good Output (pcs/h)** dan **Cycle seconds**. Buat revisi routing untuk memperbarui standar yang sudah berlaku.
 3. Kerjakan tugas role mana pun dari menu yang sesuai (lihat panduan role terkait).
 4. Setujui pekerjaan orang lain: MPS, rilis WO, koreksi stok, reversal, tutup buku, routing / BOM, conversion data.
 5. Kelola user: Administration → Users → undang, lalu beri role.

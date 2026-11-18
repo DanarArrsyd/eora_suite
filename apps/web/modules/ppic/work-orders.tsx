@@ -91,6 +91,7 @@ type CloseException = {
 };
 
 type WorkOrder = WorkOrderRow & {
+  pairedOutput?: { itemCode: string; pairsPerSheet: number } | null;
   materials: Material[];
   plantToday: string;
   /** D-117: what still keeps it open, what is left at production, who closed it, its latest close exception. */
@@ -357,6 +358,9 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
   const facts: { label: string; value: React.ReactNode }[] = [
     { label: 'Item', value: `${o.itemCode} · ${o.itemName}` },
     { label: 'Quantity', value: <span className="font-semibold tabular-nums">{`${o.qty} ${o.uomCode}`}</span> },
+    ...(o.pairedOutput
+      ? [{ label: 'Paired output', value: `${o.qty} ${o.uomCode} of ${o.pairedOutput.itemCode} · ${o.pairedOutput.pairsPerSheet} pairs per sheet` }]
+      : []),
     { label: 'Due', value: o.dueDate },
     { label: 'Plant', value: o.plantCode },
     { label: 'Reason', value: o.plannedFrom ? `From the plan (${o.plannedFrom})` : reason(o.reasonCode) },

@@ -441,7 +441,7 @@ function IssuePage({ initialWo }: { initialWo: string }) {
                               aria-label={`${m.itemCode} rack and lot ${i + 1}`}
                               value={l.stockId}
                               onValueChange={(v) => setLine(m.itemId, i, { stockId: v })}
-                              placeholder={options.length ? 'Choose rack and lot' : 'No UNRESTRICTED stock in a raw-material rack'}
+                              placeholder={options.length ? 'Choose rack and lot' : 'No unrestricted stock in a materials rack'}
                               disabled={options.length === 0}
                               options={options}
                             />
@@ -698,7 +698,7 @@ function ReturnPage({ id }: { id: string }) {
         required: true,
         options: 'rmLocations',
         optionFilter: () => ({ plantId: r.plantId }),
-        hint: 'A raw-material location of the plant.',
+        hint: 'A materials warehouse location of the plant.',
       },
       {
         key: 'qty',

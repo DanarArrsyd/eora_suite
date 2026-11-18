@@ -34,3 +34,6 @@ The `LEGACY-BLUEPRINT-REFERENCE.md` is preserved for context, but newer document
 Kickoff requires discovery and reading of installed **Caveman** and **Frontend** skills. See `CLAUDE.md` for the mandatory skill-use report and fallback if either skill is unavailable.
 
 **Every frontend/UI task must review the approved EORA Design System (`docs/uiux/`) and use relevant installed Caveman and Frontend Design skills.**
+
+### Daily Recovery Planner (D-134, local implementation)
+PPIC → Production Planning → **Daily Recovery Planner** (`/ppic/daily-recovery`) reads live FG, Before Check, QC Accepted and remaining WO coverage. Planner can save batch/minimum/buffer and shift adjustments, inspect lots and create a linked Draft WO through the existing approval flow. [Scope and rules](docs/36-DAILY-RECOVERY-SCOPE.md), [UAT](docs/uat/M5-UAT.md), [ADR-0019](docs/adr/ADR-0019-daily-recovery-planning.md). Schema deployment and tenant permission sync are required before release; local implementation is not production deployment.

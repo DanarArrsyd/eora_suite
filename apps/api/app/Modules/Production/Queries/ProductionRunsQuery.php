@@ -85,6 +85,7 @@ final class ProductionRunsQuery extends QueryDefinition
             new Field('itemId', 'w.item_id', Field::UUID),
             new Field('itemCode', 'i.code', sortable: true),
             new Field('itemName', 'i.name'),
+            new Field('itemType', 'i.item_type'),
             new Field('uomCode', 'u.code'),
             new Field('uomDecimals', 'u.decimals', Field::INTEGER),
             new Field('inspectionRequired', 'i.inspection_required', Field::BOOLEAN),

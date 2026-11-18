@@ -147,6 +147,9 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.planning.plan-parameters.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 422 => ['VALIDATION_FAILED']],
         'v1.planning.plan-parameters.update' => self::MASTER_EDIT,
         // D-123: MPS per plant; approval by a second person while the inputs are unchanged
+        'v1.planning.daily-recovery.index' => self::TENANT_READ + self::MASTER_403 + [422 => ['VALIDATION_FAILED']],
+        'v1.planning.daily-recovery.save' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],
+        'v1.planning.daily-recovery.create-work-order' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION', 'RECOVERY_INPUTS_CHANGED']],
         'v1.planning.mps-versions.store' => self::TENANT_WRITE + self::MASTER_403 + [404 => ['NOT_FOUND'], 409 => ['INVALID_STATE_TRANSITION'], 422 => ['VALIDATION_FAILED']],
         'v1.planning.mps-versions.show' => self::TENANT_READ + [403 => ['FORBIDDEN', 'SCOPE_FORBIDDEN'], 404 => ['NOT_FOUND']],
         'v1.planning.mps-versions.recalculate' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],

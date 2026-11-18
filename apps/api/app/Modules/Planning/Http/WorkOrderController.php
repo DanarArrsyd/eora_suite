@@ -79,11 +79,19 @@ final class WorkOrderController
             'note' => ['nullable', 'string', 'max:500'],
             'scheduleLineId' => ['nullable', 'uuid'],
         ]);
+
+        return $this->createDraft($data);
+    }
+
+    /** @param array<string,mixed> $data */
+    public function createDraft(array $data): JsonResponse
+    {
         $db = $this->db();
         $this->authorizer->requireAnywhere($db, self::CREATE);
         $plant = $db->selectOne('select id, code, company_id from plants where id = ?', [strtolower($data['plantId'])])
             ?? throw ValidationException::withMessages(['plantId' => 'Unknown plant.']);
         $this->authorizer->authorize($db, self::CREATE, Scope::plant((string) $plant->id, (string) $plant->company_id));
+        $db->select('select pg_advisory_xact_lock(hashtextextended(?,0))', ['daily-recovery:'.$plant->id]);
         $fields = $this->checked($db, (string) $plant->id, $data);
 
         $year = (int) substr($this->today($db, (string) $plant->id), 0, 4);
@@ -133,6 +141,12 @@ final class WorkOrderController
             }
             if (isset($data['reasonCode'])) {
                 throw ValidationException::withMessages(['reasonCode' => 'A work order from the plan has no planning-exception reason.']);
+            }
+            if (isset($data['qty'])) {
+                $pair = $db->selectOne('select v.pairs_per_sheet from mrp_orders o join routing_versions v on v.id = o.paired_routing_version_id where o.id = ?', [$wo->mrp_order_id]);
+                if ($pair !== null && bccomp(bcmod($data['qty'], (string) $pair->pairs_per_sheet, 6), '0', 6) !== 0) {
+                    throw ValidationException::withMessages(['qty' => 'Enter pieces per side in a whole number of sheets.']);
+                }
             }
         }
         $merged = [
@@ -216,7 +230,7 @@ final class WorkOrderController
             [$wo->item_id, $today, $today],
         );
         $routing = $db->selectOne(
-            "select v.id, v.version_no, r.routing_code from routings r join routing_versions v on v.routing_id = r.id
+            "select v.id, v.version_no, v.pairs_per_sheet, r.routing_code from routings r join routing_versions v on v.routing_id = r.id
               where r.plant_id = ? and r.item_id = ? and r.routing_kind = 'PRIMARY' and r.status = 'ACTIVE' and v.status in ('APPROVED', 'SUPERSEDED')
                 and v.effective_from <= ?::date and (v.effective_to is null or v.effective_to >= ?::date) order by v.effective_from desc limit 1",
             [$wo->plant_id, $wo->item_id, $today, $today],
@@ -224,6 +238,18 @@ final class WorkOrderController
         if ($bom === null || $routing === null) {
             $missing = implode(' and no ', array_filter([$bom === null ? 'approved BOM version' : null, $routing === null ? 'approved primary routing version at this plant' : null]));
             throw new DomainProblem(409, 'WO_MASTER_MISSING', 'Engineering master missing', "The item has no {$missing} in force today ({$today}). Approve it in Master Data first.");
+        }
+        $planned = $wo->mrp_order_id === null ? null : $db->selectOne('select paired_routing_version_id from mrp_orders where id = ?', [$wo->mrp_order_id]);
+        if ($planned !== null && $planned->paired_routing_version_id !== ($routing->pairs_per_sheet === null ? null : $routing->id)) {
+            throw new DomainProblem(409, 'WO_MASTER_MISSING', 'Paired routing changed', 'Run MRP again with the routing now in force.');
+        }
+        if ($routing->pairs_per_sheet !== null && (bccomp(bcmod((string) $wo->qty, (string) $routing->pairs_per_sheet, 6), '0', 6) !== 0
+            || $db->selectOne(
+                "select 1 from bom_lines l join items i on i.id = l.component_item_id join uoms u on u.id = l.uom_id
+                  where l.bom_version_id = ? having count(*) = 1 and bool_and(u.code = 'SHEET' and u.id = i.base_uom_id and i.item_type = 'RAW')",
+                [$bom->id],
+            ) === null)) {
+            throw new DomainProblem(409, 'WO_MASTER_MISSING', 'Paired blanking setup incomplete', 'Use whole sheets and a BOM with one raw material in its base unit SHEET.');
         }
         $weight = $db->selectOne(
             "select id from item_weights where item_id = ? and status in ('VALIDATED', 'RETIRED') and effective_from <= ?::date and (effective_to is null or effective_to >= ?::date)
@@ -238,11 +264,13 @@ final class WorkOrderController
         );
         $db->insert(
             "insert into work_order_materials (tenant_id, work_order_id, line_no, bom_line_id, component_item_id, uom_id, gross_qty_per, scrap_allowance, required_qty, conversion_profile_version_id)
-             select l.tenant_id, ?, l.line_no, l.id, l.component_item_id, l.uom_id, l.gross_qty_per, l.scrap_allowance, round(?::numeric * l.gross_qty_per, 6),
+             select l.tenant_id, ?, l.line_no, l.id, l.component_item_id, l.uom_id, l.gross_qty_per, l.scrap_allowance,
+                    case when v.pairs_per_sheet is null then round(?::numeric * l.gross_qty_per, 6) else w.qty / v.pairs_per_sheet end,
                     (select v.id from conversion_profile_versions v where v.profile_id = l.conversion_profile_id and v.status in ('VALIDATED', 'RETIRED')
                         and v.effective_from <= ?::date and (v.effective_to is null or v.effective_to >= ?::date) order by v.effective_from desc limit 1)
-               from bom_lines l where l.bom_version_id = ? order by l.line_no",
-            [$wo->id, (string) $wo->qty, $today, $today, $bom->id],
+               from bom_lines l join work_orders w on w.bom_version_id = l.bom_version_id and w.id = ?
+               join routing_versions v on v.id = w.routing_version_id where l.bom_version_id = ? order by l.line_no",
+            [$wo->id, (string) $wo->qty, $today, $today, $wo->id, $bom->id],
         );
         // the deferred database checks (every BOM line in the snapshot) run now, before the answer
         $db->statement('set constraints all immediate');
@@ -425,6 +453,13 @@ final class WorkOrderController
     private function respondOrder(EoraPostgresConnection $db, string $id, int $status = 200): JsonResponse
     {
         $row = $this->rows->find($db, new WorkOrdersQuery, $id) ?? throw new LogicException('Written row not visible.');
+        $pair = $db->selectOne(
+            'select i.code, v.pairs_per_sheet from work_orders w left join mrp_orders mo on mo.id = w.mrp_order_id
+               join routing_versions v on v.id = coalesce(w.routing_version_id, mo.paired_routing_version_id) join items i on i.id = v.paired_item_id
+              where w.id = ?',
+            [$id],
+        );
+        $row['pairedOutput'] = $pair === null ? null : ['itemCode' => (string) $pair->code, 'pairsPerSheet' => (int) $pair->pairs_per_sheet];
         $row['materials'] = array_map(static fn (stdClass $m) => [
             'lineNo' => (int) $m->line_no,
             'itemId' => (string) $m->component_item_id,

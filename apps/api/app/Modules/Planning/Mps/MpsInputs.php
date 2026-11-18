@@ -19,7 +19,7 @@ use stdClass;
  *   outside the horizon (`outOfScope`); class B dated: QC released stock (today: no expected receipt date is kept) and
  *   the remaining output (qty − good posted) of RELEASED / IN_PROGRESS / ON_HOLD work orders, and of work orders released
  *   from the plan from their Draft on (D-125), on their due date;
- *   class C: Pending QC, shown only;
+ *   Before Check/Pending QC is provisional supply dated today (D-134), while delivery availability follows QC release and FG receipt;
  * - per item + plant planning parameters (safety stock, production lead time; NULL = not configured), working days;
  *   an FG / semi-finished item with a safety stock is planned even without demand in the horizon.
  * The fingerprint hashes all of it (and the plan date): approval compares it with a fresh read (D-123 (2)).
@@ -80,8 +80,14 @@ final class MpsInputs
         // items with a safety stock at the plant are planned even without demand: stock below it is replenished
         foreach ($db->select(
             "select p.item_id, i.base_uom_id as uom_id from item_plan_parameters p join items i on i.tenant_id = p.tenant_id and i.id = p.item_id
-              where p.plant_id = ? and p.safety_stock > 0 and i.status = 'ACTIVE' and i.item_type in ('FINISHED', 'SEMI_FINISHED') order by p.item_id",
-            [$plant],
+              where p.plant_id = ? and p.safety_stock > 0 and i.status = 'ACTIVE' and i.item_type in ('FINISHED', 'SEMI_FINISHED')
+                and not exists (select 1 from routings r join routing_versions v on v.routing_id = r.id
+                                 where r.plant_id = p.plant_id and r.status = 'ACTIVE' and r.routing_kind = 'PRIMARY'
+                                   and v.paired_item_id is not null and p.item_id in (r.item_id, v.paired_item_id)
+                                   and v.status in ('APPROVED', 'SUPERSEDED') and v.effective_from <= ?::date
+                                   and (v.effective_to is null or v.effective_to >= ?::date))
+              order by p.item_id",
+            [$plant, $this->horizonEnd, $this->today],
         ) as $r) {
             $this->item($r);
         }
@@ -103,6 +109,9 @@ final class MpsInputs
             $item = $this->items[(string) $r->item_id];
             $item->onHand = MpsItemInput::num($r->on_hand ?? '0');
             $item->pendingQc = MpsItemInput::num($r->pending_qc ?? '0');
+            if (bccomp($item->pendingQc, '0', 6) > 0) {
+                $item->supplies[] = ['key' => 'PENDING_QC', 'kind' => 'PENDING_QC', 'date' => $this->today, 'qty' => $item->pendingQc];
+            }
             if ($r->qc_released !== null) {
                 $item->supplies[] = ['key' => 'QC_RELEASED', 'kind' => 'QC_RELEASED', 'date' => $this->today, 'qty' => MpsItemInput::num($r->qc_released)];
             }
@@ -136,7 +145,7 @@ final class MpsInputs
                                      join production_runs r on r.tenant_id = d.tenant_id and r.id = d.source_id
                                     where r.tenant_id = w.tenant_id and r.work_order_id = w.id and m.movement_code = 'OUTPUT_GOOD' and m.qty_signed > 0) g
               where w.plant_id = ? and w.item_id in ({$in}) and (w.status in ('RELEASED', 'IN_PROGRESS', 'ON_HOLD')
-                     or (w.status in ('DRAFT', 'SUBMITTED') and w.mrp_order_id is not null)) and w.qty > g.good
+                     or (w.status in ('DRAFT', 'SUBMITTED') and (w.mrp_order_id is not null or exists (select 1 from daily_recovery_plans dp where dp.work_order_id = w.id)))) and w.qty > g.good
               order by w.id",
             [$plant, ...$ids],
         ) as $r) {

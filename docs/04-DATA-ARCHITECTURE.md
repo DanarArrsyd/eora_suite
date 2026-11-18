@@ -66,7 +66,7 @@ is, independent of the document type. A reversal leg repeats the original code w
 | `CONSUME` | actual measured consumption | 5 consume leg of `PRODUCTION_POSTING` | `MAT_AT_PROD(wc)` → `V_CONSUMED` |
 | `RETURN_FROM_PROD` | measured return to the RM warehouse | 6 `MAT_RETURN` | `MAT_AT_PROD(wc)` → RM |
 | `LOT_SPLIT_OUT` / `LOT_SPLIT_IN` | remnant split: parent out, child in (same location) | 7 `LOT_SPLIT` | parent lot → child lot |
-| `OUTPUT_GOOD` | good output | 8 produce leg | `V_PRODUCED` → `QC_AREA` / PENDING_QC (no required inspection: finished → `QC_AREA` / QC_RELEASED, D-107; Semi-Finished → next process / UNRESTRICTED) |
+| `OUTPUT_GOOD` | good output | 8 produce leg | `V_PRODUCED` → `QC_AREA` / PENDING_QC (no required inspection: finished → `QC_AREA` / QC_RELEASED, D-107; Semi-Finished → selected materials location / UNRESTRICTED (D-131)) |
 | `OUTPUT_NG_REWORK` | NG reworkable | 8 produce leg | `V_PRODUCED` → `NG_AREA` / REWORK |
 | `OUTPUT_NG_REJECT` | NG rejected | 8 produce leg | `V_PRODUCED` → `NG_AREA` / REJECTED |
 | `OUTPUT_SCRAP` | weighed process scrap | 8 produce leg | `V_PRODUCED` → `SCRAP_YARD` |

@@ -41,6 +41,7 @@ const OP = {
   description: null,
   stdSetupMinutes: '30.00',
   stdCycleSeconds: '4.500',
+  stdGoodOutputPerHour: null,
   cycleBasis: 'PER_STROKE',
   partsPerCycle: 2,
   inspectionRequired: false,
@@ -155,7 +156,7 @@ test('routing page: the open Draft shows first; operations are replaced as one l
   await expect(drawer.getByRole('textbox', { name: 'Sequence' })).toHaveValue('20');
   await choose(page, drawer.getByRole('combobox', { name: 'Process' }), 'BLANK · Blanking');
   await choose(page, drawer.getByRole('combobox', { name: 'Work center' }), 'PRS-01 · Press line 1');
-  await drawer.getByRole('textbox', { name: 'Cycle time (s)' }).fill('6');
+  await drawer.getByRole('textbox', { name: 'Standard Good Output (pcs/h)' }).fill('600');
   await drawer.getByRole('checkbox', { name: 'M-200 · Press 200 t' }).check();
   await drawer.getByRole('textbox', { name: 'What to inspect' }).fill('Hole position: 1 of 50');
   await drawer.getByRole('button', { name: 'Add operation' }).click();
@@ -165,6 +166,8 @@ test('routing page: the open Draft shows first; operations are replaced as one l
   expect(puts[0]!.ifMatch).toBe('"2"');
   const sent = (puts[0]!.body as { operations: { opSeq: number; machines: unknown[]; inspections: unknown[] }[] }).operations;
   expect(sent.map((o) => o.opSeq)).toEqual([10, 20]);
+  expect(sent[0]).toMatchObject({ stdCycleSeconds: 4.5, stdGoodOutputPerHour: null });
+  expect(sent[1]).toMatchObject({ stdCycleSeconds: null, stdGoodOutputPerHour: 600 });
   expect(sent[1]!.machines).toEqual([{ machineId: OP.machines[0]!.machineId, isPreferred: false, cycleSecondsOverride: null }]);
   expect(sent[1]!.inspections).toEqual([{ characteristic: 'Hole position', samplingNote: '1 of 50' }]);
 });

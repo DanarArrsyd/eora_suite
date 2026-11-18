@@ -20,6 +20,7 @@ use App\Modules\Planning\Http\BomRoutingMapController;
 use App\Modules\Planning\Http\ConversionProfileController;
 use App\Modules\Planning\Http\ItemWeightController;
 use App\Modules\Planning\Http\MpsController;
+use App\Modules\Planning\Http\DailyRecoveryController;
 use App\Modules\Planning\Http\MrpController;
 use App\Modules\Planning\Http\PlanParameterController;
 use App\Modules\Planning\Http\RoutingController;
@@ -122,6 +123,9 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('plan-parameters', [PlanParameterController::class, 'store'])->name('plan-parameters.store');
         Route::patch('plan-parameters/{parameter}', [PlanParameterController::class, 'update'])->name('plan-parameters.update');
         // D-123: master production schedule per plant
+        Route::get('daily-recovery', [DailyRecoveryController::class, 'index'])->name('daily-recovery.index');
+        Route::put('daily-recovery', [DailyRecoveryController::class, 'save'])->name('daily-recovery.save');
+        Route::post('daily-recovery/{plan}/actions/create-work-order', [DailyRecoveryController::class, 'createWorkOrder'])->name('daily-recovery.create-work-order');
         Route::post('mps-versions', [MpsController::class, 'store'])->name('mps-versions.store');
         Route::get('mps-versions/{version}', [MpsController::class, 'show'])->name('mps-versions.show');
         Route::post('mps-versions/{version}/actions/recalculate', [MpsController::class, 'recalculate'])->name('mps-versions.recalculate');

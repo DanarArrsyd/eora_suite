@@ -107,7 +107,7 @@ final class MaterialFlowController
                 throw ValidationException::withMessages(["lines.{$i}.lotId" => 'This material is not tracked by lot. Leave the lot empty.']);
             }
             $db->selectOne("select 1 as ok from locations where id = ? and plant_id = ? and location_type = 'RM_WAREHOUSE'", [strtolower($line['fromLocationId']), $plant])
-                ?? throw ValidationException::withMessages(["lines.{$i}.fromLocationId" => 'Choose a raw-material location of this plant.']);
+                ?? throw ValidationException::withMessages(["lines.{$i}.fromLocationId" => 'Choose a materials warehouse location of this plant.']);
         }
 
         return $this->issued($db, $this->postings->post($db, $command));
@@ -181,7 +181,7 @@ final class MaterialFlowController
         self::requireUnitPrecision($data['qty'], $unit, 'qty');
         // locked until the posting commits, so the location cannot be deactivated in between
         $db->selectOne("select 1 as ok from locations where id = ? and plant_id = ? and location_type = 'RM_WAREHOUSE' and status = 'ACTIVE' for share", [$to, $doc->plant_id])
-            ?? throw ValidationException::withMessages(['toLocationId' => 'Choose an active raw-material location of this plant.']);
+            ?? throw ValidationException::withMessages(['toLocationId' => 'Choose an active materials warehouse location of this plant.']);
 
         return $this->answer($db, $this->postings->receiveReturn($db, (string) $doc->id, $key, $to, (string) $data['qty']));
     }

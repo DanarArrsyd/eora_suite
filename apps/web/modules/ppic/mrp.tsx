@@ -62,6 +62,7 @@ type Order = {
   bomVersionNo: number | null;
   warnings: string[];
   pegs: { requirementId: string | null; qty: string }[];
+  pairedWorkload?: { pairedItemCode: string; sheets: string; runHours: string; setupMinutes: string } | null;
   workOrder: { id: string; code: string; status: string } | null;
 };
 type Requirement = { id: string; dueDate: string; qty: string; parentOrderId: string; parentItemCode: string };
@@ -358,6 +359,12 @@ function RunPage({ id }: { id: string }) {
                       </td>
                       <td className="px-2 py-2 text-right font-semibold tabular-nums">
                         {order.qty} {item.uomCode}
+                        {order.pairedWorkload ? (
+                          <span className="block text-ink-2">
+                            Same target for {order.pairedWorkload.pairedItemCode} · {order.pairedWorkload.sheets} sheets · {order.pairedWorkload.runHours} h
+                            running + {order.pairedWorkload.setupMinutes} min setup
+                          </span>
+                        ) : null}
                       </td>
                       <td className="px-2 py-2 tabular-nums">
                         {order.dueDate} <span className="text-ink-2">W{isoWeek(order.weekStart)}</span>
