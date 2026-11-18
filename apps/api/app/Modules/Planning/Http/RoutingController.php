@@ -211,6 +211,8 @@ final class RoutingController
             'effectiveFrom' => ['sometimes', 'date_format:Y-m-d'],
             'changeReason' => ['sometimes', 'nullable', 'string', 'max:500'],
             'standardYield' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'lte:1', 'decimal:0,5'],
+            'pairedItemId' => ['sometimes', 'nullable', 'uuid'],
+            'pairsPerSheet' => ['sometimes', 'nullable', 'integer', 'between:1,100000'],
         ]);
         $expected = Concurrency::expectedVersion($request);
         [$db, $id, $ver] = $this->draft($version, self::CREATE);
@@ -227,6 +229,24 @@ final class RoutingController
         }
         if (array_key_exists('standardYield', $data)) {
             $changes['standard_yield'] = $data['standardYield'] === null ? null : (string) $data['standardYield'];
+        }
+        if (array_key_exists('pairedItemId', $data) || array_key_exists('pairsPerSheet', $data)) {
+            $pairedItem = array_key_exists('pairedItemId', $data) ? $data['pairedItemId'] : $ver->paired_item_id;
+            $pairsPerSheet = array_key_exists('pairsPerSheet', $data) ? $data['pairsPerSheet'] : $ver->pairs_per_sheet;
+            if (($pairedItem === null) !== ($pairsPerSheet === null)) {
+                throw ValidationException::withMessages(['pairsPerSheet' => 'Enter the second output and pieces per sheet together.']);
+            }
+            if ($pairedItem !== null && $db->selectOne(
+                "select 1 from routings r join items i on i.id = r.item_id join items p on p.id = ? join uoms u on u.id = i.base_uom_id
+                  where r.id = ? and r.routing_kind = 'PRIMARY' and i.id <> p.id and u.code = 'PCS' and p.base_uom_id = i.base_uom_id
+                    and i.item_type = 'SEMI_FINISHED' and p.item_type = 'SEMI_FINISHED' and i.lot_controlled and p.lot_controlled
+                    and p.status = 'ACTIVE'",
+                [$pairedItem, $ver->routing_id],
+            ) === null) {
+                throw ValidationException::withMessages(['pairedItemId' => 'Choose a different active lot-controlled semi-finished PCS item on a primary routing.']);
+            }
+            $changes['paired_item_id'] = $pairedItem;
+            $changes['pairs_per_sheet'] = $pairsPerSheet;
         }
         $this->update($db, 'routing_versions', 'routing_version', $id, $expected, $changes, 'routing_version.updated', (string) $ver->plant_id);
 
@@ -248,7 +268,8 @@ final class RoutingController
             'operations.*.workCenterId' => ['required', 'uuid'],
             'operations.*.description' => ['nullable', 'string', 'max:500'],
             'operations.*.stdSetupMinutes' => ['nullable', 'numeric', 'min:0', 'decimal:0,2'],
-            'operations.*.stdCycleSeconds' => ['required', 'numeric', 'min:0', 'decimal:0,3'],
+            'operations.*.stdCycleSeconds' => ['required_without:operations.*.stdGoodOutputPerHour', 'nullable', 'numeric', 'min:0', 'decimal:0,3'],
+            'operations.*.stdGoodOutputPerHour' => ['nullable', 'prohibits:operations.*.stdCycleSeconds', 'numeric', 'between:0.001,99999999.999', 'decimal:0,3'],
             'operations.*.cycleBasis' => ['required', Rule::in(['PER_PIECE', 'PER_STROKE', 'PER_BATCH'])],
             'operations.*.partsPerCycle' => ['nullable', 'integer', 'between:1,100000'],
             'operations.*.inspectionRequired' => ['sometimes', 'boolean'],
@@ -268,6 +289,19 @@ final class RoutingController
         ]);
         $expected = Concurrency::expectedVersion($request);
         [$db, $id, $ver] = $this->draft($version, self::CREATE);
+
+        foreach ($data['operations'] as $i => $op) {
+            if (! isset($op['stdGoodOutputPerHour'])) {
+                continue;
+            }
+            if ($db->selectOne(
+                "select 1 from routings r join items i on i.id = r.item_id join uoms u on u.id = i.base_uom_id where r.id = ? and u.code = 'PCS'",
+                [$ver->routing_id],
+            ) === null) {
+                throw ValidationException::withMessages(["operations.{$i}.stdGoodOutputPerHour" => 'Standard good output requires an item with base unit PCS.']);
+            }
+            break;
+        }
 
         // the version row carries the optimistic lock for its whole content
         if ($db->update('update routing_versions set change_reason = change_reason where id = ? and version = ?', [$id, $expected]) === 0) {
@@ -289,6 +323,12 @@ final class RoutingController
         $problems = [];
         if ($ver->standard_yield === null) {
             $problems['standardYield'] = 'Enter the standard yield before submitting.';
+        }
+        if ($ver->paired_item_id !== null && $db->selectOne(
+            'select 1 from routing_operations where routing_version_id = ? having count(*) = 1 and count(std_good_output_per_hour) = 1',
+            [$id],
+        ) === null) {
+            $problems['operations'] = 'Paired blanking needs one operation with a combined standard good output per hour.';
         }
         if ($db->selectOne('select 1 as ok from routing_operations where routing_version_id = ?', [$id]) === null) {
             $problems['operations'] = 'Add at least one operation before submitting.';
@@ -369,10 +409,12 @@ final class RoutingController
         }
         $opId = (string) $db->selectOne(
             'insert into routing_operations (tenant_id, plant_id, routing_version_id, op_seq, step_key, process_type_id, work_center_id, description,
-                                             std_setup_minutes, std_cycle_seconds, cycle_basis, parts_per_cycle, inspection_required, is_count_point, requires_tooling)
-             values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning id',
+                                             std_setup_minutes, std_cycle_seconds, std_good_output_per_hour, cycle_basis, parts_per_cycle, inspection_required, is_count_point, requires_tooling)
+             values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning id',
             [$ver->plant_id, $ver->id, $op['opSeq'], self::optionalText($op['stepKey'] ?? null), strtolower($op['processTypeId']), strtolower($op['workCenterId']),
-                self::optionalText($op['description'] ?? null), (string) ($op['stdSetupMinutes'] ?? 0), (string) $op['stdCycleSeconds'], $op['cycleBasis'],
+                self::optionalText($op['description'] ?? null), (string) ($op['stdSetupMinutes'] ?? 0),
+                isset($op['stdCycleSeconds']) ? (string) $op['stdCycleSeconds'] : null,
+                isset($op['stdGoodOutputPerHour']) ? (string) $op['stdGoodOutputPerHour'] : null, $op['cycleBasis'],
                 $op['partsPerCycle'] ?? 1, (bool) ($op['inspectionRequired'] ?? false), (bool) ($op['isCountPoint'] ?? true), (bool) ($op['requiresTooling'] ?? false)],
         )->id;
 
@@ -416,8 +458,9 @@ final class RoutingController
             throw ValidationException::withMessages(['effectiveFrom' => 'A version takes effect today or later.']);
         }
         $id = (string) $db->selectOne(
-            'insert into routing_versions (tenant_id, plant_id, routing_id, version_no, effective_from, change_reason, standard_yield)
-             values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, (select v.standard_yield from routing_versions v where v.id = ?)) returning id',
+            'insert into routing_versions (tenant_id, plant_id, routing_id, version_no, effective_from, change_reason, standard_yield, paired_item_id, pairs_per_sheet)
+             select (select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, v.standard_yield, v.paired_item_id, v.pairs_per_sheet
+               from (select 1) seed left join routing_versions v on v.id = ? returning id',
             [$plant, $routing, $no, $effectiveFrom, $reason, $copyFrom],
         )->id;
         if ($copyFrom !== null) {
@@ -433,9 +476,9 @@ final class RoutingController
         foreach ($db->select('select * from routing_operations where routing_version_id = ? order by op_seq', [$from]) as $op) {
             $new = (string) $db->selectOne(
                 'insert into routing_operations (tenant_id, plant_id, routing_version_id, op_seq, step_key, process_type_id, work_center_id, description,
-                                                 std_setup_minutes, std_cycle_seconds, cycle_basis, parts_per_cycle, inspection_required, is_count_point, requires_tooling)
+                                                 std_setup_minutes, std_cycle_seconds, std_good_output_per_hour, cycle_basis, parts_per_cycle, inspection_required, is_count_point, requires_tooling)
                  select tenant_id, plant_id, ?, op_seq, step_key, process_type_id, work_center_id, description, std_setup_minutes, std_cycle_seconds,
-                        cycle_basis, parts_per_cycle, inspection_required, is_count_point, requires_tooling
+                        std_good_output_per_hour, cycle_basis, parts_per_cycle, inspection_required, is_count_point, requires_tooling
                    from routing_operations where id = ? returning id',
                 [$to, $op->id],
             )->id;
@@ -520,10 +563,13 @@ final class RoutingController
     private function respondVersion(EoraPostgresConnection $db, string $id, int $status = 200): JsonResponse
     {
         $row = $this->rows->find($db, new RoutingVersionsQuery, $id) ?? throw new \LogicException('Written row not visible.');
+        $pair = $db->selectOne('select i.id, i.code, v.pairs_per_sheet from routing_versions v join items i on i.id = v.paired_item_id where v.id = ?', [$id]);
+        $row['pairedOutput'] = $pair === null ? null : ['itemId' => (string) $pair->id, 'itemCode' => (string) $pair->code, 'pairsPerSheet' => (int) $pair->pairs_per_sheet];
         $ops = $db->select(
             'select o.id, o.op_seq, o.step_key, o.process_type_id, pt.code as process_type_code, pt.name as process_type_name,
                     o.work_center_id, wc.code as work_center_code, o.description, o.std_setup_minutes::text as std_setup_minutes,
-                    o.std_cycle_seconds::text as std_cycle_seconds, o.cycle_basis, o.parts_per_cycle, o.inspection_required, o.is_count_point,
+                    o.std_cycle_seconds::text as std_cycle_seconds, o.std_good_output_per_hour::text as std_good_output_per_hour,
+                    o.cycle_basis, o.parts_per_cycle, o.inspection_required, o.is_count_point,
                     o.requires_tooling, (o.op_seq = max(o.op_seq) over ()) as is_final_operation
                from routing_operations o
                join process_types pt on pt.id = o.process_type_id
@@ -550,7 +596,8 @@ final class RoutingController
             'id' => $o->id, 'opSeq' => $o->op_seq, 'stepKey' => $o->step_key, 'processTypeId' => $o->process_type_id,
             'processTypeCode' => $o->process_type_code, 'processTypeName' => $o->process_type_name, 'workCenterId' => $o->work_center_id,
             'workCenterCode' => $o->work_center_code, 'description' => $o->description, 'stdSetupMinutes' => $o->std_setup_minutes,
-            'stdCycleSeconds' => $o->std_cycle_seconds, 'cycleBasis' => $o->cycle_basis, 'partsPerCycle' => $o->parts_per_cycle,
+            'stdCycleSeconds' => $o->std_cycle_seconds, 'stdGoodOutputPerHour' => $o->std_good_output_per_hour,
+            'cycleBasis' => $o->cycle_basis, 'partsPerCycle' => $o->parts_per_cycle,
             'inspectionRequired' => $o->inspection_required, 'isCountPoint' => $o->is_count_point, 'requiresTooling' => $o->requires_tooling,
             'isFinalOperation' => $o->is_final_operation,
             'machines' => ($machines[$o->id] ?? collect())->map(static fn ($m) => [

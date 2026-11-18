@@ -188,6 +188,16 @@ export const NAV_MODULES: readonly NavModule[] = [
         label: 'Production Planning',
         items: [
           {
+            id: 'daily-recovery',
+            live: true,
+            menu: ['planning.recovery.create'],
+            label: 'Daily Recovery Planner',
+            icon: ClipboardList,
+            release: 'R1',
+            permission: 'planning.recovery.view',
+            phase: 5,
+          },
+          {
             id: 'mps',
             live: true,
             menu: ['planning.mps.create', 'planning.mps.approve'],

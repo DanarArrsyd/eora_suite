@@ -23,6 +23,7 @@ const line = (status: string, qty: string, location = 'QC-IN', type = 'QC_AREA')
   itemId: ID(4),
   itemCode: 'BRK-A100',
   itemName: 'Bracket front A100',
+  itemType: 'FINISHED',
   lotId: ID(5),
   lotNo: 'L2611-0001',
   stockStatus: status,
@@ -117,6 +118,26 @@ test('a held quantity: only reject in policy; its release is asked of a second p
   await page.getByRole('alertdialog', { name: 'Ask this release' }).getByRole('button', { name: 'Ask release' }).click();
   await expect(page.getByText('Release asked; it waits for a second person (Dispositions)')).toBeVisible();
   expect(asked).toEqual([{ stockLineId: ID(1), qty: '20', reason: 'Customer accepted the deviation', qcLocationId: null }]);
+});
+
+test('QC releases a semi-finished lot to the selected materials location', async ({ page }) => {
+  const writes: unknown[] = [];
+  await mockApi(page, '/auth/me', ME([...QCI, 'master.org.view']));
+  await mockApi(page, '/query/inventory.stock?*', page1([{ ...line('PENDING_QC', '650'), itemType: 'SEMI_FINISHED' }]));
+  await mockApi(page, '/query/core.locations?*', page1([{ id: ID(52), code: 'SF-01', name: 'Blank shelf' }]));
+  await page.route('**/api/v1/quality/dispositions', (route) => {
+    writes.push(route.request().postDataJSON());
+    return route.fulfill({ json: { data: { docNo: 'QCD-P1-2026-0001', replayed: false } } });
+  });
+  await page.goto(`/quality/pending-qc?line=${ID(1)}`);
+  await page.getByRole('textbox', { name: 'Release (PCS)' }).fill('650');
+  await page.getByRole('button', { name: 'Post decision' }).click();
+  await expect(page.getByText('Choose the destination for the released semi-finished lot.')).toBeVisible();
+  await choose(page, page.getByRole('combobox', { name: 'Semi-finished destination' }), 'SF-01 · Blank shelf');
+  await page.getByRole('button', { name: 'Post decision' }).click();
+  await page.getByRole('alertdialog', { name: 'Post this decision' }).getByRole('button', { name: 'Post decision' }).click();
+  await expect(page.getByText('QCD-P1-2026-0001 posted')).toBeVisible();
+  expect(writes).toEqual([expect.objectContaining({ semiFinishedLocationId: ID(52) })]);
 });
 
 test('dispositions: the supervisor approves a release asked by the inspector', async ({ page }) => {

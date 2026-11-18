@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Planning\Http;
 
+use App\Modules\Planning\Mps\MpsCapacity;
 use App\Modules\Planning\Mrp\MrpPlanner;
 use App\Modules\Planning\Queries\MrpRunsQuery;
 use App\Platform\Access\Authorizer;
@@ -99,6 +100,7 @@ final class MrpController
         $id = $this->existing($db, 'mrp_runs', $run);
         $r = $db->selectOne('select r.id, r.plant_id, r.run_no, r.mps_version_id, r.created_at from mrp_runs r where r.id = ?', [$id]);
         $this->authorizer->authorize($db, self::RELEASE, $this->plantScope($db, (string) $r->plant_id));
+        $db->select('select pg_advisory_xact_lock(hashtextextended(?,0))', ['daily-recovery:'.$r->plant_id]);
         // the MPS stays approved while its planned orders are released (an approval of its successor waits)
         $mps = $db->selectOne('select status from mps_versions where id = ? for share', [$r->mps_version_id]);
         $latest = $db->selectOne('select id from mrp_runs where mps_version_id = ? order by created_at desc, id desc limit 1', [$r->mps_version_id]);
@@ -198,6 +200,7 @@ final class MrpController
         foreach ($db->select('select order_id, requirement_id, trim_scale(qty)::text as qty from mrp_pegs where mrp_run_id = ? order by id', [$id]) as $p) {
             $pegs[(string) $p->order_id][] = ['requirementId' => $p->requirement_id === null ? null : (string) $p->requirement_id, 'qty' => (string) $p->qty];
         }
+        $workloads = MpsCapacity::pairedWorkloads($db, $id);
         foreach ($db->select(
             "select o.id, o.mrp_item_id, o.kind, o.source, o.week_start::text as week, trim_scale(o.qty)::text as qty, o.due_date::text as due, o.start_date::text as start,
                     o.warnings::text as warnings, b.version_no as bom_version, w.id as wo_id, w.wo_no, w.status as wo_status
@@ -212,6 +215,7 @@ final class MrpController
             $items[(string) $o->mrp_item_id]['orders'][] = ['id' => (string) $o->id, 'kind' => (string) $o->kind, 'source' => (string) $o->source,
                 'weekStart' => (string) $o->week, 'qty' => (string) $o->qty, 'dueDate' => (string) $o->due, 'startDate' => (string) $o->start,
                 'bomVersionNo' => $o->bom_version === null ? null : (int) $o->bom_version, 'warnings' => self::list((string) $o->warnings), 'pegs' => $pegs[(string) $o->id] ?? [],
+                'pairedWorkload' => $workloads[(string) $o->id] ?? null,
                 'workOrder' => $o->wo_id === null ? null : ['id' => (string) $o->wo_id, 'code' => (string) $o->wo_no, 'status' => (string) $o->wo_status]];
         }
         $row['items'] = array_values($items);

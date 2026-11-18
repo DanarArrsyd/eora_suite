@@ -24,3 +24,5 @@ Format: Nygard (Context / Decision / Consequences) plus Verification. Status val
 | [0018](ADR-0018-list-export-pipeline.md) | List export pipeline: queued job, same QueryDefinition, signed short-lived link | Accepted | D-092 |
 
 Only ADR-0011 authorizes implementation, and only phased frontend work (D-033). ADR-0012..0016 are the approved backend baseline (D-045); backend code proceeds only slice by slice with explicit owner approval. Backend, schema, migrations and business-rule changes still require explicit owner approval.
+
+- [ADR-0019 — Daily Recovery and provisional QC coverage](ADR-0019-daily-recovery-planning.md) (D-134).

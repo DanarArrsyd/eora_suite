@@ -165,9 +165,11 @@ final class InventoryPostingService
             $types[(string) $row->id] = (string) $row->location_type;
         }
         $release = [];
+        $itemTypes = [];
         $itemIds = array_values(array_unique(array_map(static fn (PostingLeg $l) => $l->itemId, $command->legs)));
-        foreach ($db->select('select id, incoming_release_required from items where id = any(?::uuid[])', ['{'.implode(',', $itemIds).'}']) as $row) {
+        foreach ($db->select('select id, item_type, incoming_release_required from items where id = any(?::uuid[])', ['{'.implode(',', $itemIds).'}']) as $row) {
             $release[(string) $row->id] = (bool) $row->incoming_release_required;
+            $itemTypes[(string) $row->id] = (string) $row->item_type;
         }
         $refuse = static fn (string $why) => throw new DomainProblem(422, 'INVALID_LEGS', 'Invalid legs', $why);
         // per stock line (item and lot; a split's parent and children are one line): one status, or one place for a release
@@ -204,9 +206,11 @@ final class InventoryPostingService
                         && $type === ((($command->docType === 'MAT_ISSUE') === $out) ? 'RM_WAREHOUSE' : 'MAT_AT_PROD'))
                     || $refuse('An issue moves UNRESTRICTED material of its work order from a raw-material location to Material at Production; a return moves it back.'),
                 // doc 04 rows 5 and 8: consumption leaves Material at Production for V_CONSUMED, output comes from V_PRODUCED
-                // doc 04 row 9: out of what waits for a decision (or a rejected quantity), into the QC or NG area
-                'QC_DISPOSITION' => ($leg->woId === null && ($out ? in_array($type, ['QC_AREA', 'NG_AREA'], true) : in_array($type, ['QC_AREA', 'NG_AREA'], true)))
-                    || $refuse('A disposition moves a lot between the QC area and the NG area.'),
+                // A released semi-finished lot is received at a materials location. Other outcomes keep their QC/NG route.
+                'QC_DISPOSITION' => ($leg->woId === null && (! $out && $leg->movementCode === 'QC_RELEASE' && ($itemTypes[$leg->itemId] ?? null) === 'SEMI_FINISHED'
+                        ? $type === 'RM_WAREHOUSE' && $leg->stockStatus === 'UNRESTRICTED'
+                        : in_array($type, ['QC_AREA', 'NG_AREA'], true)))
+                    || $refuse('A disposition moves a lot between QC, NG and the materials warehouse for released semi-finished stock.'),
                 // doc 04 row 10, BR-FG-01: QC_RELEASED out of the QC area, into the FG warehouse as UNRESTRICTED
                 'FG_RECEIPT' => ($leg->woId === null && ($out ? $type === 'QC_AREA' && $leg->stockStatus === 'QC_RELEASED' : $type === 'FG_WAREHOUSE' && $leg->stockStatus === 'UNRESTRICTED'))
                     || $refuse('An FG receipt moves QC-released stock from the QC area into the FG warehouse as unrestricted stock.'),

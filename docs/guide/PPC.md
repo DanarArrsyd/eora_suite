@@ -41,6 +41,7 @@ Item, customer, routing, BOM, dan master lain diubah oleh **Supervisor** (D-128)
 2. Quality → Pending QC Queue → lihat barang yang masih di QC sebelum menambah produksi.
 3. Master Data → Planning Parameters → lead time dan safety stock per item.
 4. PPIC → Master Production Schedule → **Calculate MPS** → periksa planned order (boleh **Adjust** dengan alasan) → **Submit for approval**.
+   - Di **Capacity load**, operasi dengan **Standard Good Output** memakai target good dibagi rate per jam, lalu ditambah setup. Contoh 1.200 good pcs pada 600 pcs/jam dengan setup 15 menit membebani work center selama 2,25 jam.
 5. Setelah MPS Approved: **Run MRP** → PPIC → MRP Results → lihat kekurangan bahan → centang planned order → **Release to WO**.
 6. PPIC → Work Orders → buka WO Draft → periksa → **Ask for release**. Untuk WO di luar plan: **New work order** dengan alasan.
 
@@ -49,3 +50,8 @@ Item, customer, routing, BOM, dan master lain diubah oleh **Supervisor** (D-128)
 - MPS dan rilis WO disetujui CSA.
 
 Kembali ke [Panduan Pengguna](README.md).
+
+## Daily Recovery Planner (D-134)
+Open **PPIC → Production Planning → Daily Recovery Planner** and select the target production/delivery date. Review outstanding delivery alongside warehouse FG, Before Check, QC Accepted awaiting warehouse receipt and timely remaining WO output. Click the part to see the lots, source WOs and today's posted shift output. Shared stock is allocated across customers before filtering; the detail shows the portion covering this row.
+
+Enter the minimum SPK (default 500 PCS), whole material batch, additional buffer and Shift I–III quantities. Record an adjustment reason and save. Create **SPK Draft** from the saved plan, then continue the existing WO submission/release process. Changes in stock, QC, demand or planning require review and re-save before creation. A retry opens the same WO; additional planning after a linked WO makes a new revision preserving the old one. Before Check covers production provisionally and cannot be shipped. Missing approved BOM or conversion leaves material capacity unavailable.

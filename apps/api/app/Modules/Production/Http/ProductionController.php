@@ -175,12 +175,16 @@ final class ProductionController
             'goodQty' => ['nullable', 'string', 'regex:'.ProductionController::MEASURED],
             'ngReworkQty' => ['nullable', 'string', 'regex:'.ProductionController::MEASURED],
             'ngRejectQty' => ['nullable', 'string', 'regex:'.ProductionController::MEASURED],
+            'pairedGoodQty' => ['nullable', 'string', 'regex:'.ProductionController::MEASURED],
+            'pairedNgReworkQty' => ['nullable', 'string', 'regex:'.ProductionController::MEASURED],
+            'pairedNgRejectQty' => ['nullable', 'string', 'regex:'.ProductionController::MEASURED],
             'scrap' => ['nullable', 'array', 'max:10'],
             'scrap.*.itemId' => ['required', 'uuid'],
             'scrap.*.qty' => ['required', 'string', 'regex:'.ReceiptController::QTY],
             'scrap.*.reasonCode' => ['required', Rule::in(ProductionController::SCRAP_REASONS)],
             'scrap.*.note' => ['nullable', 'string', 'max:500'],
             'qcLocationId' => ['nullable', 'uuid'],
+            'semiFinishedLocationId' => ['nullable', 'uuid'],
             'ngLocationId' => ['nullable', 'uuid'],
             'scrapLocationId' => ['nullable', 'uuid'],
             'correctsPostingId' => ['nullable', 'uuid'],
@@ -192,11 +196,11 @@ final class ProductionController
         }
         $db = $this->db();
         $r = $db->selectOne(
-            "select r.id, r.plant_id, r.status, r.work_order_id, r.work_center_id, w.wo_no, w.status as wo_status, w.item_id, i.lot_controlled, i.inspection_required,
+            "select r.id, r.plant_id, r.status, r.work_order_id, r.work_center_id, w.wo_no, w.status as wo_status, w.item_id, v.paired_item_id, i.item_type, i.lot_controlled, i.inspection_required, i.base_uom_id,
                     u.code as uom, u.decimals, p.company_id,
                     (select l.id from locations l where l.plant_id = r.plant_id and l.location_type = 'MAT_AT_PROD' and l.work_center_id = r.work_center_id) as map_id
-               from production_runs r join work_orders w on w.id = r.work_order_id join items i on i.id = w.item_id join uoms u on u.id = i.base_uom_id
-               join plants p on p.id = r.plant_id where r.id = ?",
+               from production_runs r join work_orders w on w.id = r.work_order_id join routing_versions v on v.id = w.routing_version_id
+               join items i on i.id = w.item_id join uoms u on u.id = i.base_uom_id join plants p on p.id = r.plant_id where r.id = ?",
             [strtolower($data['runId'])],
         ) ?? throw ValidationException::withMessages(['runId' => 'Unknown run.']);
         $this->authorizer->authorize($db, self::POST, Scope::plant((string) $r->plant_id, (string) $r->company_id));
@@ -225,20 +229,6 @@ final class ProductionController
         $consumed = $virtual('V_CONSUMED');
         $produced = $virtual('V_PRODUCED');
 
-        // output in pieces of the work order's item, in its unit
-        $unit = (object) ['uom' => $r->uom, 'decimals' => $r->decimals];
-        $outputs = [];
-        foreach (['goodQty' => 'OUTPUT_GOOD', 'ngReworkQty' => 'OUTPUT_NG_REWORK', 'ngRejectQty' => 'OUTPUT_NG_REJECT'] as $field => $code) {
-            $qty = $data[$field] ?? null;
-            if ($qty !== null && bccomp(self::num($qty), '0', 6) > 0) {
-                $this->precision($qty, $unit, $field);
-                $outputs[$code] = $qty;
-            }
-        }
-        $scrap = array_values($data['scrap'] ?? []);
-        if ($outputs === [] && $scrap === []) {
-            throw ValidationException::withMessages(['goodQty' => 'Post what was made: good, NG or scrap.']);
-        }
         $place = function (?string $id, string $type, string $field) use ($db, $plant): string {
             $row = $id !== null
                 ? $db->selectOne("select id from locations where id = ? and plant_id = ? and location_type = ? and status = 'ACTIVE' for share", [strtolower($id), $plant, $type])
@@ -246,9 +236,74 @@ final class ProductionController
 
             return (string) ($row ?? throw ValidationException::withMessages([$field => "Choose an active {$type} location of this plant."]))->id;
         };
-        $qcArea = isset($outputs['OUTPUT_GOOD']) ? $place($data['qcLocationId'] ?? null, 'QC_AREA', 'qcLocationId') : null;
-        $ngArea = isset($outputs['OUTPUT_NG_REWORK']) || isset($outputs['OUTPUT_NG_REJECT']) ? $place($data['ngLocationId'] ?? null, 'NG_AREA', 'ngLocationId') : null;
+        $items = ['' => $r];
+        if ($r->paired_item_id !== null) {
+            $items['paired'] = $db->selectOne(
+                'select i.id as item_id, i.item_type, i.lot_controlled, i.inspection_required, i.base_uom_id, u.decimals, u.code as uom
+                   from items i join uoms u on u.id = i.base_uom_id where i.id = ?',
+                [$r->paired_item_id],
+            );
+        } elseif (isset($data['pairedGoodQty']) || isset($data['pairedNgReworkQty']) || isset($data['pairedNgRejectQty'])) {
+            throw ValidationException::withMessages(['pairedGoodQty' => 'This work order has only one output item.']);
+        }
+        $scrap = array_values($data['scrap'] ?? []);
         $scrapYard = $scrap !== [] ? $place($data['scrapLocationId'] ?? null, 'SCRAP_YARD', 'scrapLocationId') : null;
+        $legs = [];
+        $lots = [];
+        $pendingQc = false;
+        foreach ($items as $prefix => $item) {
+            $outputs = [];
+            foreach (['goodQty' => 'OUTPUT_GOOD', 'ngReworkQty' => 'OUTPUT_NG_REWORK', 'ngRejectQty' => 'OUTPUT_NG_REJECT'] as $field => $code) {
+                $field = $prefix === '' ? $field : $prefix.ucfirst($field);
+                $qty = $data[$field] ?? null;
+                if ($qty !== null && bccomp(self::num($qty), '0', 6) > 0) {
+                    $this->precision($qty, $item, $field);
+                    $outputs[$code] = $qty;
+                }
+            }
+            if ($outputs === []) {
+                continue;
+            }
+            $semiFinished = $item->item_type === 'SEMI_FINISHED';
+            if ($semiFinished && ! (bool) $item->lot_controlled) {
+                throw ValidationException::withMessages(['runId' => 'Semi-finished output requires a lot-controlled item.']);
+            }
+            $outputLot = null;
+            if ((bool) $item->lot_controlled) {
+                $day = $this->calendar->resolve($db, $plant, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
+                $lotNo = $this->lots->next($db, (string) $item->item_id, $day);
+                $outputLot = (string) $db->selectOne(
+                    "insert into lots (tenant_id, item_id, lot_no, origin) values ((select c.tenant from ctx_api.context() c), ?, ?, 'OUTPUT') returning id",
+                    [$item->item_id, $lotNo],
+                )->id;
+                $total = array_reduce(array_values($outputs), static fn (string $sum, string $q) => bcadd($sum, self::num($q), 6), '0');
+                $lots[] = ['id' => $outputLot, 'qty' => $this->plain($total), 'uomId' => (string) $item->base_uom_id];
+            }
+            foreach ($outputs as $code => $qty) {
+                if ($code === 'OUTPUT_GOOD') {
+                    $inspect = (bool) $item->inspection_required;
+                    $pendingQc = $pendingQc || $inspect;
+                    if ($semiFinished && ! $inspect) {
+                        $destination = $data['semiFinishedLocationId'] ?? throw ValidationException::withMessages([
+                            'semiFinishedLocationId' => 'Choose where the semi-finished lot is received.',
+                        ]);
+                        $status = 'UNRESTRICTED';
+                        $to = $place($destination, 'RM_WAREHOUSE', 'semiFinishedLocationId');
+                    } else {
+                        $status = $inspect ? 'PENDING_QC' : 'QC_RELEASED';
+                        $to = $place($data['qcLocationId'] ?? null, 'QC_AREA', 'qcLocationId');
+                    }
+                } else {
+                    $status = $code === 'OUTPUT_NG_REWORK' ? 'REWORK' : 'REJECTED';
+                    $to = $place($data['ngLocationId'] ?? null, 'NG_AREA', 'ngLocationId');
+                }
+                $legs[] = new PostingLeg($code, $produced, (string) $item->item_id, $outputLot, $status, '-'.$qty);
+                $legs[] = new PostingLeg($code, $to, (string) $item->item_id, $outputLot, $status, $qty);
+            }
+        }
+        if ($legs === [] && $scrap === []) {
+            throw ValidationException::withMessages(['goodQty' => 'Post what was made: good, NG or scrap.']);
+        }
 
         // ADR-0003: consumption per input lot of the WO's material at the run's work center, measured
         $lines = [];
@@ -262,18 +317,7 @@ final class ProductionController
             $lines[$k] = ['i' => $i, 'item' => $item, 'lot' => $lot] + $c;
         }
         ksort($lines);
-        $legs = [];
         $genealogy = [];
-        $totalPcs = array_reduce(array_values($outputs), static fn (string $sum, string $q) => bcadd($sum, self::num($q), 6), '0');
-        $outputLot = null;
-        if ($outputs !== [] && (bool) $r->lot_controlled) {
-            $day = $this->calendar->resolve($db, $plant, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
-            $lotNo = $this->lots->next($db, (string) $r->item_id, $day);
-            $outputLot = (string) $db->selectOne(
-                "insert into lots (tenant_id, item_id, lot_no, origin) values ((select c.tenant from ctx_api.context() c), ?, ?, 'OUTPUT') returning id",
-                [$r->item_id, $lotNo],
-            )->id;
-        }
         foreach ($lines as $line) {
             $i = $line['i'];
             $mu = $db->selectOne('select i.base_uom_id, u.code as uom, u.decimals from items i join uoms u on u.id = i.base_uom_id where i.id = ?', [$line['item']])
@@ -303,20 +347,11 @@ final class ProductionController
             $legs[] = new PostingLeg('CONSUME', (string) $r->map_id, $line['item'], $line['lot'], 'UNRESTRICTED', '-'.$this->plain($used), woId: (string) $r->work_order_id,
                 measurementMethod: $line['method'], measuredQty: $this->plain($measured), measurementEvidence: $evidence);
             $legs[] = new PostingLeg('CONSUME', $consumed, $line['item'], $line['lot'], 'UNRESTRICTED', $this->plain($used));
-            if ($line['lot'] !== null && $outputLot !== null) {
-                $genealogy[] = new GenealogyLink($line['lot'], $outputLot, $this->plain($used), (string) $mu->base_uom_id, $this->plain($totalPcs), (string) $db->selectOne('select base_uom_id from items where id = ?', [$r->item_id])->base_uom_id);
+            if ($line['lot'] !== null) {
+                foreach ($lots as $lot) {
+                    $genealogy[] = new GenealogyLink($line['lot'], $lot['id'], $this->plain($used), (string) $mu->base_uom_id, $lot['qty'], $lot['uomId']);
+                }
             }
-        }
-
-        $status = [
-            'OUTPUT_GOOD' => [(bool) $r->inspection_required ? 'PENDING_QC' : 'QC_RELEASED', $qcArea],
-            'OUTPUT_NG_REWORK' => ['REWORK', $ngArea],
-            'OUTPUT_NG_REJECT' => ['REJECTED', $ngArea],
-        ];
-        foreach ($outputs as $code => $qty) {
-            [$st, $to] = $status[$code];
-            $legs[] = new PostingLeg($code, $produced, (string) $r->item_id, $outputLot, $st, '-'.$qty);
-            $legs[] = new PostingLeg($code, (string) $to, (string) $r->item_id, $outputLot, $st, $qty);
         }
         foreach ($scrap as $i => $s) {
             $item = $db->selectOne("select i.id, i.lot_controlled, u.code as uom, u.decimals from items i join uoms u on u.id = i.base_uom_id where i.id = ? and i.item_type = 'SCRAP'", [strtolower($s['itemId'])])
@@ -339,7 +374,7 @@ final class ProductionController
         $result = $this->postings->post($db, new PostingCommand('PRODUCTION_POSTING', $plant, $key, $legs, $genealogy, note: self::optionalText($data['note'] ?? null),
             sourceType: 'production_run', sourceId: (string) $r->id, requestHash: $hash, correctsDocumentId: $corrects));
         $this->outbox->publish($db, 'production.output_posted', 'inventory_document', $result->documentId,
-            ['plantId' => $plant, 'runId' => $r->id, 'workOrderId' => $r->work_order_id, 'pendingQc' => isset($outputs['OUTPUT_GOOD']) && (bool) $r->inspection_required]);
+            ['plantId' => $plant, 'runId' => $r->id, 'workOrderId' => $r->work_order_id, 'pendingQc' => $pendingQc]);
 
         return $this->posted($db, $result);
     }
@@ -349,14 +384,17 @@ final class ProductionController
 
     private function posted(EoraPostgresConnection $db, PostingResult $result): JsonResponse
     {
-        $lot = $db->selectOne(
-            "select l.id, l.lot_no from inventory_movements m join lots l on l.id = m.lot_id
-              where m.document_id = ? and m.movement_code in ('OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT') limit 1",
+        $lots = $db->select(
+            "select distinct l.id, l.lot_no, i.id as item_id, i.code as item_code from inventory_movements m
+               join lots l on l.id = m.lot_id join items i on i.id = l.item_id
+              where m.document_id = ? and m.movement_code in ('OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT') order by item_code, id",
             [$result->documentId],
         );
+        $outputLots = array_map(static fn (stdClass $lot) => ['id' => $lot->id, 'lotNo' => $lot->lot_no, 'itemId' => $lot->item_id, 'itemCode' => $lot->item_code], $lots);
+        $lot = $lots[0] ?? null;
 
-        // the posting answer of doc 24 §5.3: its lot is the output lot (null when only scrap was posted)
-        return response()->json(['data' => $result->toArray() + ['replayed' => $result->replayed, 'lotId' => $lot?->id, 'lotNo' => $lot?->lot_no]],
+        return response()->json(['data' => $result->toArray() + ['replayed' => $result->replayed,
+            'lotId' => count($lots) === 1 ? $lot?->id : null, 'lotNo' => count($lots) === 1 ? $lot?->lot_no : null, 'outputLots' => $outputLots]],
             $result->replayed ? 200 : 201);
     }
 
@@ -411,6 +449,12 @@ final class ProductionController
               where r.id = ? group by m.item_id, i.code, i.name, m.lot_id, l.lot_no, u.code, u.decimals having sum(m.qty_signed) <> 0 order by i.code, l.lot_no",
             [$id],
         ));
+        $pair = $db->selectOne(
+            'select i.id, i.code, i.name, i.inspection_required from production_runs r join work_orders w on w.id = r.work_order_id
+               join routing_versions v on v.id = w.routing_version_id join items i on i.id = v.paired_item_id where r.id = ?',
+            [$id],
+        );
+        $row['pairedOutput'] = $pair === null ? null : ['itemId' => $pair->id, 'itemCode' => $pair->code, 'itemName' => $pair->name, 'inspectionRequired' => (bool) $pair->inspection_required];
         $row['plantToday'] = $this->calendar->resolve($db, (string) $row['plantId'], new DateTimeImmutable)->productionDate;
 
         return Concurrency::withVersion(response()->json(['data' => $row], $status), (int) $row['version']);

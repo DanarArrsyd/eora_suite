@@ -16,3 +16,6 @@ Planning, delivery promise and Control Tower risk must not treat projected or un
 
 ## Verification
 Doc 23 §7 (#51–#61), doc 14 #63–#64.
+
+## Amendment — D-134 (2026-11-18)
+Owner-approved Daily Recovery changes new production-planning calculations: Before Check / PENDING_QC is distinct provisional coverage. Earlier exclusion clauses in this ADR apply to historical calculations, not new plans. Shipping eligibility and confirmed delivery promises still require the established released warehouse stock rules. No quality acceptance rate is assumed. See ADR-0019 and doc 36; old snapshots remain immutable.

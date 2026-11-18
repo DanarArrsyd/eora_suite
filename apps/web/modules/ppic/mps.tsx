@@ -37,7 +37,7 @@ import { when } from '@/modules/master/version-ui';
 /*
  * M5 step 3 (doc 34 §1.3, D-123, D-046, BR-PLN-04/05/07): PPIC → Master Production Schedule on the live API. A version
  * per plant over 12 ISO weeks: opening FG stock used once, firm and net forecast demand on their days, projected supply
- * dated, Pending QC shown but never netted; lot-for-lot planned orders due on the earliest uncovered day. The planner
+ * dated, Before Check netted as provisional supply (D-134); lot-for-lot planned orders due on the earliest uncovered day. The planner
  * calculates, adjusts with a reason and submits; a second person approves while the data is unchanged.
  */
 
@@ -82,7 +82,7 @@ type Bucket = {
   closing: string;
 };
 type Demand = { id: string; kind: 'FIRM' | 'FORECAST'; reference: string; customerCode: string; dueDate: string; originalDate: string; qty: string };
-type Supply = { kind: 'QC_RELEASED' | 'WORK_ORDER'; reference: string | null; date: string; qty: string };
+type Supply = { kind: 'QC_RELEASED' | 'WORK_ORDER' | 'PENDING_QC'; reference: string | null; date: string; qty: string };
 type PlannedOrder = {
   id: string;
   weekStart: string;
@@ -125,7 +125,22 @@ type Capacity = {
   status: 'OK' | 'OVERLOAD' | 'NOT_CONFIGURED';
   warnings: string[];
 };
-type Mps = MpsRow & { inputsChanged: boolean | null; items: MpsItem[]; capacity: Capacity[] };
+type PairedLoad = {
+  itemCode: string;
+  pairedItemCode: string;
+  sheets: string;
+  qtyPerSide: string;
+  startDate: string;
+  workCenterCode: string;
+  runHours: string;
+  setupMinutes: string;
+};
+type Mps = MpsRow & {
+  inputsChanged: boolean | null;
+  items: MpsItem[];
+  capacity: Capacity[];
+  pairedBlanking?: { runCode: string; workloads: PairedLoad[] } | null;
+};
 
 const STATUS: Record<Status, { label: string; tone: 'info' | 'success' | 'neutral' | 'warning' }> = {
   DRAFT: { label: 'Draft', tone: 'info' },
@@ -458,9 +473,20 @@ function MpsPage({ id }: { id: string }) {
               </table>
             </div>
           )}
-          <p className="mt-3 mb-0 text-[13px] text-ink-2">
-            A warning only: the MPS never moves an order. Load = setup + standard cycle per operation of the primary routing, in the week the order starts.
-          </p>
+          <p className="mt-3 mb-0 text-[13px] text-ink-2">Load uses setup and the operation’s capacity standard, in the week the order starts.</p>
+          {m.pairedBlanking?.workloads.length ? (
+            <div className="mt-4 border-t border-line pt-3">
+              <h3 className="m-0 font-semibold">Paired blanking from {m.pairedBlanking.runCode}</h3>
+              <ul className="my-2 space-y-1 text-[13.5px]">
+                {m.pairedBlanking.workloads.map((w, index) => (
+                  <li key={index}>
+                    {w.itemCode} + {w.pairedItemCode} · {w.startDate} · {w.workCenterCode} · {w.sheets} sheets · {w.runHours} h running + {w.setupMinutes} min
+                    setup
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -554,7 +580,7 @@ function ItemCard({ item, canAdjust, onAdjust }: { item: MpsItem; canAdjust: boo
             <dd className="m-0 tabular-nums">{item.safetyStock ?? <Badge tone="neutral">Not configured</Badge>}</dd>
           </div>
           <div>
-            <dt className="text-ink-2">Pending QC (not netted)</dt>
+            <dt className="text-ink-2">Before Check (provisional)</dt>
             <dd className="m-0 tabular-nums">{item.pendingQc}</dd>
           </div>
           <div>
@@ -705,7 +731,7 @@ function ItemCard({ item, canAdjust, onAdjust }: { item: MpsItem; canAdjust: boo
                   })),
                   ...item.supplies.map((s) => ({
                     day: s.date,
-                    what: s.kind === 'WORK_ORDER' ? 'Work order remaining' : 'QC released, to receive',
+                    what: s.kind === 'WORK_ORDER' ? 'Work order remaining' : s.kind === 'PENDING_QC' ? 'Before Check, awaiting QC' : 'QC released, to receive',
                     ref: s.reference ?? '—',
                     qty: `+${s.qty}`,
                   })),

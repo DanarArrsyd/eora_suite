@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>Material Monitoring PPIC · EORA</title>
+    <link rel="stylesheet" href="assets/eora-tokens.css" />
+    <link rel="stylesheet" href="assets/eora-ui.css" />
+    <link rel="stylesheet" href="material-monitoring/monitoring.css" />
+  </head>
+  <body
+    data-module="ppic"
+    data-item="material-monitoring"
+    data-crumbs="PPIC / Planning|Material Control|Material Monitoring"
+    data-proto="<b>Design preview · Data simulasi</b> · Kepemilikan material, hasil produksi, dan QC. Perubahan contoh hanya berlaku di halaman ini."
+  >
+    <main id="page" class="page monitoring">
+      <header class="page-header">
+        <div>
+          <h1 class="page-title">Material Monitoring</h1>
+          <p class="page-desc">Telusuri pemakaian material dan hasilnya sampai ke customer, WO, dan lot.</p>
+        </div>
+        <button class="btn btn-primary" id="simulate" type="button"><i data-lucide="plus" class="icon" aria-hidden="true"></i>Simulasi input</button>
+      </header>
+      <div class="review-layout" aria-label="Pilihan desain">
+        <span>Review tampilan</span>
+        <div class="switch" role="group" aria-label="Arah desain">
+          <button type="button" data-layout="table" aria-pressed="true">Tabel PPIC</button>
+          <button type="button" data-layout="owner" aria-pressed="false">Per pemilik</button>
+          <button type="button" data-layout="lot" aria-pressed="false">Riwayat lot</button>
+        </div>
+        <button type="button" class="btn-link" id="resetDemo">Reset simulasi</button>
+      </div>
+      <section class="card filters" aria-label="Filter laporan">
+        <form id="filters">
+          <div class="filter-field">
+            <span id="period-label">Periode</span>
+            <div class="picker" data-picker="period"></div>
+          </div>
+          <div class="filter-field">
+            <span id="customer-label">Customer tujuan</span>
+            <div class="picker" data-picker="customer"></div>
+          </div>
+          <div class="filter-field">
+            <span id="owner-label">Pemilik material</span>
+            <div class="picker" data-picker="owner"></div>
+          </div>
+          <label class="filter-field search-field"
+            >Part, WO, atau lot<input class="input" type="search" id="search" placeholder="Cari part, nomor WO, atau lot…"
+          /></label>
+          <button type="reset" class="btn">Reset filter</button>
+        </form>
+      </section>
+      <div id="feedback" role="status" aria-live="polite"></div>
+      <section class="metric-strip" aria-label="Ringkasan sesuai filter" id="metrics"></section>
+      <section class="card report-card" aria-labelledby="report-title">
+        <div class="report-head">
+          <div>
+            <h2 id="report-title">Hasil per part</h2>
+            <p id="report-subtitle">November 2026 · Qty material mengikuti satuan asal. Hasil dalam pcs.</p>
+          </div>
+          <div class="report-tools">
+            <span id="count" aria-live="polite"></span><button type="button" class="btn" id="density" aria-pressed="false">Compact</button
+            ><button type="button" class="btn" id="printReport"><i data-lucide="printer" class="icon" aria-hidden="true"></i>Cetak</button>
+          </div>
+        </div>
+        <div class="view-switch" role="group" aria-label="Tampilan data">
+          <button type="button" data-view="results" aria-pressed="true">Hasil produksi</button
+          ><button type="button" data-view="stock" aria-pressed="false">Penerimaan & saldo RM</button
+          ><button type="button" data-view="readiness" aria-pressed="false">Kesiapan material WO</button>
+        </div>
+        <div id="report-body"></div>
+        <div class="report-foot" id="report-foot"></div>
+      </section>
+      <aside class="definition">
+        <i data-lucide="info" class="icon" aria-hidden="true"></i>
+        <p>
+          <b>Miss</b> adalah selisih hasil terhadap konversi dari material yang terpakai, masih provisional. <b>Good</b> adalah hasil tercatat yang belum
+          berstatus NG. Status Pending QC, QC Accepted, dan FG diterima tersedia pada detail lot.
+        </p>
+      </aside>
+    </main>
+    <dialog id="detail" class="detail-sheet" aria-labelledby="detail-title">
+      <div class="sheet-top">
+        <div>
+          <p class="eyebrow" id="detail-kicker">Detail material</p>
+          <h2 id="detail-title"></h2>
+        </div>
+        <button class="icon-btn" type="button" data-close="detail" aria-label="Tutup detail"><i data-lucide="x" class="icon" aria-hidden="true"></i></button>
+      </div>
+      <div class="sheet-body" id="detail-body"></div>
+    </dialog>
+    <dialog id="input-dialog" class="input-dialog" aria-labelledby="input-title">
+      <form id="input-form">
+        <div class="sheet-top">
+          <div>
+            <p class="eyebrow">Data simulasi</p>
+            <h2 id="input-title">Coba alur pencatatan</h2>
+          </div>
+          <button class="icon-btn" type="button" data-close="input-dialog" aria-label="Tutup simulasi">
+            <i data-lucide="x" class="icon" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="sheet-body">
+          <div class="input-types" role="group" aria-label="Jenis transaksi">
+            <button type="button" data-action="receipt" aria-pressed="true">Penerimaan RM</button
+            ><button type="button" data-action="issue" aria-pressed="false">Issue RM</button
+            ><button type="button" data-action="production" aria-pressed="false">Hasil produksi</button
+            ><button type="button" data-action="quality" aria-pressed="false">Final QC</button>
+          </div>
+          <div id="input-fields"></div>
+          <p id="input-error" role="alert" class="error-text"></p>
+        </div>
+        <footer class="sheet-bottom">
+          <button type="button" class="btn" data-close="input-dialog">Batal</button><button type="submit" class="btn btn-primary">Simpan simulasi</button>
+        </footer>
+      </form>
+    </dialog>
+    <nav class="mobile-bottom" aria-label="Navigasi PWA">
+      <button type="button" data-view="results"><i data-lucide="table-2" aria-hidden="true" class="icon"></i>Monitoring</button
+      ><button type="button" data-view="stock"><i data-lucide="boxes" aria-hidden="true" class="icon"></i>Material</button
+      ><button type="button" data-view="readiness"><i data-lucide="clipboard-check" aria-hidden="true" class="icon"></i>Kesiapan WO</button
+      ><button type="button" id="mobileInput"><i data-lucide="plus" aria-hidden="true" class="icon"></i>Simulasi</button>
+    </nav>
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script src="assets/eora-nav.config.js"></script>
+    <script src="assets/eora-shell.js"></script>
+    <script src="material-monitoring/monitoring.js"></script>
+  </body>
+</html>

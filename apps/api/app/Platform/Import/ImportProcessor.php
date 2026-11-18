@@ -91,7 +91,8 @@ final class ImportProcessor
 
     private function stage(TenantContext $context, ImportLease $lease, stdClass $job, ImportTemplate $template, string $source): void
     {
-        $headers = array_map(static fn (ImportColumn $c) => $c->header, $template->columns());
+        $columns = $template->columns();
+        $headers = array_map(static fn (ImportColumn $c) => $c->header, $columns);
         try {
             $rows = XlsxFile::rows($source);
             $first = $rows->valid() ? $rows->current() : null;
@@ -101,8 +102,10 @@ final class ImportProcessor
             return;
         }
         $found = $first === null ? [] : $first[1];
-        $missing = array_values(array_diff(array_map('strtolower', $headers), array_map('strtolower', $found)));
-        $extra = array_values(array_filter(array_diff(array_map('strtolower', $found), array_map('strtolower', $headers)), static fn (string $h) => $h !== ''));
+        $requiredHeaders = array_map(static fn (ImportColumn $c) => strtolower($c->header), array_filter($columns, static fn (ImportColumn $c) => ! $c->headerOptional));
+        $found = array_map('strtolower', $found);
+        $missing = array_values(array_diff($requiredHeaders, $found));
+        $extra = array_values(array_filter(array_diff($found, array_map('strtolower', $headers)), static fn (string $h) => $h !== ''));
         if ($missing !== [] || $extra !== []) {
             $this->fail($context, $lease, 'HEADER_MISMATCH', trim(
                 ($missing !== [] ? 'Missing columns: '.implode(', ', $missing).'. ' : '').
@@ -115,7 +118,7 @@ final class ImportProcessor
         // column position of each template header in this file (order may differ)
         $position = [];
         foreach ($headers as $header) {
-            $position[$header] = (int) array_search(strtolower($header), array_map('strtolower', $found), true);
+            $position[$header] = array_search(strtolower($header), $found, true);
         }
         $rows->next();
 
@@ -137,7 +140,7 @@ final class ImportProcessor
                 [$rowNo, $values] = $rows->current();
                 $row = [];
                 foreach ($position as $header => $at) {
-                    $row[$header] = $values[$at] ?? '';
+                    $row[$header] = $at === false ? '' : ($values[$at] ?? '');
                 }
                 $batch[] = [$rowNo, $row];
                 if (count($batch) >= self::CHUNK) {

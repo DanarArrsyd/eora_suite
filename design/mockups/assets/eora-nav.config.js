@@ -69,6 +69,7 @@ window.EORA_NAV = {
         { id: 'capacity', label: 'Capacity Planning', icon: 'gauge', release: 'R2' },
       ]},
       { label: 'Material Control', items: [
+        { id: 'material-monitoring', label: 'Material Monitoring', icon: 'table-2', release: 'R1', href: '05-material-monitoring.html' },
         { id: 'rm-availability', label: 'Raw Material Availability', icon: 'boxes', release: 'R1', href: '04-raw-material-list.html' },
         { id: 'conversion', label: 'Coil / Sheet Conversion', icon: 'calculator', release: 'R1' },
         { id: 'shortage', label: 'Material Shortage', icon: 'triangle-alert', release: 'R1' },

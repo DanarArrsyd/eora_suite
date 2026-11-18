@@ -111,3 +111,47 @@ Berlaku di setiap dokumen yang menunggu orang kedua: routing, BOM, map, net weig
 | 6 | Ulangi 1 lalu `csa` → **Return** dengan alasan. | `ppc` menerima **Returned: WO-…** berisi alasannya. | |
 | 7 | Di tenant tanpa penyetuju (role CSA tidak dipegang siapa pun di plant itu), ajukan rilis WO. | Kotak kuning **No one can approve this yet**: minta admin memberi role penyetuju. | |
 
+## 7. Kapasitas MPS dari good pcs per jam (D-130)
+
+| # | Langkah | Yang diharapkan | Hasil |
+|---|---|---|---|
+| 1 | Login `sup` → Master Data → Routings → buat versi baru untuk item dengan satuan dasar PCS. Edit operasi. Pilih **Standard good output**, isi **600** dan setup **15** menit, lalu simpan. | Operasi menampilkan **600 good pcs/h**. Nol ditolak. |
+| 2 | Submit versi baru. Buat atau hitung ulang MPS dengan planned order yang tanggal mulainya berada pada tanggal berlaku versi tersebut. | Selama versi baru menunggu persetujuan, MPS memakai versi routing yang sedang berlaku. |
+| 3 | Login `csa` → approve versi. Login `ppc` → hitung ulang MPS. Uji planned order 1.200 PCS dan periksa kontribusi operasi itu ke **Capacity load**. | Beban operasi **2,25 jam**, termasuk 15 menit setup. Yield routing dan parts per cycle tidak diterapkan lagi. |
+| 4 | Unduh template Routings. Upload satu operasi dengan **Standard Good Output (pcs/h)** = 600 dan **Cycle seconds** kosong. | Validasi lulus dan commit membuat operasi di versi Draft. Template lama yang hanya memakai Cycle seconds juga bisa divalidasi. |
+
+## 8. WO berantai Semi-Finished (D-131)
+
+1. Siapkan item blank lot-controlled, BOM blank yang memakai bahan baku, dan BOM RH/LH yang memakai item blank yang sama.
+2. Buka run pada WO blanking dan post konsumsi bahan terukur serta 650 good blank. Untuk item tanpa inspeksi, pilih lokasi material penerima. Untuk item dengan inspeksi, cek status Pending QC dan lakukan release dari akun QC yang berbeda.
+3. Issue 350 dari lot baru ke WO Forming RH, lalu post konsumsi dari lot itu. Pastikan saldo lokasi material tersisa 300 PCS dan WO LH tidak bisa mengambil 301 PCS dari lot tersebut.
+4. Dari lot hasil Forming, buka Backward Trace. Expected: hasil Forming → lot blanking → lot bahan baku.
+
+## 9. Plate Grip RH/LH dari satu WO blanking (D-132)
+
+1. Supervisor menyiapkan dua item blank lot-controlled dalam PCS, satu BOM blanking yang memakai sheet, dan satu operasi blanking pada routing utama. Isi **Second output**, **18** pcs per sisi per sheet, dan **550** good PCS per jam gabungan. CSA menyetujui.
+2. Jalankan MRP dengan kebutuhan bersih 300 RH dan 350 LH pada minggu yang sama. Harus ada satu planned WO blanking, 20 sheet, 360 PCS standar per sisi, dan 1,309 jam jalan ditambah satu setup. Cek beban blanking di MPS setelah MRP selesai.
+3. Rilis WO blanking, issue 20 sheet, dan post satu kali dengan hasil aktual 350 RH good, 340 LH good, dan 10 LH reject. Ledger harus mengurangi 20 sheet sekali dan mencatat dua lot output.
+4. Issue 340 good LH ke WO Bending LH. Coba issue lot RH ke WO LH dan pastikan aplikasi menolak. Post hasil Bending dan telusuri kembali ke lot LH hasil blanking dan lot sheet.
+
+## 10. Review desain Material Monitoring dan kepemilikan (D-133)
+
+Status desain interaktif dengan data simulasi. Buka `design/mockups/05-material-monitoring.html` melalui server lokal. Seluruh input pada preview hanya mengubah data sementara di halaman. Lihat doc 35 untuk audit dan usulan kontrak implementasi.
+
+1. Cek urutan kolom Customer, Part Name, Part No., Spec Material, IN RM, OUT ke Produksi, Terpakai, Good, NG, Miss. Bandingkan pilihan Tabel PPIC, Per pemilik, dan Riwayat lot pada desktop dan ponsel.
+2. Klik part Bracket Inner. Cek dua WO, lot hasil, lot RM termasuk penerimaan Oktober, sisa material, breakdown Trial/Proses/Final QC, dan status Pending QC/QC Accepted/FG diterima. IN RM membuka lot sumber agar qty penerimaan bersama dihitung sekali.
+3. Buka Penerimaan & saldo RM dan filter customer SUP. Material yang layak ditampilkan berasal dari perusahaan dan SUP. Stok aset DPM/SJM/AMI tetap terpisah. Pilih Semua customer untuk mengembalikan daftar lengkap.
+4. Buka Kesiapan material WO. Lihat WO yang kekurangan bahan walaupun material customer lain masih tersedia. Stok perusahaan dipakai sekali pada alokasi usulan seluruh WO, kemudian hasilnya difilter untuk tampilan.
+5. Klik Simulasi input lalu Final QC. Catat 100 accepted dan 8 NG pada lot pertama. Good berkurang, NG bertambah, dan Miss WO pertama tetap 10 pcs.
+6. Simulasikan issue 30 sheet ke WO DPM yang belum diproduksi. Catat hasil 580 Good, 5 NG trial dan 5 NG proses dengan sisa nol. Cek lot FG tanggal produksi contoh dan Miss provisional 10 pcs. Simulasikan penerimaan RM dengan pemilik SJM dan cek prefix lot SJM.
+7. Coba pencarian tanpa hasil, reset filter, navigasi keyboard, Escape pada detail, dan Reset simulasi. Refresh mengembalikan data contoh awal. Untuk mengaktifkan transaksi nyata, pilih desain dan review scope ownership/ledger pada doc 35 terlebih dahulu.
+
+## Daily Recovery Planner — D-134
+Open PPIC → Production Planning → Daily Recovery Planner with a PPC plant role. Select a target date, customer or part; open the part to inspect lot, WO and today's shift output sources. Use actual authorized records in UAT.
+
+1. With 100 FG and 400 Before Check against 500 outstanding, expect no additional SPK need and Kejar QC. QC reject 20: expect shortage 20. Receipt of the remaining accepted output must leave combined coverage unchanged.
+2. Set minimum 500, batch 22: expect proposal 506. Edit Shift I–III with a reason and save. Refresh: values remain.
+3. Create SPK Draft: open the linked existing WO workflow. Retry returns the same WO. Subsequent additional planning creates a new plan revision preserving the old link.
+4. Change stock/QC after saving: creating from stale inputs must be refused, requiring review/save.
+5. Filter customers sharing one part: supply shares must stay stable and never cover two demands. A view-only user cannot edit; another plant/tenant cannot access the plan.
+Automated browser fixtures are synthetic; factory UAT and deployment remain separate.

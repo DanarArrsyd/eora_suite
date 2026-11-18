@@ -11,5 +11,6 @@ final readonly class ImportColumn
         public string $header,
         public bool $required,
         public string $hint,
+        public bool $headerOptional = false,
     ) {}
 }

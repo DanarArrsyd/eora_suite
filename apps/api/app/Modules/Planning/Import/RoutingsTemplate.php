@@ -20,6 +20,8 @@ final class RoutingsTemplate extends EngineeringTemplate
 {
     private const array HEADER = ['Routing kind', 'Effective from', 'Standard yield %', 'Change reason'];
 
+    private const array PAIRED_HEADERS = ['Paired output item code', 'Pairs per sheet'];
+
     public function code(): string
     {
         return 'routings';
@@ -45,7 +47,8 @@ final class RoutingsTemplate extends EngineeringTemplate
             new ImportColumn('Process type', true, 'Code of an active process type.'),
             new ImportColumn('Work center', true, 'Code of an active work center of the plant.'),
             new ImportColumn('Setup minutes', false, '0 or more, at most 2 decimals; empty = 0.'),
-            new ImportColumn('Cycle seconds', true, '0 or more, at most 3 decimals.'),
+            new ImportColumn('Standard Good Output (pcs/h)', false, 'Good pieces per running hour, excluding setup. Above 0, at most 3 decimals. Fill this or Cycle seconds.', headerOptional: true),
+            new ImportColumn('Cycle seconds', false, 'For cycle-based operations only. 0 or more, at most 3 decimals. Fill this or Standard Good Output (pcs/h).', headerOptional: true),
             new ImportColumn('Cycle basis', true, 'PER_PIECE, PER_STROKE or PER_BATCH.'),
             new ImportColumn('Parts per cycle', false, 'Whole number 1–100000; empty = 1.'),
             new ImportColumn('Inspection required', false, 'YES or NO; empty = NO.'),
@@ -53,6 +56,8 @@ final class RoutingsTemplate extends EngineeringTemplate
             new ImportColumn('Machine', false, 'Code of a machine of the work center (preferred machine).'),
             new ImportColumn('Die', false, 'Code of a die of the plant linked to the item; marks the operation as needing tooling.'),
             new ImportColumn('Cavities used', false, 'Whole number 1–1000, with a die.'),
+            new ImportColumn('Paired output item code', false, 'Second lot-controlled semi-finished PCS item for a paired blanking operation.', headerOptional: true),
+            new ImportColumn('Pairs per sheet', false, 'Whole pieces of each side made per sheet. Fill only with a paired output item.', headerOptional: true),
         ];
     }
 
@@ -61,6 +66,11 @@ final class RoutingsTemplate extends EngineeringTemplate
         $code = strtoupper($row['Routing code']);
         $kind = strtoupper($row['Routing kind']);
         $yield = $row['Standard yield %'];
+        $rate = $row['Standard Good Output (pcs/h)'] ?? '';
+        $cycle = $row['Cycle seconds'] ?? '';
+        $row += array_fill_keys(self::PAIRED_HEADERS, '');
+        $other = strtoupper($row['Paired output item code']);
+        $pairs = $row['Pairs per sheet'];
         $errors = RowRules::collect([
             RowRules::required($row['Item code'], 'Item code'),
             RowRules::required($code, 'Routing code'),
@@ -76,8 +86,12 @@ final class RoutingsTemplate extends EngineeringTemplate
             RowRules::required($row['Process type'], 'Process type'),
             RowRules::required($row['Work center'], 'Work center'),
             $row['Setup minutes'] !== '' && preg_match('/^\d{1,8}(\.\d{1,2})?$/', $row['Setup minutes']) !== 1 ? 'Setup minutes: 0 or more with at most 2 decimals.' : null,
-            RowRules::required($row['Cycle seconds'], 'Cycle seconds'),
-            $row['Cycle seconds'] !== '' && preg_match('/^\d{1,8}(\.\d{1,3})?$/', $row['Cycle seconds']) !== 1 ? 'Cycle seconds: 0 or more with at most 3 decimals.' : null,
+            ($rate === '') === ($cycle === '') ? 'Fill exactly one of Standard Good Output (pcs/h) or Cycle seconds.' : null,
+            RowRules::positiveDecimal($rate, 3, 'Standard Good Output (pcs/h)', 8),
+            ($other === '') !== ($pairs === '') ? 'Fill both paired output columns, or leave both empty.' : null,
+            self::wholeNumber($pairs, 1, 100000, 'Pairs per sheet'),
+            $other !== '' && ($rate === '' || $kind === 'ALTERNATE') ? 'Paired blanking uses a primary routing and a combined good output per hour.' : null,
+            $cycle !== '' && preg_match('/^\d{1,8}(\.\d{1,3})?$/', $cycle) !== 1 ? 'Cycle seconds: 0 or more with at most 3 decimals.' : null,
             RowRules::required($row['Cycle basis'], 'Cycle basis'),
             RowRules::oneOf($row['Cycle basis'], ['PER_PIECE', 'PER_STROKE', 'PER_BATCH'], 'Cycle basis'),
             self::wholeNumber($row['Parts per cycle'], 1, 100000, 'Parts per cycle'),
@@ -87,17 +101,36 @@ final class RoutingsTemplate extends EngineeringTemplate
             $row['Cavities used'] !== '' && $row['Die'] === '' ? 'Cavities used needs a die.' : null,
         ]);
         $this->checkPlant($db, $row['Plant code'], $errors, $plant);
-        $item = $row['Item code'] === '' ? null : $db->selectOne('select id, status from items where code = ?', [strtoupper($row['Item code'])]);
+        $item = $row['Item code'] === '' ? null : $db->selectOne(
+            'select i.id, i.status, i.item_type, i.lot_controlled, u.id as uom_id, u.code as base_unit from items i join uoms u on u.id = i.base_uom_id where i.code = ?',
+            [strtoupper($row['Item code'])],
+        );
         if ($row['Item code'] !== '' && ($item === null || $item->status !== 'ACTIVE')) {
             $errors[] = 'Item '.strtoupper($row['Item code']).($item === null ? ' does not exist.' : ' is inactive.');
             $item = null;
         }
         if ($plant !== null && $item !== null && $code !== '') {
+            if ($rate !== '' && $item->base_unit !== 'PCS') {
+                $errors[] = 'Standard Good Output (pcs/h) requires an item with base unit PCS.';
+            }
             $this->checkRouting($db, $plant, $item, $code, $row, $errors);
             $this->checkOperation($db, $plant, $item, $row, $errors);
         }
         $group = strtoupper($row['Plant code']).'/'.strtoupper($row['Item code']).'/'.$code;
         $this->sameAsGroup($seen, $group, $rowNo, $row, self::HEADER, "Routing {$code}", $errors);
+        $this->sameAsGroup($seen, 'pair:'.$group, $rowNo, $row, self::PAIRED_HEADERS, "Routing {$code}", $errors);
+        if ($other !== '' && $item !== null) {
+            if ($item->item_type !== 'SEMI_FINISHED' || ! $item->lot_controlled || $item->base_unit !== 'PCS' || $db->selectOne(
+                "select 1 from items where code = ? and id <> ? and status = 'ACTIVE' and item_type = 'SEMI_FINISHED' and lot_controlled and base_uom_id = ?",
+                [$other, $item->id, $item->uom_id],
+            ) === null) {
+                $errors[] = 'Paired blanking needs two different lot-controlled semi-finished PCS items.';
+            }
+            if (isset($seen['paired-operation'][$group])) {
+                $errors[] = 'Paired blanking needs exactly one routing operation.';
+            }
+            $seen['paired-operation'][$group] = $rowNo;
+        }
 
         return $errors === [] ? RowRules::collect([RowRules::once($seen, 'op', $group.'/'.(int) $row['Op seq'], $rowNo, "Op seq {$row['Op seq']} of routing {$code}")]) : $errors;
     }
@@ -130,9 +163,10 @@ final class RoutingsTemplate extends EngineeringTemplate
             }
             $no = (int) $db->selectOne('select coalesce(max(version_no), 0) + 1 as n from routing_versions where routing_id = ?', [$routing])->n;
             $version = (string) $db->selectOne(
-                'insert into routing_versions (tenant_id, plant_id, routing_id, version_no, effective_from, change_reason, standard_yield)
-                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?) returning id',
-                [$plant->id, $routing, $no, $first['Effective from'], RowRules::text($first['Change reason']), self::fraction($first['Standard yield %'])],
+                'insert into routing_versions (tenant_id, plant_id, routing_id, version_no, effective_from, change_reason, standard_yield, paired_item_id, pairs_per_sheet)
+                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, (select id from items where code = ?), ?) returning id',
+                [$plant->id, $routing, $no, $first['Effective from'], RowRules::text($first['Change reason']), self::fraction($first['Standard yield %']),
+                    strtoupper($first['Paired output item code'] ?? ''), RowRules::text($first['Pairs per sheet'] ?? '')],
             )->id;
             $this->created($db, 'routing_versions', 'routing_version', $version, ['versionNo' => $no, 'operations' => count($group)], (string) $plant->id);
             foreach ($group as $rowNo => $row) {
@@ -197,11 +231,12 @@ final class RoutingsTemplate extends EngineeringTemplate
     {
         $op = (string) $db->selectOne(
             'insert into routing_operations (tenant_id, plant_id, routing_version_id, op_seq, step_key, process_type_id, work_center_id,
-                                             std_setup_minutes, std_cycle_seconds, cycle_basis, parts_per_cycle, inspection_required, is_count_point, requires_tooling)
+                                             std_setup_minutes, std_cycle_seconds, std_good_output_per_hour, cycle_basis, parts_per_cycle, inspection_required, is_count_point, requires_tooling)
              values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, (select id from process_types where code = ?),
-                     (select id from work_centers where plant_id = ? and code = ?), ?, ?, ?, ?, ?, ?, ?) returning id',
+                     (select id from work_centers where plant_id = ? and code = ?), ?, ?, ?, ?, ?, ?, ?, ?) returning id',
             [$plant, $version, (int) $row['Op seq'], RowRules::text(strtoupper($row['Step key'])), strtoupper($row['Process type']), $plant, strtoupper($row['Work center']),
-                $row['Setup minutes'] === '' ? '0' : $row['Setup minutes'], $row['Cycle seconds'], strtoupper($row['Cycle basis']),
+                $row['Setup minutes'] === '' ? '0' : $row['Setup minutes'], RowRules::text($row['Cycle seconds'] ?? ''),
+                RowRules::text($row['Standard Good Output (pcs/h)'] ?? ''), strtoupper($row['Cycle basis']),
                 $row['Parts per cycle'] === '' ? 1 : (int) $row['Parts per cycle'], RowRules::isYes($row['Inspection required'], false),
                 RowRules::isYes($row['Count point'], true), $row['Die'] !== ''],
         )->id;

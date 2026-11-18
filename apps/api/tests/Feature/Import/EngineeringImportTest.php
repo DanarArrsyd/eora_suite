@@ -82,6 +82,42 @@ it('imports a routing as a DRAFT version with its operations, machine and die; a
     expect(spa($this)->getJson("/api/v1/exchange/imports/{$again}/rows?status=ERROR")->json('data.0.errors'))->toContain('Routing R1 has an open version 1. Finish or withdraw it first.');
 })->group('integration', 'import');
 
+it('imports standard good output per running hour in place of cycle seconds (D-130)', function () {
+    orgUser($this, $this->t, 'SUP');
+    rtSetup($this, $this->t);
+    $header = array_replace(ENG_ROUTING_HEADER, [12 => 'Standard Good Output (pcs/h)']);
+    $row = engOps($this->t)[0];
+    $row[12] = '0';
+    $bad = engUpload($this, $this->t, 'routings', $header, [$row]);
+    expect(impJob($this->t, $bad))->valid_rows->toBe(0)->error_rows->toBe(1);
+
+    $row[12] = '600.5';
+    $good = engUpload($this, $this->t, 'routings', $header, [$row]);
+    expect(engCommit($this, $this->t, $good))->status->toBe('COMMITTED')->committed_rows->toBe(1);
+    $operation = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
+        'select std_cycle_seconds, std_good_output_per_hour::text as rate from routing_operations',
+    ));
+    expect($operation)->std_cycle_seconds->toBeNull()->rate->toBe('600.500');
+})->group('integration', 'import');
+
+it('imports one paired blanking operation with an approved-ready parts per sheet standard (D-132)', function () {
+    orgUser($this, $this->t, 'SUP');
+    $s = rtSetup($this, $this->t);
+    foreach (['BLANK-RH', 'BLANK-LH'] as $code) {
+        spa($this)->postJson('/api/v1/core/items', [
+            'code' => $code, 'name' => $code, 'itemType' => 'SEMI_FINISHED', 'lotControlled' => true, 'baseUomId' => $s['item']['baseUomId'],
+        ])->assertCreated();
+    }
+    $header = [...array_replace(ENG_ROUTING_HEADER, [12 => 'Standard Good Output (pcs/h)']), 'Paired output item code', 'Pairs per sheet'];
+    $row = [...array_replace(engOps($this->t)[0], [1 => 'BLANK-RH', 12 => '550', 18 => '', 19 => '']), 'BLANK-LH', '18'];
+    $job = engCommit($this, $this->t, engUpload($this, $this->t, 'routings', $header, [$row]));
+    expect($job)->status->toBe('COMMITTED')->committed_rows->toBe(1);
+    $version = AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => $db->selectOne(
+        'select v.pairs_per_sheet, i.code from routing_versions v join items i on i.id = v.paired_item_id',
+    ));
+    expect($version)->pairs_per_sheet->toBe(18)->code->toBe('BLANK-LH');
+})->group('integration', 'import');
+
 it('imports a BOM as a DRAFT version; a repeated component needs a purpose; version rows must agree', function () {
     orgUser($this, $this->t, 'SUP');
     $s = rtSetup($this, $this->t);

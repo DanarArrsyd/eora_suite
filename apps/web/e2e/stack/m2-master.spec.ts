@@ -94,9 +94,10 @@ test('M2 master data end to end on the real stack', async ({ browser }) => {
     const op = planner.getByRole('dialog', { name: 'Add operation' });
     await choose(planner, op.getByRole('combobox', { name: 'Process' }), 'BLANK · Blanking');
     await choose(planner, op.getByRole('combobox', { name: 'Work center' }), /^PRS-200 · /);
-    await op.getByRole('textbox', { name: 'Cycle time (s)' }).fill('4');
+    await expect(op.getByRole('combobox', { name: 'Capacity basis' })).toContainText('Standard good output');
+    await op.getByRole('textbox', { name: 'Standard Good Output (pcs/h)' }).fill('600');
     await op.getByRole('button', { name: 'Add operation' }).click();
-    await expect(planner.getByRole('table', { name: 'Operations of version 1' }).getByRole('row', { name: /Blanking/ })).toBeVisible();
+    await expect(planner.getByRole('table', { name: 'Operations of version 1' }).getByRole('row', { name: /Blanking/ })).toContainText('600 good pcs/h');
 
     // a version is submitted with its standard yield
     await planner.getByRole('button', { name: 'Edit details' }).click();
@@ -119,6 +120,7 @@ test('M2 master data end to end on the real stack', async ({ browser }) => {
     await expect(admin.getByRole('heading', { level: 1, name: `${ITEM} routing R1` })).toBeVisible();
     await admin.getByRole('button', { name: 'Approve' }).click();
     await expect(admin.getByText('Approved versions never change. Use New version to change the routing.')).toBeVisible();
+    await expect(admin.getByRole('table', { name: 'Operations of version 1' }).getByRole('row', { name: /Blanking/ })).toContainText('600 good pcs/h');
   });
 
   await test.step('the Supervisor imports the sample file with errors: valid rows commit, the others say why', async () => {

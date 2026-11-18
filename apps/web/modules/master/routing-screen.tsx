@@ -88,7 +88,8 @@ type Operation = {
   workCenterCode: string;
   description: string | null;
   stdSetupMinutes: string;
-  stdCycleSeconds: string;
+  stdCycleSeconds: string | null;
+  stdGoodOutputPerHour: string | null;
   cycleBasis: 'PER_PIECE' | 'PER_STROKE' | 'PER_BATCH';
   partsPerCycle: number;
   inspectionRequired: boolean;
@@ -99,7 +100,7 @@ type Operation = {
   tools: { dieId: string; dieCode: string; quantity: number; cavitiesUsed: number | null; availableInPlant: boolean }[];
   inspections: { characteristic: string; samplingNote: string | null }[];
 };
-type VersionDetail = VersionRow & { operations: Operation[] };
+type VersionDetail = VersionRow & { operations: Operation[]; pairedOutput?: { itemId: string; itemCode: string; pairsPerSheet: number } | null };
 /** One operation as the PUT body expects it. */
 type OperationInput = {
   opSeq: number;
@@ -108,7 +109,8 @@ type OperationInput = {
   workCenterId: string;
   description: string | null;
   stdSetupMinutes: number;
-  stdCycleSeconds: number;
+  stdCycleSeconds: number | null;
+  stdGoodOutputPerHour: number | null;
   cycleBasis: Operation['cycleBasis'];
   partsPerCycle: number;
   inspectionRequired: boolean;
@@ -139,7 +141,8 @@ function toInput(op: Operation): OperationInput {
     workCenterId: op.workCenterId,
     description: op.description,
     stdSetupMinutes: Number(op.stdSetupMinutes),
-    stdCycleSeconds: Number(op.stdCycleSeconds),
+    stdCycleSeconds: op.stdCycleSeconds === null ? null : Number(op.stdCycleSeconds),
+    stdGoodOutputPerHour: op.stdGoodOutputPerHour == null ? null : Number(op.stdGoodOutputPerHour),
     cycleBasis: op.cycleBasis,
     partsPerCycle: op.partsPerCycle,
     inspectionRequired: op.inspectionRequired,
@@ -505,7 +508,16 @@ function VersionBody({
     },
     { id: 'workCenter', header: 'Work center', cell: (o) => o.workCenterCode },
     { id: 'setup', header: 'Setup (min)', numeric: true, cell: (o) => Number(o.stdSetupMinutes).toLocaleString('en-US') },
-    { id: 'cycle', header: 'Cycle (s)', numeric: true, cell: (o) => Number(o.stdCycleSeconds).toLocaleString('en-US'), sub: (o) => basisLabel(o.cycleBasis) },
+    {
+      id: 'capacityStandard',
+      header: 'Capacity standard',
+      numeric: true,
+      cell: (o) =>
+        o.stdGoodOutputPerHour == null
+          ? `${Number(o.stdCycleSeconds).toLocaleString('en-US')} s`
+          : `${Number(o.stdGoodOutputPerHour).toLocaleString('en-US')} good pcs/h`,
+      sub: (o) => (o.stdGoodOutputPerHour == null ? basisLabel(o.cycleBasis) : undefined),
+    },
     { id: 'parts', header: 'Parts per cycle', numeric: true, cell: (o) => o.partsPerCycle },
     {
       id: 'machines',
@@ -564,6 +576,14 @@ function VersionBody({
             <dl className="m-0 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-[13.5px] max-sm:grid-cols-1 max-sm:gap-y-0.5">
               <dt className="text-ink-2">Effective</dt>
               <dd className="m-0 text-ink max-sm:mb-2">{dayRange(version.effectiveFrom, version.effectiveTo)}</dd>
+              {version.pairedOutput ? (
+                <>
+                  <dt className="text-ink-2">Paired blanking</dt>
+                  <dd className="m-0 text-ink max-sm:mb-2">
+                    {routing.itemCode} + {version.pairedOutput.itemCode} · {version.pairedOutput.pairsPerSheet} pcs per side per sheet
+                  </dd>
+                </>
+              ) : null}
               <dt className="text-ink-2">Standard yield</dt>
               <dd className="m-0 text-ink tabular-nums max-sm:mb-2">{version.standardYield ? yieldPercent(version.standardYield) : 'Not entered yet'}</dd>
               <dt className="text-ink-2">What changes</dt>
@@ -629,7 +649,7 @@ function VersionBody({
         />
       </section>
 
-      <VersionDetailsDrawer version={version} open={detailsOpen} onOpenChange={setDetailsOpen} onSaved={onChanged} />
+      <VersionDetailsDrawer routing={routing} version={version} open={detailsOpen} onOpenChange={setDetailsOpen} onSaved={onChanged} />
       <OperationDrawer
         key={editing.op?.id ?? 'new'}
         routing={routing}
@@ -644,11 +664,13 @@ function VersionBody({
 }
 
 function VersionDetailsDrawer({
+  routing,
   version,
   open,
   onOpenChange,
   onSaved,
 }: {
+  routing: RoutingRow;
   version: VersionDetail;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -657,15 +679,35 @@ function VersionDetailsDrawer({
   const me = useMe();
   const zone = me.data?.tenants.find((t) => t.id === me.data?.activeTenantId)?.timezone ?? 'Asia/Jakarta';
   const today = todayIn(zone);
-  const schema = z.object({
-    effectiveFrom: z.string().min(1, 'Choose the day this version takes effect.'),
-    standardYield: z
-      .string()
-      .trim()
-      .regex(/^$|^\d{1,3}(\.\d{1,3})?$/, 'Enter a percentage with at most 3 decimals, e.g. 98.5.')
-      .refine((v) => v === '' || (Number(v) > 0 && Number(v) <= 100), 'Enter more than 0 and at most 100.'),
-    changeReason: z.string().trim().max(500, 'Use at most 500 characters.'),
+  const outputs = useQuery({
+    queryKey: ['master', 'routing', 'paired-output-items'],
+    queryFn: ({ signal }) =>
+      queryAll<{ id: string; code: string; name: string; baseUomCode: string }>(
+        'core.items',
+        { itemType: 'SEMI_FINISHED', lotControlled: 'true', status: 'ACTIVE' },
+        signal,
+      ),
+    enabled: open && routing.routingKind === 'PRIMARY',
   });
+  const pieceItems = (outputs.data ?? []).filter((item) => item.baseUomCode === 'PCS');
+  const showPair = Boolean(version.pairedOutput) || pieceItems.some((item) => item.id === routing.itemId);
+  const schema = z
+    .object({
+      effectiveFrom: z.string().min(1, 'Choose the day this version takes effect.'),
+      standardYield: z
+        .string()
+        .trim()
+        .regex(/^$|^\d{1,3}(\.\d{1,3})?$/, 'Enter a percentage with at most 3 decimals, e.g. 98.5.')
+        .refine((v) => v === '' || (Number(v) > 0 && Number(v) <= 100), 'Enter more than 0 and at most 100.'),
+      pairedItemId: z.string(),
+      pairsPerSheet: z.string().trim(),
+      changeReason: z.string().trim().max(500, 'Use at most 500 characters.'),
+    })
+    .superRefine((v, ctx) => {
+      if (v.pairedItemId !== 'NONE' && !/^(?:[1-9]\d{0,4}|100000)$/.test(v.pairsPerSheet)) {
+        ctx.addIssue({ code: 'custom', path: ['pairsPerSheet'], message: 'Enter whole pieces per side per sheet.' });
+      }
+    });
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent title={`Version ${version.versionNo} details`} closeLabel="Close">
@@ -677,6 +719,8 @@ function VersionDetailsDrawer({
             defaultValues={{
               effectiveFrom: version.effectiveFrom,
               standardYield: version.standardYield ? String(Number((Number(version.standardYield) * 100).toFixed(3))) : '',
+              pairedItemId: version.pairedOutput?.itemId ?? 'NONE',
+              pairsPerSheet: version.pairedOutput ? String(version.pairedOutput.pairsPerSheet) : '',
               changeReason: version.changeReason ?? '',
             }}
             submitLabel="Save changes"
@@ -694,6 +738,12 @@ function VersionDetailsDrawer({
                     body: {
                       effectiveFrom: v.effectiveFrom,
                       standardYield: v.standardYield === '' ? null : Number((Number(v.standardYield) / 100).toFixed(5)),
+                      ...(showPair
+                        ? {
+                            pairedItemId: v.pairedItemId === 'NONE' ? null : v.pairedItemId,
+                            pairsPerSheet: v.pairedItemId === 'NONE' ? null : Number(v.pairsPerSheet),
+                          }
+                        : {}),
                       changeReason: v.changeReason || null,
                     },
                   }),
@@ -715,6 +765,25 @@ function VersionDetailsDrawer({
               autoComplete="off"
               hint="Good pieces expected from the material put in, already counting normal process loss, e.g. 98.5. Needed before submitting."
             />
+            {showPair ? (
+              <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+                <FormSelectField
+                  name="pairedItemId"
+                  label="Second output"
+                  options={[
+                    { value: 'NONE', label: 'One output' },
+                    ...pieceItems.filter((item) => item.id !== routing.itemId).map((item) => ({ value: item.id, label: `${item.code} · ${item.name}` })),
+                  ]}
+                />
+                <FormTextField
+                  name="pairsPerSheet"
+                  label="Pieces per side per sheet"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  hint="Uses one combined good-output rate in the blanking operation."
+                />
+              </div>
+            ) : null}
             <FormTextareaField name="changeReason" label="What changes" maxLength={500} rows={3} />
           </EoraForm>
         </div>
@@ -723,42 +792,56 @@ function VersionDetailsDrawer({
   );
 }
 
-const OPERATION_SCHEMA = z.object({
-  opSeq: z
-    .string()
-    .trim()
-    .regex(/^\d{1,4}$/, 'Enter a whole number from 1 to 9999.')
-    .refine((v) => Number(v) >= 1, 'Enter a whole number from 1 to 9999.'),
-  stepKey: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^$|^[A-Z][A-Z0-9_-]{0,31}$/, 'Use A-Z, 0-9, "_" or "-", starting with a letter.'),
-  processTypeId: z.string().min(1, 'Choose the process.'),
-  workCenterId: z.string().min(1, 'Choose the work center.'),
-  description: z.string().trim().max(500, 'Use at most 500 characters.'),
-  stdSetupMinutes: z
-    .string()
-    .trim()
-    .regex(/^$|^\d+(\.\d{1,2})?$/, 'Enter minutes with at most 2 decimals.'),
-  stdCycleSeconds: z
-    .string()
-    .trim()
-    .regex(/^\d+(\.\d{1,3})?$/, 'Enter seconds with at most 3 decimals.'),
-  cycleBasis: z.string().min(1, 'Choose what one cycle produces.'),
-  partsPerCycle: z
-    .string()
-    .trim()
-    .regex(/^\d{1,6}$/, 'Enter a whole number.')
-    .refine((v) => Number(v) >= 1, 'Enter at least 1.'),
-  isCountPoint: z.string(),
-  inspectionRequired: z.string(),
-  requiresTooling: z.string(),
-  machines: z.array(z.string()),
-  preferredMachine: z.string(),
-  tools: z.array(z.string()),
-  inspections: z.string().max(5000, 'Use fewer lines.'),
-});
+const CAPACITY_BASES: Option[] = [
+  { value: 'GOOD_OUTPUT', label: 'Standard good output' },
+  { value: 'CYCLE_TIME', label: 'Cycle time' },
+];
+
+const OPERATION_SCHEMA = z
+  .object({
+    opSeq: z
+      .string()
+      .trim()
+      .regex(/^\d{1,4}$/, 'Enter a whole number from 1 to 9999.')
+      .refine((v) => Number(v) >= 1, 'Enter a whole number from 1 to 9999.'),
+    stepKey: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^$|^[A-Z][A-Z0-9_-]{0,31}$/, 'Use A-Z, 0-9, "_" or "-", starting with a letter.'),
+    processTypeId: z.string().min(1, 'Choose the process.'),
+    workCenterId: z.string().min(1, 'Choose the work center.'),
+    description: z.string().trim().max(500, 'Use at most 500 characters.'),
+    stdSetupMinutes: z
+      .string()
+      .trim()
+      .regex(/^$|^\d+(\.\d{1,2})?$/, 'Enter minutes with at most 2 decimals.'),
+    capacityBasis: z.enum(['GOOD_OUTPUT', 'CYCLE_TIME']),
+    stdGoodOutputPerHour: z.string().trim(),
+    stdCycleSeconds: z.string().trim(),
+    cycleBasis: z.string().min(1, 'Choose what one cycle produces.'),
+    partsPerCycle: z
+      .string()
+      .trim()
+      .regex(/^\d{1,6}$/, 'Enter a whole number.')
+      .refine((v) => Number(v) >= 1, 'Enter at least 1.'),
+    isCountPoint: z.string(),
+    inspectionRequired: z.string(),
+    requiresTooling: z.string(),
+    machines: z.array(z.string()),
+    preferredMachine: z.string(),
+    tools: z.array(z.string()),
+    inspections: z.string().max(5000, 'Use fewer lines.'),
+  })
+  .superRefine((values, ctx) => {
+    if (values.capacityBasis === 'GOOD_OUTPUT') {
+      if (!/^\d{1,8}(\.\d{1,3})?$/.test(values.stdGoodOutputPerHour) || Number(values.stdGoodOutputPerHour) === 0) {
+        ctx.addIssue({ code: 'custom', path: ['stdGoodOutputPerHour'], message: 'Enter a positive rate with up to 8 whole digits and 3 decimals.' });
+      }
+    } else if (!/^\d{1,9}(\.\d{1,3})?$/.test(values.stdCycleSeconds)) {
+      ctx.addIssue({ code: 'custom', path: ['stdCycleSeconds'], message: 'Enter seconds with at most 3 decimals.' });
+    }
+  });
 type OperationForm = z.infer<typeof OPERATION_SCHEMA>;
 
 function OperationDrawer({
@@ -798,7 +881,9 @@ function OperationDrawer({
         workCenterId: op.workCenterId,
         description: op.description ?? '',
         stdSetupMinutes: String(Number(op.stdSetupMinutes)),
-        stdCycleSeconds: String(Number(op.stdCycleSeconds)),
+        capacityBasis: op.stdGoodOutputPerHour == null ? 'CYCLE_TIME' : 'GOOD_OUTPUT',
+        stdGoodOutputPerHour: op.stdGoodOutputPerHour == null ? '' : String(Number(op.stdGoodOutputPerHour)),
+        stdCycleSeconds: op.stdCycleSeconds === null ? '' : String(Number(op.stdCycleSeconds)),
         cycleBasis: op.cycleBasis,
         partsPerCycle: String(op.partsPerCycle),
         isCountPoint: String(op.isCountPoint),
@@ -816,6 +901,8 @@ function OperationDrawer({
         workCenterId: '',
         description: '',
         stdSetupMinutes: '0',
+        capacityBasis: 'GOOD_OUTPUT',
+        stdGoodOutputPerHour: '',
         stdCycleSeconds: '',
         cycleBasis: 'PER_PIECE',
         partsPerCycle: '1',
@@ -856,7 +943,8 @@ function OperationDrawer({
                 workCenterId: v.workCenterId,
                 description: v.description || null,
                 stdSetupMinutes: v.stdSetupMinutes === '' ? 0 : Number(v.stdSetupMinutes),
-                stdCycleSeconds: Number(v.stdCycleSeconds),
+                stdCycleSeconds: v.capacityBasis === 'CYCLE_TIME' ? Number(v.stdCycleSeconds) : null,
+                stdGoodOutputPerHour: v.capacityBasis === 'GOOD_OUTPUT' ? Number(v.stdGoodOutputPerHour) : null,
                 cycleBasis: v.cycleBasis as OperationInput['cycleBasis'],
                 partsPerCycle: Number(v.partsPerCycle),
                 isCountPoint: v.isCountPoint === 'true',
@@ -940,12 +1028,7 @@ function OperationDrawer({
               hint={`Active work centers of plant ${routing.plantCode}.`}
             />
             <FormTextField name="description" label="Description" maxLength={500} autoComplete="off" />
-            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
-              <FormTextField name="stdSetupMinutes" label="Setup time (min)" inputMode="decimal" autoComplete="off" />
-              <FormTextField name="stdCycleSeconds" label="Cycle time (s)" required inputMode="decimal" autoComplete="off" />
-              <FormSelectField name="cycleBasis" label="One cycle makes" required options={CYCLE_BASES} hint="Per stroke for presses, per batch for ovens." />
-              <FormTextField name="partsPerCycle" label="Parts per cycle" required inputMode="numeric" autoComplete="off" />
-            </div>
+            <OperationCapacityFields />
             <div className="grid grid-cols-3 gap-4 max-sm:grid-cols-1">
               <FormSelectField name="isCountPoint" label="Reports quantity" required options={YES_NO} />
               <FormSelectField name="inspectionRequired" label="Inspection" required options={YES_NO} />
@@ -963,6 +1046,31 @@ function OperationDrawer({
         </div>
       </DrawerContent>
     </Drawer>
+  );
+}
+
+function OperationCapacityFields() {
+  const capacityBasis = useWatch({ name: 'capacityBasis' });
+
+  return (
+    <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+      <FormSelectField name="capacityBasis" label="Capacity basis" required options={CAPACITY_BASES} />
+      <FormTextField name="stdSetupMinutes" label="Setup time (min)" inputMode="decimal" autoComplete="off" />
+      {capacityBasis === 'GOOD_OUTPUT' ? (
+        <FormTextField
+          name="stdGoodOutputPerHour"
+          label="Standard Good Output (pcs/h)"
+          required
+          inputMode="decimal"
+          autoComplete="off"
+          hint="Good pieces in one hour of running time. Enter setup separately."
+        />
+      ) : (
+        <FormTextField name="stdCycleSeconds" label="Cycle time (s)" required inputMode="decimal" autoComplete="off" />
+      )}
+      <FormSelectField name="cycleBasis" label="One cycle makes" required options={CYCLE_BASES} hint="Per stroke for presses, per batch for ovens." />
+      <FormTextField name="partsPerCycle" label="Parts per cycle" required inputMode="numeric" autoComplete="off" />
+    </div>
   );
 }
 

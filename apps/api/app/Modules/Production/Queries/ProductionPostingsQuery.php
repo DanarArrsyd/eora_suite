@@ -42,9 +42,13 @@ final class ProductionPostingsQuery extends QueryDefinition
                  join work_centers wc on wc.tenant_id = r.tenant_id and wc.id = r.work_center_id
                  left join shifts sh on sh.tenant_id = d.tenant_id and sh.id = d.shift_id
                  left join inventory_documents cd on cd.tenant_id = d.tenant_id and cd.id = d.corrects_document_id
-                 left join lateral (select l.lot_no from inventory_movements m join lots l on l.tenant_id = m.tenant_id and l.id = m.lot_id
-                                     where m.tenant_id = d.tenant_id and m.document_id = d.id and m.movement_code in ('OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT')
-                                     limit 1) ol on true
+                 left join lateral (select case when count(*) = 1 then min(x.lot_no)
+                                                else string_agg(x.code || ' · ' || x.lot_no, ', ' order by x.code, x.lot_no) end as lot_no
+                                       from (select distinct l.id, l.lot_no, oi.code
+                                               from inventory_movements m join lots l on l.tenant_id = m.tenant_id and l.id = m.lot_id
+                                               join items oi on oi.tenant_id = l.tenant_id and oi.id = l.item_id
+                                              where m.tenant_id = d.tenant_id and m.document_id = d.id
+                                                and m.movement_code in ('OUTPUT_GOOD', 'OUTPUT_NG_REWORK', 'OUTPUT_NG_REJECT')) x) ol on true
                  left join users up on up.id = d.posted_by";
     }
 

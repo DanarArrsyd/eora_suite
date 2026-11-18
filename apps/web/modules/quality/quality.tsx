@@ -27,6 +27,7 @@ import { queryAll, querySource } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
 import { ApprovalPanel, when } from '@/modules/master/version-ui';
 import { unitPrecisionError } from '@/modules/materials/resources';
+import { SemiFinishedLocationField } from '@/modules/materials/semi-finished-location-field';
 
 /*
  * M4 step 5 (doc 33 §1.5, D-113, doc 04 row 9, BR-QC-01..03): Quality → Pending QC Queue and Dispositions on the live API.
@@ -49,6 +50,7 @@ export type QcLineRow = {
   itemId: string;
   itemCode: string;
   itemName: string;
+  itemType: string;
   lotId: string | null;
   lotNo: string | null;
   stockStatus: Waiting;
@@ -237,6 +239,7 @@ function LotPage({ id }: { id: string }) {
   });
   const [askQty, setAskQty] = React.useState('');
   const [askReason, setAskReason] = React.useState('');
+  const [semiFinishedLocationId, setSemiFinishedLocationId] = React.useState('');
   const [notice, setNotice] = React.useState<string | null>(null);
   const [problem, setProblem] = React.useState<string | null>(null);
   const [confirm, setConfirm] = React.useState<null | 'decide' | 'ask'>(null);
@@ -287,6 +290,7 @@ function LotPage({ id }: { id: string }) {
   }
 
   const allowed: Outcome[] = r.stockStatus === 'PENDING_QC' ? ['RELEASE', 'HOLD', 'REWORK', 'REJECT'] : r.stockStatus === 'HOLD' ? ['REJECT'] : [];
+  const semiFinished = r.itemType === 'SEMI_FINISHED';
   const asked = (Object.entries(decisions) as [Outcome, Decision][]).filter(([o, d]) => allowed.includes(o) && d.qty !== '');
   const set = (o: Outcome, patch: Partial<Decision>) => setDecisions((all) => ({ ...all, [o]: { ...all[o], ...patch } }));
   const check = (): string | null => {
@@ -297,6 +301,7 @@ function LotPage({ id }: { id: string }) {
       if (!/^\d+(\.\d+)?$/.test(d.qty) || Number(d.qty) <= 0) return `${label}: enter a quantity above zero.`;
       const precision = unitPrecisionError(d.qty, r.uomCode, r.uomDecimals);
       if (precision) return `${label}: ${precision}`;
+      if (o === 'RELEASE' && semiFinished && !semiFinishedLocationId) return 'Choose the destination for the released semi-finished lot.';
       if (o !== 'RELEASE' && !d.reasonCode) return `${label}: choose the reason.`;
       if (d.reasonCode === 'OTHER' && d.note.trim().length < 3) return `${label}: explain it when the reason is Other.`;
       if (d.note.trim() !== '' && d.note.trim().length < 3) return `${label}: write a note of at least 3 characters, or leave it empty.`;
@@ -313,6 +318,7 @@ function LotPage({ id }: { id: string }) {
           stockLineId: r.id,
           note: null,
           ngLocationId: null,
+          ...(semiFinished && decisions.RELEASE.qty ? { semiFinishedLocationId } : {}),
           lines: asked.map(([o, d]) => ({
             outcome: o,
             qty: d.qty,
@@ -332,7 +338,7 @@ function LotPage({ id }: { id: string }) {
     await call(() =>
       api.POST('/quality/release-requests', {
         params: { header: { 'Idempotency-Key': key.current } },
-        body: { stockLineId: r.id, qty: askQty, reason: askReason.trim(), qcLocationId: null },
+        body: { stockLineId: r.id, qty: askQty, reason: askReason.trim(), qcLocationId: null, ...(semiFinished ? { semiFinishedLocationId } : {}) },
       }),
     );
     key.current = `qcd-${crypto.randomUUID()}`;
@@ -388,7 +394,7 @@ function LotPage({ id }: { id: string }) {
                   className="m-0 grid min-w-0 grid-cols-[minmax(0,180px)_minmax(0,1fr)_minmax(0,1fr)] items-start gap-x-3 gap-y-2 border-0 px-0 py-3 first:pt-0 max-md:grid-cols-1"
                 >
                   <legend className="col-span-full float-left m-0 w-full p-0 text-[13.5px] font-semibold text-ink">
-                    {o.label} <span className="font-normal text-ink-2">· {o.place}</span>
+                    {o.label} <span className="font-normal text-ink-2">· {o.value === 'RELEASE' && semiFinished ? 'Materials location' : o.place}</span>
                   </legend>
                   <Field label={`${o.label} (${r.uomCode})`}>
                     {(control) => (
@@ -421,6 +427,9 @@ function LotPage({ id }: { id: string }) {
                       <Input {...control} maxLength={500} value={decisions[o.value].note} onChange={(e) => set(o.value, { note: e.target.value })} />
                     )}
                   </Field>
+                  {o.value === 'RELEASE' && semiFinished && decisions.RELEASE.qty ? (
+                    <SemiFinishedLocationField plantId={r.plantId} value={semiFinishedLocationId} onValueChange={setSemiFinishedLocationId} />
+                  ) : null}
                 </fieldset>
               ))}
             </div>
@@ -458,6 +467,7 @@ function LotPage({ id }: { id: string }) {
               <Field label="Reason" required hint="Why it may be released, e.g. the deviation the customer accepted.">
                 {(control) => <Input {...control} maxLength={500} value={askReason} onChange={(e) => setAskReason(e.target.value)} />}
               </Field>
+              {semiFinished ? <SemiFinishedLocationField plantId={r.plantId} value={semiFinishedLocationId} onValueChange={setSemiFinishedLocationId} /> : null}
             </div>
             <div className="mt-4 flex justify-end">
               <Button
@@ -467,7 +477,12 @@ function LotPage({ id }: { id: string }) {
                       ? 'Enter the quantity to release.'
                       : scaled(askQty) > scaled(r.qty)
                         ? `Only ${r.qty} ${r.uomCode} is here.`
-                        : (unitPrecisionError(askQty, r.uomCode, r.uomDecimals) ?? (askReason.trim().length < 3 ? 'Give the reason.' : null));
+                        : (unitPrecisionError(askQty, r.uomCode, r.uomDecimals) ??
+                          (askReason.trim().length < 3
+                            ? 'Give the reason.'
+                            : semiFinished && !semiFinishedLocationId
+                              ? 'Choose the destination for the released semi-finished lot.'
+                              : null));
                   setProblem(why);
                   if (!why) setConfirm('ask');
                 }}

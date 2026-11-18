@@ -152,3 +152,8 @@ Rule: no module writes another module's tables; cross-module reads use contracts
 SoD-07 *(proposed)*: MPS preparer cannot approve the same MPS version.
 Evaluation order for every request: authenticated session → active tenant membership (session) → permission in any role assignment → **scope match** (assignment scope contains the record's company/plant/warehouse/work center) → resource policy (state, SoD, thresholds) → RLS backstop. List endpoints apply the scope as query predicates (QueryDefinition), never as post-filtering.
 
+
+## Daily Recovery (D-134)
+- `planning.recovery.view`: PPC, CSA, AUD templates; plant-scoped read of live planner positions and source details.
+- `planning.recovery.create`: PPC template; plant-scoped save of parameters and shift plans.
+- Create SPK additionally requires existing `planning.wo.create`; release retains the existing maker/checker process. Tenant sync applies template permissions to existing tenants. Direct SQL guards enforce scoped plan writes and immutable linked history.
