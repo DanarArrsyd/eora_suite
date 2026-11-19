@@ -53,6 +53,7 @@ return new class extends Migration
               CHECK ((revision = 1) = (revision_reason IS NULL)),
               CHECK (status IN ('DRAFT', 'CANCELLED') OR (spk_no IS NOT NULL AND released_by IS NOT NULL AND released_at IS NOT NULL)),
               CHECK ((status = 'CLOSED') = (closed_by IS NOT NULL AND closed_at IS NOT NULL)),
+              CHECK (status NOT IN ('DRAFT', 'CANCELLED') OR (released_by IS NULL AND released_at IS NULL AND spk_no IS NULL)),
               FOREIGN KEY (tenant_id, plant_id) REFERENCES plants(tenant_id, id),
               FOREIGN KEY (tenant_id, work_center_id) REFERENCES work_centers(tenant_id, id),
               FOREIGN KEY (tenant_id, previous_id) REFERENCES spk_headers(tenant_id, id)
@@ -106,7 +107,9 @@ return new class extends Migration
             DECLARE wc record; prev record;
             BEGIN
               IF TG_OP = 'INSERT' THEN
-                IF NEW.status <> 'DRAFT' OR NEW.spk_no IS NOT NULL OR NOT public.eora_actor_may('production.spk.create', NEW.plant_id) THEN
+                IF NEW.status <> 'DRAFT' OR NEW.spk_no IS NOT NULL
+                   OR (NEW.released_by, NEW.released_at, NEW.closed_by, NEW.closed_at) IS DISTINCT FROM (NULL::uuid, NULL::timestamptz, NULL::uuid, NULL::timestamptz)
+                   OR NOT public.eora_actor_may('production.spk.create', NEW.plant_id) THEN
                   RAISE EXCEPTION 'an SPK starts as a draft written by a planner of its plant' USING ERRCODE = '42501';
                 END IF;
                 SELECT w.plant_id, w.status INTO wc FROM public.work_centers w WHERE w.tenant_id = NEW.tenant_id AND w.id = NEW.work_center_id;
@@ -151,9 +154,11 @@ return new class extends Migration
                      WHERE l.tenant_id = NEW.tenant_id AND l.spk_id = NEW.id AND w.status NOT IN ('RELEASED', 'IN_PROGRESS')) THEN
                   RAISE EXCEPTION 'an SPK is released only while its work orders are released or in production' USING ERRCODE = '23514';
                 END IF;
-                IF NEW.status IN ('CLOSED', 'SUPERSEDED', 'CANCELLED') AND NOT (public.eora_actor_may('production.spk.close', NEW.plant_id)
-                     OR public.eora_actor_may('production.spk.release', NEW.plant_id) OR public.eora_actor_may('production.spk.create', NEW.plant_id)) THEN
-                  RAISE EXCEPTION 'an SPK is closed by a planner of its plant' USING ERRCODE = '42501';
+                -- each move needs its own permission, as the API: close → close, cancel → create, superseded (by releasing its revision) → release
+                IF (NEW.status = 'CLOSED' AND NOT public.eora_actor_may('production.spk.close', NEW.plant_id))
+                   OR (NEW.status = 'CANCELLED' AND NOT public.eora_actor_may('production.spk.create', NEW.plant_id))
+                   OR (NEW.status = 'SUPERSEDED' AND NOT public.eora_actor_may('production.spk.release', NEW.plant_id)) THEN
+                  RAISE EXCEPTION 'this SPK move needs its own planner permission at the plant' USING ERRCODE = '42501';
                 END IF;
                 IF NEW.status = 'SUPERSEDED' AND NOT EXISTS (SELECT 1 FROM public.spk_headers h WHERE h.tenant_id = NEW.tenant_id
                      AND h.previous_id = NEW.id AND h.status = 'DRAFT') THEN
@@ -174,8 +179,10 @@ return new class extends Migration
             CREATE OR REPLACE FUNCTION eora_guard_spk_line() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
             DECLARE h record; w record; o record; m record; cal uuid; target uuid := COALESCE(NEW.spk_id, OLD.spk_id);
             BEGIN
-              SELECT x.status, x.plant_id, x.work_center_id, x.production_date INTO h FROM public.spk_headers x WHERE x.tenant_id = COALESCE(NEW.tenant_id, OLD.tenant_id) AND x.id = target;
-              IF h.status <> 'DRAFT' THEN
+              -- the header is locked first, so a line change and the release of its SPK never pass each other
+              SELECT x.status, x.plant_id, x.work_center_id, x.production_date INTO h FROM public.spk_headers x
+               WHERE x.tenant_id = COALESCE(NEW.tenant_id, OLD.tenant_id) AND x.id = target FOR UPDATE;
+              IF h.status IS DISTINCT FROM 'DRAFT' THEN
                 RAISE EXCEPTION 'the lines of a released SPK change through a revision' USING ERRCODE = '23514';
               END IF;
               IF NOT public.eora_actor_may('production.spk.create', h.plant_id) THEN
