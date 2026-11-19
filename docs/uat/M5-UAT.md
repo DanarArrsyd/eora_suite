@@ -155,3 +155,14 @@ Open PPIC → Production Planning → Daily Recovery Planner with a PPC plant ro
 4. Change stock/QC after saving: creating from stale inputs must be refused, requiring review/save.
 5. Filter customers sharing one part: supply shares must stay stable and never cover two demands. A view-only user cannot edit; another plant/tenant cannot access the plan.
 Automated browser fixtures are synthetic; factory UAT and deployment remain separate.
+
+## Material ownership foundation — D-135
+
+Use authorized test records in an isolated plant. Do not convert historical company balances into customer assets.
+
+1. Receive the same lot-controlled material for the company and DPM. Select the customer owner independently of Supplier / sender. Verify separate owner labels and daily RM numbers. Repeating a request must return the same receipt and lot.
+2. Create a WO with Production customer DPM. A DPM lot may issue to it. The same lot must be refused for an unassigned or SJM WO. Company material may serve either customer.
+3. Record separate production runs per material owner. A posting consuming company material and customer material together must be refused without changing stock. Output, NG and scrap of the accepted posting retain the owner. Customer scrap requires a lot-controlled scrap item.
+4. Follow customer output through Pending QC, release and FG receipt. The original lot and owner remain. Delivery may allocate only to the same customer. Reverse through the existing approval workflow and verify unchanged ownership.
+5. Split a customer RM lot and inspect parent and child owner. Check stock/receipt export owner columns and tenant/plant access.
+6. Temporary limitation: in a plant holding customer-owned physical stock, new aggregate MPS/MRP/Daily Recovery calculations show an actionable owner-aware-planning requirement. Existing saved plan history remains readable; use customer-specific WO while the subsequent planning slice is under development. This foundation is not approved for operational deployment until this boundary is accepted or replaced by owner-aware netting.

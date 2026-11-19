@@ -117,3 +117,7 @@ The preview covers the three layouts, monthly/customer/owner search filters, exa
 The next implementation slice is ownership in the ledger, receipt/lot numbering and issue enforcement, followed by scoped report queries and production/quality provenance. The repository's AGENTS.md and CLAUDE.md require owner selection of the mockup and review of material accounting/conversion policy before operational implementation. Owner approval of the product need is recorded separately from that design/slice gate.
 
 Skills read and applied were Caveman for concise analysis and Frontend Design for deliberate table/detail layouts. The approved EORA palette, typography and shell take precedence over skill defaults. Code discovery started with Codebase Memory graph tools and continued with current owning source files for schema literals and unindexed changes.
+
+## 2026-11-18 — first ownership implementation slice
+
+D-135 resolves mixed-owner production for the first slice: separate material owners per production posting/output lot; no cross-customer exceptions. The owner authorized continuation after the Daily Recovery release. See [doc 37](37-MATERIAL-OWNERSHIP-SCOPE.md) for the concrete scope and the temporary aggregate-planning integration boundary. The monthly monitoring and owner-aware allocation proposals above remain later work; the preview is still simulated.

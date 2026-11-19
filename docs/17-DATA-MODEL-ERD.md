@@ -230,3 +230,7 @@ Shared DB, `tenant_id` + composite FKs on **every** tenant table (audit of §2/�
 
 ## Daily Recovery persistence (D-134)
 `daily_recovery_plans` is tenant/plant/customer/item/target-date scoped, revisioned, with one unlinked draft per key. It stores minimum/batch/buffer, three shift quantities, reason, DAILY_RECOVERY_V1, source fingerprint/snapshot and optional work_order_id. Forced RLS, tenant composite FKs, audit stamps and a permission/lifecycle guard apply. Linked plans are immutable; subsequent planning makes a new revision. Inventory remains exclusively in the existing ledger.
+
+## D-135 — Material ownership foundation
+
+Migration `2026_11_18_005000` adds immutable `lots.owner_customer_id` / `owner_company_id`, tenant-composite FKs and one-owner checks; `work_orders.production_customer_id`; forced-RLS `daily_lot_counters`; and extends movement/balance ownership to OWN/CUSTOMER. The owner customer is part of stock identity through its immutable lot. Trigger guards cover issue, production conservation, split, allocation and delivery. No historical relabelling. See doc 37 and ADR-0020.

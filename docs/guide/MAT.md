@@ -29,8 +29,10 @@ Master data (item, supplier, satuan) diubah oleh **Supervisor** (D-128); minta k
 
 1. Materials → Inbound Schedule → catat jadwal kedatangan dari supplier.
 2. Materials → RM Receipts → terima bahan (lot supplier, qty); bahan yang perlu inspeksi menunggu Incoming Release.
+   - Pilih **Material owner**: **Company (purchased material)** untuk bahan yang dibeli perusahaan, atau customer bila bahan dikirim/dimiliki customer (mis. DPM). **Supplier** tetap pihak yang mengirim. Bahan customer harus item yang di-track per lot; nomor lot menjadi `RM-{kode pemilik}-{DDMMYY}-{urut}`.
 3. PPIC → MRP Results → lihat **Material shortages** (tanggal butuh, tanggal harus pesan).
 4. Materials → Material Issue → keluarkan bahan untuk WO yang sudah dirilis ke work center-nya.
+   - Pilihan lot hanya menampilkan lot **Company** dan lot milik customer WO tersebut. Satu posting produksi memakai bahan satu pemilik saja.
 5. Materials → Material Return → terima sisa bahan yang dikembalikan produksi (timbang / hitung).
 
 ## Persetujuan

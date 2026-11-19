@@ -1,5 +1,10 @@
 # EORA Suite V1 — Project Blueprint & Claude Code Handoff
 
+## Current session handoff
+
+Read [docs/CURRENT-PROJECT-HANDOFF.md](docs/CURRENT-PROJECT-HANDOFF.md) before resuming. It records the latest owner decisions, uncommitted ownership implementation, verified checks, deployment boundary and recommended next scope. Recheck Git/runtime; the decision register remains authoritative.
+
+
 **Status:** Specification and UI baseline approved (doc 13, D-027). **Frontend implementation authorized in phases** (D-033, doc 22) — Phases 1–3 approved (Control Tower frontend on typed mocks). **Phase 3.5 Backend Architecture & Data Contract Readiness approved** (D-045) as the backend baseline; backend slices (doc 11) start only with explicit owner approval per slice — **B0 Foundation completed** (D-053, `apps/api`, merged `c19be09`); **M0 decisions recorded 2026-10-11** (doc 27, D-054..D-065): B1/B2 decisions approved, D-B1-24 signed tenant context approved; delivery in milestones M1–M7 (doc 11), each starting only after its scope approval. Source: private GitHub repository `DanarArrsyd/eora_suite`, branch `main` (D-050). **Industry:** Discrete manufacturing (stamping, machining, fabrication, welding, assembly). **Product:** independent multi-tenant SaaS Manufacturing Operations Management (MOM). **Timezone default:** Asia/Jakarta, tenant-configurable. **Last consolidated:** 2026-10-11.
 
 ## Read in this order
@@ -37,3 +42,6 @@ Kickoff requires discovery and reading of installed **Caveman** and **Frontend**
 
 ### Daily Recovery Planner (D-134, local implementation)
 PPIC → Production Planning → **Daily Recovery Planner** (`/ppic/daily-recovery`) reads live FG, Before Check, QC Accepted and remaining WO coverage. Planner can save batch/minimum/buffer and shift adjustments, inspect lots and create a linked Draft WO through the existing approval flow. [Scope and rules](docs/36-DAILY-RECOVERY-SCOPE.md), [UAT](docs/uat/M5-UAT.md), [ADR-0019](docs/adr/ADR-0019-daily-recovery-planning.md). Schema deployment and tenant permission sync are required before release; local implementation is not production deployment.
+
+### Material ownership foundation (D-135, review branch)
+Receipts distinguish the material owner from the supplier/sender; customer-attributed WOs, immutable lot owners, single-owner production and customer-restricted delivery are covered by the foundation in [doc 37](docs/37-MATERIAL-OWNERSHIP-SCOPE.md) and [ADR-0020](docs/adr/ADR-0020-material-ownership-foundation.md). Customer-owned assets require lot tracking. Owner-aware automatic planning and the monthly PPIC monitoring screen remain later slices; the temporary calculation gate is explicit in the scope and UAT. Operational deployment is separate from local implementation.

@@ -44,6 +44,7 @@ Item, customer, routing, BOM, dan master lain diubah oleh **Supervisor** (D-128)
    - Di **Capacity load**, operasi dengan **Standard Good Output** memakai target good dibagi rate per jam, lalu ditambah setup. Contoh 1.200 good pcs pada 600 pcs/jam dengan setup 15 menit membebani work center selama 2,25 jam.
 5. Setelah MPS Approved: **Run MRP** → PPIC → MRP Results → lihat kekurangan bahan → centang planned order → **Release to WO**.
 6. PPIC → Work Orders → buka WO Draft → periksa → **Ask for release**. Untuk WO di luar plan: **New work order** dengan alasan.
+   - Isi **Production customer** bila WO memakai bahan milik customer. Bahan customer hanya bisa dipakai untuk WO customer itu. Bila WO untuk delivery, customer-nya harus sama.
 
 ## Persetujuan
 
@@ -52,6 +53,16 @@ Item, customer, routing, BOM, dan master lain diubah oleh **Supervisor** (D-128)
 Kembali ke [Panduan Pengguna](README.md).
 
 ## Daily Recovery Planner (D-134)
-Open **PPIC → Production Planning → Daily Recovery Planner** and select the target production/delivery date. Review outstanding delivery alongside warehouse FG, Before Check, QC Accepted awaiting warehouse receipt and timely remaining WO output. Click the part to see the lots, source WOs and today's posted shift output. Shared stock is allocated across customers before filtering; the detail shows the portion covering this row.
 
-Enter the minimum SPK (default 500 PCS), whole material batch, additional buffer and Shift I–III quantities. Record an adjustment reason and save. Create **SPK Draft** from the saved plan, then continue the existing WO submission/release process. Changes in stock, QC, demand or planning require review and re-save before creation. A retry opens the same WO; additional planning after a linked WO makes a new revision preserving the old one. Before Check covers production provisionally and cannot be shipped. Missing approved BOM or conversion leaves material capacity unavailable.
+1. Buka **PPIC → Daily Recovery Planner**, pilih **Target production / delivery date**.
+2. Tiap baris: kebutuhan kirim customer per part, dibandingkan dengan **FG warehouse stock**, **Pending QC (Before Check)**, **QC released, awaiting FG receipt** dan **Remaining WO output**. Klik nama part untuk melihat lot, WO sumber dan hasil produksi hari ini.
+3. Isi **Minimum work order (pcs)** (default 500), **Pcs per material batch**, **Buffer (pcs)** dan **Shift I–III plan (pcs)**. Tulis **Reason**, lalu **Save shift plan**.
+4. **Create draft work order** (SPK) dari rencana yang sudah disimpan. Lanjutkan alur WO biasa: **Ask for release**.
+
+Catatan:
+- Pending QC (Before Check) hanya dihitung untuk planning produksi, tidak bisa dikirim.
+- Stok yang dipakai bersama dialokasikan sekali ke semua customer sebelum filter.
+- Bila stok, QC, demand atau parameter berubah, muncul **Position changed since the plan was saved**: periksa dan simpan ulang dulu.
+- Menekan ulang **Create draft work order** membuka WO yang sama. Rencana tambahan setelah WO dibuat menjadi revisi baru; revisi lama tetap tersimpan.
+- Tanpa BOM yang berlaku atau konversi batch, **Material capacity (estimate)** tidak terhitung.
+- Bila plant menyimpan bahan milik customer, MPS, MRP dan Daily Recovery ditolak dengan pesan **Customer material in stock**. Untuk sementara, buat work order manual dengan **Production customer** yang sesuai.
