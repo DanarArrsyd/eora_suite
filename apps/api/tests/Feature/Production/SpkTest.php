@@ -154,6 +154,10 @@ it('plans only released WO operations of the line on its machines, also through 
     expect(fn () => asApp($t, $prl['id'], $insert($line())))->toThrow(QueryException::class, 'written by a planner');
     expect(fn () => asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update("update spk_headers set status = 'CLOSED' where id = ?", [$spk['id']])))
         ->toThrow(QueryException::class, 'draft → released');
+    // NULL never slips past the guard (three-valued logic): a release without its releaser is refused, not ignored
+    expect(fn () => asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update(
+        "update spk_headers set status = 'RELEASED', spk_no = 'SPK-X-191126-0009', released_by = null, released_at = now() where id = ?", [$spk['id']])))
+        ->toThrow(QueryException::class, 'records its release once');
     // a draft's own text is the planner's too (Codex on #97)
     expect(fn () => asApp($t, $prl['id'], fn (EoraPostgresConnection $db) => $db->update("update spk_headers set reference = 'Taken over' where id = ?", [$spk['id']])))
         ->toThrow(QueryException::class, 'edited by a planner');
@@ -184,7 +188,7 @@ it('refuses to release an SPK whose work order was cancelled after planning (Cod
     spa($this)->postJson("/api/v1/production/spk/{$spk['id']}/actions/release", [], ['If-Match' => '"'.$spk['version'].'"'])
         ->assertStatus(409)->assertJsonPath('code', 'INVALID_STATE_TRANSITION');
     expect(fn () => asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update(
-        "update spk_headers set status = 'RELEASED', spk_no = 'SPK-X-191126-0001', released_at = now() where id = ?", [$spk['id']])))
+        "update spk_headers set status = 'RELEASED', spk_no = 'SPK-X-191126-0001', released_by = (select c.actor from ctx_api.context() c), released_at = now() where id = ?", [$spk['id']])))
         ->toThrow(QueryException::class, 'work orders are released');
 })->group('integration', 'production');
 

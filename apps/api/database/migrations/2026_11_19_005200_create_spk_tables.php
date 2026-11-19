@@ -51,7 +51,8 @@ return new class extends Migration
               UNIQUE (tenant_id, spk_no, revision),
               CHECK ((revision = 1) = (previous_id IS NULL)),
               CHECK ((revision = 1) = (revision_reason IS NULL)),
-              CHECK (status IN ('DRAFT', 'CANCELLED') OR (spk_no IS NOT NULL AND released_at IS NOT NULL)),
+              CHECK (status IN ('DRAFT', 'CANCELLED') OR (spk_no IS NOT NULL AND released_by IS NOT NULL AND released_at IS NOT NULL)),
+              CHECK ((status = 'CLOSED') = (closed_by IS NOT NULL AND closed_at IS NOT NULL)),
               FOREIGN KEY (tenant_id, plant_id) REFERENCES plants(tenant_id, id),
               FOREIGN KEY (tenant_id, work_center_id) REFERENCES work_centers(tenant_id, id),
               FOREIGN KEY (tenant_id, previous_id) REFERENCES spk_headers(tenant_id, id)
@@ -127,13 +128,15 @@ return new class extends Migration
               END IF;
               -- who released or closed it, and when, is written once by that transition, as the signed actor, now
               IF (NEW.released_by, NEW.released_at) IS DISTINCT FROM (OLD.released_by, OLD.released_at)
-                 AND NOT (OLD.status = 'DRAFT' AND NEW.status = 'RELEASED' AND NEW.released_by = (SELECT c.actor FROM ctx_api.context() c)
-                          AND NEW.released_at = pg_catalog.now()) THEN
+                 AND NOT COALESCE(OLD.status = 'DRAFT' AND NEW.status = 'RELEASED' AND NEW.released_by IS NOT NULL
+                          AND NEW.released_by IS NOT DISTINCT FROM (SELECT c.actor FROM ctx_api.context() c)
+                          AND NEW.released_at IS NOT DISTINCT FROM pg_catalog.now(), false) THEN
                 RAISE EXCEPTION 'an SPK records its release once, by the releasing planner' USING ERRCODE = '23514';
               END IF;
               IF (NEW.closed_by, NEW.closed_at) IS DISTINCT FROM (OLD.closed_by, OLD.closed_at)
-                 AND NOT (OLD.status = 'RELEASED' AND NEW.status = 'CLOSED' AND NEW.closed_by = (SELECT c.actor FROM ctx_api.context() c)
-                          AND NEW.closed_at = pg_catalog.now()) THEN
+                 AND NOT COALESCE(OLD.status = 'RELEASED' AND NEW.status = 'CLOSED' AND NEW.closed_by IS NOT NULL
+                          AND NEW.closed_by IS NOT DISTINCT FROM (SELECT c.actor FROM ctx_api.context() c)
+                          AND NEW.closed_at IS NOT DISTINCT FROM pg_catalog.now(), false) THEN
                 RAISE EXCEPTION 'an SPK records its closing once, by the closing planner' USING ERRCODE = '23514';
               END IF;
               IF NEW.status IS DISTINCT FROM OLD.status THEN
