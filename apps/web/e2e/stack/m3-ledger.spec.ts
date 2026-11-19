@@ -129,7 +129,7 @@ test('M3 ledger end to end on the real stack', async ({ browser }) => {
     await inventory.goto('/inventory/adjustments');
     await inventory.getByRole('button', { name: 'New adjustment request' }).click();
     const drawer = inventory.getByRole('dialog', { name: 'New adjustment request' });
-    await choose(inventory, drawer.getByRole('combobox', { name: 'Stock line' }), `COIL-SPCC-12 · ${released}-01 · P1 / RM-A02 · Unrestricted · 100 KG`);
+    await choose(inventory, drawer.getByRole('combobox', { name: 'Stock line' }), `COIL-SPCC-12 · ${released}-01 · P1 / RM-A02 · Unrestricted · 100.000 KG`);
     await drawer.getByRole('textbox', { name: 'Quantity' }).fill('20');
     await choose(inventory, drawer.getByRole('combobox', { name: 'Reason' }), 'Damage');
     await drawer.getByRole('textbox', { name: 'Note' }).fill('Edge damaged when the coil was cut');
