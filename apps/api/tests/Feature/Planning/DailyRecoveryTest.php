@@ -59,6 +59,14 @@ it('nets real Before Check through QC and FG receipt, persists editable plans an
     $wo = spa($this)->postJson($createUrl, [], ['If-Match' => '"'.$save['version'].'"'])->assertCreated()->json('data');
     spa($this)->postJson($createUrl, [], ['If-Match' => '"'.$save['version'].'"'])->assertOk()->assertJsonPath('data.workOrderId', $wo['workOrderId'])->assertJsonPath('data.replayed', true);
     spa($this)->getJson('/api/v1/planning/work-orders/'.$wo['workOrderId'])->assertOk()->assertJsonPath('data.qty', '506')->assertJsonPath('data.status', 'DRAFT');
+    // A recovery WO made before D-135 from several deliveries has no customer at all: it stays updatable as a
+    // company-material order instead of being frozen by the planning-customer guard (Codex on #95).
+    app(TenantTransaction::class)->run(TenantContext::forTenant($t['tenant'], $ppc['id']), function (EoraPostgresConnection $db) use ($wo, $f) {
+        $line = $db->selectOne('select schedule_line_id from work_orders where id = ?', [$wo['workOrderId']])->schedule_line_id;
+        $db->update('update work_orders set production_customer_id = null, schedule_line_id = null where id = ?', [$wo['workOrderId']]);
+        expect($db->update("update work_orders set note = 'Legacy recovery order' where id = ?", [$wo['workOrderId']]))->toBe(1);
+        $db->update('update work_orders set production_customer_id = ?, schedule_line_id = ? where id = ?', [$f['customer'], $line, $wo['workOrderId']]);
+    });
     $covered = $read()->assertOk()->json('data.0');
     expect($covered['netQty'])->toBe('0')->and($covered['workOrderId'])->toBe($wo['workOrderId'])
         ->and($covered['planQty'])->toBe('506')->and($covered['positionQty'])->toBe('416');

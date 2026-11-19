@@ -83,7 +83,11 @@ return new class extends Migration
                  AND (TG_OP='INSERT' OR NEW.production_customer_id IS DISTINCT FROM OLD.production_customer_id) THEN
                 RAISE EXCEPTION 'choose an active production customer' USING ERRCODE='23514';
               END IF;
-              IF EXISTS(SELECT 1 FROM public.daily_recovery_plans p WHERE p.tenant_id=NEW.tenant_id AND p.work_order_id=NEW.id
+              -- A Daily Recovery order made before this migration from several deliveries has no customer at all: it keeps
+              -- working as a company-material order (it can never take customer material) instead of being frozen. Once a
+              -- customer is attributed, it must be the planning customer.
+              IF coalesce(NEW.production_customer_id,customer) IS NOT NULL
+                 AND EXISTS(SELECT 1 FROM public.daily_recovery_plans p WHERE p.tenant_id=NEW.tenant_id AND p.work_order_id=NEW.id
                         AND p.customer_id IS DISTINCT FROM coalesce(NEW.production_customer_id,customer)) THEN
                 RAISE EXCEPTION 'a Daily Recovery work order keeps its planning customer' USING ERRCODE='23514';
               END IF;
