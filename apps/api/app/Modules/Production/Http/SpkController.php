@@ -429,8 +429,10 @@ final class SpkController
                     l.machine_id, m.code as machine_code, m.name as machine_name, l.shift_id, s.code as shift_code,
                     trim_scale(l.planned_qty)::text as planned_qty, l.priority, trim_scale(l.setup_minutes)::text as setup_minutes,
                     trim_scale(l.qc_sample_minutes)::text as qc_sample_minutes, l.note,
-                    trim_scale(o.std_good_output_per_hour)::text as sph, trim_scale(o.std_cycle_seconds)::text as cycle_seconds, o.cycle_basis, o.parts_per_cycle
+                    trim_scale(o.std_good_output_per_hour)::text as sph, trim_scale(o.std_cycle_seconds)::text as cycle_seconds, o.cycle_basis, o.parts_per_cycle,
+                    v.paired_item_id
                from spk_lines l join work_orders w on w.id = l.work_order_id join items i on i.id = w.item_id join uoms u on u.id = w.uom_id
+               left join routing_versions v on v.id = w.routing_version_id
                join routing_operations o on o.id = l.routing_operation_id join process_types pt on pt.id = o.process_type_id
                join machines m on m.id = l.machine_id left join shifts s on s.id = l.shift_id
               where l.spk_id = ? order by l.priority, l.line_no',
@@ -440,7 +442,9 @@ final class SpkController
         $load = [];
         $row['lines'] = array_map(static function (stdClass $l) use (&$load): array {
             $sph = self::sph($l);
-            $hours = self::hours($sph, (string) $l->planned_qty, (string) $l->setup_minutes, (string) $l->qc_sample_minutes);
+            // a paired blanking WO plans pieces per side while SPH counts both sides' good output (D-130, as MPS capacity does)
+            $runQty = $l->paired_item_id === null ? (string) $l->planned_qty : bcmul(self::num($l->planned_qty), '2', 6);
+            $hours = self::hours($sph, $runQty, (string) $l->setup_minutes, (string) $l->qc_sample_minutes);
             $key = (string) $l->machine_id;
             $load[$key] ??= ['machineId' => $key, 'machineCode' => (string) $l->machine_code, 'machineName' => (string) $l->machine_name, 'hours' => '0', 'notCalculable' => 0, 'shifts' => []];
             // one bucket per shift of the machine (lines without a shift share one bucket): each bucket is held to one shift's hours

@@ -165,6 +165,17 @@ it('plans only released WO operations of the line on its machines, also through 
         'insert into spk_headers (tenant_id, plant_id, work_center_id, production_date) values (?, ?, ?, ?)', [$t['tenant'], $f['plant'], $f['wc']['id'], $f['today']])))
         ->toThrow(QueryException::class, 'written by a planner');
 
+    // each move needs its own permission (Codex on #97): a cost-centre releaser (CSA) may release, never cancel or close
+    $csa = orgUser($this, $t, 'CSA');
+    expect(fn () => asApp($t, $csa['id'], fn (EoraPostgresConnection $db) => $db->update("update spk_headers set status = 'CANCELLED' where id = ?", [$spk['id']])))
+        ->toThrow(QueryException::class, 'its own planner permission');
+    asApp($t, $f['ppc']['id'], $insert($line()));
+    asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update(
+        "update spk_headers set status = 'RELEASED', spk_no = 'SPK-X-191126-0009', released_by = (select c.actor from ctx_api.context() c), released_at = now() where id = ?", [$spk['id']]));
+    expect(fn () => asApp($t, $csa['id'], fn (EoraPostgresConnection $db) => $db->update(
+        "update spk_headers set status = 'CLOSED', closed_by = (select c.actor from ctx_api.context() c), closed_at = now() where id = ?", [$spk['id']])))
+        ->toThrow(QueryException::class, 'its own planner permission');
+
     // another tenant sees nothing
     expect(AccessFixtures::run($other, fn (EoraPostgresConnection $db) => (int) $db->selectOne('select count(*) as n from spk_headers')->n))->toBe(0);
 })->group('integration', 'production');

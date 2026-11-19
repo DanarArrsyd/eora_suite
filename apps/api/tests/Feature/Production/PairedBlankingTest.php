@@ -115,6 +115,15 @@ it('plans whole sheets once and traces separately counted Plate Grip sides into 
     ], $key);
     $issue('BLANK-RH', $f['wc'], 'SHEET', $rawLot, $f['rack'], '20', 'paired-issue-sheet')->assertCreated();
     $use($f['prl']);
+    // SPK per Line (D-138, Codex on #97): the paired WO plans 360 per side, but 550/h is both sides' good output, so the
+    // line is busy for 720 / 550 h + 15 min setup + 5 min QC sample = 1.642 h, as MPS capacity counts it
+    $spk = spa($this)->postJson('/api/v1/production/spk', ['plantId' => $f['plant'], 'workCenterId' => $f['wc']['id'], 'productionDate' => $f['today']])->assertCreated()->json('data');
+    $blankOp = collect(spa($this)->getJson("/api/v1/production/spk/{$spk['id']}/options")->assertOk()->json('data.operations'))
+        ->firstWhere('workOrderId', $orders['BLANK-RH']['id'])['operationId'];
+    $spk = spa($this)->putJson("/api/v1/production/spk/{$spk['id']}", ['lines' => [[
+        'workOrderId' => $orders['BLANK-RH']['id'], 'routingOperationId' => $blankOp, 'machineId' => $f['m1']['id'], 'plannedQty' => '360', 'priority' => 1,
+    ]]], ['If-Match' => '"'.$spk['version'].'"'])->assertOk()->json('data');
+    expect($spk['lines'][0])->toMatchArray(['plannedQty' => '360', 'sph' => '550', 'hours' => '1.642']);
     $run = prOpen($this, $f, ['workOrderId' => $orders['BLANK-RH']['id']])->assertCreated()->assertJsonPath('data.pairedOutput.itemCode', 'BLANK-LH')->json('data');
     $post = [
         'runId' => $run['id'], 'goodQty' => '350', 'pairedGoodQty' => '340', 'pairedNgRejectQty' => '10', 'semiFinishedLocationId' => $f['rack2'],
