@@ -170,11 +170,25 @@ it('plans only released WO operations of the line on its machines, also through 
     expect(fn () => asApp($t, $csa['id'], fn (EoraPostgresConnection $db) => $db->update("update spk_headers set status = 'CANCELLED' where id = ?", [$spk['id']])))
         ->toThrow(QueryException::class, 'its own planner permission');
     asApp($t, $f['ppc']['id'], $insert($line()));
+    // a machine taken off the line after planning blocks the release, through the API and the database (Codex on #97)
+    $machine = fn (string $status) => AccessFixtures::run($t, fn (EoraPostgresConnection $db) => $db->update('update machines set status = ? where id = ?', [$status, $f['m2']['id']]));
+    $machine('INACTIVE');
+    $draft = spa($this)->getJson("/api/v1/production/spk/{$spk['id']}")->assertOk()->json('data');
+    spa($this)->postJson("/api/v1/production/spk/{$spk['id']}/actions/release", [], ['If-Match' => '"'.$draft['version'].'"'])
+        ->assertStatus(409)->assertJsonPath('code', 'INVALID_STATE_TRANSITION');
+    expect(fn () => asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update(
+        "update spk_headers set status = 'RELEASED', spk_no = 'SPK-X-191126-0009', released_by = (select c.actor from ctx_api.context() c), released_at = now() where id = ?", [$spk['id']])))
+        ->toThrow(QueryException::class, 'machines are active on its line');
+    $machine('ACTIVE');
     asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update(
         "update spk_headers set status = 'RELEASED', spk_no = 'SPK-X-191126-0009', released_by = (select c.actor from ctx_api.context() c), released_at = now() where id = ?", [$spk['id']]));
     expect(fn () => asApp($t, $csa['id'], fn (EoraPostgresConnection $db) => $db->update(
         "update spk_headers set status = 'CLOSED', closed_by = (select c.actor from ctx_api.context() c), closed_at = now() where id = ?", [$spk['id']])))
         ->toThrow(QueryException::class, 'its own planner permission');
+    // the released text never changes, not even alongside an allowed close (Codex on #97)
+    expect(fn () => asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update(
+        "update spk_headers set status = 'CLOSED', closed_by = (select c.actor from ctx_api.context() c), closed_at = now(), note = 'Rewritten' where id = ?", [$spk['id']])))
+        ->toThrow(QueryException::class, 'changes through a revision');
 
     // another tenant sees nothing
     expect(AccessFixtures::run($other, fn (EoraPostgresConnection $db) => (int) $db->selectOne('select count(*) as n from spk_headers')->n))->toBe(0);

@@ -190,6 +190,17 @@ final class SpkController
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Work order no longer released',
                 implode(', ', $blocked).' is no longer released or in production. Remove its lines and save before releasing.');
         }
+        // the planned machines must still be active on this line; FOR SHARE holds off a concurrent machine change until this commits
+        $machines = $db->select(
+            'select m.code, m.status, m.work_center_id from machines m where m.id in (select l.machine_id from spk_lines l where l.spk_id = ?) order by m.id for share of m',
+            [$h->id],
+        );
+        $idle = array_values(array_map(static fn (stdClass $m) => (string) $m->code,
+            array_filter($machines, static fn (stdClass $m) => $m->status !== 'ACTIVE' || $m->work_center_id !== $h->work_center_id)));
+        if ($idle !== []) {
+            throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Machine no longer on this line',
+                implode(', ', $idle).' is no longer an active machine of this line. Move its lines to another machine and save before releasing.');
+        }
         $number = $h->previous_id !== null
             ? (string) $db->selectOne('select spk_no from spk_headers where id = ?', [$h->previous_id])->spk_no
             : $this->nextNumber($db, $h);
@@ -234,8 +245,8 @@ final class SpkController
             'insert into spk_lines (tenant_id, spk_id, line_no, work_order_id, routing_operation_id, machine_id, shift_id, planned_qty, priority, setup_minutes, qc_sample_minutes, note)
              select tenant_id, ?, line_no, work_order_id, routing_operation_id, machine_id, shift_id, planned_qty, priority, setup_minutes, qc_sample_minutes, note
                from spk_lines l where l.spk_id = ? and exists (select 1 from work_orders w where w.id = l.work_order_id and w.status in (\'RELEASED\', \'IN_PROGRESS\'))
-                and exists (select 1 from machines m where m.id = l.machine_id and m.status = \'ACTIVE\')',
-            [$id, $h->id],
+                and exists (select 1 from machines m where m.id = l.machine_id and m.status = \'ACTIVE\' and m.work_center_id = ?)',
+            [$id, $h->id, $h->work_center_id],
         );
         $this->audit->record($db, 'spk.revised', 'spk', $id, null, $this->state($db, 'spk_headers', $id), ['revises' => (string) $h->id, 'reason' => trim($data['reason'])], (string) $h->plant_id);
 

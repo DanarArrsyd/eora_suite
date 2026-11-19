@@ -142,6 +142,10 @@ return new class extends Migration
                           AND NEW.closed_at IS NOT DISTINCT FROM pg_catalog.now(), false) THEN
                 RAISE EXCEPTION 'an SPK records its closing once, by the closing planner' USING ERRCODE = '23514';
               END IF;
+              -- the text of a released SPK never changes, not even alongside a status move: only a draft edits it
+              IF (NEW.reference, NEW.note) IS DISTINCT FROM (OLD.reference, OLD.note) AND NOT (OLD.status = 'DRAFT' AND NEW.status = 'DRAFT') THEN
+                RAISE EXCEPTION 'a released SPK changes through a revision' USING ERRCODE = '23514';
+              END IF;
               IF NEW.status IS DISTINCT FROM OLD.status THEN
                 IF NOT ((OLD.status = 'DRAFT' AND NEW.status IN ('RELEASED', 'CANCELLED'))
                      OR (OLD.status = 'RELEASED' AND NEW.status IN ('CLOSED', 'SUPERSEDED'))) THEN
@@ -154,6 +158,10 @@ return new class extends Migration
                      WHERE l.tenant_id = NEW.tenant_id AND l.spk_id = NEW.id AND w.status NOT IN ('RELEASED', 'IN_PROGRESS')) THEN
                   RAISE EXCEPTION 'an SPK is released only while its work orders are released or in production' USING ERRCODE = '23514';
                 END IF;
+                IF NEW.status = 'RELEASED' AND EXISTS (SELECT 1 FROM public.spk_lines l JOIN public.machines m ON m.tenant_id = l.tenant_id AND m.id = l.machine_id
+                     WHERE l.tenant_id = NEW.tenant_id AND l.spk_id = NEW.id AND (m.status <> 'ACTIVE' OR m.work_center_id IS DISTINCT FROM NEW.work_center_id)) THEN
+                  RAISE EXCEPTION 'an SPK is released only while its machines are active on its line' USING ERRCODE = '23514';
+                END IF;
                 -- each move needs its own permission, as the API: close → close, cancel → create, superseded (by releasing its revision) → release
                 IF (NEW.status = 'CLOSED' AND NOT public.eora_actor_may('production.spk.close', NEW.plant_id))
                    OR (NEW.status = 'CANCELLED' AND NOT public.eora_actor_may('production.spk.create', NEW.plant_id))
@@ -164,8 +172,6 @@ return new class extends Migration
                      AND h.previous_id = NEW.id AND h.status = 'DRAFT') THEN
                   RAISE EXCEPTION 'an SPK is superseded only by the release of its revision' USING ERRCODE = '23514';
                 END IF;
-              ELSIF OLD.status <> 'DRAFT' AND (NEW.reference, NEW.note) IS DISTINCT FROM (OLD.reference, OLD.note) THEN
-                RAISE EXCEPTION 'a released SPK changes through a revision' USING ERRCODE = '23514';
               ELSIF OLD.status = 'DRAFT' AND NOT public.eora_actor_may('production.spk.create', NEW.plant_id) THEN
                 -- any other change of a draft (its text, or the version bump of a line edit) is the planner's
                 RAISE EXCEPTION 'an SPK draft is edited by a planner of its plant' USING ERRCODE = '42501';
