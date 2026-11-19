@@ -103,6 +103,9 @@ it('drafts, plans, releases with a daily company number, tells production and re
         ->assertOk()->json('data');
     // 2400 / 300 = 8 h + 5 min: over the 7 h shift — a warning, not a block
     expect($rev['machineLoad'][0])->toMatchArray(['hours' => '8.083', 'overloaded' => true, 'balanceHours' => '-1.083']);
+    // superseding without releasing the revision never commits: the line and day would be left without a plan (Codex on #97)
+    expect(fn () => asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update("update spk_headers set status = 'SUPERSEDED' where id = ?", [$spk['id']])))
+        ->toThrow(PDOException::class, 'superseded only by the release of its revision');
     $rev = spa($this)->postJson("/api/v1/production/spk/{$rev['id']}/actions/release", [], ['If-Match' => '"'.$rev['version'].'"'])->assertOk()->json('data');
     expect($rev['code'])->toBe($released['code']);
     spa($this)->getJson("/api/v1/production/spk/{$spk['id']}")->assertOk()->assertJsonPath('data.status', 'SUPERSEDED');

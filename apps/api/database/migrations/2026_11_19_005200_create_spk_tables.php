@@ -181,6 +181,19 @@ return new class extends Migration
             REVOKE ALL ON FUNCTION eora_guard_spk_header() FROM PUBLIC;
             CREATE TRIGGER guard_header BEFORE INSERT OR UPDATE ON spk_headers FOR EACH ROW EXECUTE FUNCTION eora_guard_spk_header();
 
+            -- at commit, a superseded SPK has its revision released: superseding without releasing would leave the line and day without a plan
+            CREATE OR REPLACE FUNCTION eora_check_spk_superseded() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
+            BEGIN
+              IF NOT EXISTS (SELECT 1 FROM public.spk_headers h WHERE h.tenant_id = NEW.tenant_id AND h.previous_id = NEW.id AND h.status IN ('RELEASED', 'CLOSED', 'SUPERSEDED'))
+                 AND EXISTS (SELECT 1 FROM public.spk_headers h WHERE h.tenant_id = NEW.tenant_id AND h.id = NEW.id AND h.status = 'SUPERSEDED') THEN
+                RAISE EXCEPTION 'an SPK is superseded only by the release of its revision' USING ERRCODE = '23514';
+              END IF;
+              RETURN NULL;
+            END $fn$;
+            REVOKE ALL ON FUNCTION eora_check_spk_superseded() FROM PUBLIC;
+            CREATE CONSTRAINT TRIGGER check_superseded AFTER UPDATE OF status ON spk_headers DEFERRABLE INITIALLY DEFERRED
+              FOR EACH ROW WHEN (NEW.status = 'SUPERSEDED') EXECUTE FUNCTION eora_check_spk_superseded();
+
             -- an SPK line plans a released WO's operation on a machine of the SPK's line (doc 38 §4)
             CREATE OR REPLACE FUNCTION eora_guard_spk_line() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
             DECLARE h record; w record; o record; m record; cal uuid; target uuid := COALESCE(NEW.spk_id, OLD.spk_id);
@@ -233,6 +246,7 @@ return new class extends Migration
             DROP TABLE spk_headers;
             DROP FUNCTION eora_guard_spk_line();
             DROP FUNCTION eora_guard_spk_header();
+            DROP FUNCTION eora_check_spk_superseded();
             SQL);
         foreach (self::RIGHTS as [$code]) {
             DB::delete('delete from role_template_permissions where permission_code = ?', [$code]);
