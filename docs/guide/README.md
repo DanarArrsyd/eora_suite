@@ -14,6 +14,14 @@ Panduan singkat per role: menu yang terlihat, untuk apa, langkah kerja harian, d
 8. **Pengiriman** — DLV mengalokasikan FG ke jadwal kirim, FGW mengambil (pick) ke staging, DLV mengirim (shipment).
 9. **Kontrol stok** — INV mengurus koreksi stok, reversal, dan tutup buku bulanan.
 
+## Tampilan daftar (semua menu)
+
+- **Kolom**: tombol kolom di kanan toolbar memilih kolom yang tampil; kolom penting (mis. jumlah dan status) selalu tampil.
+- **Comfortable / Compact**: kerapatan baris tabel.
+- **Views**: simpan pencarian, filter, urutan dan kolom dengan nama (**Save current view…**), lalu buka lagi kapan saja. View hanya terlihat oleh Anda; menyimpan nama yang sama menggantinya. Hapus lewat **Delete a view**.
+- **Angka dan tanggal**: kuantitas memakai pemisah ribuan dan satuan (mis. `1,000 PCS`, `44.500 KG`); nol tampil sebagai `–`; tanggal seperti `27 Nov 2026`.
+- **Owner**: di Stock Overview, RM Receipts dan Material Lots, filter **Owner** memilih bahan **Company** atau milik satu customer.
+
 ## Siapa menyetujui apa (pembuat ≠ penyetuju)
 
 | Pekerjaan | Dibuat oleh | Disetujui / dirilis oleh |

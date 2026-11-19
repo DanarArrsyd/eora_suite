@@ -221,6 +221,7 @@ SO line 1—n schedule lines (D-034); Customer PO line 1—1 SO line (unique map
 - Demand: `delivery_schedule_lines (tenant_id, plant_id, requirement_date) WHERE status IN ('FIRM','PARTIALLY_FULFILLED')`; `(tenant_id, so_line_id, revision)`.
 - Outbox: partial `outbox_events (created_at) WHERE dispatched_at IS NULL` (relay with `FOR UPDATE SKIP LOCKED`).
 - Inbox: `inbox_notifications (tenant_id, user_id, read_at, created_at DESC)`.
+- Saved list views (D-137): `list_views (tenant_id, id, user_id, list_key, name, state jsonb ≤ 8 KB, audit stamps; UNIQUE(tenant_id, user_id, list_key, name))`, forced RLS on tenant **and** actor; screen settings only, never business data.
 - Keyset pagination indexes match each QueryDefinition default sort (e.g. `(tenant_id, plant_id, requirement_date, id)`); OFFSET only for small master data (ADR-0008 §4).
 - RLS columns indexed; policy uses `(SELECT c.tenant FROM ctx_api.context() c)` so the verifier runs once per RLS table reference (InitPlan) and an invalid or reset context fails closed (ADR-0001 Amendment 2).
 

@@ -54,8 +54,9 @@ Kembali ke [Panduan Pengguna](README.md).
 
 ## Daily Recovery Planner (D-134)
 
-1. Buka **PPIC → Daily Recovery Planner**, pilih **Target production / delivery date**.
-2. Tiap baris: kebutuhan kirim customer per part, dibandingkan dengan **FG warehouse stock**, **Pending QC (Before Check)**, **QC released, awaiting FG receipt** dan **Remaining WO output**. Klik nama part untuk melihat lot, WO sumber dan hasil produksi hari ini.
+1. Buka **PPIC → Daily Recovery Planner**, pilih tanggal target di kiri toolbar.
+2. Tiap baris: kebutuhan kirim customer per part (**Demand to target**) dan **Next step** (mis. Plan needed, Waiting for QC, Material short). Kolom **Supply covering the demand** berisi **FG stock** dan **Pending QC** (Before Check); **QC released** dan **Remaining WO** bisa ditampilkan lewat tombol kolom. Kolom **Work order plan** berisi **Net need** dan **Proposed**; **Material capacity** dan **Planned** juga lewat tombol kolom. Klik nama part (atau **Review**) untuk melihat lot, WO sumber dan hasil produksi hari ini.
+   - Filter **Next step** untuk melihat yang perlu dikerjakan saja, misalnya *Plan needed*. Klik judul kolom untuk mengurutkan.
 3. Isi **Minimum work order (pcs)** (default 500), **Pcs per material batch**, **Buffer (pcs)** dan **Shift I–III plan (pcs)**. Tulis **Reason**, lalu **Save shift plan**.
 4. **Create draft work order** (SPK) dari rencana yang sudah disimpan. Lanjutkan alur WO biasa: **Ask for release**.
 
@@ -64,5 +65,5 @@ Catatan:
 - Stok yang dipakai bersama dialokasikan sekali ke semua customer sebelum filter.
 - Bila stok, QC, demand atau parameter berubah, muncul **Position changed since the plan was saved**: periksa dan simpan ulang dulu.
 - Menekan ulang **Create draft work order** membuka WO yang sama. Rencana tambahan setelah WO dibuat menjadi revisi baru; revisi lama tetap tersimpan.
-- Tanpa BOM yang berlaku atau konversi batch, **Material capacity (estimate)** tidak terhitung.
+- Tanpa BOM yang berlaku atau konversi batch, **Material capacity** tidak terhitung.
 - Bila plant menyimpan bahan milik customer, MPS, MRP dan Daily Recovery ditolak dengan pesan **Customer material in stock**. Untuk sementara, buat work order manual dengan **Production customer** yang sesuai.
