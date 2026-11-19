@@ -126,8 +126,17 @@ test('spk line: the planner plans a released WO operation on a machine, sees the
   await choose(page, page.getByRole('combobox', { name: 'Work order operation' }), /^WO-P1-2026-0003 · BRK-A100 · Blanking \(op 10\)/);
   await choose(page, page.getByRole('combobox', { name: 'Machine' }), 'M-PRS200 · Mechanical press 200 t');
   await page.getByRole('textbox', { name: 'Planned qty (PCS)' }).fill('300');
+  // unsaved edits block the release: it would send the saved plan, not the one on screen
+  await expect(page.getByRole('button', { name: 'Release to production' })).toBeDisabled();
   await page.getByRole('button', { name: 'Save SPK' }).click();
   await expect(page.getByText('SPK saved')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Release to production' })).toBeEnabled();
+  // an edit after saving blocks the release again until it is saved
+  await page.getByRole('textbox', { name: 'Planned qty (PCS)' }).fill('320');
+  await expect(page.getByRole('button', { name: 'Release to production' })).toBeDisabled();
+  await expect(page.getByText('Unsaved changes')).toBeVisible();
+  await page.getByRole('button', { name: 'Save SPK' }).click();
+  await expect(page.getByRole('button', { name: 'Release to production' })).toBeEnabled();
   expect(writes[0]).toMatchObject({
     method: 'PUT',
     ifMatch: '"1"',
@@ -141,8 +150,8 @@ test('spk line: the planner plans a released WO operation on a machine, sees the
   await page.getByRole('button', { name: 'Release to production' }).click();
   await page.getByRole('alertdialog', { name: 'Release to production' }).getByRole('button', { name: 'Release' }).click();
   await expect(page.getByText('SPK-STP-191126-0001 released to production')).toBeVisible();
-  expect(writes[1]).toMatchObject({ method: 'POST', ifMatch: '"2"' });
-  expect(writes[1]!.url).toContain('/actions/release');
+  expect(writes[2]).toMatchObject({ method: 'POST', ifMatch: '"2"' });
+  expect(writes[2]!.url).toContain('/actions/release');
   await expect(page.getByRole('heading', { level: 1, name: 'SPK-STP-191126-0001' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Revise' })).toBeVisible();
 });

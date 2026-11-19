@@ -122,8 +122,19 @@ return new class extends Migration
                 END IF;
                 RETURN NEW;
               END IF;
-              IF NEW.spk_no IS DISTINCT FROM OLD.spk_no AND OLD.spk_no IS NOT NULL THEN
+              IF NEW.spk_no IS DISTINCT FROM OLD.spk_no AND (OLD.spk_no IS NOT NULL OR NOT (OLD.status = 'DRAFT' AND NEW.status = 'RELEASED')) THEN
                 RAISE EXCEPTION 'an SPK keeps its number' USING ERRCODE = '23514';
+              END IF;
+              -- who released or closed it, and when, is written once by that transition, as the signed actor, now
+              IF (NEW.released_by, NEW.released_at) IS DISTINCT FROM (OLD.released_by, OLD.released_at)
+                 AND NOT (OLD.status = 'DRAFT' AND NEW.status = 'RELEASED' AND NEW.released_by = (SELECT c.actor FROM ctx_api.context() c)
+                          AND NEW.released_at = pg_catalog.now()) THEN
+                RAISE EXCEPTION 'an SPK records its release once, by the releasing planner' USING ERRCODE = '23514';
+              END IF;
+              IF (NEW.closed_by, NEW.closed_at) IS DISTINCT FROM (OLD.closed_by, OLD.closed_at)
+                 AND NOT (OLD.status = 'RELEASED' AND NEW.status = 'CLOSED' AND NEW.closed_by = (SELECT c.actor FROM ctx_api.context() c)
+                          AND NEW.closed_at = pg_catalog.now()) THEN
+                RAISE EXCEPTION 'an SPK records its closing once, by the closing planner' USING ERRCODE = '23514';
               END IF;
               IF NEW.status IS DISTINCT FROM OLD.status THEN
                 IF NOT ((OLD.status = 'DRAFT' AND NEW.status IN ('RELEASED', 'CANCELLED'))
@@ -158,9 +169,9 @@ return new class extends Migration
 
             -- an SPK line plans a released WO's operation on a machine of the SPK's line (doc 38 §4)
             CREATE OR REPLACE FUNCTION eora_guard_spk_line() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
-            DECLARE h record; w record; o record; m record; s record; target uuid := COALESCE(NEW.spk_id, OLD.spk_id);
+            DECLARE h record; w record; o record; m record; cal uuid; target uuid := COALESCE(NEW.spk_id, OLD.spk_id);
             BEGIN
-              SELECT x.status, x.plant_id, x.work_center_id INTO h FROM public.spk_headers x WHERE x.tenant_id = COALESCE(NEW.tenant_id, OLD.tenant_id) AND x.id = target;
+              SELECT x.status, x.plant_id, x.work_center_id, x.production_date INTO h FROM public.spk_headers x WHERE x.tenant_id = COALESCE(NEW.tenant_id, OLD.tenant_id) AND x.id = target;
               IF h.status <> 'DRAFT' THEN
                 RAISE EXCEPTION 'the lines of a released SPK change through a revision' USING ERRCODE = '23514';
               END IF;
@@ -183,10 +194,13 @@ return new class extends Migration
                 RAISE EXCEPTION 'an SPK line runs on an active machine of the SPK''s line' USING ERRCODE = '23514';
               END IF;
               IF NEW.shift_id IS NOT NULL THEN
-                SELECT c.plant_id INTO s FROM public.shifts x JOIN public.shift_calendars c ON c.tenant_id = x.tenant_id AND c.id = x.shift_calendar_id
-                 WHERE x.tenant_id = NEW.tenant_id AND x.id = NEW.shift_id;
-                IF NOT FOUND OR (s.plant_id IS NOT NULL AND s.plant_id IS DISTINCT FROM h.plant_id) THEN
-                  RAISE EXCEPTION 'an SPK line uses a shift of its plant' USING ERRCODE = '23514';
+                -- the shift calendar in force on the SPK's day: the plant's own before the tenant's, latest version first
+                -- (BusinessCalendar::effectiveVersion), so one physical shift never counts twice
+                SELECT c.id INTO cal FROM public.shift_calendars c
+                 WHERE c.tenant_id = NEW.tenant_id AND (c.plant_id = h.plant_id OR c.plant_id IS NULL) AND c.effective_from <= h.production_date
+                 ORDER BY (c.plant_id IS NULL), c.effective_from DESC LIMIT 1;
+                IF cal IS NULL OR NOT EXISTS (SELECT 1 FROM public.shifts x WHERE x.tenant_id = NEW.tenant_id AND x.id = NEW.shift_id AND x.shift_calendar_id = cal) THEN
+                  RAISE EXCEPTION 'an SPK line uses a shift of the calendar in force on its day' USING ERRCODE = '23514';
                 END IF;
               END IF;
               RETURN NEW;

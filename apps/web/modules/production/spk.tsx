@@ -309,6 +309,8 @@ function SpkPage({ id, mode }: { id: string; mode: Mode }) {
     enabled: editable,
   });
   const [ask, setAsk] = React.useState<'release' | 'cancel' | 'revise' | 'close' | null>(null);
+  // unsaved line edits: releasing would send the saved plan, not the one on screen (Codex on #97)
+  const [dirty, setDirty] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [problem, setProblem] = React.useState<string | null>(null);
 
@@ -348,7 +350,12 @@ function SpkPage({ id, mode }: { id: string; mode: Mode }) {
   const actions = mode === 'plan' && (
     <div className="flex flex-wrap gap-2">
       {s.status === 'DRAFT' && may('production.spk.release') ? (
-        <Button variant="primary" onClick={() => setAsk('release')} disabled={!s.lines.length}>
+        <Button
+          variant="primary"
+          onClick={() => setAsk('release')}
+          disabled={!s.lines.length || dirty}
+          title={dirty ? 'Save the SPK before releasing it' : undefined}
+        >
           Release to production
         </Button>
       ) : null}
@@ -366,6 +373,11 @@ function SpkPage({ id, mode }: { id: string; mode: Mode }) {
         </Button>
       </div>
       {notice ? <InlineAlert tone="success" title={notice} className="mb-4" /> : null}
+      {dirty ? (
+        <InlineAlert tone="info" title="Unsaved changes" className="mb-4">
+          Save the SPK to release it; release sends the saved plan.
+        </InlineAlert>
+      ) : null}
       {problem ? (
         <InlineAlert tone="danger" title="Not done" className="mb-4">
           {problem}
@@ -402,6 +414,7 @@ function SpkPage({ id, mode }: { id: string; mode: Mode }) {
             await refresh();
             setNotice('SPK saved');
           }}
+          onDirtyChange={setDirty}
         />
       ) : (
         <LinesTable spk={s} />
@@ -569,7 +582,19 @@ function LinesTable({ spk }: { spk: SpkDetail }) {
   );
 }
 
-function LinesEditor({ spk, options, loading, onSaved }: { spk: SpkDetail; options?: Options; loading: boolean; onSaved: () => Promise<void> }) {
+function LinesEditor({
+  spk,
+  options,
+  loading,
+  onSaved,
+  onDirtyChange,
+}: {
+  spk: SpkDetail;
+  options?: Options;
+  loading: boolean;
+  onSaved: () => Promise<void>;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
   const blank = (): Draft => ({
     key: crypto.randomUUID(),
     operation: '',
@@ -606,7 +631,11 @@ function LinesEditor({ spk, options, loading, onSaved }: { spk: SpkDetail; optio
   }));
   const machineOptions = (options?.machines ?? []).map((m) => ({ value: m.id, label: `${m.code} · ${m.name}` }));
   const shiftOptions = (options?.shifts ?? []).map((s) => ({ value: s.id, label: `${s.code} · ${s.name}` }));
-  const set = (i: number, patch: Partial<Draft>) => setRows((all) => all.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const edit = (change: (all: Draft[]) => Draft[]) => {
+    onDirtyChange(true);
+    setRows(change);
+  };
+  const set = (i: number, patch: Partial<Draft>) => edit((all) => all.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const save = async () => {
     setBusy(true);
     setProblem(null);
@@ -637,6 +666,7 @@ function LinesEditor({ spk, options, loading, onSaved }: { spk: SpkDetail; optio
           } as never,
         }),
       );
+      onDirtyChange(false);
       await onSaved();
     } catch (error) {
       setProblem(failureMessage(error));
@@ -709,7 +739,7 @@ function LinesEditor({ spk, options, loading, onSaved }: { spk: SpkDetail; optio
                     <Field label="Note">{(c) => <Input {...c} value={r.note} maxLength={300} onChange={(e) => set(i, { note: e.target.value })} />}</Field>
                   </div>
                   <div className="flex items-end">
-                    <IconButton aria-label={`Remove line ${i + 1}`} onClick={() => setRows((all) => all.filter((_, j) => j !== i))}>
+                    <IconButton aria-label={`Remove line ${i + 1}`} onClick={() => edit((all) => all.filter((_, j) => j !== i))}>
                       <Trash2 aria-hidden="true" />
                     </IconButton>
                   </div>
@@ -729,7 +759,7 @@ function LinesEditor({ spk, options, loading, onSaved }: { spk: SpkDetail; optio
           </InlineAlert>
         ) : null}
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setRows((all) => [...all, blank()])}>
+          <Button onClick={() => edit((all) => [...all, blank()])}>
             <Plus aria-hidden="true" className="size-4" />
             Add line
           </Button>

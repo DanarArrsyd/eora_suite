@@ -120,8 +120,8 @@ final class SpkController
             'machines' => array_map(static fn (stdClass $m) => ['id' => (string) $m->id, 'code' => (string) $m->code, 'name' => (string) $m->name],
                 $db->select("select id, code, name from machines where work_center_id = ? and status = 'ACTIVE' order by code", [$h->work_center_id])),
             'shifts' => array_map(static fn (stdClass $s) => ['id' => (string) $s->id, 'code' => (string) $s->code, 'name' => (string) $s->name],
-                $db->select('select s.id, s.code, s.name from shifts s join shift_calendars c on c.id = s.shift_calendar_id
-                              where c.plant_id = ? or c.plant_id is null order by s.starts_at, s.code', [$h->plant_id])),
+                $db->select('select id, code, name from shifts where shift_calendar_id = ? order by starts_at, code',
+                    [$this->shiftCalendar($db, (string) $h->plant_id, (string) $h->production_date) ?? '00000000-0000-0000-0000-000000000000'])),
         ]]);
     }
 
@@ -286,9 +286,9 @@ final class SpkController
         $db->selectOne("select 1 as ok from machines where id = ? and work_center_id = ? and status = 'ACTIVE'", [strtolower((string) $line['machineId']), $h->work_center_id])
             ?? throw ValidationException::withMessages(["lines.{$i}.machineId" => 'Choose an active machine of this line.']);
         $shift = isset($line['shiftId']) ? strtolower((string) $line['shiftId']) : null;
-        if ($shift !== null && $db->selectOne('select 1 as ok from shifts s join shift_calendars c on c.id = s.shift_calendar_id where s.id = ? and (c.plant_id = ? or c.plant_id is null)',
-            [$shift, $h->plant_id]) === null) {
-            throw ValidationException::withMessages(["lines.{$i}.shiftId" => 'Choose a shift of this plant.']);
+        if ($shift !== null && $db->selectOne('select 1 as ok from shifts where id = ? and shift_calendar_id = ?',
+            [$shift, $this->shiftCalendar($db, (string) $h->plant_id, (string) $h->production_date) ?? '00000000-0000-0000-0000-000000000000']) === null) {
+            throw ValidationException::withMessages(["lines.{$i}.shiftId" => 'Choose a shift of the calendar in force on this day.']);
         }
 
         return [
@@ -348,6 +348,17 @@ final class SpkController
         }
 
         return $h;
+    }
+
+    /** The shift calendar in force at the plant on the day: the plant's own before the tenant's, latest version (BusinessCalendar). */
+    private function shiftCalendar(EoraPostgresConnection $db, string $plant, string $day): ?string
+    {
+        $row = $db->selectOne(
+            'select id from shift_calendars where (plant_id = ? or plant_id is null) and effective_from <= ?::date order by (plant_id is null), effective_from desc limit 1',
+            [$plant, $day],
+        );
+
+        return $row === null ? null : (string) $row->id;
     }
 
     private function today(EoraPostgresConnection $db, string $plant): string

@@ -84,6 +84,13 @@ it('drafts, plans, releases with a daily company number, tells production and re
     spa($this)->getJson("/api/v1/production/spk/{$spk['id']}")->assertOk()->assertJsonPath('data.lines.0.workOrderCode', $f['wo']['code']);
     spa($this)->getJson('/api/v1/query/production.spk?'.http_build_query(['filter' => ['status' => 'RELEASED']]))->assertOk()->assertJsonPath('data.0.code', $released['code']);
     spa($this)->postJson("/api/v1/production/spk/{$spk['id']}/actions/close", [], ['If-Match' => '"'.$released['version'].'"'])->assertForbidden();
+    // who released it, and when, cannot be rewritten afterwards — not by production, not by a planner (Codex on #97)
+    expect(fn () => asApp($t, $prl['id'], fn (EoraPostgresConnection $db) => $db->update("update spk_headers set released_at = now() - interval '1 day' where id = ?", [$spk['id']])))
+        ->toThrow(QueryException::class, 'records its release once');
+    expect(fn () => asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update('update spk_headers set released_by = ? where id = ?', [$prl['id'], $spk['id']])))
+        ->toThrow(QueryException::class, 'records its release once');
+    expect(fn () => asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update('update spk_headers set closed_by = ?, closed_at = now() where id = ?', [$prl['id'], $spk['id']])))
+        ->toThrow(QueryException::class, 'records its closing once');
 
     // the planner revises with a reason: the released SPK stays in force until the revision is released, which keeps the number
     rtSwitch($this, $t, 'PPC');
@@ -191,9 +198,22 @@ it('holds each shift of a machine to one shift of hours: pooling shifts never hi
         $shift = fn (string $code, string $from, string $to) => (string) $db->selectOne(
             'insert into shifts (tenant_id, shift_calendar_id, code, name, starts_at, ends_at) values (?, ?, ?, ?, ?, ?) returning id', [$t['tenant'], $calendar, $code, "Shift {$code}", $from, $to])->id;
 
+        // a later calendar version of the plant (not in force yet) with its own S1: never offered for today, never accepted
+        $future = (string) $db->selectOne("insert into shift_calendars (tenant_id, plant_id, code, name, effective_from) values (?, ?, 'DAY2-NEXT', 'Next year', '2099-01-01') returning id",
+            [$t['tenant'], $f['plant']])->id;
+        $db->insert("insert into shifts (tenant_id, shift_calendar_id, code, name, starts_at, ends_at) values (?, ?, 'S1', 'Shift S1 next year', '06:00', '14:00')", [$t['tenant'], $future]);
+
         return [$shift('S1', '07:00', '15:00'), $shift('S2', '15:00', '23:00')];
     });
+    $later = AccessFixtures::run($t, fn (EoraPostgresConnection $db) => (string) $db->selectOne("select s.id from shifts s join shift_calendars c on c.id = s.shift_calendar_id where c.code = 'DAY2-NEXT'")->id);
     $spk = spa($this)->postJson('/api/v1/production/spk', ['plantId' => $f['plant'], 'workCenterId' => $f['wc2']['id'], 'productionDate' => $f['today']])->assertCreated()->json('data');
+    $shifts = spa($this)->getJson("/api/v1/production/spk/{$spk['id']}/options")->assertOk()->json('data.shifts');
+    expect(array_column($shifts, 'id'))->toBe([$s1, $s2]);
+    spa($this)->putJson("/api/v1/production/spk/{$spk['id']}", ['lines' => [spkLine($f, ['shiftId' => $later])]], ['If-Match' => '"'.$spk['version'].'"'])
+        ->assertStatus(422)->assertJsonValidationErrors(['lines.0.shiftId']);
+    expect(fn () => asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->insert(
+        'insert into spk_lines (tenant_id, spk_id, line_no, work_order_id, routing_operation_id, machine_id, shift_id, planned_qty) values (?, ?, 1, ?, ?, ?, ?, 10)',
+        [$t['tenant'], $spk['id'], $f['wo']['id'], $f['weldOp'], $f['m2']['id'], $later])))->toThrow(QueryException::class, 'calendar in force');
     // 8 h + 5 min in shift 1 and 1 h + 5 min in shift 2: 9.167 h of 14 h for the day, yet shift 1 is over its 7 h
     $spk = spa($this)->putJson("/api/v1/production/spk/{$spk['id']}", ['lines' => [
         spkLine($f, ['plannedQty' => '2400', 'shiftId' => $s1]),
