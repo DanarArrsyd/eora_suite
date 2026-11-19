@@ -1,0 +1,146 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Platform\Database\EoraPostgresConnection;
+use Illuminate\Database\QueryException;
+use Tests\Support\AccessFixtures;
+use Tests\Support\TenantFixtures;
+
+/*
+ * SPK per Line (doc 38, D-138), slice 1: one SPK per line and production day, lines plan released WO operations on the
+ * line's machines, hours = qty / SPH + setup / 60 + QC sample / 60 against the line's hours per shift, numbered
+ * SPK-<company>-<DDMMYY>-<0001> at release, changed after release only through a revision.
+ */
+
+/** @return array<string, mixed> mfFixture (a released WO) + the weld line with 7 hours per shift, signed in as PPC */
+function spkFixture(object $test, array $t): array
+{
+    $f = mfFixture($test, $t);
+    $company = AccessFixtures::run($t, function (EoraPostgresConnection $db) use ($f) {
+        $db->update('update work_centers set available_hours_per_shift = 7 where id = ?', [$f['wc2']['id']]);
+
+        return (string) $db->selectOne('select c.code from plants p join companies c on c.id = p.company_id where p.id = ?', [$f['plant']])->code;
+    });
+    $ppc = rtSwitch($test, $t, 'PPC');
+    $op = AccessFixtures::run($t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
+        'select o.id from routing_operations o join work_orders w on w.routing_version_id = o.routing_version_id where w.id = ? and o.op_seq = 20',
+        [$f['wo']['id']],
+    )->id);
+
+    return $f + ['company' => $company, 'ppc' => $ppc, 'weldOp' => $op];
+}
+
+function spkLine(array $f, array $over = []): array
+{
+    return $over + ['workOrderId' => $f['wo']['id'], 'routingOperationId' => $f['weldOp'], 'machineId' => $f['m2']['id'], 'plannedQty' => '600', 'priority' => 1];
+}
+
+it('drafts, plans, releases with a daily company number, tells production and revises an SPK', function () {
+    $t = TenantFixtures::provision();
+    AccessFixtures::roles($t);
+    $f = spkFixture($this, $t);
+    $prl = orgUser($this, $t, 'PRL');
+    rtSwitch($this, $t, 'PPC');
+
+    $spk = spa($this)->postJson('/api/v1/production/spk', ['plantId' => $f['plant'], 'workCenterId' => $f['wc2']['id'], 'productionDate' => $f['today'], 'reference' => '2/STP/I/26'])
+        ->assertCreated()->assertJsonPath('data.status', 'DRAFT')->assertJsonPath('data.code', null)->json('data');
+    // one SPK per line and day
+    spa($this)->postJson('/api/v1/production/spk', ['plantId' => $f['plant'], 'workCenterId' => $f['wc2']['id'], 'productionDate' => $f['today']])
+        ->assertStatus(409)->assertJsonPath('code', 'SPK_EXISTS');
+
+    $options = spa($this)->getJson("/api/v1/production/spk/{$spk['id']}/options")->assertOk()->json('data');
+    expect(array_column($options['operations'], 'operationId'))->toBe([$f['weldOp']])
+        ->and($options['operations'][0]['sph'])->toBe('300')
+        ->and(array_column($options['machines'], 'code'))->toBe(['W-1']);
+
+    // 600 pcs at 300 pcs/h + 0 min setup + 5 min QC sample = 2.083 h of the 7 h shift
+    $spk = spa($this)->putJson("/api/v1/production/spk/{$spk['id']}", ['reference' => '2/STP/I/26', 'lines' => [spkLine($f)]], ['If-Match' => '"'.$spk['version'].'"'])
+        ->assertOk()->json('data');
+    expect($spk['lines'][0])->toMatchArray(['plannedQty' => '600', 'sph' => '300', 'hours' => '2.083', 'qcSampleMinutes' => '5'])
+        ->and($spk['machineLoad'][0])->toMatchArray(['machineCode' => 'W-1', 'hours' => '2.083', 'capacityHours' => '7', 'balanceHours' => '4.917', 'overloaded' => false]);
+
+    $released = spa($this)->postJson("/api/v1/production/spk/{$spk['id']}/actions/release", [], ['If-Match' => '"'.$spk['version'].'"'])->assertOk()->json('data');
+    $day = (new DateTimeImmutable($f['today']))->format('dmy');
+    expect($released['status'])->toBe('RELEASED')->and($released['code'])->toBe("SPK-{$f['company']}-{$day}-0001");
+    // a released SPK changes only through a revision
+    spa($this)->putJson("/api/v1/production/spk/{$spk['id']}", ['lines' => []], ['If-Match' => '"'.$released['version'].'"'])
+        ->assertStatus(409)->assertJsonPath('code', 'INVALID_STATE_TRANSITION');
+
+    // production of the plant is told and reads it, but cannot change it
+    signIn($this, $prl, $t);
+    expect(collect(spa($this)->getJson('/api/v1/inbox')->assertOk()->json('data'))->firstWhere('kind', 'production.spk_released')['deepLink'] ?? null)
+        ->toBe("/production/spk-line?spk={$spk['id']}");
+    spa($this)->getJson("/api/v1/production/spk/{$spk['id']}")->assertOk()->assertJsonPath('data.lines.0.workOrderCode', $f['wo']['code']);
+    spa($this)->getJson('/api/v1/query/production.spk?'.http_build_query(['filter' => ['status' => 'RELEASED']]))->assertOk()->assertJsonPath('data.0.code', $released['code']);
+    spa($this)->postJson("/api/v1/production/spk/{$spk['id']}/actions/close", [], ['If-Match' => '"'.$released['version'].'"'])->assertForbidden();
+
+    // the planner revises with a reason: the released SPK stays in force until the revision is released, which keeps the number
+    rtSwitch($this, $t, 'PPC');
+    spa($this)->postJson("/api/v1/production/spk/{$spk['id']}/actions/revise", ['reason' => 'x'], ['If-Match' => '"'.$released['version'].'"'])->assertStatus(422);
+    $rev = spa($this)->postJson("/api/v1/production/spk/{$spk['id']}/actions/revise", ['reason' => 'Machine W-1 down in shift 1'], ['If-Match' => '"'.$released['version'].'"'])
+        ->assertCreated()->json('data');
+    expect($rev)->toMatchArray(['status' => 'DRAFT', 'revision' => 2, 'previousId' => $spk['id'], 'revisionReason' => 'Machine W-1 down in shift 1'])
+        ->and($rev['lines'])->toHaveCount(1);
+    $rev = spa($this)->putJson("/api/v1/production/spk/{$rev['id']}", ['lines' => [spkLine($f, ['plannedQty' => '2400', 'priority' => 2])]], ['If-Match' => '"'.$rev['version'].'"'])
+        ->assertOk()->json('data');
+    // 2400 / 300 = 8 h + 5 min: over the 7 h shift — a warning, not a block
+    expect($rev['machineLoad'][0])->toMatchArray(['hours' => '8.083', 'overloaded' => true, 'balanceHours' => '-1.083']);
+    $rev = spa($this)->postJson("/api/v1/production/spk/{$rev['id']}/actions/release", [], ['If-Match' => '"'.$rev['version'].'"'])->assertOk()->json('data');
+    expect($rev['code'])->toBe($released['code']);
+    spa($this)->getJson("/api/v1/production/spk/{$spk['id']}")->assertOk()->assertJsonPath('data.status', 'SUPERSEDED');
+    expect(array_column($rev['revisions'], 'status'))->toBe(['SUPERSEDED', 'RELEASED']);
+    spa($this)->postJson("/api/v1/production/spk/{$rev['id']}/actions/close", [], ['If-Match' => '"'.$rev['version'].'"'])->assertOk()->assertJsonPath('data.status', 'CLOSED');
+
+    // the daily series counts per company: the next SPK of the day is 0002
+    $next = spa($this)->postJson('/api/v1/production/spk', ['plantId' => $f['plant'], 'workCenterId' => $f['wc']['id'], 'productionDate' => $f['today']])->assertCreated()->json('data');
+    $op10 = AccessFixtures::run($t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
+        'select o.id from routing_operations o join work_orders w on w.routing_version_id = o.routing_version_id where w.id = ? and o.op_seq = 10', [$f['wo']['id']])->id);
+    $next = spa($this)->putJson("/api/v1/production/spk/{$next['id']}", ['lines' => [spkLine($f, ['routingOperationId' => $op10, 'machineId' => $f['m1']['id'], 'plannedQty' => '1600'])]],
+        ['If-Match' => '"'.$next['version'].'"'])->assertOk()->json('data');
+    // a stroke makes 2 pieces every 4.5 s: 1600 pcs/h; 1600 pcs + 30 min setup + 5 min QC = 1.583 h; no hours per shift on this line
+    expect($next['lines'][0])->toMatchArray(['sph' => '1600', 'hours' => '1.583', 'setupMinutes' => '30'])
+        ->and($next['machineLoad'][0]['capacityHours'])->toBeNull();
+    spa($this)->postJson("/api/v1/production/spk/{$next['id']}/actions/release", [], ['If-Match' => '"'.$next['version'].'"'])
+        ->assertOk()->assertJsonPath('data.code', "SPK-{$f['company']}-{$day}-0002");
+})->group('integration', 'production');
+
+it('plans only released WO operations of the line on its machines, also through direct SQL, inside the tenant', function () {
+    $t = TenantFixtures::provision();
+    $other = TenantFixtures::provision();
+    AccessFixtures::roles($t);
+    AccessFixtures::roles($other);
+    $f = spkFixture($this, $t);
+    $spk = spa($this)->postJson('/api/v1/production/spk', ['plantId' => $f['plant'], 'workCenterId' => $f['wc2']['id'], 'productionDate' => $f['today']])->assertCreated()->json('data');
+    $put = fn (array $line) => spa($this)->putJson("/api/v1/production/spk/{$spk['id']}", ['lines' => [$line]], ['If-Match' => '"'.$spk['version'].'"']);
+
+    $put(spkLine($f, ['machineId' => $f['m1']['id']]))->assertStatus(422)->assertJsonValidationErrors(['lines.0.machineId']);
+    $op10 = AccessFixtures::run($t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
+        'select o.id from routing_operations o join work_orders w on w.routing_version_id = o.routing_version_id where w.id = ? and o.op_seq = 10', [$f['wo']['id']])->id);
+    $put(spkLine($f, ['routingOperationId' => $op10]))->assertStatus(422)->assertJsonValidationErrors(['lines.0.routingOperationId']);
+    $draft = woCreate($this, $f)->assertCreated()->json('data');
+    $put(spkLine($f, ['workOrderId' => $draft['id']]))->assertStatus(422)->assertJsonValidationErrors(['lines.0.workOrderId']);
+    $put(spkLine($f, ['plannedQty' => '0']))->assertStatus(422);
+    spa($this)->postJson("/api/v1/production/spk/{$spk['id']}/actions/release", [], ['If-Match' => '"'.$spk['version'].'"'])->assertStatus(422)->assertJsonValidationErrors(['lines']);
+    spa($this)->postJson('/api/v1/production/spk', ['plantId' => $f['plant'], 'workCenterId' => $f['wc2']['id'], 'productionDate' => '2026-01-01'])
+        ->assertStatus(422)->assertJsonValidationErrors(['productionDate']);
+
+    // the database repeats the rules for the runtime role
+    $line = fn (array $over = []) => array_merge(['tenant_id' => $t['tenant'], 'spk_id' => $spk['id'], 'line_no' => 1, 'work_order_id' => $f['wo']['id'],
+        'routing_operation_id' => $f['weldOp'], 'machine_id' => $f['m2']['id'], 'planned_qty' => '10'], $over);
+    $insert = fn (array $row) => fn (EoraPostgresConnection $db) => $db->insert(
+        'insert into spk_lines (tenant_id, spk_id, line_no, work_order_id, routing_operation_id, machine_id, planned_qty) values (?, ?, ?, ?, ?, ?, ?)', array_values($row));
+    expect(fn () => asApp($t, $f['ppc']['id'], $insert($line(['machine_id' => $f['m1']['id']]))))->toThrow(QueryException::class, 'active machine of the SPK');
+    expect(fn () => asApp($t, $f['ppc']['id'], $insert($line(['routing_operation_id' => $op10]))))->toThrow(QueryException::class, 'operation of the work order');
+    expect(fn () => asApp($t, $f['ppc']['id'], $insert($line(['work_order_id' => $draft['id']]))))->toThrow(QueryException::class, 'released work order');
+    $prl = orgUser($this, $t, 'PRL');
+    expect(fn () => asApp($t, $prl['id'], $insert($line())))->toThrow(QueryException::class, 'written by a planner');
+    expect(fn () => asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update("update spk_headers set status = 'CLOSED' where id = ?", [$spk['id']])))
+        ->toThrow(QueryException::class, 'draft → released');
+    expect(fn () => asApp($t, $prl['id'], fn (EoraPostgresConnection $db) => $db->insert(
+        'insert into spk_headers (tenant_id, plant_id, work_center_id, production_date) values (?, ?, ?, ?)', [$t['tenant'], $f['plant'], $f['wc']['id'], $f['today']])))
+        ->toThrow(QueryException::class, 'written by a planner');
+
+    // another tenant sees nothing
+    expect(AccessFixtures::run($other, fn (EoraPostgresConnection $db) => (int) $db->selectOne('select count(*) as n from spk_headers')->n))->toBe(0);
+})->group('integration', 'production');

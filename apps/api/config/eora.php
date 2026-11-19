@@ -66,6 +66,7 @@ use App\Modules\Planning\Queries\WoCloseExceptionsQuery;
 use App\Modules\Planning\Queries\WorkOrdersQuery;
 use App\Modules\Production\Queries\ProductionPostingsQuery;
 use App\Modules\Production\Queries\ProductionRunsQuery;
+use App\Modules\Production\Queries\SpkQuery;
 use App\Modules\Quality\Queries\DispositionsQuery;
 use App\Modules\Warehouse\Queries\FgReceiptsQuery;
 use App\Platform\Export\ExportJobsQuery;
@@ -144,6 +145,7 @@ return [
         'materials.returns' => MaterialReturnsQuery::class,
         'inventory.material_at_production' => MaterialAtProductionQuery::class,
         'production.runs' => ProductionRunsQuery::class,
+        'production.spk' => SpkQuery::class,
         'production.postings' => ProductionPostingsQuery::class,
         'quality.dispositions' => DispositionsQuery::class,
         'warehouse.fg_receipts' => FgReceiptsQuery::class,
