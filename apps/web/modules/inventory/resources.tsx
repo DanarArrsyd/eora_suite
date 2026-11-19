@@ -5,6 +5,7 @@ import { ITEM_TYPES as ITEM_TYPE_OPTIONS } from '@/modules/master/part-resources
 import { PHYSICAL_LOCATION_TYPES, PLANT_FILTER } from '@/modules/master/resources';
 import { queryOptions } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
+import { OWNER_CUSTOMER_FILTER, OWNERSHIP_FILTER, ownerColumn, ownerFact } from '@/modules/inventory/owner';
 import { unitPrecisionError } from '@/modules/materials/resources';
 
 /*
@@ -30,6 +31,8 @@ export type StockLineRow = {
   itemName: string;
   lotId: string | null;
   lotNo: string | null;
+  ownership: 'OWN' | 'CUSTOMER';
+  ownerCode: string | null;
   supplierLotNo: string | null;
   stockStatus: StockStatus;
   qty: string;
@@ -54,6 +57,8 @@ const FILTERS: FilterField[] = [
   { key: 'itemType', type: 'multiselect', source: 'static', label: 'Item type', options: ITEM_TYPE_OPTIONS },
   { key: 'stockStatus', type: 'multiselect', source: 'static', label: 'Status', options: STATUS_OPTIONS },
   { key: 'locationType', type: 'multiselect', source: 'static', label: 'Location kind', options: PHYSICAL_LOCATION_TYPES },
+  OWNERSHIP_FILTER,
+  OWNER_CUSTOMER_FILTER,
 ];
 
 type Posted = { data: { docNo: string; replayed: boolean } };
@@ -84,7 +89,7 @@ export const STOCK_OVERVIEW: MasterResource<StockLineRow> = {
   ],
   filters: FILTERS,
   // stock is for every role; plant and item options come from master data, which some roles (operators) do not read
-  filterPermissions: { plantId: 'master.org.view', itemId: 'master.part.view' },
+  filterPermissions: { plantId: 'master.org.view', itemId: 'master.part.view', ownerCustomerId: 'master.part.view' },
   columns: [
     { id: 'itemCode', header: 'Item', lead: true, sortable: true, cell: (r) => <span className="font-mono">{r.itemCode}</span>, sub: (r) => r.itemName },
     {
@@ -95,6 +100,7 @@ export const STOCK_OVERVIEW: MasterResource<StockLineRow> = {
       sub: (r) => (r.supplierLotNo ? `Supplier ${r.supplierLotNo}` : undefined),
     },
     { id: 'locationCode', header: 'Location', sortable: true, cell: (r) => r.locationCode, sub: (r) => `${place(r)} · ${typeLabel(r.locationType)}` },
+    ownerColumn<StockLineRow>(),
     { id: 'stockStatus', header: 'Status', sortable: true, cell: (r) => <DomainStatusBadge domain="stock" status={r.stockStatus} /> },
     { id: 'qty', header: 'On hand', numeric: true, critical: true, cell: (r) => `${r.qty} ${r.uomCode}` },
     { id: 'availableQty', header: 'Available', numeric: true, cell: (r) => `${r.availableQty} ${r.uomCode}` },
@@ -129,6 +135,7 @@ export const STOCK_OVERVIEW: MasterResource<StockLineRow> = {
   toForm: (r) => ({ toLocationId: '', qty: r.stockStatus === 'UNRESTRICTED' ? r.availableQty : r.qty, note: '' }),
   facts: (r) => [
     { label: 'Item', value: `${r.itemCode} · ${r.itemName}` },
+    ownerFact(r),
     { label: 'Lot', value: r.lotNo ? `${r.lotNo}${r.supplierLotNo ? ` (supplier ${r.supplierLotNo})` : ''}` : 'No lot' },
     { label: 'From', value: `${r.locationCode} · ${place(r)}` },
     { label: 'Status', value: <DomainStatusBadge domain="stock" status={r.stockStatus} /> },

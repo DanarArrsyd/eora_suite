@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Planning\Recovery;
 
+use App\Modules\Inventory\Application\MaterialOwnership;
 use App\Modules\Planning\Mps\MpsItemInput;
 use App\Platform\Calendar\BusinessCalendar;
 use App\Platform\Database\EoraPostgresConnection;
@@ -18,6 +19,7 @@ final class DailyRecoveryPlanner
     /** @return array<string,mixed> */
     public function read(EoraPostgresConnection $db, string $plant, string $target): array
     {
+        MaterialOwnership::requireAggregatePlanning($db, $plant);
         $today = $this->calendar->resolve($db, $plant, new DateTimeImmutable)->productionDate;
         $parts = $db->select("select c.id as customer_id, c.code as customer_code, c.name as customer_name,
               i.id as item_id, i.code as item_code, i.name as item_name, min(ci.customer_part_no) as part_no

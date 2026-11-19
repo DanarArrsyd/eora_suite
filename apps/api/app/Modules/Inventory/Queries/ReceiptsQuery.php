@@ -33,6 +33,8 @@ final class ReceiptsQuery extends QueryDefinition
                  join plants p on p.tenant_id = d.tenant_id and p.id = d.plant_id
                  join uoms u on u.tenant_id = m.tenant_id and u.id = m.uom_id
                  left join lots lt on lt.tenant_id = m.tenant_id and lt.id = m.lot_id
+                 left join customers oc on oc.tenant_id=lt.tenant_id and oc.id=lt.owner_customer_id
+                 left join companies co on co.tenant_id=lt.tenant_id and co.id=lt.owner_company_id
                  left join suppliers s on s.tenant_id = d.tenant_id and s.id = d.source_id and d.source_type = 'supplier'
                  left join users up on up.id = d.posted_by";
     }
@@ -73,6 +75,10 @@ final class ReceiptsQuery extends QueryDefinition
             new Field('lotId', 'm.lot_id', Field::UUID, filterable: true),
             new Field('lotNo', 'lt.lot_no'),
             new Field('supplierLotNo', 'lt.supplier_lot_no'),
+            new Field('ownerCustomerId', 'lt.owner_customer_id', Field::UUID, filterable: true),
+            new Field('ownerCompanyId', 'lt.owner_company_id', Field::UUID),
+            new Field('ownerCode', 'coalesce(oc.code,co.code)'),
+            new Field('ownership', "case when lt.owner_customer_id is null then 'OWN' else 'CUSTOMER' end", Field::ENUM, filterable: true, options: ['OWN', 'CUSTOMER']),
             new Field('locationId', 'm.location_id', Field::UUID, filterable: true),
             new Field('locationCode', 'l.code'),
             new Field('stockStatus', 'm.stock_status', Field::ENUM, filterable: true, options: StockQuery::STATUSES),
@@ -100,6 +106,8 @@ final class ReceiptsQuery extends QueryDefinition
             new ExportColumn('Item name', 'itemName'),
             new ExportColumn('Lot', 'lotNo'),
             new ExportColumn('Supplier lot', 'supplierLotNo'),
+            new ExportColumn('Material owner', 'ownerCode'),
+            new ExportColumn('Ownership', 'ownership', labels: ['OWN' => 'Company-owned', 'CUSTOMER' => 'Customer-owned']),
             new ExportColumn('Location', 'locationCode'),
             new ExportColumn('Status', 'stockStatus', labels: StockQuery::STATUS_LABELS),
             new ExportColumn('Quantity', 'qty', ExportColumn::DECIMAL),

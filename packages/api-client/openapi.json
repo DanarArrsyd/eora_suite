@@ -15314,6 +15314,54 @@
                             }
                         }
                     },
+                    "409": {
+                        "description": "OWNER_PEGGING_REQUIRED",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "format": "uri"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer",
+                                            "enum": [
+                                                409
+                                            ]
+                                        },
+                                        "code": {
+                                            "type": "string",
+                                            "enum": [
+                                                "OWNER_PEGGING_REQUIRED"
+                                            ]
+                                        },
+                                        "detail": {
+                                            "type": "string",
+                                            "description": "Safe to show; never names permissions, scopes or other tenants."
+                                        },
+                                        "correlationId": {
+                                            "type": "string"
+                                        },
+                                        "reference": {
+                                            "type": "string",
+                                            "description": "Short support reference derived from the correlation id."
+                                        }
+                                    },
+                                    "required": [
+                                        "type",
+                                        "title",
+                                        "status",
+                                        "code"
+                                    ]
+                                }
+                            }
+                        }
+                    },
                     "422": {
                         "description": "VALIDATION_FAILED",
                         "content": {
@@ -15635,7 +15683,7 @@
                         }
                     },
                     "409": {
-                        "description": "INVALID_STATE_TRANSITION",
+                        "description": "OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -15657,6 +15705,7 @@
                                         "code": {
                                             "type": "string",
                                             "enum": [
+                                                "OWNER_PEGGING_REQUIRED",
                                                 "INVALID_STATE_TRANSITION"
                                             ]
                                         },
@@ -16171,7 +16220,7 @@
                         }
                     },
                     "409": {
-                        "description": "INVALID_STATE_TRANSITION, RECOVERY_INPUTS_CHANGED",
+                        "description": "OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION, RECOVERY_INPUTS_CHANGED",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -16193,6 +16242,7 @@
                                         "code": {
                                             "type": "string",
                                             "enum": [
+                                                "OWNER_PEGGING_REQUIRED",
                                                 "INVALID_STATE_TRANSITION",
                                                 "RECOVERY_INPUTS_CHANGED"
                                             ]
@@ -35635,7 +35685,7 @@
                         }
                     },
                     "409": {
-                        "description": "INVALID_STATE_TRANSITION",
+                        "description": "OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -35657,6 +35707,7 @@
                                         "code": {
                                             "type": "string",
                                             "enum": [
+                                                "OWNER_PEGGING_REQUIRED",
                                                 "INVALID_STATE_TRANSITION"
                                             ]
                                         },
@@ -36215,7 +36266,7 @@
                         }
                     },
                     "409": {
-                        "description": "INVALID_STATE_TRANSITION",
+                        "description": "OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -36237,6 +36288,7 @@
                                         "code": {
                                             "type": "string",
                                             "enum": [
+                                                "OWNER_PEGGING_REQUIRED",
                                                 "INVALID_STATE_TRANSITION"
                                             ]
                                         },
@@ -36744,7 +36796,7 @@
                         }
                     },
                     "409": {
-                        "description": "INVALID_STATE_TRANSITION",
+                        "description": "OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -36766,6 +36818,7 @@
                                         "code": {
                                             "type": "string",
                                             "enum": [
+                                                "OWNER_PEGGING_REQUIRED",
                                                 "INVALID_STATE_TRANSITION"
                                             ]
                                         },
@@ -38728,7 +38781,7 @@
                         }
                     },
                     "409": {
-                        "description": "INVALID_STATE_TRANSITION, MPS_INPUTS_CHANGED",
+                        "description": "OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION, MPS_INPUTS_CHANGED",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -38750,6 +38803,7 @@
                                         "code": {
                                             "type": "string",
                                             "enum": [
+                                                "OWNER_PEGGING_REQUIRED",
                                                 "INVALID_STATE_TRANSITION",
                                                 "MPS_INPUTS_CHANGED"
                                             ]
@@ -39229,7 +39283,7 @@
                         }
                     },
                     "409": {
-                        "description": "INVALID_STATE_TRANSITION",
+                        "description": "OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -39251,6 +39305,7 @@
                                         "code": {
                                             "type": "string",
                                             "enum": [
+                                                "OWNER_PEGGING_REQUIRED",
                                                 "INVALID_STATE_TRANSITION"
                                             ]
                                         },
@@ -39834,7 +39889,7 @@
                         }
                     },
                     "409": {
-                        "description": "INVALID_STATE_TRANSITION",
+                        "description": "OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -39856,6 +39911,7 @@
                                         "code": {
                                             "type": "string",
                                             "enum": [
+                                                "OWNER_PEGGING_REQUIRED",
                                                 "INVALID_STATE_TRANSITION"
                                             ]
                                         },
@@ -57386,6 +57442,13 @@
                                         "type": "string",
                                         "format": "uuid"
                                     },
+                                    "ownerCustomerId": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "uuid"
+                                    },
                                     "qty": {
                                         "type": "string",
                                         "pattern": "^(?!0+(\\.0+)?$)\\d{1,12}(\\.\\d{1,6})?$"
@@ -74536,6 +74599,13 @@
                                             "null"
                                         ],
                                         "format": "uuid"
+                                    },
+                                    "productionCustomerId": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "uuid"
                                     }
                                 },
                                 "required": [
@@ -75067,6 +75137,13 @@
                                         "maxLength": 500
                                     },
                                     "scheduleLineId": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "uuid"
+                                    },
+                                    "productionCustomerId": {
                                         "type": [
                                             "string",
                                             "null"

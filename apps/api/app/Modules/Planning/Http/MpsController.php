@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Planning\Http;
 
+use App\Modules\Inventory\Application\MaterialOwnership;
 use App\Modules\Planning\Mps\MpsCapacity;
 use App\Modules\Planning\Mps\MpsEngine;
 use App\Modules\Planning\Mps\MpsInputs;
@@ -65,6 +66,7 @@ final class MpsController
         if ($db->selectOne("select 1 as ok from mps_versions where plant_id = ? and status in ('DRAFT', 'SUBMITTED')", [$plant]) !== null) {
             throw self::openExists();
         }
+        MaterialOwnership::requireAggregatePlanning($db, $plant);
         $in = $this->inputs->load($db, $plant);
         $year = (int) substr($in->today, 0, 4);
         $number = (int) $db->selectOne(
@@ -109,6 +111,7 @@ final class MpsController
         $expected = Concurrency::expectedVersion($request);
         $db = $this->db();
         $m = $this->locked($db, $version, self::CREATE, ['DRAFT']);
+        MaterialOwnership::requireAggregatePlanning($db, (string) $m->plant_id);
         $before = $this->state($db, 'mps_versions', (string) $m->id);
         $in = $this->inputs->load($db, (string) $m->plant_id);
         if ($db->update(
@@ -142,6 +145,7 @@ final class MpsController
         $expected = Concurrency::expectedVersion($request);
         $db = $this->db();
         $m = $this->locked($db, $version, self::CREATE, ['DRAFT']);
+        MaterialOwnership::requireAggregatePlanning($db, (string) $m->plant_id);
         $o = $db->selectOne(
             'select o.id, o.week_start::text as week_start, mi.production_lead_time_days as lead, u.code as uom, u.decimals
                from mps_planned_orders o join mps_items mi on mi.id = o.mps_item_id join uoms u on u.id = mi.uom_id
@@ -234,6 +238,7 @@ final class MpsController
                                 union all select 1 from mps_planned_orders where mps_version_id = ? and adjusted_by = ? limit 1', [$m->id, $actor, $m->id, $actor]) !== null) {
             throw new DomainProblem(403, 'SOD_VIOLATION', 'Second person required', 'You prepared this MPS; another approver decides it.');
         }
+        MaterialOwnership::requireAggregatePlanning($db, (string) $m->plant_id);
         if ($this->inputs->load($db, (string) $m->plant_id)->fingerprint() !== $m->input_fingerprint) {
             throw new DomainProblem(409, 'MPS_INPUTS_CHANGED', 'Data changed since the calculation',
                 'Demand, stock, work orders or planning parameters changed after this MPS was calculated. Return it so the planner recalculates.');

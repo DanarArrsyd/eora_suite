@@ -44,6 +44,7 @@ export type WorkOrderRow = {
   salesOrderId: string | null;
   salesOrderCode: string | null;
   customerCode: string | null;
+  productionCustomerId: string | null;
   scheduleDate: string | null;
   scheduleQty: string | null;
   bomVersionNo: number | null;
@@ -121,7 +122,7 @@ const STATUS_OPTIONS: Option[] = [
   { value: 'CANCELLED', label: 'Cancelled' },
 ];
 const ifMatch = (version: number) => ({ 'If-Match': `"${version}"` });
-const BLANK = { plantId: '', itemId: '', qty: '', dueDate: '', reasonCode: '', note: '', scheduleLineId: '' };
+const BLANK = { plantId: '', itemId: '', qty: '', dueDate: '', reasonCode: '', note: '', scheduleLineId: '', productionCustomerId: '' };
 
 function fields(minDate?: string): MasterResource<WorkOrderRow>['fields'] {
   return [
@@ -151,6 +152,13 @@ function fields(minDate?: string): MasterResource<WorkOrderRow>['fields'] {
       // the plant's calendar day once the WO exists; on creation the plant is not chosen yet, so the server checks it
       ...(minDate ? { minDate } : {}),
       hint: 'Today or later at the plant.',
+    },
+    {
+      key: 'productionCustomerId',
+      label: 'Production customer',
+      kind: 'select',
+      options: 'customers',
+      hint: 'Needed to use customer material. Must match the customer of the delivery.',
     },
     { key: 'reasonCode', label: 'Reason (outside MPS)', kind: 'select', required: true, options: WO_REASONS },
     { key: 'note', label: 'Note', kind: 'text', maxLength: 500, hint: 'Required when the reason is Other.' },
@@ -193,7 +201,7 @@ function workOrders(base: string): MasterResource<WorkOrderRow> {
         id: 'salesOrderCode',
         header: 'For delivery',
         cell: (r) => r.salesOrderCode ?? '—',
-        sub: (r) => (r.customerCode ? `${r.customerCode} · ${r.scheduleDate}` : undefined),
+        sub: (r) => (r.customerCode ? (r.scheduleDate ? `${r.customerCode} · ${r.scheduleDate}` : r.customerCode) : undefined),
       },
       { id: 'reasonCode', header: 'Reason', cell: (r) => reason(r.reasonCode) },
       {
@@ -225,6 +233,7 @@ function workOrders(base: string): MasterResource<WorkOrderRow> {
             reasonCode: v.reasonCode as 'URGENT_ORDER' | 'NO_MPS_YET' | 'SAMPLE_TRIAL' | 'NG_REPLACEMENT' | 'OTHER',
             note: v.note || null,
             scheduleLineId: v.scheduleLineId || null,
+            productionCustomerId: v.productionCustomerId || null,
           },
         }),
       ),
@@ -341,6 +350,7 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
             dueDate: v.dueDate!,
             note: v.note || null,
             scheduleLineId: v.scheduleLineId || null,
+            productionCustomerId: v.productionCustomerId || null,
           },
         }),
       ),
@@ -352,11 +362,13 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
       reasonCode: r.reasonCode,
       note: r.note ?? '',
       scheduleLineId: r.scheduleLineId ?? '',
+      productionCustomerId: r.productionCustomerId ?? '',
     }),
   };
 
   const facts: { label: string; value: React.ReactNode }[] = [
     { label: 'Item', value: `${o.itemCode} · ${o.itemName}` },
+    { label: 'Production customer', value: o.customerCode ?? 'None (company material only)' },
     { label: 'Quantity', value: <span className="font-semibold tabular-nums">{`${o.qty} ${o.uomCode}`}</span> },
     ...(o.pairedOutput
       ? [{ label: 'Paired output', value: `${o.qty} ${o.uomCode} of ${o.pairedOutput.itemCode} · ${o.pairedOutput.pairsPerSheet} pairs per sheet` }]

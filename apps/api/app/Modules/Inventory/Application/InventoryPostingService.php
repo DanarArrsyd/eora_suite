@@ -43,6 +43,17 @@ final class InventoryPostingService
     /** Requests decided by a second person (D-060): never posted directly. */
     private const array REQUESTED = ['STOCK_ADJUSTMENT', 'REVERSAL', 'WO_CLOSE_EXCEPTION'];
 
+    /** Material-owner guards of the ledger (D-135) in the user's words (D-136); the database keeps its own wording. */
+    private const array OWNER_REFUSALS = [
+        'customer-owned material only serves its owner customer work order' => 'This lot belongs to another customer. Use company material or material of this work order\'s customer.',
+        'customer-owned goods only serve their owner customer delivery' => 'These goods belong to another customer. Ship company stock or stock of this delivery\'s customer.',
+        'customer-owned goods only allocate to their owner customer' => 'These goods belong to another customer. Allocate company stock or stock of this delivery\'s customer.',
+        'one production posting and all its outputs have one material owner' => 'Use material of one owner per production posting. Report each owner in a separate run.',
+        'customer-owned output requires traceable customer material consumption' => 'Customer output needs the customer material it was made from. Enter the consumed lot.',
+        'company-owned material stays in its owning company' => 'This company\'s material cannot move to a plant of another company.',
+        'a lot keeps its material owner' => 'A lot keeps its material owner. Reverse the receipt and receive it again with the right owner.',
+    ];
+
     /**
      * Documents posted directly in M3 (doc 32 M3-D2) with the codes of their legs; the others come with their documents in
      * M4 (issue, custody, return, production, QC, FG receipt, pick, shipment, scrap, rework).
@@ -741,11 +752,15 @@ final class InventoryPostingService
         $this->requireOpenPeriod($db, $command->plantId, $effective, $time->calendarDate);
 
         $items = $this->items($db, $command->legs);
+        $owners = [];
+        foreach ($db->select("select id, case when owner_customer_id is null then 'OWN' else 'CUSTOMER' end as ownership from lots where id = any(?::uuid[])", ['{'.implode(',', array_filter(array_map(static fn (PostingLeg $l) => $l->lotId, $command->legs))).'}']) as $lot) {
+            $owners[(string) $lot->id] = (string) $lot->ownership;
+        }
         $physical = $this->physicalLocations($db, $command->plantId, $command->legs);
         $deltas = [];
         foreach ($command->legs as $leg) {
             if (isset($physical[$leg->locationId])) {
-                $key = $this->balanceKey($command->plantId, $leg, $items[$leg->itemId]->base_uom_id);
+                $key = $this->balanceKey($command->plantId, $leg, $items[$leg->itemId]->base_uom_id, $owners[$leg->lotId] ?? 'OWN');
                 $deltas[$key] = bcadd($deltas[$key] ?? '0', self::num($leg->qty), 6);
             }
         }
@@ -782,12 +797,12 @@ final class InventoryPostingService
             $db->insert(
                 'insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, reverses_movement_id, plant_id, location_id, item_id, lot_id,
                                                   stock_status, uom_id, qty_signed, entered_qty, entered_uom_id, uom_conversion_id, wo_id, run_id,
-                                                  measurement_method, measured_qty, measurement_evidence, reason_code, reason_note, schedule_line_id)
-                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                                                  measurement_method, measured_qty, measurement_evidence, reason_code, reason_note, schedule_line_id, ownership)
+                 values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [$documentId, $i + 1, $leg->movementCode, $leg->reversesMovementId, $command->plantId, $leg->locationId, $leg->itemId, $leg->lotId,
                     $leg->stockStatus, $items[$leg->itemId]->base_uom_id, $leg->qty, $leg->enteredQty, $leg->enteredUomId, $leg->uomConversionId, $leg->woId,
                     $command->sourceType === 'production_run' ? $command->sourceId : null,
-                    $leg->measurementMethod, $leg->measuredQty, $leg->measurementEvidence, $leg->reasonCode, $leg->reasonNote, $leg->scheduleLineId],
+                    $leg->measurementMethod, $leg->measuredQty, $leg->measurementEvidence, $leg->reasonCode, $leg->reasonNote, $leg->scheduleLineId, $owners[$leg->lotId] ?? 'OWN'],
             );
         }
         foreach ($command->genealogy as $g) {
@@ -880,9 +895,9 @@ final class InventoryPostingService
         return $physical;
     }
 
-    private function balanceKey(string $plantId, PostingLeg $leg, string $uomId): string
+    private function balanceKey(string $plantId, PostingLeg $leg, string $uomId, string $ownership): string
     {
-        return implode('|', [$plantId, $leg->locationId, $leg->itemId, $leg->lotId ?? '', $leg->stockStatus, 'OWN', $uomId]);
+        return implode('|', [$plantId, $leg->locationId, $leg->itemId, $leg->lotId ?? '', $leg->stockStatus, $ownership, $uomId]);
     }
 
     /**
@@ -948,8 +963,9 @@ final class InventoryPostingService
         if (in_array($state, ['23514', '42501', '23503'], true)) {
             $message = $e->getPrevious()?->getMessage() ?? $e->getMessage();
             preg_match('/ERROR:\s+(.+?)(\n|\(Connection|$)/', $message, $m);
+            $reason = trim($m[1] ?? '');
 
-            return new DomainProblem(422, 'POSTING_REFUSED', 'Posting refused', trim($m[1] ?? 'The ledger refused this posting.'));
+            return new DomainProblem(422, 'POSTING_REFUSED', 'Posting refused', self::OWNER_REFUSALS[$reason] ?? ($reason !== '' ? $reason : 'The ledger refused this posting.'));
         }
 
         return null;

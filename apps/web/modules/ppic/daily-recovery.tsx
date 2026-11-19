@@ -18,7 +18,9 @@ import {
   Pagination,
   useFilterPanel,
   type EoraColumn,
+  statusEntry,
   type FilterField,
+  type StatusOf,
 } from '@eora/features/patterns';
 import {
   Badge,
@@ -97,16 +99,16 @@ type Result = {
   meta: { total: number; page: number; perPage: number; today: string; targetDate: string; asOf: string; fingerprint: string; formulaCode: string };
 };
 const STATUSES: Record<string, string> = {
-  WAIT_QC: 'Kejar QC',
-  COVERED: 'Tercakup',
-  BATCH_MISSING: 'Isi konversi batch',
-  BOM_MISSING: 'BOM belum tersedia',
-  MATERIAL_SHORT: 'Material kurang',
-  PLAN_REQUIRED: 'Perlu rencana',
-  WO_CREATED: 'SPK dibuat',
+  WAIT_QC: 'Waiting for QC',
+  COVERED: 'Covered',
+  BATCH_MISSING: 'Enter pcs per batch',
+  BOM_MISSING: 'No BOM in force',
+  MATERIAL_SHORT: 'Material short',
+  PLAN_REQUIRED: 'Plan needed',
+  WO_CREATED: 'Work order created',
 };
 const pcs = (value: string | null) =>
-  value === null ? <span className="text-ink-2">Belum terhitung</span> : <QuantityWithUom value={Number(value)} uom="pcs" />;
+  value === null ? <span className="text-ink-2">Not calculated</span> : <QuantityWithUom value={Number(value)} uom="pcs" />;
 
 export function DailyRecoveryScreen() {
   const me = useMe();
@@ -185,66 +187,63 @@ export function DailyRecoveryScreen() {
       title: (r) => r.itemName,
     },
     { id: 'partNo', header: 'Part No.', cell: (r) => r.partNo, minWidth: 170 },
-    { id: 'requiredQty', header: 'Kebutuhan s.d. target', cell: (r) => pcs(r.requiredQty), numeric: true, minWidth: 160 },
-    { id: 'fgQty', header: 'FG Gudang', cell: (r) => pcs(r.fgQty), numeric: true, minWidth: 120 },
-    { id: 'beforeCheckQty', header: 'Before Check', cell: (r) => pcs(r.beforeCheckQty), numeric: true, critical: true, minWidth: 130 },
-    { id: 'acceptedQty', header: 'QC Accepted, belum FG', cell: (r) => pcs(r.acceptedQty), numeric: true, minWidth: 175 },
-    { id: 'wo', header: 'Sisa WO untuk kebutuhan', cell: (r) => pcs(r.allocated.wo), numeric: true, minWidth: 175 },
-    { id: 'netQty', header: 'Kebutuhan SPK net', cell: (r) => pcs(r.netQty), numeric: true, critical: true, minWidth: 150 },
-    { id: 'proposedQty', header: 'Usulan sesuai batch', cell: (r) => pcs(r.proposedQty), numeric: true, critical: true, minWidth: 160 },
-    { id: 'material', header: 'Estimasi kapasitas bahan', cell: (r) => pcs(r.materialCapacityQty), numeric: true, minWidth: 180 },
-    { id: 'planQty', header: 'Total plan edit', cell: (r) => pcs(r.planQty), numeric: true, minWidth: 135 },
+    { id: 'requiredQty', header: 'Demand up to target', cell: (r) => pcs(r.requiredQty), numeric: true, minWidth: 160 },
+    { id: 'fgQty', header: 'FG warehouse stock', cell: (r) => pcs(r.fgQty), numeric: true, minWidth: 120 },
+    { id: 'beforeCheckQty', header: 'Pending QC (Before Check)', cell: (r) => pcs(r.beforeCheckQty), numeric: true, critical: true, minWidth: 130 },
+    { id: 'acceptedQty', header: 'QC released, awaiting FG receipt', cell: (r) => pcs(r.acceptedQty), numeric: true, minWidth: 175 },
+    { id: 'wo', header: 'Remaining WO output', cell: (r) => pcs(r.allocated.wo), numeric: true, minWidth: 175 },
+    { id: 'netQty', header: 'Net work order need', cell: (r) => pcs(r.netQty), numeric: true, critical: true, minWidth: 150 },
+    { id: 'proposedQty', header: 'Proposed (whole batches)', cell: (r) => pcs(r.proposedQty), numeric: true, critical: true, minWidth: 160 },
+    { id: 'material', header: 'Material capacity (estimate)', cell: (r) => pcs(r.materialCapacityQty), numeric: true, minWidth: 180 },
+    { id: 'planQty', header: 'Planned total', cell: (r) => pcs(r.planQty), numeric: true, minWidth: 135 },
     {
       id: 'status',
-      header: 'Tindakan',
+      header: 'Action',
       cell: (r) => <Badge tone={r.status === 'WAIT_QC' || r.status === 'MATERIAL_SHORT' ? 'warning' : 'neutral'}>{STATUSES[r.status] ?? r.status}</Badge>,
       minWidth: 155,
     },
   ];
-  if (me.isPending) return <LoadingState title="Memuat Daily Recovery" />;
+  if (me.isPending) return <LoadingState title="Loading Daily Recovery" />;
   if (!canView)
     return (
       <div className="p-6">
-        <PermissionDeniedState
-          title="Daily Recovery belum tersedia untuk role ini"
-          description="Akses membutuhkan role Planner atau pembaca planning pada plant terkait."
-        />
+        <PermissionDeniedState title="Daily Recovery is not available for your role" description="Ask your administrator for planning access at this plant." />
       </div>
     );
   if (!plant)
     return (
       <div className="p-6">
-        <EmptyState title="Pilih plant untuk planning" description="Akun ini perlu akses ke plant terlebih dahulu." />
+        <EmptyState title="No plant available" description="Ask your administrator for access to a plant." />
       </div>
     );
 
   return (
     <EnterprisePage
       title="Daily Recovery Planner"
-      description="Review kebutuhan kirim, hasil yang menunggu QC, dan rencana produksi per shift."
+      description="Cover delivery demand and plan production per shift."
       actions={
         <Button variant="secondary" onClick={() => query.refetch()} disabled={query.isFetching}>
           <RefreshCw className="size-4" aria-hidden="true" />
-          Refresh posisi
+          Refresh
         </Button>
       }
     >
       {notice ? <InlineAlert tone="success" title={notice} className="mb-4" /> : null}
       <div className="mb-4 flex flex-wrap items-end justify-between gap-4 rounded-lg border border-line bg-surface p-4">
-        <Field label="Tanggal target produksi / kirim">
+        <Field label="Target production / delivery date">
           {(control) => (
             <DatePicker
               {...control}
               value={targetDate as IsoDate}
               min={today as IsoDate}
-              label="Tanggal target produksi / kirim"
+              label="Target production / delivery date"
               onChange={(value) => value && setParams({ targetDate: value })}
             />
           )}
         </Field>
         <p className="max-w-xl text-xs leading-5 text-ink-2">
-          Before Check dihitung sebagai suplai proyeksi untuk planning. Pengiriman mengikuti FG yang siap pakai. Qty stok per item dapat dipakai bersama
-          beberapa customer. Alokasi kebutuhan dihitung sekali sebelum filter.
+          Pending QC (Before Check) counts as projected supply for planning only. Delivery uses released FG stock. Shared stock is allocated across customers
+          once, before filters.
         </p>
       </div>
       <ListWorkspace
@@ -252,7 +251,7 @@ export function DailyRecoveryScreen() {
         toolbar={
           <>
             <div className="flex flex-wrap items-center gap-3">
-              <ListSearch label="Cari customer atau part" placeholder="Cari customer, part, atau part no…" value={search} onChange={(q) => setParams({ q })} />
+              <ListSearch label="Search customer or part" placeholder="Search customer, part or part no…" value={search} onChange={(q) => setParams({ q })} />
               <span className="text-xs text-ink-2">{query.data?.meta.total ?? '…'} part</span>
             </div>
             <div className="flex items-center gap-2">
@@ -284,7 +283,7 @@ export function DailyRecoveryScreen() {
         }
       >
         <DataTable
-          label="Daily Recovery per customer dan part"
+          label="Daily Recovery by customer and part"
           columns={columns}
           rows={rows}
           getRowId={(r) => r.id}
@@ -298,21 +297,21 @@ export function DailyRecoveryScreen() {
           density={density}
           empty={
             <EmptyState
-              title="Belum ada part untuk filter ini"
-              description="Siapkan mapping customer–part aktif dan jadwal delivery, atau sesuaikan filter customer."
+              title="No parts match these filters"
+              description="Add an active customer part and a delivery schedule, or change the customer filter."
             />
           }
-          rowActions={{ primary: (r) => ({ id: 'review', label: 'Review / Plan', icon: ClipboardList, onSelect: () => setDetailId(r.id) }) }}
+          rowActions={{ primary: (r) => ({ id: 'review', label: 'Review plan', icon: ClipboardList, onSelect: () => setDetailId(r.id) }) }}
         />
       </ListWorkspace>
-      <p className="mt-3 text-xs text-ink-2">Geser tabel ke kanan untuk melihat posisi QC, sisa WO, kapasitas bahan, dan rencana produksi.</p>
+      <p className="mt-3 text-xs text-ink-2">Scroll the table right for QC, remaining WO, material capacity and the plan.</p>
       {query.data ? (
         <p className="mt-3 text-xs text-ink-2">
-          Posisi live {query.data.meta.asOf} · Aktual tanggal produksi {query.data.meta.today} · {query.data.meta.formulaCode} (berlaku 18 Nov 2026)
+          Live position {query.data.meta.asOf} · Production date {query.data.meta.today} · {query.data.meta.formulaCode} (in force from 18 Nov 2026)
         </p>
       ) : null}
       <Drawer open={!!selected} onOpenChange={(open) => !open && setDetailId(null)}>
-        <DrawerContent title={selected ? `${selected.customerCode} · ${selected.itemName}` : 'Review planning'} closeLabel="Tutup review">
+        <DrawerContent title={selected ? `${selected.customerCode} · ${selected.itemName}` : 'Review plan'} closeLabel="Close review">
           {selected ? (
             <RecoveryDetail
               key={`${selected.id}-${selected.version}`}
@@ -323,7 +322,7 @@ export function DailyRecoveryScreen() {
               canCreateWo={canCreateWo}
               onSaved={async () => {
                 await client.invalidateQueries({ queryKey: ['daily-recovery'] });
-                setNotice('Rencana shift tersimpan');
+                setNotice('Shift plan saved');
               }}
               onCreated={(id) => router.push(`/ppic/work-orders?order=${id}`)}
             />
@@ -419,29 +418,29 @@ function RecoveryDetail({
     }
   };
   const numbers: { key: keyof typeof values; label: string; hint?: string }[] = [
-    { key: 'minimumQty', label: 'Minimum SPK (pcs)' },
-    { key: 'batchQty', label: 'Pcs per batch material', hint: 'Contoh 22 pcs/sheet membulatkan minimum 500 menjadi 506.' },
-    { key: 'bufferQty', label: 'Tambahan target buffer (pcs)' },
-    { key: 'shift1Qty', label: 'Plan Shift I (pcs)' },
-    { key: 'shift2Qty', label: 'Plan Shift II (pcs)' },
-    { key: 'shift3Qty', label: 'Plan Shift III (pcs)' },
+    { key: 'minimumQty', label: 'Minimum work order (pcs)' },
+    { key: 'batchQty', label: 'Pcs per material batch', hint: 'Example: 22 pcs per sheet rounds a minimum of 500 up to 506.' },
+    { key: 'bufferQty', label: 'Buffer (pcs)' },
+    { key: 'shift1Qty', label: 'Shift I plan (pcs)' },
+    { key: 'shift2Qty', label: 'Shift II plan (pcs)' },
+    { key: 'shift3Qty', label: 'Shift III plan (pcs)' },
   ];
   return (
-    <div tabIndex={0} role="region" aria-label="Detail rencana produksi" className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5 text-[13px]">
+    <div tabIndex={0} role="region" aria-label="Production plan detail" className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5 text-[13px]">
       <p className="text-ink-2">
-        {row.partNo} · Target {targetDate} · Backlog {pcs(row.backlogQty)} · Pengiriman hari ini {pcs(row.shippedTodayQty)}
+        {row.partNo} · Target {targetDate} · Backlog {pcs(row.backlogQty)} · Shipped today {pcs(row.shippedTodayQty)}
       </p>
       <section>
-        <h3 className="mb-2 text-sm font-semibold">Suplai yang dipakai untuk kebutuhan ini</h3>
+        <h3 className="mb-2 text-sm font-semibold">Supply used for this demand</h3>
         <dl className="grid grid-cols-2 gap-2">
           {Object.entries({
-            'FG dialokasikan / staging': row.allocated.fg,
-            'Before Check proyeksi': row.allocated.beforeCheck,
-            'QC Accepted, belum FG': row.allocated.accepted,
-            'Sisa WO sebelum target': row.allocated.wo,
-            'Kebutuhan SPK net': row.netQty,
-            'Usulan sesuai batch': row.proposedQty,
-            'Estimasi kapasitas bahan': row.materialCapacityQty,
+            'FG allocated / staged': row.allocated.fg,
+            'Pending QC (projected)': row.allocated.beforeCheck,
+            'QC released, awaiting FG receipt': row.allocated.accepted,
+            'Remaining WO output before target': row.allocated.wo,
+            'Net work order need': row.netQty,
+            'Proposed (whole batches)': row.proposedQty,
+            'Material capacity (estimate)': row.materialCapacityQty,
           }).map(([label, qty]) => (
             <React.Fragment key={label}>
               <dt className="text-ink-2">{label}</dt>
@@ -451,27 +450,27 @@ function RecoveryDetail({
         </dl>
       </section>
       {row.inputsChanged && !additional ? (
-        <InlineAlert tone="warning" title="Posisi berubah sejak rencana disimpan">
-          Review angka terbaru dan simpan ulang sebelum membuat SPK.
+        <InlineAlert tone="warning" title="Position changed since the plan was saved">
+          Check the new figures and save again before creating the work order.
         </InlineAlert>
       ) : null}
       {row.status === 'MATERIAL_SHORT' ? (
-        <InlineAlert tone="warning" title="Estimasi material di bawah usulan">
-          Review lot bahan dan jadwal kedatangannya sebelum melanjutkan release WO.
+        <InlineAlert tone="warning" title="Material capacity is below the proposal">
+          Check material lots and inbound dates before releasing the work order.
         </InlineAlert>
       ) : null}
       {additional ? (
-        <InlineAlert tone="info" title={`Rencana sebelumnya sudah menjadi ${row.workOrderCode}`}>
+        <InlineAlert tone="info" title={`The earlier plan became ${row.workOrderCode}`}>
           <Link className="text-link underline" href={`/ppic/work-orders?order=${row.workOrderId}`}>
-            Buka SPK sebelumnya
+            Open that work order
           </Link>
-          . Qty di bawah dapat disimpan sebagai rencana tambahan dengan alasan baru.
+          . Save the quantities below as an additional plan with a new reason.
         </InlineAlert>
       ) : null}
       <form onSubmit={save} className="space-y-4">
-        <h3 className="text-sm font-semibold">{additional ? 'Rencana tambahan' : 'Rencana produksi per shift'}</h3>
+        <h3 className="text-sm font-semibold">{additional ? 'Additional plan' : 'Production plan per shift'}</h3>
         <fieldset disabled={!canEdit || busy} className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
-          <legend className="sr-only">Parameter dan jumlah produksi</legend>
+          <legend className="sr-only">Planning parameters and quantities</legend>
           {numbers.map(({ key, label, hint }) => (
             <Field key={key} label={label} hint={hint}>
               {(control) => (
@@ -488,20 +487,20 @@ function RecoveryDetail({
               )}
             </Field>
           ))}
-          <Field label="Alasan / penyesuaian Planner" required className="col-span-2 max-sm:col-span-1">
+          <Field label="Reason" required className="col-span-2 max-sm:col-span-1">
             {(control) => (
               <Textarea {...control} value={values.reason} onChange={(e) => set('reason', e.target.value)} minLength={3} maxLength={500} required />
             )}
           </Field>
         </fieldset>
         {problem ? (
-          <InlineAlert tone="danger" title="Rencana belum diproses">
+          <InlineAlert tone="danger" title="Plan not saved">
             {problem}
           </InlineAlert>
         ) : null}
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant="primary" disabled={!canEdit || busy}>
-            {busy ? 'Memproses…' : additional ? 'Simpan rencana tambahan' : 'Simpan rencana shift'}
+            {busy ? 'Saving…' : additional ? 'Save additional plan' : 'Save shift plan'}
           </Button>
           {!additional ? (
             <Button
@@ -510,21 +509,19 @@ function RecoveryDetail({
               onClick={create}
               disabled={!canCreateWo || busy || dirty || !row.planId || row.inputsChanged || Number(row.planQty) <= 0}
             >
-              Buat SPK Draft
+              Create draft work order
             </Button>
           ) : null}
         </div>
-        <p className="text-xs text-ink-2">
-          Simpan rencana sebelum membuat SPK. Qty dapat disesuaikan dengan alasan. SPK berikutnya mengikuti alur persetujuan WO.
-        </p>
+        <p className="text-xs text-ink-2">Save the plan first. The draft work order then follows the normal release approval.</p>
       </form>
       <section>
-        <h3 className="mb-2 text-sm font-semibold">Lot & posisi barang</h3>
-        <div tabIndex={0} role="region" aria-label="Sumber saldo per lot" className="overflow-x-auto rounded-md border border-line">
+        <h3 className="mb-2 text-sm font-semibold">Lots and positions</h3>
+        <div tabIndex={0} role="region" aria-label="Balances by lot" className="overflow-x-auto rounded-md border border-line">
           <table className="w-full text-left text-xs">
             <thead className="bg-subtle text-ink-2">
               <tr>
-                <th className="p-2">Lot / lokasi</th>
+                <th className="p-2">Lot / location</th>
                 <th className="p-2">Status</th>
                 <th className="p-2 text-right">Qty</th>
               </tr>
@@ -533,11 +530,13 @@ function RecoveryDetail({
               {row.lots.map((lot) => (
                 <tr className="border-t border-line" key={lot.id}>
                   <td className="p-2">
-                    {lot.lot_no ?? 'Tanpa lot'}
+                    {lot.lot_no ?? 'No lot'}
                     <br />
                     {lot.location_code}
                   </td>
-                  <td className="p-2">{lot.stock_status === 'PENDING_QC' ? 'Before Check' : lot.stock_status}</td>
+                  <td className="p-2">
+                    {lot.stock_status === 'PENDING_QC' ? 'Pending QC (Before Check)' : statusEntry('stock', lot.stock_status as StatusOf<'stock'>).label}
+                  </td>
                   <td className="p-2 text-right">
                     {lot.qty} {lot.uom}
                   </td>
@@ -546,28 +545,28 @@ function RecoveryDetail({
             </tbody>
           </table>
         </div>
-        {!row.lots.length ? <p className="mt-2 text-ink-2">Belum ada saldo lot untuk part ini.</p> : null}
+        {!row.lots.length ? <p className="mt-2 text-ink-2">No lot balance for this part.</p> : null}
       </section>
       <section>
-        <h3 className="mb-2 text-sm font-semibold">Hasil aktual produksi hari ini, per item</h3>
+        <h3 className="mb-2 text-sm font-semibold">Production reported today</h3>
         {row.production.length ? (
           row.production.map((p, index) => (
             <p key={`${p.doc_no}-${index}`} className="mb-2">
-              {p.wo_no} · {p.lot_no ?? 'Tanpa lot'} · {p.shift_code ?? 'Shift belum ditetapkan'} · {pcs(p.qty)}
+              {p.wo_no} · {p.lot_no ?? 'No lot'} · {p.shift_code ?? 'No shift'} · {pcs(p.qty)}
             </p>
           ))
         ) : (
-          <p className="text-ink-2">Belum ada laporan hasil produksi pada tanggal produksi ini.</p>
+          <p className="text-ink-2">No production reported for this production date.</p>
         )}
       </section>
       <section>
-        <h3 className="mb-2 text-sm font-semibold">Sisa WO & sumber kebutuhan</h3>
+        <h3 className="mb-2 text-sm font-semibold">Remaining work orders and demand</h3>
         {row.workOrders.map((w) => (
           <p className="mb-2" key={w.id}>
             <Link className="text-link underline" href={`/ppic/work-orders?order=${w.id}`}>
               {w.wo_no}
             </Link>{' '}
-            · {w.status} · target {w.due} · sisa {pcs(w.remaining)}
+            · {w.status} · due {w.due} · remaining {pcs(w.remaining)}
           </p>
         ))}
         {row.demands.map((d) => (

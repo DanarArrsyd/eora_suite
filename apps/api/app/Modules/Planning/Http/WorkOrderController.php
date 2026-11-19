@@ -78,6 +78,7 @@ final class WorkOrderController
             'reasonCode' => ['required', Rule::in(WorkOrderController::REASONS)],
             'note' => ['nullable', 'string', 'max:500'],
             'scheduleLineId' => ['nullable', 'uuid'],
+            'productionCustomerId' => ['nullable', 'uuid'],
         ]);
 
         return $this->createDraft($data);
@@ -102,9 +103,9 @@ final class WorkOrderController
         )->last_no;
         $woNo = sprintf('WO-%s-%d-%04d', $plant->code, $year, $number);
         $id = (string) $db->selectOne(
-            'insert into work_orders (tenant_id, plant_id, wo_no, item_id, uom_id, qty, due_date, reason_code, note, schedule_line_id)
-             values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?) returning id',
-            [$plant->id, $woNo, $fields['item_id'], $fields['uom_id'], $fields['qty'], $fields['due_date'], $fields['reason_code'], $fields['note'], $fields['schedule_line_id']],
+            'insert into work_orders (tenant_id, plant_id, wo_no, item_id, uom_id, qty, due_date, reason_code, note, schedule_line_id, production_customer_id)
+             values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning id',
+            [$plant->id, $woNo, $fields['item_id'], $fields['uom_id'], $fields['qty'], $fields['due_date'], $fields['reason_code'], $fields['note'], $fields['schedule_line_id'], $fields['production_customer_id']],
         )->id;
         $this->audit->record($db, 'work_order.created', 'work_order', $id, null, $this->state($db, 'work_orders', $id), ['woNo' => $woNo], (string) $plant->id);
 
@@ -129,6 +130,7 @@ final class WorkOrderController
             'reasonCode' => ['sometimes', Rule::in(WorkOrderController::REASONS)],
             'note' => ['sometimes', 'nullable', 'string', 'max:500'],
             'scheduleLineId' => ['sometimes', 'nullable', 'uuid'],
+            'productionCustomerId' => ['sometimes', 'nullable', 'uuid'],
         ]);
         $expected = Concurrency::expectedVersion($request);
         $db = $this->db();
@@ -156,6 +158,7 @@ final class WorkOrderController
             'reasonCode' => $data['reasonCode'] ?? $wo->reason_code,
             'note' => array_key_exists('note', $data) ? $data['note'] : $wo->note,
             'scheduleLineId' => array_key_exists('scheduleLineId', $data) ? $data['scheduleLineId'] : $wo->schedule_line_id,
+            'productionCustomerId' => array_key_exists('productionCustomerId', $data) ? $data['productionCustomerId'] : $wo->production_customer_id,
         ];
         $fields = $this->checked($db, (string) $wo->plant_id, $merged);
         $this->update($db, 'work_orders', 'work_order', (string) $wo->id, $expected, $fields, 'work_order.updated', (string) $wo->plant_id);
@@ -171,7 +174,7 @@ final class WorkOrderController
         $wo = $this->writable($db, $order, ['DRAFT']);
         $this->authorizer->authorize($db, self::SUBMIT, $this->plantScope($db, (string) $wo->plant_id));
         $this->checked($db, (string) $wo->plant_id, ['itemId' => $wo->item_id, 'qty' => self::plain((string) $wo->qty), 'dueDate' => $wo->due_date,
-            'reasonCode' => $wo->reason_code, 'note' => $wo->note, 'scheduleLineId' => $wo->schedule_line_id]);
+            'reasonCode' => $wo->reason_code, 'note' => $wo->note, 'scheduleLineId' => $wo->schedule_line_id, 'productionCustomerId' => $wo->production_customer_id]);
         $this->transition($db, $wo, $expected, "status = 'SUBMITTED', submitted_by = ?, submitted_at = now(), return_reason = null", [$this->actor($db)], 'work_order.submitted');
         $this->outbox->publish($db, 'wo.release_requested', 'work_order', (string) $wo->id, ['plantId' => $wo->plant_id]);
         app(Approvals::class)->requested($db, 'work_order', (string) $wo->id); // D-129
@@ -383,21 +386,28 @@ final class WorkOrderController
         if ($data['reasonCode'] === 'OTHER' && mb_strlen((string) $note) < 3) {
             throw ValidationException::withMessages(['note' => 'Explain the work order when the reason is Other.']);
         }
+        $customer = isset($data['productionCustomerId']) ? strtolower((string) $data['productionCustomerId']) : null;
+        if ($customer !== null && $db->selectOne("select id from customers where id=? and status='ACTIVE'", [$customer]) === null) {
+            throw ValidationException::withMessages(['productionCustomerId' => 'Choose an active production customer.']);
+        }
         $schedule = null;
         if (($data['scheduleLineId'] ?? null) !== null) {
             $line = $db->selectOne(
-                'select s.id, s.status, s.plant_id, l.item_id from delivery_schedule_lines s join sales_order_lines l on l.id = s.so_line_id where s.id = ?',
+                'select s.id, s.status, s.plant_id, l.item_id, h.customer_id from delivery_schedule_lines s join sales_order_lines l on l.id = s.so_line_id join sales_order_headers h on h.id=l.sales_order_id where s.id = ?',
                 [strtolower((string) $data['scheduleLineId'])],
             );
             if ($line === null || (string) $line->plant_id !== $plant || (string) $line->item_id !== (string) $item->id
                 || ! in_array($line->status, ['FIRM', 'PARTIALLY_FULFILLED'], true)) {
                 throw ValidationException::withMessages(['scheduleLineId' => 'Choose a firm delivery of this item at this plant.']);
             }
+            if ($customer !== null && $customer !== (string) $line->customer_id) {
+                throw ValidationException::withMessages(['productionCustomerId' => 'Choose the customer of the selected delivery.']);
+            }
             $schedule = (string) $line->id;
         }
 
         return ['item_id' => (string) $item->id, 'uom_id' => (string) $item->base_uom_id, 'qty' => $qty, 'due_date' => (string) $data['dueDate'],
-            'reason_code' => (string) $data['reasonCode'], 'note' => $note, 'schedule_line_id' => $schedule];
+            'reason_code' => (string) $data['reasonCode'], 'note' => $note, 'schedule_line_id' => $schedule, 'production_customer_id' => $customer];
     }
 
     /** @param  list<mixed>  $bindings */

@@ -119,6 +119,16 @@ export const test = base.extend<{ session: void; page: Page }>({
   },
   session: [
     async ({ page }, provide) => {
+      // This suite uses synthetic API fixtures. Never let an omitted lookup reach the user's real local API.
+      // Specific mocks below/in each spec take precedence; explicit 401 fixtures still exercise session expiry.
+      await page.route('**/api/v1/**', (route) => {
+        console.warn(`Missing browser fixture: ${route.request().method()} ${new URL(route.request().url()).pathname}`);
+        return route.fulfill({
+          status: 503,
+          contentType: 'application/problem+json',
+          body: JSON.stringify({ status: 503, code: 'UNMOCKED_TEST_REQUEST', title: 'No browser fixture registered' }),
+        });
+      });
       await page.route('**/sanctum/csrf-cookie', (route) => route.fulfill({ status: 204, headers: { 'set-cookie': 'XSRF-TOKEN=e2e-token; Path=/' } }));
       await mockApi(page, '/auth/me', { status: 200, json: SESSION });
       await mockApi(page, '/inbox', {

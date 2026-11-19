@@ -147,6 +147,7 @@ test('adjustments: the requester sees its request waiting and has no decision to
 });
 
 test('adjustments: found stock where none is recorded is added by naming location, item and lot (D-100)', async ({ page }) => {
+  await mockApi(page, '/query/core.plants?*', page1([{ id: LINE.plantId, code: 'P1', name: 'Plant 1', status: 'ACTIVE', version: 1 }]));
   await mockApi(
     page,
     '/auth/me',

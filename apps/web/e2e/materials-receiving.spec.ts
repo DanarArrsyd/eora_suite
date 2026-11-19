@@ -60,6 +60,14 @@ async function capture(page: Page, path: string, answer: Record<string, unknown>
   return calls;
 }
 
+// Optional pickers must be synthetic too; real 401 responses would correctly expire the test session.
+test.beforeEach(async ({ page }) => {
+  await mockApi(page, '/query/core.plants?*', page1([PLANT]));
+  await mockApi(page, '/query/core.items?*', page1([COIL]));
+  await mockApi(page, '/query/core.customers?*', page1([]));
+  await mockApi(page, '/query/materials.inbound_schedule?*', page1([]));
+});
+
 test('RM receipts: a receipt is confirmed before it posts, with one idempotency key across a declined attempt', async ({ page }) => {
   await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['materials.receipt.view', 'materials.receipt.post'] } });
   await mockApi(page, '/query/inventory.receipts?*', page1([]));
@@ -103,6 +111,7 @@ test('RM receipts: a receipt is confirmed before it posts, with one idempotency 
   expect(calls[0]!.body).toEqual({
     plantId: PLANT.id,
     supplierId: SUPPLIER.id,
+    ownerCustomerId: null,
     itemId: COIL.id,
     locationId: RACK.id,
     qty: '2500',
@@ -173,4 +182,36 @@ test('navigation: a quality inspector reaches Incoming Release, and only the liv
   await expect(menu.getByRole('link', { name: 'Incoming Release' })).toBeVisible();
   await expect(menu.getByRole('link', { name: 'RM Receipts' })).toHaveCount(0);
   await expect(menu.getByRole('link', { name: 'Material Issue' })).toHaveCount(0);
+});
+
+test('customer material: select an owner independently from the sender and keep the receipt usable at all supported widths', async ({ page }) => {
+  await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['materials.receipt.view', 'materials.receipt.post', 'master.part.view'] } });
+  await mockApi(page, '/query/inventory.receipts?*', page1([]));
+  await mockApi(page, '/query/core.plants?*', page1([PLANT]));
+  await mockApi(page, '/query/core.suppliers?*', page1([SUPPLIER]));
+  await mockApi(page, '/query/core.customers?*', page1([{ id: ID(40), code: 'DPM', name: 'Customer DPM', status: 'ACTIVE', version: 1 }]));
+  await mockApi(page, '/query/core.items?*', page1([COIL]));
+  await mockApi(page, '/query/core.locations?*', page1([RACK]));
+  const calls = await capture(page, '/inventory/receipts', { documentId: ID(50), docNo: 'RCV-P1-2026-0001', lotNo: 'RM-DPM-181126-0001', replayed: false });
+  await page.goto('/materials/rm-receipts');
+  await page.getByRole('button', { name: 'New receipt' }).click();
+  const form = page.getByRole('dialog', { name: 'New receipt' });
+  await choose(page, form.getByRole('combobox', { name: 'Plant' }), 'P1 · Plant 1');
+  await choose(page, form.getByRole('combobox', { name: 'Supplier' }), 'SUP-STEEL · Steel service centre');
+  await choose(page, form.getByRole('combobox', { name: 'Material owner' }), 'DPM · Customer DPM');
+  await choose(page, form.getByRole('combobox', { name: 'Item' }), 'COIL-SPCC-12 · SPCC coil 1.2 mm (KG)');
+  await choose(page, form.getByRole('combobox', { name: 'Put away at' }), 'P1 / RM-A01 · Coil rack A01');
+  await form.getByRole('textbox', { name: 'Quantity' }).fill('100');
+  for (const width of [1920, 1440, 1024, 768, 390, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(form.getByRole('combobox', { name: 'Material owner' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await axe(page);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: '/tmp/eora-material-ownership-receipt.png', fullPage: true });
+  await form.getByRole('button', { name: 'Post receipt' }).click();
+  await page.getByRole('alertdialog', { name: 'Post this receipt' }).getByRole('button', { name: 'Post receipt' }).click();
+  await expect(page.getByText('RCV-P1-2026-0001 posted, lot RM-DPM-181126-0001')).toBeVisible();
+  expect(calls[0]!.body).toMatchObject({ supplierId: SUPPLIER.id, ownerCustomerId: ID(40), qty: '100' });
 });

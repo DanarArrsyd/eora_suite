@@ -164,7 +164,7 @@ function FieldControl({ field, today, row }: { field: FieldSpec; today: string; 
     );
   }
   if (field.kind === 'select') {
-    const options: Option[] = Array.isArray(field.options) ? field.options : (picker.data ?? []);
+    const options: Option[] = Array.isArray(field.options) ? field.options : [...(field.leadOptions ?? []), ...(picker.data ?? [])];
     const hint = picker.isError ? 'The list could not be loaded. Close and reopen to try again.' : field.hint;
     return (
       <FormSelectField

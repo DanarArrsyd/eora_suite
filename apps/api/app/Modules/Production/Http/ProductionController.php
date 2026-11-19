@@ -6,6 +6,7 @@ namespace App\Modules\Production\Http;
 
 use App\Modules\Inventory\Application\InventoryPostingService;
 use App\Modules\Inventory\Application\LotNumbers;
+use App\Modules\Inventory\Application\MaterialOwnership;
 use App\Modules\Inventory\Contracts\GenealogyLink;
 use App\Modules\Inventory\Contracts\PostingCommand;
 use App\Modules\Inventory\Contracts\PostingLeg;
@@ -249,6 +250,10 @@ final class ProductionController
         $scrap = array_values($data['scrap'] ?? []);
         $scrapYard = $scrap !== [] ? $place($data['scrapLocationId'] ?? null, 'SCRAP_YARD', 'scrapLocationId') : null;
         $legs = [];
+        $owner = MaterialOwnership::forProduction($db, (string) $r->work_order_id, (string) $r->map_id, (string) $r->company_id, $data['consumptions']);
+        $customer = $db->selectOne('select c.code from work_orders w left join delivery_schedule_lines s on s.id=w.schedule_line_id
+            left join sales_order_lines l on l.id=s.so_line_id left join sales_order_headers h on h.id=l.sales_order_id
+            join customers c on c.id=coalesce(w.production_customer_id,h.customer_id) where w.id=?', [$r->work_order_id]);
         $lots = [];
         $pendingQc = false;
         foreach ($items as $prefix => $item) {
@@ -265,16 +270,18 @@ final class ProductionController
                 continue;
             }
             $semiFinished = $item->item_type === 'SEMI_FINISHED';
-            if ($semiFinished && ! (bool) $item->lot_controlled) {
+            if (($semiFinished || $owner['customer'] !== null) && ! (bool) $item->lot_controlled) {
                 throw ValidationException::withMessages(['runId' => 'Semi-finished output requires a lot-controlled item.']);
             }
             $outputLot = null;
             if ((bool) $item->lot_controlled) {
                 $day = $this->calendar->resolve($db, $plant, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
-                $lotNo = $this->lots->next($db, (string) $item->item_id, $day);
+                $lotNo = $customer !== null && $item->item_type === 'FINISHED'
+                    ? $this->lots->daily($db, 'FG', (string) $customer->code, $day)
+                    : $this->lots->next($db, (string) $item->item_id, $day);
                 $outputLot = (string) $db->selectOne(
-                    "insert into lots (tenant_id, item_id, lot_no, origin) values ((select c.tenant from ctx_api.context() c), ?, ?, 'OUTPUT') returning id",
-                    [$item->item_id, $lotNo],
+                    "insert into lots (tenant_id, item_id, lot_no, origin, owner_customer_id, owner_company_id) values ((select c.tenant from ctx_api.context() c), ?, ?, 'OUTPUT', ?, ?) returning id",
+                    [$item->item_id, $lotNo, $owner['customer'], $owner['company']],
                 )->id;
                 $total = array_reduce(array_values($outputs), static fn (string $sum, string $q) => bcadd($sum, self::num($q), 6), '0');
                 $lots[] = ['id' => $outputLot, 'qty' => $this->plain($total), 'uomId' => (string) $item->base_uom_id];
@@ -361,11 +368,14 @@ final class ProductionController
             if ($s['reasonCode'] === 'OTHER' && mb_strlen((string) $note) < 3) {
                 throw ValidationException::withMessages(["scrap.{$i}.note" => 'Explain the scrap when the reason is Other.']);
             }
+            if ($owner['customer'] !== null && ! (bool) $item->lot_controlled) {
+                throw ValidationException::withMessages(["scrap.{$i}.itemId" => 'Customer scrap needs a lot-tracked scrap item. Choose another scrap item.']);
+            }
             $scrapLot = null;
             if ((bool) $item->lot_controlled) {
                 $day = $this->calendar->resolve($db, $plant, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
-                $scrapLot = (string) $db->selectOne("insert into lots (tenant_id, item_id, lot_no, origin) values ((select c.tenant from ctx_api.context() c), ?, ?, 'OUTPUT') returning id",
-                    [$item->id, $this->lots->next($db, (string) $item->id, $day)])->id;
+                $scrapLot = (string) $db->selectOne("insert into lots (tenant_id, item_id, lot_no, origin, owner_customer_id, owner_company_id) values ((select c.tenant from ctx_api.context() c), ?, ?, 'OUTPUT', ?, ?) returning id",
+                    [$item->id, $this->lots->next($db, (string) $item->id, $day), $owner['customer'], $owner['company']])->id;
             }
             $legs[] = new PostingLeg('OUTPUT_SCRAP', $produced, (string) $item->id, $scrapLot, 'UNRESTRICTED', '-'.$s['qty'], reasonCode: $s['reasonCode'], reasonNote: $note);
             $legs[] = new PostingLeg('OUTPUT_SCRAP', (string) $scrapYard, (string) $item->id, $scrapLot, 'UNRESTRICTED', $s['qty'], reasonCode: $s['reasonCode'], reasonNote: $note);

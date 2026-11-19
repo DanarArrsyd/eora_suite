@@ -4,6 +4,7 @@ import { DomainStatusBadge, STATUS_CATALOGUE, type FilterField } from '@eora/fea
 import { Badge } from '@eora/ui';
 import { queryAll, queryOptions } from '@/modules/master/source';
 import type { MasterResource, MasterRow } from '@/modules/master/types';
+import { COMPANY_OWNER, OWNER_CUSTOMER_FILTER, OWNERSHIP_FILTER, ownerColumn, ownerFact } from '@/modules/inventory/owner';
 
 /*
  * M3 step 3 (doc 32 §1.3, D-062, D-097): Materials → Receiving on the live API. Both screens post through the inventory
@@ -17,6 +18,8 @@ export type ReceiptRow = MasterRow & {
   postedAt: string;
   postedByName: string | null;
   supplierCode: string | null;
+  ownership: 'OWN' | 'CUSTOMER';
+  ownerCode: string | null;
   supplierName: string | null;
   itemCode: string;
   itemName: string;
@@ -106,6 +109,8 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
       label: 'Supplier',
       loadOptions: (_deps, signal) => queryOptions('core.suppliers', (r) => `${String(r.code)} · ${String(r.name)}`, {}, signal),
     },
+    OWNERSHIP_FILTER,
+    OWNER_CUSTOMER_FILTER,
   ],
   columns: [
     { id: 'code', header: 'Receipt', lead: true, sortable: true, cell: (r) => <span className="font-mono">{r.code}</span>, sub: (r) => r.effectiveDate },
@@ -117,6 +122,7 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
       cell: (r) => (r.lotNo ? <span className="font-mono">{r.lotNo}</span> : 'No lot'),
       sub: (r) => (r.supplierLotNo ? `Supplier ${r.supplierLotNo}` : undefined),
     },
+    ownerColumn<ReceiptRow>(),
     { id: 'locationCode', header: 'Location', cell: (r) => r.locationCode, sub: (r) => r.plantCode },
     { id: 'qty', header: 'Quantity', numeric: true, critical: true, cell: (r) => `${r.qty} ${r.uomCode}` },
     { id: 'stockStatus', header: 'Received as', cell: (r) => <DomainStatusBadge domain="stock" status={r.stockStatus} /> },
@@ -125,6 +131,15 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
   fields: [
     { key: 'plantId', label: 'Plant', kind: 'select', required: true, options: 'plants' },
     { key: 'supplierId', label: 'Supplier', kind: 'select', required: true, options: 'suppliers' },
+    {
+      key: 'ownerCustomerId',
+      label: 'Material owner',
+      kind: 'select',
+      required: true,
+      options: 'customers',
+      leadOptions: [{ value: COMPANY_OWNER, label: 'Company (purchased material)' }],
+      hint: 'Choose the customer when the customer supplied the material.',
+    },
     { key: 'itemId', label: 'Item', kind: 'select', required: true, options: 'receivedItems', hint: 'Raw material or consumables.' },
     { key: 'locationId', label: 'Put away at', kind: 'select', required: true, options: 'rmLocations', hint: 'A raw-material location of the plant.' },
     {
@@ -152,10 +167,11 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
     },
     { key: 'note', label: 'Note', kind: 'text', maxLength: 500 },
   ],
-  blank: { plantId: '', supplierId: '', itemId: '', locationId: '', qty: '', supplierLotNo: '', inboundLineId: '', note: '' },
+  blank: { ownerCustomerId: COMPANY_OWNER, plantId: '', supplierId: '', itemId: '', locationId: '', qty: '', supplierLotNo: '', inboundLineId: '', note: '' },
   toForm: () => ({}),
   facts: (r) => [
     { label: 'Received', value: `${r.effectiveDate} · ${r.plantCode}` },
+    ownerFact(r),
     { label: 'Supplier', value: r.supplierCode ? `${r.supplierCode} · ${r.supplierName ?? ''}` : '—' },
     { label: 'Item', value: `${r.itemCode} · ${r.itemName}` },
     { label: 'Lot', value: r.lotNo ? `${r.lotNo}${r.supplierLotNo ? ` (supplier ${r.supplierLotNo})` : ''}` : 'No lot' },
@@ -171,6 +187,8 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
     const qty = v.qty ? unitPrecisionError(v.qty, item.baseUomCode, item.baseUomDecimals) : undefined;
     if (qty) problems.qty = qty;
     // a supplier lot is kept on the lot: an item without lots has nowhere to keep it
+    if (!item.lotControlled && v.ownerCustomerId && v.ownerCustomerId !== COMPANY_OWNER)
+      problems.ownerCustomerId = 'Customer material needs a lot-tracked item. Choose Company or another item.';
     if (!item.lotControlled && v.supplierLotNo) problems.supplierLotNo = 'This item is not tracked by lot. Leave the supplier lot or heat number empty.';
     return problems;
   },
@@ -189,6 +207,7 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
         body: {
           plantId: v.plantId!,
           supplierId: v.supplierId!,
+          ownerCustomerId: v.ownerCustomerId && v.ownerCustomerId !== COMPANY_OWNER ? v.ownerCustomerId : null,
           itemId: v.itemId!,
           locationId: v.locationId!,
           qty: v.qty!,
@@ -294,6 +313,8 @@ export type LotLineRow = {
   lotNo: string;
   supplierLotNo: string | null;
   lotOrigin: 'RECEIPT' | 'OUTPUT' | 'SPLIT';
+  ownerCode?: string | null;
+  ownership?: 'OWN' | 'CUSTOMER';
   parentLotNo: string | null;
   stockStatus: keyof (typeof STATUS_CATALOGUE)['stock'];
   qty: string;
@@ -348,8 +369,10 @@ export const MATERIAL_LOTS: MasterResource<LotLineRow> = {
       options: Object.entries(STATUS_CATALOGUE.stock).map(([value, e]) => ({ value, label: e.label })),
     },
     { key: 'lotOrigin', type: 'multiselect', source: 'static', label: 'Origin', options: ORIGINS },
+    OWNERSHIP_FILTER,
+    OWNER_CUSTOMER_FILTER,
   ],
-  filterPermissions: { plantId: 'master.org.view', itemId: 'master.part.view' },
+  filterPermissions: { plantId: 'master.org.view', itemId: 'master.part.view', ownerCustomerId: 'master.part.view' },
   columns: [
     { id: 'itemCode', header: 'Item', lead: true, sortable: true, cell: (r) => <span className="font-mono">{r.itemCode}</span>, sub: (r) => r.itemName },
     {
@@ -360,6 +383,7 @@ export const MATERIAL_LOTS: MasterResource<LotLineRow> = {
       sub: (r) =>
         [r.parentLotNo ? `Split from ${r.parentLotNo}` : null, r.supplierLotNo ? `Supplier ${r.supplierLotNo}` : null].filter(Boolean).join(' · ') || undefined,
     },
+    ownerColumn<LotLineRow>(),
     { id: 'locationCode', header: 'Location', sortable: true, cell: (r) => r.locationCode, sub: lotPlace },
     { id: 'stockStatus', header: 'Status', sortable: true, cell: (r) => <DomainStatusBadge domain="stock" status={r.stockStatus} /> },
     { id: 'qty', header: 'On hand', numeric: true, critical: true, cell: (r) => `${r.qty} ${r.uomCode}` },

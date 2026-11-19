@@ -103,6 +103,7 @@ test('work orders: a planner drafts a manual work order with its reason and asks
     page1([{ id: ID(3), code: 'BRK-A100', name: 'Bracket front A100', baseUomCode: 'PCS', status: 'ACTIVE', version: 1 }]),
   );
   await mockApi(page, '/query/demand.schedule_lines?*', page1([]));
+  await mockApi(page, '/query/core.customers?*', page1([{ id: ID(44), code: 'DPM', name: 'Customer DPM', status: 'ACTIVE', version: 1 }]));
   // who decides the release (D-129): role and names from the approvals API
   await mockApi(page, '/approvals/work_order/*', {
     status: 200,
@@ -143,9 +144,18 @@ test('work orders: a planner drafts a manual work order with its reason and asks
   await drawer.getByRole('button', { name: /^Due date/ }).click();
   await page.getByRole('button', { name: 'Today', exact: true }).click();
   await choose(page, drawer.getByRole('combobox', { name: 'Reason (outside MPS)' }), 'Urgent customer order');
+  await choose(page, drawer.getByRole('combobox', { name: 'Production customer' }), 'DPM · Customer DPM');
   await drawer.getByRole('button', { name: 'Create work order' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'WO-P1-2026-0001' })).toBeVisible();
-  expect(writes[0]!.body).toMatchObject({ plantId: ID(2), itemId: ID(3), qty: '1200', reasonCode: 'URGENT_ORDER', note: null, scheduleLineId: null });
+  expect(writes[0]!.body).toMatchObject({
+    plantId: ID(2),
+    itemId: ID(3),
+    qty: '1200',
+    reasonCode: 'URGENT_ORDER',
+    note: null,
+    scheduleLineId: null,
+    productionCustomerId: ID(44),
+  });
   await expect(page.getByText('Materials are copied at release')).toBeVisible();
   await axe(page);
 
