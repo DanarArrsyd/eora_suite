@@ -107,12 +107,16 @@ test('spk line: the planner plans a released WO operation on a machine, sees the
   });
   let current = { ...SPK };
   const writes: { method: string; url: string; body: unknown; ifMatch?: string }[] = [];
-  await page.route(`**/api/v1/production/spk/${SPK.id}**`, (route) => {
+  let holdNextWrite: Promise<void> | null = null;
+  await page.route(`**/api/v1/production/spk/${SPK.id}**`, async (route) => {
     const req = route.request();
     const url = req.url();
     if (url.includes('/options')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: OPTIONS }) });
     if (req.method() === 'GET') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: current }) });
     writes.push({ method: req.method(), url, body: req.postDataJSON(), ifMatch: req.headers()['if-match'] });
+    const held = holdNextWrite;
+    holdNextWrite = null;
+    if (held) await held;
     current =
       req.method() === 'PUT'
         ? { ...current, version: 2, lineCount: 1, lines: [LINE], machineLoad: LOAD }
@@ -128,7 +132,13 @@ test('spk line: the planner plans a released WO operation on a machine, sees the
   await page.getByRole('textbox', { name: 'Planned qty (PCS)' }).fill('300');
   // unsaved edits block the release: it would send the saved plan, not the one on screen
   await expect(page.getByRole('button', { name: 'Release to production' })).toBeDisabled();
+  // while the save runs the editor takes no edits: they would be dropped by the refresh (Codex on #97)
+  let finishSave = () => {};
+  const saveHeld = new Promise<void>((resolve) => (finishSave = resolve));
+  holdNextWrite = saveHeld;
   await page.getByRole('button', { name: 'Save SPK' }).click();
+  await expect(page.getByRole('textbox', { name: 'Planned qty (PCS)' })).toBeDisabled();
+  finishSave();
   await expect(page.getByText('SPK saved')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Release to production' })).toBeEnabled();
   // an edit after saving blocks the release again until it is saved

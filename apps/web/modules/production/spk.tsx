@@ -693,88 +693,93 @@ function LinesEditor({
             Release a work order whose routing has an operation on {spk.workCenterCode} first.
           </InlineAlert>
         ) : null}
-        <ol className="m-0 flex list-none flex-col gap-4 p-0" aria-label="SPK lines">
-          {rows.map((r, i) => {
-            const op = operations.find((o) => opKey(o.workOrderId, o.operationId) === r.operation);
-            return (
-              <li key={r.key} className="rounded-lg border border-line p-4">
-                <fieldset className="m-0 grid grid-cols-6 gap-3 border-0 p-0 max-lg:grid-cols-2 max-sm:grid-cols-1">
-                  <legend className="mb-2 text-[13px] font-semibold">Line {i + 1}</legend>
-                  <div className="col-span-3 max-lg:col-span-2 max-sm:col-span-1">
-                    <Field label="Work order operation" required>
+        {/* no edits while a save and its refresh run: the request carries the rows as they were, and the refresh replaces them */}
+        <fieldset disabled={busy} aria-busy={busy} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0">
+          <ol className="m-0 flex list-none flex-col gap-4 p-0" aria-label="SPK lines">
+            {rows.map((r, i) => {
+              const op = operations.find((o) => opKey(o.workOrderId, o.operationId) === r.operation);
+              return (
+                <li key={r.key} className="rounded-lg border border-line p-4">
+                  <fieldset className="m-0 grid grid-cols-6 gap-3 border-0 p-0 max-lg:grid-cols-2 max-sm:grid-cols-1">
+                    <legend className="mb-2 text-[13px] font-semibold">Line {i + 1}</legend>
+                    <div className="col-span-3 max-lg:col-span-2 max-sm:col-span-1">
+                      <Field label="Work order operation" required>
+                        {(c) => (
+                          <Select
+                            {...c}
+                            value={r.operation}
+                            onValueChange={(v) => {
+                              const o = operations.find((x) => opKey(x.workOrderId, x.operationId) === v);
+                              set(i, { operation: v, setupMinutes: r.setupMinutes === '' && o ? o.setupMinutes : r.setupMinutes });
+                            }}
+                            options={opOptions}
+                            placeholder={loading ? 'Loading…' : 'Choose a work order operation'}
+                          />
+                        )}
+                      </Field>
+                    </div>
+                    <Field label="Machine" required>
+                      {(c) => (
+                        <Select {...c} value={r.machineId} onValueChange={(v) => set(i, { machineId: v })} options={machineOptions} placeholder="Choose" />
+                      )}
+                    </Field>
+                    <Field label="Shift">
                       {(c) => (
                         <Select
                           {...c}
-                          value={r.operation}
-                          onValueChange={(v) => {
-                            const o = operations.find((x) => opKey(x.workOrderId, x.operationId) === v);
-                            set(i, { operation: v, setupMinutes: r.setupMinutes === '' && o ? o.setupMinutes : r.setupMinutes });
-                          }}
-                          options={opOptions}
-                          placeholder={loading ? 'Loading…' : 'Choose a work order operation'}
+                          value={r.shiftId}
+                          onValueChange={(v) => set(i, { shiftId: v })}
+                          options={shiftOptions}
+                          emptyLabel="Any shift"
+                          placeholder="Any shift"
                         />
                       )}
                     </Field>
-                  </div>
-                  <Field label="Machine" required>
-                    {(c) => <Select {...c} value={r.machineId} onValueChange={(v) => set(i, { machineId: v })} options={machineOptions} placeholder="Choose" />}
-                  </Field>
-                  <Field label="Shift">
-                    {(c) => (
-                      <Select
-                        {...c}
-                        value={r.shiftId}
-                        onValueChange={(v) => set(i, { shiftId: v })}
-                        options={shiftOptions}
-                        emptyLabel="Any shift"
-                        placeholder="Any shift"
-                      />
-                    )}
-                  </Field>
-                  <Field label={`Planned qty${op ? ` (${op.uomCode})` : ''}`} required>
-                    {(c) => <Input {...c} inputMode="decimal" value={r.plannedQty} onChange={(e) => set(i, { plannedQty: e.target.value })} />}
-                  </Field>
-                  <Field label="Priority">
-                    {(c) => <Input {...c} inputMode="numeric" value={r.priority} onChange={(e) => set(i, { priority: e.target.value })} />}
-                  </Field>
-                  <Field label="Setup (min)" hint="From the routing.">
-                    {(c) => <Input {...c} inputMode="decimal" value={r.setupMinutes} onChange={(e) => set(i, { setupMinutes: e.target.value })} />}
-                  </Field>
-                  <Field label="QC sample (min)">
-                    {(c) => <Input {...c} inputMode="decimal" value={r.qcSampleMinutes} onChange={(e) => set(i, { qcSampleMinutes: e.target.value })} />}
-                  </Field>
-                  <div className="col-span-2 max-sm:col-span-1">
-                    <Field label="Note">{(c) => <Input {...c} value={r.note} maxLength={300} onChange={(e) => set(i, { note: e.target.value })} />}</Field>
-                  </div>
-                  <div className="flex items-end">
-                    <IconButton aria-label={`Remove line ${i + 1}`} onClick={() => edit((all) => all.filter((_, j) => j !== i))}>
-                      <Trash2 aria-hidden="true" />
-                    </IconButton>
-                  </div>
-                </fieldset>
-                {op ? (
-                  <p className="m-0 mt-2 text-xs text-ink-2">
-                    {op.itemName} · WO {op.qty} {op.uomCode} due {formatDay(op.dueDate)} · {op.sph ? `${op.sph} pcs/h` : 'no SPH: hours not calculable'}
-                  </p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
-        {problem ? (
-          <InlineAlert tone="danger" title="SPK not saved">
-            {problem}
-          </InlineAlert>
-        ) : null}
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => edit((all) => [...all, blank()])}>
-            <Plus aria-hidden="true" className="size-4" />
-            Add line
-          </Button>
-          <Button variant="primary" onClick={save} disabled={busy}>
-            {busy ? 'Saving…' : 'Save SPK'}
-          </Button>
-        </div>
+                    <Field label={`Planned qty${op ? ` (${op.uomCode})` : ''}`} required>
+                      {(c) => <Input {...c} inputMode="decimal" value={r.plannedQty} onChange={(e) => set(i, { plannedQty: e.target.value })} />}
+                    </Field>
+                    <Field label="Priority">
+                      {(c) => <Input {...c} inputMode="numeric" value={r.priority} onChange={(e) => set(i, { priority: e.target.value })} />}
+                    </Field>
+                    <Field label="Setup (min)" hint="From the routing.">
+                      {(c) => <Input {...c} inputMode="decimal" value={r.setupMinutes} onChange={(e) => set(i, { setupMinutes: e.target.value })} />}
+                    </Field>
+                    <Field label="QC sample (min)">
+                      {(c) => <Input {...c} inputMode="decimal" value={r.qcSampleMinutes} onChange={(e) => set(i, { qcSampleMinutes: e.target.value })} />}
+                    </Field>
+                    <div className="col-span-2 max-sm:col-span-1">
+                      <Field label="Note">{(c) => <Input {...c} value={r.note} maxLength={300} onChange={(e) => set(i, { note: e.target.value })} />}</Field>
+                    </div>
+                    <div className="flex items-end">
+                      <IconButton aria-label={`Remove line ${i + 1}`} onClick={() => edit((all) => all.filter((_, j) => j !== i))}>
+                        <Trash2 aria-hidden="true" />
+                      </IconButton>
+                    </div>
+                  </fieldset>
+                  {op ? (
+                    <p className="m-0 mt-2 text-xs text-ink-2">
+                      {op.itemName} · WO {op.qty} {op.uomCode} due {formatDay(op.dueDate)} · {op.sph ? `${op.sph} pcs/h` : 'no SPH: hours not calculable'}
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+          {problem ? (
+            <InlineAlert tone="danger" title="SPK not saved">
+              {problem}
+            </InlineAlert>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => edit((all) => [...all, blank()])}>
+              <Plus aria-hidden="true" className="size-4" />
+              Add line
+            </Button>
+            <Button variant="primary" onClick={save} disabled={busy}>
+              {busy ? 'Saving…' : 'Save SPK'}
+            </Button>
+          </div>
+        </fieldset>
         <p className="m-0 text-xs text-ink-2">Save to see the hours and the machine load. Hours = planned qty ÷ SPH + setup + QC sample.</p>
       </CardContent>
     </Card>
