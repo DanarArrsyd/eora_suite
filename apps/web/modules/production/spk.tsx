@@ -556,6 +556,8 @@ const LINE_COLUMNS: EoraColumn<SpkLine>[] = [
     cell: (l) => (l.hours ? `${l.hours} h` : 'Not calculable'),
     sub: (l) => `Setup ${l.setupMinutes} min · QC ${l.qcSampleMinutes} min`,
   },
+  // the planner's instruction for this line: production reads it on the released SPK
+  { id: 'note', header: 'Note', cell: (l) => l.note ?? '—', minWidth: 160 },
 ];
 
 function LinesTable({ spk }: { spk: SpkDetail }) {

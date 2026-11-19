@@ -164,7 +164,7 @@ test('spk line: production reads the released SPKs of its plant, also on a phone
     code: 'SPK-STP-191126-0001',
     version: 3,
     lineCount: 1,
-    lines: [LINE],
+    lines: [{ ...LINE, note: 'Use coil from rack 2' }],
     machineLoad: LOAD,
     releasedAt: '2026-11-19T12:22:00Z',
     releasedByName: 'Planner',
@@ -192,6 +192,8 @@ test('spk line: production reads the released SPKs of its plant, also on a phone
   await page.goto(`/production/spk-line?spk=${SPK.id}`);
   await expect(page.getByRole('heading', { level: 1, name: 'SPK-STP-191126-0001' })).toBeVisible();
   await expect(page.getByRole('table', { name: 'Lines of SPK-STP-191126-0001' })).toContainText('WO-P1-2026-0003');
+  // the planner's line note reaches production (Codex on #97)
+  await expect(page.getByRole('table', { name: 'Lines of SPK-STP-191126-0001' })).toContainText('Use coil from rack 2');
   await expect(page.getByRole('button', { name: 'Revise' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Close SPK' })).toHaveCount(0);
   await axe(page);

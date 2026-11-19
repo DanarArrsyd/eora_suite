@@ -201,6 +201,16 @@ final class SpkController
             throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Machine no longer on this line',
                 implode(', ', $idle).' is no longer an active machine of this line. Move its lines to another machine and save before releasing.');
         }
+        // shifts saved before a new calendar version came into force for the day are no longer shifts of that day
+        $stale = $db->select(
+            'select l.line_no from spk_lines l where l.spk_id = ? and l.shift_id is not null
+                and not exists (select 1 from shifts s where s.id = l.shift_id and s.shift_calendar_id is not distinct from ?::uuid) order by l.line_no',
+            [$h->id, $this->shiftCalendar($db, (string) $h->plant_id, (string) $h->production_date)],
+        );
+        if ($stale !== []) {
+            throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Shift calendar changed',
+                'Line '.implode(', ', array_map(static fn (stdClass $l) => (string) $l->line_no, $stale)).' uses a shift that is no longer in the calendar for this day. Pick the shift again and save before releasing.');
+        }
         $number = $h->previous_id !== null
             ? (string) $db->selectOne('select spk_no from spk_headers where id = ?', [$h->previous_id])->spk_no
             : $this->nextNumber($db, $h);

@@ -104,7 +104,7 @@ return new class extends Migration
 
             -- who writes an SPK and how its status moves (doc 38 §3, §5)
             CREATE OR REPLACE FUNCTION eora_guard_spk_header() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $fn$
-            DECLARE wc record; prev record;
+            DECLARE wc record; prev record; cal uuid;
             BEGIN
               IF TG_OP = 'INSERT' THEN
                 IF NEW.status <> 'DRAFT' OR NEW.spk_no IS NOT NULL
@@ -160,6 +160,16 @@ return new class extends Migration
                 IF NEW.status = 'RELEASED' AND EXISTS (SELECT 1 FROM public.spk_lines l JOIN public.work_orders w ON w.tenant_id = l.tenant_id AND w.id = l.work_order_id
                      WHERE l.tenant_id = NEW.tenant_id AND l.spk_id = NEW.id AND w.status NOT IN ('RELEASED', 'IN_PROGRESS')) THEN
                   RAISE EXCEPTION 'an SPK is released only while its work orders are released or in production' USING ERRCODE = '23514';
+                END IF;
+                IF NEW.status = 'RELEASED' THEN
+                  -- a shift saved before a new calendar version came into force for the day is no longer a shift of that day
+                  SELECT c.id INTO cal FROM public.shift_calendars c
+                   WHERE c.tenant_id = NEW.tenant_id AND (c.plant_id = NEW.plant_id OR c.plant_id IS NULL) AND c.effective_from <= NEW.production_date
+                   ORDER BY (c.plant_id IS NULL), c.effective_from DESC LIMIT 1;
+                  IF EXISTS (SELECT 1 FROM public.spk_lines l WHERE l.tenant_id = NEW.tenant_id AND l.spk_id = NEW.id AND l.shift_id IS NOT NULL
+                       AND NOT EXISTS (SELECT 1 FROM public.shifts x WHERE x.tenant_id = l.tenant_id AND x.id = l.shift_id AND x.shift_calendar_id IS NOT DISTINCT FROM cal)) THEN
+                    RAISE EXCEPTION 'an SPK is released only with shifts of the calendar in force on its day' USING ERRCODE = '23514';
+                  END IF;
                 END IF;
                 IF NEW.status = 'RELEASED' AND EXISTS (SELECT 1 FROM public.spk_lines l JOIN public.machines m ON m.tenant_id = l.tenant_id AND m.id = l.machine_id
                      WHERE l.tenant_id = NEW.tenant_id AND l.spk_id = NEW.id AND (m.status <> 'ACTIVE' OR m.work_center_id IS DISTINCT FROM NEW.work_center_id)) THEN
