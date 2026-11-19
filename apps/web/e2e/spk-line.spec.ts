@@ -210,6 +210,12 @@ test('spk line: production reads the released SPKs of its plant, also on a phone
   }
   // production sees released and closed SPKs only
   expect(decodeURIComponent(listUrls.at(-1) ?? '')).toContain('RELEASED');
+  // its Status filter narrows within them (Codex on #97): Closed only asks for CLOSED alone
+  await page.goto('/production/spk-line?f.status=CLOSED');
+  await expect(page.getByText('SPK-STP-191126-0001').first()).toBeVisible();
+  const narrowed = decodeURIComponent(listUrls.at(-1) ?? '');
+  expect(narrowed).toContain('CLOSED');
+  expect(narrowed).not.toContain('RELEASED');
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/production/spk-line?spk=${SPK.id}`);

@@ -154,6 +154,17 @@ const FILTERS: FilterField[] = [
   },
   { key: 'status', type: 'multiselect', source: 'static', label: 'Status', options: Object.entries(STATUS).map(([value, s]) => ({ value, label: s.label })) },
 ];
+// production reads released and closed SPKs only: its Status filter offers just those and narrows within them
+const PRODUCTION_STATUSES = ['RELEASED', 'CLOSED'];
+const PRODUCTION_FILTERS: FilterField[] = FILTERS.map((f) =>
+  f.key === 'status' && f.type === 'multiselect' && f.source === 'static'
+    ? { ...f, options: f.options.filter((o) => PRODUCTION_STATUSES.includes(o.value)) }
+    : f,
+);
+const productionStatus = (filters: Record<string, string | string[]>) => {
+  const picked = ([] as string[]).concat(filters.status ?? []).filter((s) => PRODUCTION_STATUSES.includes(s));
+  return { ...filters, status: picked.length ? picked : PRODUCTION_STATUSES };
+};
 
 function listConfig(mode: Mode): MasterResource<SpkRow> {
   return {
@@ -170,9 +181,9 @@ function listConfig(mode: Mode): MasterResource<SpkRow> {
     searchPlaceholder: 'Search SPK number or line…',
     rowLabel: (r) => r.code ?? `Draft ${r.workCenterCode} ${r.productionDate}`,
     defaultSort: [{ id: 'productionDate', desc: true }],
-    filters: FILTERS,
+    filters: mode === 'production' ? PRODUCTION_FILTERS : FILTERS,
     filterPermissions: { plantId: 'master.org.view', workCenterId: 'master.org.view' },
-    ...(mode === 'production' ? { fixedFilters: { status: ['RELEASED', 'CLOSED'] } } : {}),
+    ...(mode === 'production' ? { mapFilters: productionStatus } : {}),
     columns: [
       {
         id: 'code',
