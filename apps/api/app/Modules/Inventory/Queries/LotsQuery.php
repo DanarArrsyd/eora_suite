@@ -27,6 +27,8 @@ final class LotsQuery extends QueryDefinition
     public function from(): string
     {
         return 'lots lt
+                 left join customers oc on oc.tenant_id=lt.tenant_id and oc.id=lt.owner_customer_id
+                 left join companies co on co.tenant_id=lt.tenant_id and co.id=lt.owner_company_id
                  join items i on i.tenant_id = lt.tenant_id and i.id = lt.item_id
                  join uoms u on u.tenant_id = i.tenant_id and u.id = i.base_uom_id';
     }
@@ -45,6 +47,10 @@ final class LotsQuery extends QueryDefinition
             new Field('itemCode', 'i.code', sortable: true),
             new Field('itemName', 'i.name'),
             new Field('supplierLotNo', 'lt.supplier_lot_no'),
+            new Field('ownerCustomerId', 'lt.owner_customer_id', Field::UUID, filterable: true),
+            new Field('ownerCompanyId', 'lt.owner_company_id', Field::UUID),
+            new Field('ownerCode', 'coalesce(oc.code,co.code)'),
+            new Field('ownership', "case when lt.owner_customer_id is null then 'OWN' else 'CUSTOMER' end", Field::ENUM, filterable: true, options: ['OWN', 'CUSTOMER']),
             new Field('origin', 'lt.origin', Field::ENUM, filterable: true, options: ['RECEIPT', 'OUTPUT', 'SPLIT']),
             new Field('uomCode', 'u.code'),
             new Field('uomDecimals', 'u.decimals', Field::INTEGER),

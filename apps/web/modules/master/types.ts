@@ -42,6 +42,8 @@ export type FieldSpec = {
   options?: Option[] | OptionSource;
   /** Live pickers: filters from the record the drawer acts on (e.g. locations of the row's plant and kind). */
   optionFilter?: (row: unknown) => Record<string, string | string[]>;
+  /** Live pickers: fixed choices listed before the loaded ones (e.g. "Company" as material owner). */
+  leadOptions?: Option[];
   /** Shown only when creating (codes and parents are fixed afterwards). */
   createOnly?: boolean;
   /** Shown only when editing (e.g. status: a new record always starts active). */

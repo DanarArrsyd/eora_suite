@@ -14,3 +14,6 @@ apps/api
 # Generated from the API (composer openapi:export + pnpm generate)
 packages/api-client/openapi.json
 packages/api-client/src/schema.d.ts
+
+# Separate local verification builds
+.next-*/

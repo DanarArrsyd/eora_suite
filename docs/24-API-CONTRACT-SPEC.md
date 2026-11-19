@@ -159,3 +159,9 @@ No shared component must change before the backend exists; the two additive type
 - PUT `/planning/daily-recovery`: planId (null for first), plant/customer/item/date, minimumQty, batchQty (nullable), bufferQty, shift1Qty/shift2Qty/shift3Qty and reason. If-Match `0` initially, current version on edits/additional revision.
 - POST `/planning/daily-recovery/{plan}/actions/create-work-order`: current If-Match; returns linked workOrderId. Same-plan retries return existing link. Source drift returns 409 `RECOVERY_INPUTS_CHANGED`; stale edits return 412. Existing WO creation rules and permissions apply.
 Generated OpenAPI/client types remain canonical. Pending QC is separately labelled provisional in new MPS snapshots (D-134).
+
+## D-135 — Ownership API extension
+
+`POST /inventory/receipts` accepts nullable `ownerCustomerId`; null retains company-purchased semantics. A customer owner requires an active customer and a lot-controlled item. `POST/PATCH /planning/work-orders` accepts nullable `productionCustomerId`; a pegged customer must agree and the value is fixed after submission. Stock, receipt and lot query schemas expose ownerCustomerId, ownerCompanyId, ownerCode and ownership. Work orders expose productionCustomerId.
+
+Aggregate MPS/MRP/Daily Recovery calculations can return 409 OWNER_PEGGING_REQUIRED while owner-aware netting is pending. Existing history is unchanged. Standard inventory refusals cover owner mismatch and single-owner transformations. Generated OpenAPI and typed clients carry the new request fields.

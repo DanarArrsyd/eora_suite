@@ -10479,6 +10479,28 @@ export interface operations {
                     };
                 };
             };
+            /** @description OWNER_PEGGING_REQUIRED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 409;
+                        /** @enum {string} */
+                        code: "OWNER_PEGGING_REQUIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
             /** @description VALIDATION_FAILED */
             422: {
                 headers: {
@@ -10616,7 +10638,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description INVALID_STATE_TRANSITION */
+            /** @description OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10629,7 +10651,7 @@ export interface operations {
                         /** @enum {integer} */
                         status: 409;
                         /** @enum {string} */
-                        code: "INVALID_STATE_TRANSITION";
+                        code: "OWNER_PEGGING_REQUIRED" | "INVALID_STATE_TRANSITION";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;
@@ -10859,7 +10881,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description INVALID_STATE_TRANSITION, RECOVERY_INPUTS_CHANGED */
+            /** @description OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION, RECOVERY_INPUTS_CHANGED */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10872,7 +10894,7 @@ export interface operations {
                         /** @enum {integer} */
                         status: 409;
                         /** @enum {string} */
-                        code: "INVALID_STATE_TRANSITION" | "RECOVERY_INPUTS_CHANGED";
+                        code: "OWNER_PEGGING_REQUIRED" | "INVALID_STATE_TRANSITION" | "RECOVERY_INPUTS_CHANGED";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;
@@ -19598,7 +19620,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description INVALID_STATE_TRANSITION */
+            /** @description OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -19611,7 +19633,7 @@ export interface operations {
                         /** @enum {integer} */
                         status: 409;
                         /** @enum {string} */
-                        code: "INVALID_STATE_TRANSITION";
+                        code: "OWNER_PEGGING_REQUIRED" | "INVALID_STATE_TRANSITION";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;
@@ -19873,7 +19895,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description INVALID_STATE_TRANSITION */
+            /** @description OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -19886,7 +19908,7 @@ export interface operations {
                         /** @enum {integer} */
                         status: 409;
                         /** @enum {string} */
-                        code: "INVALID_STATE_TRANSITION";
+                        code: "OWNER_PEGGING_REQUIRED" | "INVALID_STATE_TRANSITION";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;
@@ -20111,7 +20133,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description INVALID_STATE_TRANSITION */
+            /** @description OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20124,7 +20146,7 @@ export interface operations {
                         /** @enum {integer} */
                         status: 409;
                         /** @enum {string} */
-                        code: "INVALID_STATE_TRANSITION";
+                        code: "OWNER_PEGGING_REQUIRED" | "INVALID_STATE_TRANSITION";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;
@@ -21029,7 +21051,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description INVALID_STATE_TRANSITION, MPS_INPUTS_CHANGED */
+            /** @description OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION, MPS_INPUTS_CHANGED */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21042,7 +21064,7 @@ export interface operations {
                         /** @enum {integer} */
                         status: 409;
                         /** @enum {string} */
-                        code: "INVALID_STATE_TRANSITION" | "MPS_INPUTS_CHANGED";
+                        code: "OWNER_PEGGING_REQUIRED" | "INVALID_STATE_TRANSITION" | "MPS_INPUTS_CHANGED";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;
@@ -21262,7 +21284,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description INVALID_STATE_TRANSITION */
+            /** @description OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21275,7 +21297,7 @@ export interface operations {
                         /** @enum {integer} */
                         status: 409;
                         /** @enum {string} */
-                        code: "INVALID_STATE_TRANSITION";
+                        code: "OWNER_PEGGING_REQUIRED" | "INVALID_STATE_TRANSITION";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;
@@ -21543,7 +21565,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description INVALID_STATE_TRANSITION */
+            /** @description OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21556,7 +21578,7 @@ export interface operations {
                         /** @enum {integer} */
                         status: 409;
                         /** @enum {string} */
-                        code: "INVALID_STATE_TRANSITION";
+                        code: "OWNER_PEGGING_REQUIRED" | "INVALID_STATE_TRANSITION";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;
@@ -29229,6 +29251,8 @@ export interface operations {
                     locationId: string;
                     /** Format: uuid */
                     supplierId: string;
+                    /** Format: uuid */
+                    ownerCustomerId?: string | null;
                     qty: string;
                     supplierLotNo?: string | null;
                     note?: string | null;
@@ -36899,6 +36923,8 @@ export interface operations {
                     note?: string | null;
                     /** Format: uuid */
                     scheduleLineId?: string | null;
+                    /** Format: uuid */
+                    productionCustomerId?: string | null;
                 };
             };
         };
@@ -37145,6 +37171,8 @@ export interface operations {
                     note?: string | null;
                     /** Format: uuid */
                     scheduleLineId?: string | null;
+                    /** Format: uuid */
+                    productionCustomerId?: string | null;
                 };
             };
         };

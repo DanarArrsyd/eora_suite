@@ -94,7 +94,7 @@ const WARNING: Record<string, string> = {
   NO_BOM: 'No approved BOM',
   UOM_CONVERSION_MISSING: 'Unit conversion missing',
 };
-const TYPE: Record<string, string> = { FINISHED: 'Finished good', SEMI_FINISHED: 'Semi-finished', RAW: 'Raw material', CONSUMABLE: 'Consumable' };
+const TYPE: Record<string, string> = { FINISHED: 'Finished good', SEMI_FINISHED: 'Semi-Finished Material', RAW: 'Raw material', CONSUMABLE: 'Consumable' };
 const BASE = '/ppic/mrp';
 
 export const MRP_RUNS: MasterResource<RunRow> = {

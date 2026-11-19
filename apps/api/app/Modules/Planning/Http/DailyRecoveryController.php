@@ -138,7 +138,7 @@ final class DailyRecoveryController
         $schedule = count($row['demands']) === 1 ? $row['demands'][0]->id : null;
         $body = ['plantId' => $plant, 'itemId' => $p->item_id, 'qty' => $row['planQty'], 'dueDate' => $p->target_date,
             'reasonCode' => 'OTHER', 'note' => 'Daily Recovery '.$p->target_date.' / '.$row['customerCode'].' — '.mb_substr((string) $p->reason, 0, 350),
-            'scheduleLineId' => $schedule];
+            'scheduleLineId' => $schedule, 'productionCustomerId' => (string) $p->customer_id];
         $wo = $this->workOrders->createDraft($body)->getData(true)['data'];
         $before = (array) $p;
         $db->update('update daily_recovery_plans set work_order_id = ? where id = ?', [$wo['id'], $id]);

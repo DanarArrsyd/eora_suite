@@ -49,6 +49,7 @@ final class ReceiptController
             'itemId' => ['required', 'uuid'],
             'locationId' => ['required', 'uuid'],
             'supplierId' => ['required', 'uuid'],
+            'ownerCustomerId' => ['nullable', 'uuid'],
             'qty' => ['required', 'string', 'regex:'.self::QTY],
             'supplierLotNo' => ['nullable', 'string', 'max:60'],
             'note' => ['nullable', 'string', 'max:500'],
@@ -64,9 +65,10 @@ final class ReceiptController
         $locationId = strtolower($data['locationId']);
         $supplierLot = self::optionalText($data['supplierLotNo'] ?? null);
         $note = self::optionalText($data['note'] ?? null);
+        $owner = isset($data['ownerCustomerId']) ? strtolower($data['ownerCustomerId']) : null;
         $inbound = isset($data['inboundLineId']) ? strtolower($data['inboundLineId']) : null;
         $hash = hash('sha256', json_encode(['RM_RECEIPT', $plant, $itemId, $locationId, $supplierId, $data['qty'], $supplierLot, $note, $data['effectiveDate'] ?? null,
-            ...($inbound === null ? [] : [$inbound])], JSON_THROW_ON_ERROR));
+            ...($inbound === null ? [] : [$inbound]), ...($owner === null ? [] : [['ownerCustomerId' => $owner]])], JSON_THROW_ON_ERROR));
 
         // a retried request answers with what it posted, whatever master data changed since; a concurrent one waits
         $previous = $this->postings->claim($db, $key, $hash);
@@ -96,11 +98,21 @@ final class ReceiptController
         }
         // the day the receipt belongs to, resolved once: its lot number and its posting use the same day
         $day = $data['effectiveDate'] ?? $this->calendar->resolve($db, $plant, new DateTimeImmutable((string) $db->selectOne('select now()::text as t')->t))->productionDate;
+        $company = $db->selectOne('select c.id, c.code from plants p join companies c on c.id=p.company_id where p.id=?', [$plant]);
+        $ownerCode = (string) $company->code;
+        if ($owner !== null) {
+            if (! (bool) $item->lot_controlled) {
+                throw ValidationException::withMessages(['ownerCustomerId' => 'Customer material needs a lot-tracked item. Choose Company or another item.']);
+            }
+            $customer = $db->selectOne("select code from customers where id=? and status='ACTIVE'", [$owner])
+                ?? throw ValidationException::withMessages(['ownerCustomerId' => 'Choose an active customer as material owner.']);
+            $ownerCode = (string) $customer->code;
+        }
         $lot = null;
         if ((bool) $item->lot_controlled) {
             $lot = (string) $db->selectOne(
-                "insert into lots (tenant_id, item_id, lot_no, supplier_lot_no, origin) values ((select c.tenant from ctx_api.context() c), ?, ?, ?, 'RECEIPT') returning id",
-                [$item->id, $this->lots->next($db, (string) $item->id, $day), $supplierLot],
+                "insert into lots (tenant_id, item_id, lot_no, supplier_lot_no, origin, owner_customer_id, owner_company_id) values ((select c.tenant from ctx_api.context() c), ?, ?, ?, 'RECEIPT', ?, ?) returning id",
+                [$item->id, $this->lots->daily($db, 'RM', $ownerCode, $day), $supplierLot, $owner, $owner === null ? $company->id : null],
             )->id;
         }
         $status = (bool) $item->incoming_release_required ? 'BLOCKED' : 'UNRESTRICTED';

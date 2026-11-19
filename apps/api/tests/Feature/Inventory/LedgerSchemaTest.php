@@ -164,12 +164,12 @@ it('never holds a negative or a virtual balance, nor a movement of zero or with 
     expect($receipt(6, $today))->toThrow(QueryException::class, 'the entered quantity converts into the leg');
     expect($receipt(5, rtDay($this->t, -1)))->toThrow(QueryException::class, 'the entered quantity converts into the leg'); // not in force yet
     $receipt(5, $today)();
-    // M3-D9: OWN only
+    // D-135: customer assets are supported; unrelated consignment ownership is still unavailable.
     expect(fn () => ledgerAsApp($this->t, fn (EoraPostgresConnection $db) => $db->insert(
         "insert into inventory_movements (tenant_id, document_id, leg_no, movement_code, plant_id, location_id, item_id, lot_id, stock_status, ownership, uom_id, qty_signed)
          values (?, ?, 3, 'RCPT_SUPPLIER', ?, ?, ?, ?, 'UNRESTRICTED', 'CONSIGNMENT', ?, 1)",
         [$this->t['tenant'], $f['doc'], $f['plant'], $f['rm'], $f['item'], $f['lot'], $f['pcs']],
-    )))->toThrow(QueryException::class, 'check');
+    )))->toThrow(QueryException::class, 'ledger ownership must match the lot owner');
 })->group('integration', 'inventory');
 
 it('reverses a posted document only through a posted reversal by a second person that negates every leg once (ADR-0002 §5, D-060)', function () {

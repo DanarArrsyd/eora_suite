@@ -157,3 +157,7 @@ Evaluation order for every request: authenticated session → active tenant memb
 - `planning.recovery.view`: PPC, CSA, AUD templates; plant-scoped read of live planner positions and source details.
 - `planning.recovery.create`: PPC template; plant-scoped save of parameters and shift plans.
 - Create SPK additionally requires existing `planning.wo.create`; release retains the existing maker/checker process. Tenant sync applies template permissions to existing tenants. Direct SQL guards enforce scoped plan writes and immutable linked history.
+
+## D-135 — Ownership permissions
+
+No new grants or exception permission. Materials receipt/issue, production, QC, FG receipt, delivery and correction use their existing scoped permissions. Receipt owner selection uses the existing customer master read permission. Customer ownership is enforced server-side and in the database; choosing a customer does not expand scope.

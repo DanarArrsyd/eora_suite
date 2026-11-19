@@ -105,7 +105,7 @@ test('material issue: materials issues lots of a released work order to a work c
   await expect(page.getByRole('combobox', { name: 'To work center' })).toContainText('PRS-01');
   await expect(page.getByText('384 KG')).toBeVisible();
   await page.getByRole('button', { name: 'Add COIL-SPCC-12 lot' }).click();
-  await choose(page, page.getByRole('combobox', { name: 'COIL-SPCC-12 rack and lot 1' }), 'RM-A01 · L2611-0001 · 500 KG available');
+  await choose(page, page.getByRole('combobox', { name: 'COIL-SPCC-12 rack and lot 1' }), 'RM-A01 · L2611-0001 · 500 KG available · Company');
   await page.getByRole('textbox', { name: 'COIL-SPCC-12 quantity 1 (KG)' }).fill('600');
   await page.getByRole('button', { name: 'Issue material' }).last().click();
   await expect(page.getByText('COIL-SPCC-12: only 500 KG is available at RM-A01, lot L2611-0001.')).toBeVisible();
@@ -194,4 +194,38 @@ test('material return: production asks, materials receives what it weighed into 
   expect(writes[0]!.url).toMatch(/\/material-returns\/.+\/receive$/);
   expect(writes[0]!.body).toEqual({ toLocationId: ID(52), qty: '14.5' });
   await expect(page.getByText('-0.5 KG')).toBeVisible();
+});
+
+test('material issue offers company lots and lots of the work order customer only (D-135)', async ({ page }) => {
+  const customerLot = (n: number, owner: string) => ({
+    ...STOCK[0],
+    id: ID(n),
+    lotId: ID(n + 100),
+    lotNo: `RM-${owner}-181126-0001`,
+    ownership: 'CUSTOMER',
+    ownerCode: owner,
+  });
+  await mockApi(page, '/auth/me', ME(['materials.issue.view', 'materials.issue.create', 'materials.issue.post', 'planning.wo.view', 'inventory.stock.view']));
+  await mockApi(page, '/query/materials.issues?*', page1([]));
+  await mockApi(
+    page,
+    '/query/planning.work_orders?*',
+    page1([{ id: WO.id, code: WO.code, itemCode: WO.itemCode, qty: WO.qty, uomCode: 'PCS', dueDate: WO.dueDate }]),
+  );
+  await mockApi(
+    page,
+    '/query/inventory.stock?*',
+    page1([{ ...STOCK[0], ownership: 'OWN', ownerCode: 'EORA' }, customerLot(42, 'DPM'), customerLot(43, 'SJM'), STOCK[1]]),
+  );
+  await page.route('**/api/v1/planning/work-orders/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { ...WO, customerCode: 'DPM' } }) }),
+  );
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/materials/material-issue?wo=${WO.id}`);
+  await page.getByRole('button', { name: 'Add COIL-SPCC-12 lot' }).click();
+  await page.getByRole('combobox', { name: 'COIL-SPCC-12 rack and lot 1' }).click();
+  await expect(page.getByRole('option', { name: 'RM-A01 · L2611-0001 · 500 KG available · Company', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'RM-A01 · RM-DPM-181126-0001 · 500 KG available · DPM (customer)', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: /RM-SJM-/ })).toHaveCount(0);
 });

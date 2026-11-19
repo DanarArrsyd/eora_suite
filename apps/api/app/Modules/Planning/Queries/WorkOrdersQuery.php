@@ -45,7 +45,7 @@ final class WorkOrdersQuery extends QueryDefinition
                  left join delivery_schedule_lines s on s.tenant_id = w.tenant_id and s.id = w.schedule_line_id
                  left join sales_order_lines sl on sl.tenant_id = s.tenant_id and sl.id = s.so_line_id
                  left join sales_order_headers sh on sh.tenant_id = sl.tenant_id and sh.id = sl.sales_order_id
-                 left join customers c on c.tenant_id = sh.tenant_id and c.id = sh.customer_id
+                 left join customers c on c.tenant_id = w.tenant_id and c.id = coalesce(w.production_customer_id,sh.customer_id)
                  left join bom_versions bv on bv.tenant_id = w.tenant_id and bv.id = w.bom_version_id
                  left join routing_versions rv on rv.tenant_id = w.tenant_id and rv.id = w.routing_version_id
                  left join routings r on r.tenant_id = rv.tenant_id and r.id = rv.routing_id
@@ -101,6 +101,7 @@ final class WorkOrdersQuery extends QueryDefinition
             new Field('salesOrderId', 'sh.id', Field::UUID),
             new Field('salesOrderCode', 'sh.so_no'),
             new Field('customerCode', 'c.code'),
+            new Field('productionCustomerId', 'w.production_customer_id', Field::UUID),
             new Field('scheduleDate', 's.requirement_date::text'),
             new Field('scheduleQty', 'trim_scale(s.required_qty)::text'),
             new Field('bomVersionNo', 'bv.version_no', Field::INTEGER),

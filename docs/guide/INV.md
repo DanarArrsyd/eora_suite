@@ -76,6 +76,7 @@ Menjaga kebenaran stok: koreksi, reversal, tutup buku, dan pengawasan menyeluruh
 ## Langkah kerja
 
 1. Inventory → Stock Overview / Movement Ledger → pantau stok dan pergerakan.
+   - Kolom **Owner** menunjukkan **Company** atau kode customer. Pakai filter **Owner** / **Owner customer** untuk melihat bahan per pemilik. Pemilik lot tidak bisa diubah; koreksi lewat reversal dokumen asal.
 2. Inventory → Adjustments → ajukan koreksi stok dengan alasan (disetujui CSA).
 3. Inventory → Reversals → setujui pembatalan dokumen yang diajukan orang lain.
 4. Inventory → Period Close → ajukan tutup buku bulanan (disetujui CSA).

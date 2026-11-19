@@ -150,3 +150,14 @@ Each rule: ID, statement, owner module, enforcement point, source decision, acce
 | BR-PLN-REC-01 | DAILY_RECOVERY_V1 net = max(0, outstanding firm requirement + buffer - eligible FG - Before Check - QC Accepted awaiting receipt - remaining timely WO). Shared stocks are allocated once before filters. Posted Good is excluded from remaining WO. | DailyRecoveryTest; doc 36 |
 | BR-PLN-REC-02 | Positive net is rounded to whole editable batch after an editable minimum (default 500 PCS); zero net proposes zero. Missing batch/BOM is explicit. Shift I-III overrides require an audited reason. | RecoveryCalculationTest |
 | BR-PLN-REC-03 | Saved source fingerprint and If-Match protect SPK creation. A plan links at most one existing-lifecycle Draft WO; retries return the same WO. Further same-day planning creates a new immutable-linked revision. No physical posting occurs. | DailyRecoveryTest |
+
+## Material ownership foundation — D-135
+
+| ID | Rule | Authority |
+| --- | --- | --- |
+| BR-OWN-01 | A customer-owned receipt requires lot control. One immutable owner follows splits, production output, NG, QC, FG receipt, delivery and reversal. Supplier is separate from owner. | D-133, D-135; doc 37 |
+| BR-OWN-02 | Customer material may issue only to a WO for the same customer. Allocation/pick/shipment must serve that owner customer. An unassigned WO uses company material only. | D-135 |
+| BR-OWN-03 | One production posting, including its Good, NG and scrap outputs, uses one owner. Mixed-owner processing and cross-customer exceptions are unavailable. | D-135 |
+| BR-OWN-04 | New RM lots use the owner's configured code and receipt date; finished output with an attributed customer uses that customer's code and production date. Shared daily series are atomic across items. Historical numbers and idempotent replies are preserved. | D-133, D-135 |
+
+The foundation has a temporary integration boundary: aggregate automatic planning refuses customer-owned physical stock until owner-aware demand pegging is implemented (doc 37). This is not a new availability formula or a claim that the customer assets are missing.

@@ -28,6 +28,7 @@ import { queryAll, querySource } from '@/modules/master/source';
 import type { FormValues, MasterResource } from '@/modules/master/types';
 import { when } from '@/modules/master/version-ui';
 import { unitPrecisionError } from './resources';
+import { ownerLabel } from '@/modules/inventory/owner';
 
 /*
  * M4 step 3 (doc 33 §1.3, D-110, doc 04 rows 3 and 6): Materials → Material Issue and Material Return, Inventory →
@@ -178,6 +179,8 @@ type WorkOrder = {
   id: string;
   code: string;
   status: string;
+  /** Production customer (own, or of the delivery served): only its customer material may be issued (D-135). */
+  customerCode?: string | null;
   plantId: string;
   plantCode: string;
   itemCode: string;
@@ -201,6 +204,8 @@ type WorkOrder = {
 };
 
 type StockLine = {
+  ownerCode?: string | null;
+  ownership?: 'OWN' | 'CUSTOMER';
   id: string;
   locationId: string;
   locationCode: string;
@@ -273,7 +278,8 @@ function IssuePage({ initialWo }: { initialWo: string }) {
     );
   }
 
-  const stockOf = (itemId: string) => stock.data?.[itemId] ?? [];
+  // customer material serves its own customer only (D-135): other customers' lots are not offered
+  const stockOf = (itemId: string) => (stock.data?.[itemId] ?? []).filter((s) => s.ownership !== 'CUSTOMER' || s.ownerCode === o?.customerCode);
   const setLine = (itemId: string, i: number, patch: Partial<Line>) =>
     setLines((all) => ({ ...all, [itemId]: (all[itemId] ?? []).map((l, j) => (j === i ? { ...l, ...patch } : l)) }));
   const addLine = (itemId: string) => setLines((all) => ({ ...all, [itemId]: [...(all[itemId] ?? []), { key: crypto.randomUUID(), stockId: '', qty: '' }] }));
@@ -407,7 +413,7 @@ function IssuePage({ initialWo }: { initialWo: string }) {
               {o.materials.map((m) => {
                 const options = stockOf(m.itemId).map((s) => ({
                   value: s.id,
-                  label: `${s.locationCode} · ${s.lotNo ?? 'no lot'} · ${s.availableQty} ${s.uomCode} available`,
+                  label: `${s.locationCode} · ${s.lotNo ?? 'no lot'} · ${s.availableQty} ${s.uomCode} available · ${ownerLabel(s)}`,
                 }));
                 const own = lines[m.itemId] ?? [];
                 return (

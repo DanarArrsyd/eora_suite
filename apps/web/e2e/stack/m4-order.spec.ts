@@ -54,7 +54,7 @@ test('M4 order end to end on the real stack', async ({ browser }) => {
     // sup@ imported the BOM and routing (D-128) and csa@ approves them; the all-roles UAT account stays for UAT (D-112)
     expect(artisan('eora:demo:uat-account', `--code=${TENANT}`, `--password=${PASSWORD}`)).toContain(`uat@${TENANT}.test`);
     const out = artisan('eora:demo:m4', `--code=${TENANT}`);
-    const done = /Demo order done in \S+: (SO-P1-\d{4}-\d{4}) → (WO-P1-\d{4}-\d{4}) → lot (L\d{4}-\d{4}) → (SHP-P1-\d{4}-\d{4})/.exec(out);
+    const done = /Demo order done in \S+: (SO-P1-\d{4}-\d{4}) → (WO-P1-\d{4}-\d{4}) → lot ((?:FG-\S+-\d{6}|L\d{4})-\d{4}) → (SHP-P1-\d{4}-\d{4})/.exec(out);
     expect(done, out).not.toBeNull();
     so = done![1]!;
     wo = done![2]!;
@@ -86,7 +86,8 @@ test('M4 order end to end on the real stack', async ({ browser }) => {
     await expect(tree).toContainText('COIL-SPCC-12');
     await expect(tree).toContainText('supplier lot HEAT-A102');
     const text = (await tree.textContent()) ?? '';
-    coil = /(L\d{4}-\d{4})COIL-SPCC-12/.exec(text.replace(/\s+/g, ''))?.[1] ?? '';
+    // receipt lots are numbered RM-{owner}-{DDMMYY}-{n} (D-135); older ones L{yymm}-{n}
+    coil = /((?:RM-[A-Z0-9_-]+?-\d{6}|L\d{4})-\d{4})COIL-SPCC-12/.exec(text.replace(/\s+/g, ''))?.[1] ?? '';
     expect(coil).not.toBe('');
   });
 

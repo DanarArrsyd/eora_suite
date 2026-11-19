@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Planning\Http;
 
+use App\Modules\Inventory\Application\MaterialOwnership;
 use App\Modules\Planning\Mps\MpsCapacity;
 use App\Modules\Planning\Mrp\MrpPlanner;
 use App\Modules\Planning\Queries\MrpRunsQuery;
@@ -100,6 +101,7 @@ final class MrpController
         $id = $this->existing($db, 'mrp_runs', $run);
         $r = $db->selectOne('select r.id, r.plant_id, r.run_no, r.mps_version_id, r.created_at from mrp_runs r where r.id = ?', [$id]);
         $this->authorizer->authorize($db, self::RELEASE, $this->plantScope($db, (string) $r->plant_id));
+        MaterialOwnership::requireAggregatePlanning($db, (string) $r->plant_id);
         $db->select('select pg_advisory_xact_lock(hashtextextended(?,0))', ['daily-recovery:'.$r->plant_id]);
         // the MPS stays approved while its planned orders are released (an approval of its successor waits)
         $mps = $db->selectOne('select status from mps_versions where id = ? for share', [$r->mps_version_id]);

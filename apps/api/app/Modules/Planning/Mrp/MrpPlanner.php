@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Planning\Mrp;
 
+use App\Modules\Inventory\Application\MaterialOwnership;
 use App\Modules\Planning\Mps\MpsEngine;
 use App\Modules\Planning\Mps\MpsInputs;
 use App\Modules\Planning\Mps\MpsItemInput;
@@ -67,6 +68,7 @@ final class MrpPlanner
      */
     public function run(EoraPostgresConnection $db, string $runId, string $plant, string $mpsVersionId, string $today, string $horizonStart, int $weeks): void
     {
+        MaterialOwnership::requireAggregatePlanning($db, $plant);
         [$this->runId, $this->plant, $this->today, $this->horizonStart, $this->weeks] = [$runId, $plant, $today, $horizonStart, $weeks];
         $end = (new DateTimeImmutable($horizonStart))->modify('+'.(7 * $weeks - 1).' days')->format('Y-m-d');
         $this->days = MpsInputs::workingDays($db, $plant, $horizonStart, $end);

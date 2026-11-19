@@ -96,9 +96,10 @@ final class DeliveryController
                     trim_scale(b.qty - coalesce((select sum(a.qty) from stock_allocations a where a.balance_id = b.id and a.status = 'ACTIVE'), 0))::text as available
                from stock_balances b join locations l on l.id = b.location_id left join lots lt on lt.id = b.lot_id
               where b.plant_id = ? and b.item_id = ? and b.stock_status = 'UNRESTRICTED' and l.location_type = 'FG_WAREHOUSE' and l.status = 'ACTIVE'
+                and (lt.owner_customer_id is null or lt.owner_customer_id = ?::uuid)
                 and b.qty > coalesce((select sum(a.qty) from stock_allocations a where a.balance_id = b.id and a.status = 'ACTIVE'), 0)
               order by lt.created_at nulls last, lt.lot_no nulls last, l.code",
-            [$s->plant_id, $s->item_id],
+            [$s->plant_id, $s->item_id, $s->customer_id],
         );
         $left = $need;
         $lines = [];
@@ -141,10 +142,14 @@ final class DeliveryController
             $ids = [];
             foreach (array_values($data['lines']) as $i => $l) {
                 $b = $db->selectOne(
-                    "select b.id, trim_scale(b.qty)::text as qty from stock_balances b join locations l on l.id = b.location_id
+                    "select b.id, trim_scale(b.qty)::text as qty, lt.owner_customer_id from stock_balances b join locations l on l.id = b.location_id
+                      left join lots lt on lt.id=b.lot_id
                       where b.id = ? and b.plant_id = ? and b.item_id = ? and b.stock_status = 'UNRESTRICTED' and l.location_type = 'FG_WAREHOUSE' for update of b",
                     [strtolower($l['stockLineId']), $s->plant_id, $s->item_id],
                 ) ?? throw ValidationException::withMessages(["lines.{$i}.stockLineId" => "Choose unrestricted {$s->item_code} in an FG warehouse location of this plant."]);
+                if ($b->owner_customer_id !== null && $b->owner_customer_id !== $s->customer_id) {
+                    throw ValidationException::withMessages(["lines.{$i}.stockLineId" => 'This lot belongs to another customer. Choose company stock or stock of this delivery\'s customer.']);
+                }
                 self::requireUnitPrecision($l['qty'], $s, "lines.{$i}.qty");
                 $qty = self::num($l['qty']);
                 if (bccomp($qty, '0', 6) <= 0) {
@@ -433,8 +438,9 @@ final class DeliveryController
     {
         $id = strtolower($id);
         $s = preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $id) === 1 ? $db->selectOne(
-            'select s.id, s.plant_id, s.status, trim_scale(s.required_qty)::text as required, ol.item_id, i.code as item_code, u.code as uom, u.decimals, p.company_id
+            'select s.id, s.plant_id, s.status, trim_scale(s.required_qty)::text as required, ol.item_id, i.code as item_code, u.code as uom, u.decimals, p.company_id, h.customer_id
                from delivery_schedule_lines s join sales_order_lines ol on ol.id = s.so_line_id join items i on i.id = ol.item_id
+               join sales_order_headers h on h.id=ol.sales_order_id
                join uoms u on u.id = s.uom_id join plants p on p.id = s.plant_id where s.id = ?',
             [$id],
         ) : null;

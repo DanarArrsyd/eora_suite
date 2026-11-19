@@ -44,6 +44,8 @@ final class StockQuery extends QueryDefinition
                  join plants p on p.tenant_id = b.tenant_id and p.id = b.plant_id
                  join uoms u on u.tenant_id = b.tenant_id and u.id = b.uom_id
                  left join lots lt on lt.tenant_id = b.tenant_id and lt.id = b.lot_id
+                 left join customers oc on oc.tenant_id=lt.tenant_id and oc.id=lt.owner_customer_id
+                 left join companies co on co.tenant_id=lt.tenant_id and co.id=lt.owner_company_id
                  left join lots plt on plt.tenant_id = lt.tenant_id and plt.id = lt.parent_lot_id';
     }
 
@@ -85,6 +87,10 @@ final class StockQuery extends QueryDefinition
             new Field('lotId', 'b.lot_id', Field::UUID, filterable: true),
             new Field('lotNo', 'lt.lot_no', sortable: true),
             new Field('supplierLotNo', 'lt.supplier_lot_no'),
+            new Field('ownerCustomerId', 'lt.owner_customer_id', Field::UUID, filterable: true),
+            new Field('ownerCompanyId', 'lt.owner_company_id', Field::UUID),
+            new Field('ownerCode', 'coalesce(oc.code,co.code)'),
+            new Field('ownership', "case when lt.owner_customer_id is null then 'OWN' else 'CUSTOMER' end", Field::ENUM, filterable: true, options: ['OWN', 'CUSTOMER']),
             // lot-tracked stock only (Material Lots), how the lot came about, and the lot it was split from (D-099)
             new Field('lotTracked', '(b.lot_id is not null)', Field::BOOLEAN, filterable: true),
             new Field('lotOrigin', 'lt.origin', Field::ENUM, filterable: true, options: ['RECEIPT', 'OUTPUT', 'SPLIT']),
@@ -116,6 +122,8 @@ final class StockQuery extends QueryDefinition
             new ExportColumn('Item name', 'itemName'),
             new ExportColumn('Lot', 'lotNo'),
             new ExportColumn('Supplier lot', 'supplierLotNo'),
+            new ExportColumn('Material owner', 'ownerCode'),
+            new ExportColumn('Ownership', 'ownership', labels: ['OWN' => 'Company-owned', 'CUSTOMER' => 'Customer-owned']),
             new ExportColumn('Split from', 'parentLotNo'),
             new ExportColumn('Status', 'stockStatus', labels: self::STATUS_LABELS),
             new ExportColumn('On hand', 'qty', ExportColumn::DECIMAL),

@@ -72,10 +72,10 @@ it('traces a coil forward to the FG lots made of it and the customer that receiv
     $f = ltFixture($this, $this->t);
     AccessFixtures::grant($this->t, $f['fgw']['id'], 'INV');
 
-    // the coil and FG lot A share their number (internal lots count per item, M3-D3): the trace asks which one
-    $matches = ltTrace($this, $f['coilNo'], 'forward')->assertOk()->json('data.matches');
-    expect(collect($matches)->pluck('itemCode')->all())->toContain($f['coil']['code']);
-    $trace = ltTrace($this, $f['coilNo'], 'forward', ['lotId' => $f['lot']])->assertOk()->json('data');
+    // D-135: new RM day/owner numbers no longer collide with the output's legacy per-item series.
+    $trace = ltTrace($this, $f['coilNo'], 'forward')->assertOk()->json('data');
+    $explicit = ltTrace($this, $f['coilNo'], 'forward', ['lotId' => $f['lot']])->assertOk()->json('data');
+    expect($explicit['start'])->toBe($trace['start']);
     expect($trace['start'])->toMatchArray(['kind' => 'lot', 'lotNo' => $f['coilNo']])->and($trace['nodes'][0]['depth'])->toBe(0)
         ->and($trace['nodes'][0]['receipt']['supplierCode'])->not->toBeNull();
     $made = array_values(array_filter($trace['nodes'], fn (array $n) => $n['depth'] === 1));

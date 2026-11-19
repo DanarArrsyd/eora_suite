@@ -67,7 +67,7 @@ test('sign-in ignores an off-site destination (no open redirect)', async ({ page
   await page.getByLabel('E-mail').fill(SESSION.user.email);
   await page.getByLabel(/^Password/).fill('correct horse battery staple');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL(/127\.0\.0\.1:3100\/(ppic)?$/);
+  await expect(page).toHaveURL((url) => url.origin === new URL(String(test.info().project.use.baseURL)).origin && ['/', '/ppic'].includes(url.pathname));
 });
 
 test('workspace picker lists only the user’s workspaces and opens the chosen one', async ({ page }) => {

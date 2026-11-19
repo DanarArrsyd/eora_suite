@@ -87,12 +87,12 @@ test('daily recovery persists batch and shift edits, exposes lot sources and cre
   await expect(page.getByRole('heading', { name: 'Daily Recovery Planner' })).toBeVisible();
   await page.getByRole('button', { name: 'Bracket Inner', exact: true }).click();
   await expect(page.getByText('FG-DPM-181126-0001').first()).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Buat SPK Draft' })).toBeDisabled();
-  await page.getByLabel('Plan Shift I (pcs)', { exact: true }).fill('506');
-  await page.getByLabel('Alasan / penyesuaian Planner').fill('One full material batch');
-  await page.getByRole('button', { name: 'Simpan rencana shift', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Buat SPK Draft' })).toBeEnabled();
-  await page.getByRole('button', { name: 'Buat SPK Draft' }).click();
+  await expect(page.getByRole('button', { name: 'Create draft work order' })).toBeDisabled();
+  await page.getByLabel('Shift I plan (pcs)', { exact: true }).fill('506');
+  await page.getByLabel('Reason').fill('One full material batch');
+  await page.getByRole('button', { name: 'Save shift plan', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Create draft work order' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Create draft work order' }).click();
   await expect(page).toHaveURL(new RegExp(`/ppic/work-orders\\?order=${ID(8)}`));
 });
 
@@ -107,10 +107,10 @@ test('Before Check covers delivery provisionally and exposes stale planning inpu
       });
   });
   await page.goto('/ppic/daily-recovery?targetDate=2026-11-19');
-  await expect(page.getByText('Kejar QC', { exact: true })).toBeVisible();
+  await expect(page.getByText('Waiting for QC', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Bracket Inner', exact: true }).click();
-  await expect(page.getByText('Posisi berubah sejak rencana disimpan')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Buat SPK Draft' })).toBeDisabled();
+  await expect(page.getByText('Position changed since the plan was saved')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create draft work order' })).toBeDisabled();
 });
 
 test('the planner sees a source-change refusal and keeps the editable plan open', async ({ page }) => {
@@ -126,9 +126,9 @@ test('the planner sees a source-change refusal and keeps the editable plan open'
   });
   await page.goto('/ppic/daily-recovery?targetDate=2026-11-19');
   await page.getByRole('button', { name: 'Bracket Inner', exact: true }).click();
-  await page.getByRole('button', { name: 'Buat SPK Draft' }).click();
-  await expect(page.getByText('Rencana belum diproses')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Simpan rencana shift', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Create draft work order' }).click();
+  await expect(page.getByText('Plan not saved')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save shift plan', exact: true })).toBeVisible();
 });
 
 test('daily recovery is readable and accessible on a phone with view-only permissions', async ({ page }) => {
@@ -141,7 +141,7 @@ test('daily recovery is readable and accessible on a phone with view-only permis
   await page.goto('/ppic/daily-recovery?targetDate=2026-11-19');
   await expect(page.getByRole('heading', { name: 'Daily Recovery Planner' })).toBeVisible();
   await page.getByRole('button', { name: 'Bracket Inner', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Simpan rencana shift', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save shift plan', exact: true })).toBeDisabled();
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
   expect(results.violations.map((v) => v.id)).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

@@ -27,10 +27,10 @@ it('receives a lot-controlled coil BLOCKED with a new internal lot, and replays 
     orgUser($this, $this->t, 'MAT');
     $f = $this->f;
     $year = substr($f['today'], 0, 4);
-    $period = substr($f['today'], 2, 2).substr($f['today'], 5, 2);
+    $period = (new DateTimeImmutable($f['today']))->format('dmy');
 
     $first = rcReceive($this, $f)->assertCreated()->json('data');
-    expect($first)->docNo->toBe("RCV-P1-{$year}-0001")->lotNo->toBe("L{$period}-0001")->replayed->toBeFalse();
+    expect($first)->docNo->toBe("RCV-P1-{$year}-0001")->lotNo->toBe("RM-CO1-{$period}-0001")->replayed->toBeFalse();
 
     // the same request again: the same document and lot, nothing new created
     rcReceive($this, $f)->assertOk()->assertJsonPath('data.docNo', $first['docNo'])->assertJsonPath('data.lotId', $first['lotId'])->assertJsonPath('data.replayed', true);
@@ -38,7 +38,7 @@ it('receives a lot-controlled coil BLOCKED with a new internal lot, and replays 
     rcReceive($this, $f, ['qty' => '11'])->assertStatus(409)->assertJsonPath('code', 'IDEMPOTENCY_KEY_REUSED');
     rcReceive($this, $f, key: null)->assertStatus(400)->assertJsonPath('code', 'IDEMPOTENCY_KEY_REQUIRED');
 
-    expect(rcReceive($this, $f, ['qty' => '4'], 'receipt-key-0002')->assertCreated()->json('data.lotNo'))->toBe("L{$period}-0002");
+    expect(rcReceive($this, $f, ['qty' => '4'], 'receipt-key-0002')->assertCreated()->json('data.lotNo'))->toBe("RM-CO1-{$period}-0002");
     expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => (int) $db->selectOne('select count(*) as n from lots')->n))->toBe(2);
 
     $receipts = spa($this)->getJson('/api/v1/query/inventory.receipts')->assertOk()->assertJsonPath('meta.total', 2)->json('data');

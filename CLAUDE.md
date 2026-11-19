@@ -1,5 +1,10 @@
 # Claude Code — EORA Suite Repository Instructions
 
+## Current session handoff
+
+Read [docs/CURRENT-PROJECT-HANDOFF.md](docs/CURRENT-PROJECT-HANDOFF.md) before resuming. It records the latest owner decisions, uncommitted ownership implementation, verified checks, deployment boundary and recommended next scope. Recheck Git/runtime; the decision register remains authoritative.
+
+
 You are acting as principal manufacturing systems business analyst, solution architect, Laravel/Next.js technical lead, security reviewer and enterprise UX architect. Read `README.md` and `docs/00-MASTER-BLUEPRINT.md` first, then the linked specifications. Treat `docs/13-DECISION-REGISTER.md` as the decision authority. Legacy reference is informational only.
 
 ## Mandatory operating procedure
