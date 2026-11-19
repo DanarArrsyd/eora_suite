@@ -13,6 +13,7 @@ use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
 use App\Platform\Http\Concurrency;
 use App\Platform\Http\MasterWrites;
+use App\Platform\Outbox\OutboxPublisher;
 use App\Platform\Query\QueryRunner;
 use DateTimeImmutable;
 use Illuminate\Http\JsonResponse;
@@ -47,6 +48,7 @@ final class SpkController
         private readonly AuditRecorder $audit,
         private readonly QueryRunner $rows,
         private readonly BusinessCalendar $calendar,
+        private readonly OutboxPublisher $outbox,
     ) {}
 
     /** A new DRAFT SPK for a line and a production day (today or later at the plant). */
@@ -177,6 +179,17 @@ final class SpkController
         if ($db->selectOne('select 1 as ok from spk_lines where spk_id = ? limit 1', [$h->id]) === null) {
             throw ValidationException::withMessages(['lines' => 'Add at least one line before releasing the SPK.']);
         }
+        // the planned WOs must still be released or in production; FOR SHARE holds off a concurrent cancel until this commits
+        $planned = $db->select(
+            'select w.wo_no, w.status from work_orders w where w.id in (select l.work_order_id from spk_lines l where l.spk_id = ?) order by w.id for share of w',
+            [$h->id],
+        );
+        $blocked = array_values(array_map(static fn (stdClass $w) => (string) $w->wo_no,
+            array_filter($planned, static fn (stdClass $w) => ! in_array($w->status, ['RELEASED', 'IN_PROGRESS'], true))));
+        if ($blocked !== []) {
+            throw new DomainProblem(409, 'INVALID_STATE_TRANSITION', 'Work order no longer released',
+                implode(', ', $blocked).' is no longer released or in production. Remove its lines and save before releasing.');
+        }
         $number = $h->previous_id !== null
             ? (string) $db->selectOne('select spk_no from spk_headers where id = ?', [$h->previous_id])->spk_no
             : $this->nextNumber($db, $h);
@@ -193,7 +206,8 @@ final class SpkController
             throw Concurrency::conflict();
         }
         $this->audit->record($db, 'spk.released', 'spk', (string) $h->id, $before, $this->state($db, 'spk_headers', (string) $h->id), ['spkNo' => $number], (string) $h->plant_id);
-        $this->tellProduction($db, $h, $number);
+        // production is told through the outbox (SpkReleasedNotifier), in this transaction
+        $this->outbox->publish($db, 'production.spk_released', 'spk', (string) $h->id, ['plantId' => (string) $h->plant_id, 'spkNo' => $number, 'revision' => (int) $h->revision]);
 
         return $this->respondSpk($db, (string) $h->id);
     }
@@ -311,26 +325,6 @@ final class SpkController
         return sprintf('%s-%s-%04d', $namespace, (new DateTimeImmutable($day))->format('dmy'), $number);
     }
 
-    /** Production of the plant (who opens runs there) gets one inbox notice with a link to the released SPK. */
-    private function tellProduction(EoraPostgresConnection $db, stdClass $h, string $number): void
-    {
-        $line = (string) $db->selectOne('select code from work_centers where id = ?', [$h->work_center_id])->code;
-        $event = (string) $db->selectOne('select uuidv7() as id')->id;
-        $title = mb_substr("SPK released: {$number} · {$line} · ".(new DateTimeImmutable((string) $h->production_date))->format('d M Y'), 0, 200);
-        $body = (int) $h->revision > 1 ? "Revision {$h->revision} replaces the earlier SPK. Check the changed lines before you start." : 'The planner released the plan for this line and day.';
-        $db->affectingStatement(
-            "insert into inbox_notifications (tenant_id, membership_id, user_id, event_id, kind, severity, action_required, title, body, deep_link)
-             select distinct on (m.id) m.tenant_id, m.id, m.user_id, ?::uuid, 'production.spk_released', 'INFO', false, ?, ?, ?
-               from memberships m
-               join role_assignments ra on ra.membership_id = m.id and ra.revoked_at is null and ra.valid_from <= now() and (ra.valid_until is null or ra.valid_until > now())
-               join role_permissions rp on rp.role_id = ra.role_id and rp.permission_code = 'production.run.create'
-              where m.status = 'ACTIVE' and m.user_id <> (select c.actor from ctx_api.context() c)
-                and (ra.scope_type = 'TENANT' or (ra.scope_type = 'PLANT' and ra.plant_id = ?::uuid)
-                     or (ra.scope_type = 'COMPANY' and ra.company_id = (select p.company_id from plants p where p.id = ?::uuid)))",
-            [$event, $title, $body, '/production/spk-line?spk='.$h->id, $h->plant_id, $h->plant_id],
-        );
-    }
-
     private function visible(EoraPostgresConnection $db, string $spk, bool $lock = false): stdClass
     {
         $scopes = $this->authorizer->requireAnyOf($db, [self::VIEW, self::CREATE]);
@@ -430,19 +424,21 @@ final class SpkController
               where l.spk_id = ? order by l.priority, l.line_no',
             [$id],
         );
+        /** @var array<string, array{machineId: string, machineCode: string, machineName: string, hours: string, notCalculable: int, shifts: array<string, array{shiftId: ?string, shiftCode: ?string, hours: string}>}> $load */
         $load = [];
         $row['lines'] = array_map(static function (stdClass $l) use (&$load): array {
             $sph = self::sph($l);
             $hours = self::hours($sph, (string) $l->planned_qty, (string) $l->setup_minutes, (string) $l->qc_sample_minutes);
             $key = (string) $l->machine_id;
             $load[$key] ??= ['machineId' => $key, 'machineCode' => (string) $l->machine_code, 'machineName' => (string) $l->machine_name, 'hours' => '0', 'notCalculable' => 0, 'shifts' => []];
+            // one bucket per shift of the machine (lines without a shift share one bucket): each bucket is held to one shift's hours
+            $bucket = (string) ($l->shift_id ?? '');
+            $load[$key]['shifts'][$bucket] ??= ['shiftId' => $l->shift_id, 'shiftCode' => $l->shift_code, 'hours' => '0'];
             if ($hours === null) {
                 $load[$key]['notCalculable']++;
             } else {
                 $load[$key]['hours'] = bcadd(self::num($load[$key]['hours']), self::num($hours), 6);
-            }
-            if ($l->shift_id !== null) {
-                $load[$key]['shifts'][(string) $l->shift_id] = true;
+                $load[$key]['shifts'][$bucket]['hours'] = bcadd(self::num($load[$key]['shifts'][$bucket]['hours']), self::num($hours), 6);
             }
 
             return [
@@ -459,15 +455,24 @@ final class SpkController
         }, $lines);
         $perShift = $db->selectOne('select trim_scale(available_hours_per_shift)::text as hours from work_centers where id = ?', [$row['workCenterId']])->hours;
         $row['hoursPerShift'] = $perShift;
+        // a machine is overloaded when any one of its shifts is: pooling shifts would hide an over-full shift (doc 38 §3)
         $row['machineLoad'] = array_values(array_map(static function (array $m) use ($perShift): array {
-            $capacity = $perShift === null ? null : bcmul(self::num($perShift), (string) max(1, count($m['shifts'])), 6);
+            $shifts = array_values(array_map(static function (array $b) use ($perShift): array {
+                $hours = self::num($b['hours']);
+
+                return ['shiftId' => $b['shiftId'] ?? null, 'shiftCode' => $b['shiftCode'] ?? null, 'hours' => self::round3($hours),
+                    'capacityHours' => $perShift === null ? null : self::round3(self::num($perShift)),
+                    'balanceHours' => $perShift === null ? null : self::round3(bcsub(self::num($perShift), $hours, 6)),
+                    'overloaded' => $perShift !== null && bccomp($hours, self::num($perShift), 6) > 0];
+            }, $m['shifts']));
+            $capacity = $perShift === null ? null : bcmul(self::num($perShift), (string) max(1, count($shifts)), 6);
             $hours = self::num($m['hours']);
 
             return ['machineId' => $m['machineId'], 'machineCode' => $m['machineCode'], 'machineName' => $m['machineName'],
                 'hours' => self::round3($hours), 'notCalculableLines' => $m['notCalculable'],
                 'capacityHours' => $capacity === null ? null : self::round3(self::num($capacity)),
                 'balanceHours' => $capacity === null ? null : self::round3(bcsub(self::num($capacity), $hours, 6)),
-                'overloaded' => $capacity !== null && bccomp($hours, $capacity, 6) > 0];
+                'overloaded' => in_array(true, array_column($shifts, 'overloaded'), true), 'shifts' => $shifts];
         }, $load));
         $row['revisions'] = array_map(static fn (stdClass $r) => ['id' => (string) $r->id, 'revision' => (int) $r->revision, 'status' => (string) $r->status,
             'reason' => $r->revision_reason], $db->select(

@@ -69,6 +69,7 @@ const LOAD = [
     capacityHours: '7.5',
     balanceHours: '7.083',
     overloaded: false,
+    shifts: [{ shiftId: null, shiftCode: null, hours: '0.417', capacityHours: '7.5', balanceHours: '7.083', overloaded: false }],
   },
 ];
 const OPTIONS = {

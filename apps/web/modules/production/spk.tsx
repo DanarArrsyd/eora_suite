@@ -105,6 +105,8 @@ type MachineLoad = {
   capacityHours: string | null;
   balanceHours: string | null;
   overloaded: boolean;
+  /** One entry per shift of the machine (lines without a shift share one); the machine is overloaded when one shift is. */
+  shifts: { shiftId: string | null; shiftCode: string | null; hours: string; capacityHours: string | null; balanceHours: string | null; overloaded: boolean }[];
 };
 type SpkDetail = SpkRow & {
   lines: SpkLine[];
@@ -497,6 +499,19 @@ function MachineLoadPanel({ load }: { load: MachineLoad[] }) {
                     : ' · hours per shift not configured'}
                   {m.notCalculableLines ? ` · ${m.notCalculableLines} line${m.notCalculableLines === 1 ? '' : 's'} without SPH` : ''}
                 </span>
+                {m.shifts.length > 1 || m.shifts.some((x) => x.shiftCode) ? (
+                  <ul
+                    className="col-span-3 m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-xs max-md:col-span-1"
+                    aria-label={`${m.machineCode} per shift`}
+                  >
+                    {m.shifts.map((x) => (
+                      <li key={x.shiftId ?? 'none'} className={x.overloaded ? 'font-semibold text-stat-err-fg' : 'text-ink-2'}>
+                        {x.shiftCode ?? 'No shift'}: {x.hours} h{x.capacityHours ? ` of ${x.capacityHours} h` : ''}
+                        {x.overloaded && x.balanceHours ? ` · ${String(Math.abs(Number(x.balanceHours)))} h over` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </li>
             );
           })}

@@ -56,7 +56,7 @@ Sheets `LINE A / B / P SPK PRINT` (plus `SPK WELDING PRINT`, `SPK REPAIR PRINT`,
 - `run hours = planned qty / SPH` (SPH = routing standard good output per hour, D-130; an operation with cycle seconds instead uses `qty × cycle / 3600`).
 - `setup hours = setup minutes / 60` (routing), once per line unless the previous line on the same machine runs the same die (later refinement).
 - `QC sample hours = QC sample minutes / 60` (new plant default, 5 minutes, editable per line).
-- `machine load = Σ line hours` per machine and shift; `capacity = work center available hours per shift` (7 h default in the Excel); `balance = capacity − load`. Overload is a warning, not a block.
+- `machine load = Σ line hours` per machine and shift; `capacity = work center available hours per shift` (7 h default in the Excel); `balance = capacity − load`. Each shift is held to one shift of hours (lines without a shift share one bucket); a machine is overloaded when any shift is. Overload is a warning, not a block.
 - An operation without SPH shows **Not calculable** (never zero).
 
 ## 4. Data model

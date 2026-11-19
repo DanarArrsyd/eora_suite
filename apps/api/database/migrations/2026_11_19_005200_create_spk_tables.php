@@ -133,6 +133,10 @@ return new class extends Migration
                 IF NEW.status = 'RELEASED' AND NOT public.eora_actor_may('production.spk.release', NEW.plant_id) THEN
                   RAISE EXCEPTION 'an SPK is released by a planner of its plant' USING ERRCODE = '42501';
                 END IF;
+                IF NEW.status = 'RELEASED' AND EXISTS (SELECT 1 FROM public.spk_lines l JOIN public.work_orders w ON w.tenant_id = l.tenant_id AND w.id = l.work_order_id
+                     WHERE l.tenant_id = NEW.tenant_id AND l.spk_id = NEW.id AND w.status NOT IN ('RELEASED', 'IN_PROGRESS')) THEN
+                  RAISE EXCEPTION 'an SPK is released only while its work orders are released or in production' USING ERRCODE = '23514';
+                END IF;
                 IF NEW.status IN ('CLOSED', 'SUPERSEDED', 'CANCELLED') AND NOT (public.eora_actor_may('production.spk.close', NEW.plant_id)
                      OR public.eora_actor_may('production.spk.release', NEW.plant_id) OR public.eora_actor_may('production.spk.create', NEW.plant_id)) THEN
                   RAISE EXCEPTION 'an SPK is closed by a planner of its plant' USING ERRCODE = '42501';
@@ -143,6 +147,9 @@ return new class extends Migration
                 END IF;
               ELSIF OLD.status <> 'DRAFT' AND (NEW.reference, NEW.note) IS DISTINCT FROM (OLD.reference, OLD.note) THEN
                 RAISE EXCEPTION 'a released SPK changes through a revision' USING ERRCODE = '23514';
+              ELSIF OLD.status = 'DRAFT' AND NOT public.eora_actor_may('production.spk.create', NEW.plant_id) THEN
+                -- any other change of a draft (its text, or the version bump of a line edit) is the planner's
+                RAISE EXCEPTION 'an SPK draft is edited by a planner of its plant' USING ERRCODE = '42501';
               END IF;
               RETURN NEW;
             END $fn$;
