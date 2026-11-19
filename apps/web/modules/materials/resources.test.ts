@@ -43,11 +43,11 @@ describe('Material Lots split check (D-099)', () => {
 
   it('splits unrestricted stock up to what is not allocated', async () => {
     expect(await check('8', line({}))).toEqual({});
-    expect(await check('9', line({}))).toEqual({ qty: 'Only 8 KG is available here; the rest is allocated.' });
+    expect(await check('9', line({}))).toEqual({ qty: 'Only 8.000 KG is available here; the rest is allocated.' });
   });
   it('splits other statuses up to what is there, at the unit decimals', async () => {
     expect(await check('10', line({ stockStatus: 'BLOCKED' }))).toEqual({});
-    expect(await check('11', line({ stockStatus: 'BLOCKED' }))).toEqual({ qty: 'Only 10 KG is here.' });
+    expect(await check('11', line({ stockStatus: 'BLOCKED' }))).toEqual({ qty: 'Only 10.000 KG is here.' });
     expect(await check('1.2345', line({}))).toEqual({ qty: 'Enter KG with at most 3 decimals.' });
   });
 });

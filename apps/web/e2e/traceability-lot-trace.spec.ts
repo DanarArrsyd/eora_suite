@@ -118,7 +118,7 @@ test('backward: a shipment back to the coil, with run, WO, receipt and a lot out
   expect(asked[0]).toContain('direction=backward');
   const tree = page.getByRole('list', { name: 'Backward trace' });
   await expect(tree).toContainText('Shipped SHP-P1-2026-0002 to OEM-A');
-  await expect(tree).toContainText('100 KG used for 300 PCS · Production posting PRD-P1-2026-0002 · run RUN-P1-2026-0002 · WO-P1-2026-0003');
+  await expect(tree).toContainText('100.000 KG used for 300 PCS · Production posting PRD-P1-2026-0002 · run RUN-P1-2026-0002 · WO-P1-2026-0003');
   await expect(tree).toContainText('Received on RCV-P1-2026-0002 from SUP-STEEL');
   await expect(tree).toContainText('supplier lot HEAT-A102');
   await expect(tree).toContainText('Outside your plants');

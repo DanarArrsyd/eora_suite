@@ -142,7 +142,7 @@ test('incoming release: blocked lines only; Release posts the quantity in place'
   const url = decodeURIComponent((await listUrl).url());
   expect(url).toContain('filter[stockStatus]=BLOCKED');
   expect(url).toContain('filter[locationType]=RM_WAREHOUSE');
-  await expect(page.getByRole('table', { name: 'Incoming Release' }).getByRole('row', { name: /COIL-SPCC-12/ })).toContainText('2500 KG');
+  await expect(page.getByRole('table', { name: 'Incoming Release' }).getByRole('row', { name: /COIL-SPCC-12/ })).toContainText('2,500.000 KG');
   await axe(page);
 
   await page.getByRole('button', { name: 'Release COIL-SPCC-12 L2610-0001 at RM-A01' }).click();

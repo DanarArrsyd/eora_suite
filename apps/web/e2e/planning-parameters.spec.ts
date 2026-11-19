@@ -112,8 +112,8 @@ test('inbound schedule: scheduled, outstanding and status per line', async ({ pa
   await expect(page.getByRole('heading', { level: 1, name: 'Inbound Schedule' })).toBeVisible();
   const table = page.getByRole('table');
   await expect(table).toContainText('INB-P1-2026-0001');
-  await expect(table).toContainText('1500 KG');
-  await expect(table).toContainText('900 KG');
+  await expect(table).toContainText('1,500.000 KG');
+  await expect(table).toContainText('900.000 KG');
   await expect(table).toContainText('600 received');
   await expect(table).toContainText('Partially received');
   await axe(page);

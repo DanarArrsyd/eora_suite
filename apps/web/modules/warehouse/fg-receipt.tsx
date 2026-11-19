@@ -13,6 +13,7 @@ import { queryAll } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
 import { when } from '@/modules/master/version-ui';
 import { unitPrecisionError } from '@/modules/materials/resources';
+import { formatQty } from '@/components/format';
 
 /*
  * M4 step 6 (doc 33 §1.6, D-114, doc 04 row 10, BR-FG-01): Warehouse → FG Receipt on the live API. The FG warehouse
@@ -170,7 +171,7 @@ function ReceivePage() {
       if (!/^\d+(\.\d+)?$/.test(q) || scaled(q) <= 0n) return `${name}: enter a quantity above zero.`;
       const precision = unitPrecisionError(q, r.uomCode, r.uomDecimals);
       if (precision) return `${name}: ${precision}`;
-      if (scaled(q) > scaled(r.qty)) return `${name}: only ${r.qty} ${r.uomCode} is QC released.`;
+      if (scaled(q) > scaled(r.qty)) return `${name}: only ${formatQty(r.qty, r.uomCode)} is QC released.`;
     }
     return null;
   };
@@ -277,7 +278,7 @@ function ReceivePage() {
                       <span className="ml-2 text-[13px] text-ink-2">{r.itemName}</span>
                     </div>
                     <div className="text-[13px] text-ink-2 tabular-nums">
-                      {r.lotNo ? <span className="font-mono text-ink">{r.lotNo}</span> : 'No lot'} · {r.qty} {r.uomCode} released
+                      {r.lotNo ? <span className="font-mono text-ink">{r.lotNo}</span> : 'No lot'} · {formatQty(r.qty, r.uomCode)} released
                     </div>
                     <Field label={`Receive (${r.uomCode})`}>
                       {(control) => (

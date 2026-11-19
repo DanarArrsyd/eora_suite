@@ -29,6 +29,8 @@ import type { FormValues, MasterResource } from '@/modules/master/types';
 import { when } from '@/modules/master/version-ui';
 import { unitPrecisionError } from './resources';
 import { ownerLabel } from '@/modules/inventory/owner';
+import { Quantity } from '@/components/quantity';
+import { formatQty, formatDay } from '@/components/format';
 
 /*
  * M4 step 3 (doc 33 §1.3, D-110, doc 04 rows 3 and 6): Materials → Material Issue and Material Return, Inventory →
@@ -301,7 +303,7 @@ function IssuePage({ initialWo }: { initialWo: string }) {
       const precision = unitPrecisionError(l.qty, s.uomCode, s.uomDecimals);
       if (precision) return `${m.itemCode}: ${precision}`;
       if (Number(l.qty) > Number(s.availableQty))
-        return `${m.itemCode}: only ${s.availableQty} ${s.uomCode} is available at ${s.locationCode}${s.lotNo ? `, lot ${s.lotNo}` : ''}.`;
+        return `${m.itemCode}: only ${formatQty(s.availableQty, s.uomCode)} is available at ${s.locationCode}${s.lotNo ? `, lot ${s.lotNo}` : ''}.`;
     }
     return null;
   };
@@ -369,7 +371,11 @@ function IssuePage({ initialWo }: { initialWo: string }) {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
-            <Field label="Released work order" required hint={o ? `${o.itemCode} · ${o.itemName} · ${o.qty} ${o.uomCode}, due ${o.dueDate}` : undefined}>
+            <Field
+              label="Released work order"
+              required
+              hint={o ? `${o.itemCode} · ${o.itemName} · ${formatQty(o.qty, o.uomCode)}, due ${formatDay(o.dueDate)}` : undefined}
+            >
               {(control) => (
                 <Select
                   {...control}
@@ -381,7 +387,7 @@ function IssuePage({ initialWo }: { initialWo: string }) {
                     setProblem(null);
                   }}
                   placeholder={released.isPending ? 'Loading…' : 'Choose a work order'}
-                  options={(released.data ?? []).map((w) => ({ value: w.id, label: `${w.code} · ${w.itemCode} · ${w.qty} ${w.uomCode}` }))}
+                  options={(released.data ?? []).map((w) => ({ value: w.id, label: `${w.code} · ${w.itemCode} · ${formatQty(w.qty, w.uomCode)}` }))}
                 />
               )}
             </Field>
@@ -413,7 +419,7 @@ function IssuePage({ initialWo }: { initialWo: string }) {
               {o.materials.map((m) => {
                 const options = stockOf(m.itemId).map((s) => ({
                   value: s.id,
-                  label: `${s.locationCode} · ${s.lotNo ?? 'no lot'} · ${s.availableQty} ${s.uomCode} available · ${ownerLabel(s)}`,
+                  label: `${s.locationCode} · ${s.lotNo ?? 'no lot'} · ${formatQty(s.availableQty, s.uomCode)} available · ${ownerLabel(s)}`,
                 }));
                 const own = lines[m.itemId] ?? [];
                 return (
@@ -426,15 +432,15 @@ function IssuePage({ initialWo }: { initialWo: string }) {
                       <dl className="m-0 flex flex-wrap gap-x-4 text-[13px] tabular-nums">
                         <div className="flex gap-1">
                           <dt className="text-ink-2">Required</dt>
-                          <dd className="m-0 text-ink">{`${m.requiredQty} ${m.uomCode}`}</dd>
+                          <dd className="m-0 text-ink">{`${formatQty(m.requiredQty, m.uomCode)}`}</dd>
                         </div>
                         <div className="flex gap-1">
                           <dt className="text-ink-2">Issued</dt>
-                          <dd className="m-0 text-ink">{`${m.issuedQty} ${m.baseUomCode}`}</dd>
+                          <dd className="m-0 text-ink">{`${formatQty(m.issuedQty, m.baseUomCode)}`}</dd>
                         </div>
                         <div className="flex gap-1">
                           <dt className="text-ink-2">At production</dt>
-                          <dd className="m-0 text-ink">{`${m.atProductionQty} ${m.baseUomCode}`}</dd>
+                          <dd className="m-0 text-ink">{`${formatQty(m.atProductionQty, m.baseUomCode)}`}</dd>
                         </div>
                       </dl>
                     </div>
@@ -569,8 +575,8 @@ export const MATERIAL_RETURNS: MasterResource<ReturnRow> = {
       sub: (r) => r.workCenterCode,
     },
     { id: 'itemCode', header: 'Material', sortable: true, cell: (r) => <span className="font-mono">{r.itemCode}</span>, sub: (r) => r.lotNo ?? 'No lot' },
-    { id: 'askedQty', header: 'Asked', numeric: true, cell: (r) => `${r.askedQty} ${r.uomCode}` },
-    { id: 'receivedQty', header: 'Received', numeric: true, critical: true, cell: (r) => (r.receivedQty ? `${r.receivedQty} ${r.uomCode}` : '—') },
+    { id: 'askedQty', header: 'Asked', numeric: true, cell: (r) => <Quantity value={r.askedQty} uom={r.uomCode} /> },
+    { id: 'receivedQty', header: 'Received', numeric: true, critical: true, cell: (r) => (r.receivedQty ? `${formatQty(r.receivedQty, r.uomCode)}` : '—') },
     { id: 'status', header: 'Status', sortable: true, cell: (r) => <DomainStatusBadge domain="document" status={r.status} /> },
   ],
   fields: [
@@ -600,7 +606,8 @@ export const MATERIAL_RETURNS: MasterResource<ReturnRow> = {
     if (!line) return { lineId: 'That material is no longer at the work center. Choose it again.' };
     const precision = v.qty ? unitPrecisionError(v.qty, line.uomCode, line.uomDecimals) : undefined;
     if (precision) return { qty: precision };
-    if (v.qty && Number(v.qty) > Number(line.qty)) return { qty: `${line.workOrderCode} has ${line.qty} ${line.uomCode} of it at ${line.workCenterCode}.` };
+    if (v.qty && Number(v.qty) > Number(line.qty))
+      return { qty: `${line.workOrderCode} has ${formatQty(line.qty, line.uomCode)} of it at ${line.workCenterCode}.` };
     return {};
   },
   confirm: (v) => ({
@@ -713,7 +720,7 @@ function ReturnPage({ id }: { id: string }) {
         required: true,
         decimals: r.uomDecimals,
         positive: true,
-        hint: `Weighed or counted. ${r.askedQty} ${r.uomCode} was asked; both are kept.`,
+        hint: `Weighed or counted. ${formatQty(r.askedQty, r.uomCode)} was asked; both are kept.`,
       },
     ],
     toForm: () => ({ toLocationId: '', qty: r.askedQty }),
@@ -745,11 +752,11 @@ function ReturnPage({ id }: { id: string }) {
     { label: 'From', value: `${r.workCenterCode} · ${r.fromLocationCode} · ${r.plantCode}` },
     { label: 'Material', value: `${r.itemCode} · ${r.itemName}` },
     { label: 'Lot', value: r.lotNo ?? 'No lot' },
-    { label: 'Asked', value: <span className="tabular-nums">{`${r.askedQty} ${r.uomCode}`}</span> },
+    { label: 'Asked', value: <span className="tabular-nums">{`${formatQty(r.askedQty, r.uomCode)}`}</span> },
     ...(r.receivedQty
       ? [
-          { label: 'Received', value: <span className="font-semibold tabular-nums">{`${r.receivedQty} ${r.uomCode} into ${r.toLocationCode}`}</span> },
-          { label: 'Difference', value: <span className="tabular-nums">{`${r.differenceQty} ${r.uomCode}`}</span> },
+          { label: 'Received', value: <span className="font-semibold tabular-nums">{`${formatQty(r.receivedQty, r.uomCode)} into ${r.toLocationCode}`}</span> },
+          { label: 'Difference', value: <span className="tabular-nums">{`${formatQty(r.differenceQty, r.uomCode)}`}</span> },
         ]
       : []),
     { label: 'Note', value: r.note ?? '—' },
@@ -761,7 +768,7 @@ function ReturnPage({ id }: { id: string }) {
   return (
     <EnterprisePage
       title={returnLabel(r)}
-      description={`${r.askedQty} ${r.uomCode} of ${r.itemCode} asked back from ${r.workCenterCode} for ${r.workOrderCode}.`}
+      description={`${formatQty(r.askedQty, r.uomCode)} of ${r.itemCode} asked back from ${r.workCenterCode} for ${r.workOrderCode}.`}
       meta={<DomainStatusBadge domain="document" status={r.status} />}
       actions={
         <div className="flex flex-wrap gap-2">
@@ -883,7 +890,7 @@ export const MATERIAL_AT_PRODUCTION: MasterResource<AtProductionRow> = {
     },
     { id: 'itemCode', header: 'Material', sortable: true, cell: (r) => <span className="font-mono">{r.itemCode}</span>, sub: (r) => r.itemName },
     { id: 'lotNo', header: 'Lot', sortable: true, cell: (r) => r.lotNo ?? 'No lot' },
-    { id: 'qty', header: 'Quantity', numeric: true, critical: true, cell: (r) => `${r.qty} ${r.uomCode}` },
+    { id: 'qty', header: 'Quantity', numeric: true, critical: true, cell: (r) => <Quantity value={r.qty} uom={r.uomCode} /> },
     { id: 'lastMovedAt', header: 'Last moved', sortable: true, cell: (r) => when(r.lastMovedAt) },
   ],
   fields: [],

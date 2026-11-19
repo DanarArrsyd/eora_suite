@@ -147,12 +147,12 @@ export function DataTable<T extends RowData>(props: DataTableProps<T>) {
     return cells;
   })();
 
-  const [scroll, setScroll] = React.useState({ start: false, end: false });
+  const [scroll, setScroll] = React.useState({ start: false, end: false, overflow: false });
   const wrapRef = React.useRef<HTMLDivElement>(null);
   const measure = React.useCallback(() => {
     const el = wrapRef.current;
     if (!el) return;
-    setScroll({ start: el.scrollLeft > 0, end: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 });
+    setScroll({ start: el.scrollLeft > 0, end: el.scrollLeft + el.clientWidth < el.scrollWidth - 1, overflow: el.scrollWidth > el.clientWidth + 1 });
   }, []);
   React.useEffect(() => {
     const el = wrapRef.current;
@@ -214,7 +214,15 @@ export function DataTable<T extends RowData>(props: DataTableProps<T>) {
           Loading {label.toLowerCase()}
         </span>
       ) : null}
-      <div ref={wrapRef} onScroll={measure} className="relative overflow-x-auto overscroll-x-contain max-md:overflow-visible">
+      {/* a table wider than its container scrolls inside it and can then be reached and scrolled with the keyboard (WCAG 2.1.1) */}
+      <div
+        ref={wrapRef}
+        onScroll={measure}
+        tabIndex={scroll.overflow ? 0 : undefined}
+        role={scroll.overflow ? 'region' : undefined}
+        aria-label={scroll.overflow ? `${label}, scrolls sideways` : undefined}
+        className="relative overflow-x-auto overscroll-x-contain max-md:overflow-visible"
+      >
         <table
           aria-busy={showSkeleton || isFetching ? true : undefined}
           className={cn('w-full border-separate border-spacing-0 max-md:block', compact ? 'text-[12.5px]' : 'text-[13px]')}

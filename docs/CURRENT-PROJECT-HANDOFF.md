@@ -4,6 +4,7 @@ Read this before resuming implementation. This is a dated handoff, not a replace
 
 ## Current state and authorization
 
+- **2026-11-19 later:** PR #95 is **merged** (main `a9708f1`). D-137 UI consistency slices 1–4 (`docs/review/2026-11-19-UIUX-AUDIT.md` §6) are on branch `feat/ui-consistency` as a pull request, not merged. New migration `2026_11_19_005100_create_list_views` (personal saved views). Open follow-up: Daily Recovery export (needs an export job for the computed view).
 - Active branch at handoff: `codex/material-ownership`, based on main `63a451c`. Ownership slice (D-135) plus the language/ownership-wording slice (D-136, owner approved 2026-11-19) are **committed on this branch and pushed as a pull request — not merged, not deployed**. Merge follows the usual rule: CI green and review done first.
 - Owner decisions 2026-11-19: **D-136** UI/API/exports/docs English, role guides Indonesian. Release condition in doc 37: keep the plant-wide planning gate; do **not** apply migration `2026_11_18_005000` to the operational database before owner-aware planning ships. Lot date `DDMMYY` kept. Review and status per finding: `docs/review/2026-11-19-CODEX-OWNERSHIP-AND-LANGUAGE-REVIEW.md`.
 - Local user-facing web at `http://localhost:3100` remains the previous release. API at `http://localhost:8000/api/v1/health/ready` and web login returned 200 at handoff; Docker services were healthy. Recheck before making current-state claims. The ownership migration has **not** been applied to the operational database.

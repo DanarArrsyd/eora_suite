@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { ApiError, api, call, failureMessage } from '@eora/features/auth';
 import { Button, DatePicker, Field, IconButton, InlineAlert, Input, Modal, ModalBody, ModalContent, ModalFooter, Textarea, type IsoDate } from '@eora/ui';
+import { formatDay, formatQty } from '@/components/format';
 
 /*
  * M5 step 2 (D-122, D-038, BR-DEM-11): revise a firm delivery of a confirmed order. The old delivery is kept as
@@ -121,8 +122,8 @@ function ReviseForm({
     <>
       <ModalBody>
         <p className="mt-0 mb-3 text-ink-2">
-          {schedule.qty} {uomCode} on {schedule.requirementDate}, {schedule.deliveredQty} delivered, {schedule.outstandingQty} outstanding. It stays on the
-          order as Superseded with what it delivered; the deliveries below replace it. Add a row to split it over several days.
+          {formatQty(schedule.qty, uomCode)} on {formatDay(schedule.requirementDate)}, {schedule.deliveredQty} delivered, {schedule.outstandingQty} outstanding.
+          It stays on the order as Superseded with what it delivered; the deliveries below replace it. Add a row to split it over several days.
         </p>
         {problem ? (
           <InlineAlert tone="danger" title="Not revised" className="mb-3">

@@ -14,6 +14,8 @@ import { PLANT_FILTER } from '@/modules/master/resources';
 import { queryAll, querySource } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
 import { ApprovalPanel, when } from '@/modules/master/version-ui';
+import { Quantity } from '@/components/quantity';
+import { formatDay } from '@/components/format';
 
 /*
  * M3 step 7 (doc 32 §1.7, doc 04 row 13, D-060, D-101): Inventory → Control → Reversals on the live API. Anyone who may
@@ -194,13 +196,13 @@ const LEG_COLUMNS: EoraColumn<Leg>[] = [
   },
   { id: 'itemCode', header: 'Item', cell: (l) => <span className="font-mono">{l.itemCode}</span>, sub: (l) => l.lotNo ?? 'No lot' },
   { id: 'stockStatus', header: 'Status', cell: (l) => <DomainStatusBadge domain="stock" status={l.stockStatus} /> },
-  { id: 'qty', header: 'Posted', numeric: true, cell: (l) => `${l.qty} ${l.uomCode}` },
+  { id: 'qty', header: 'Posted', numeric: true, cell: (l) => <Quantity value={l.qty} uom={l.uomCode} /> },
   {
     id: 'undo',
     header: 'Reversal',
     numeric: true,
     critical: true,
-    cell: (l) => `${l.qty.startsWith('-') ? l.qty.slice(1) : `-${l.qty}`} ${l.uomCode}`,
+    cell: (l) => <Quantity value={l.qty.startsWith('-') ? l.qty.slice(1) : `-${l.qty}`} uom={l.uomCode} />,
   },
 ];
 
@@ -288,10 +290,10 @@ function ReversalPage({ id }: { id: string }) {
   const facts: { label: string; value: React.ReactNode }[] = [
     { label: 'Reverses', value: <span className="font-mono">{r.originalCode}</span> },
     { label: 'Document type', value: typeLabel(r.originalType) },
-    { label: 'Posted for', value: r.originalDate },
+    { label: 'Posted for', value: formatDay(r.originalDate) },
     { label: 'Plant', value: r.plantCode },
     { label: 'Reason', value: r.reason },
-    { label: 'Reversal day', value: r.effectiveDate },
+    { label: 'Reversal day', value: formatDay(r.effectiveDate) },
     ...(r.correction ? [{ label: 'Closed-month correction', value: `Evidence: ${r.evidence ?? '—'}` }] : []),
     ...(r.status === 'REJECTED' ? [{ label: 'Rejected because', value: r.rejectReason ?? '—' }] : []),
   ];

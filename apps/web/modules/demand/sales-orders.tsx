@@ -15,6 +15,8 @@ import { PLANT_FILTER } from '@/modules/master/resources';
 import { queryAll } from '@/modules/master/source';
 import type { FormValues, MasterResource } from '@/modules/master/types';
 import { when } from '@/modules/master/version-ui';
+import { Quantity } from '@/components/quantity';
+import { formatDay, formatQty } from '@/components/format';
 
 /*
  * M4 step 1 (doc 33 §1.1, D-107, D-034, doc 16 §12): Sales Orders on the live API, in Demand and in PPIC. A planner
@@ -112,7 +114,7 @@ function salesOrders(base: string): MasterResource<SalesOrderRow> {
       { id: 'customerCode', header: 'Customer', sortable: true, cell: (r) => r.customerCode, sub: (r) => r.customerName },
       { id: 'customerPoNos', header: 'Customer PO', cell: (r) => r.customerPoNos ?? '—' },
       { id: 'lineCount', header: 'Lines', numeric: true, cell: (r) => String(r.lineCount) },
-      { id: 'nextDueDate', header: 'Next delivery', cell: (r) => r.nextDueDate ?? '—' },
+      { id: 'nextDueDate', header: 'Next delivery', cell: (r) => formatDay(r.nextDueDate) },
       { id: 'createdAt', header: 'Created', sortable: true, cell: (r) => when(r.createdAt), sub: (r) => r.createdByName ?? undefined },
       { id: 'status', header: 'Status', sortable: true, cell: (r) => <DomainStatusBadge domain="document" status={r.status} /> },
     ],
@@ -350,7 +352,7 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
     { label: 'Customer', value: `${o.customerCode} · ${o.customerName}` },
     { label: 'Plant', value: o.plantCode },
     { label: 'Customer PO', value: o.customerPoNos ?? '—' },
-    { label: 'Next delivery', value: o.nextDueDate ?? '—' },
+    { label: 'Next delivery', value: formatDay(o.nextDueDate) },
     { label: 'Created', value: `${when(o.createdAt)}${o.createdByName ? ` · ${o.createdByName}` : ''}` },
     ...(o.confirmedAt ? [{ label: 'Confirmed', value: `${when(o.confirmedAt)}${o.confirmedByName ? ` · ${o.confirmedByName}` : ''}` }] : []),
     ...(o.status === 'CANCELLED' ? [{ label: 'Cancelled because', value: o.cancelReason ?? '—' }] : []),
@@ -362,9 +364,9 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
       id: 'requirementDate',
       header: 'Delivery date',
       lead: true,
-      cell: (s) => s.requirementDate,
+      cell: (s) => formatDay(s.requirementDate),
     },
-    { id: 'qty', header: 'Quantity', numeric: true, cell: (s) => `${s.qty} ${line.uomCode}` },
+    { id: 'qty', header: 'Quantity', numeric: true, cell: (s) => <Quantity value={s.qty} uom={line.uomCode} /> },
     { id: 'deliveredQty', header: 'Delivered', numeric: true, cell: (s) => s.deliveredQty },
     { id: 'outstandingQty', header: 'Outstanding', numeric: true, critical: true, cell: (s) => s.outstandingQty },
     {
@@ -500,9 +502,7 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
                     </CardTitle>
                     <p className="m-0 mt-1 text-[13px] text-ink-2">
                       {line.itemCode} · {line.itemName} · PO {line.customerPoNo} line {line.customerPoLine} ·{' '}
-                      <span className="font-semibold text-ink tabular-nums">
-                        {line.qty} {line.uomCode}
-                      </span>
+                      <span className="font-semibold text-ink tabular-nums">{formatQty(line.qty, line.uomCode)}</span>
                       {line.status === 'CANCELLED' ? ' · Cancelled' : ''}
                     </p>
                   </div>
@@ -631,7 +631,7 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
         title="Cancel this delivery"
         description={
           ask?.kind === 'cancelDelivery'
-            ? `${ask.schedule.qty} ${ask.line.uomCode} on ${ask.schedule.requirementDate} stops counting as demand. It stays on the order as Cancelled with your reason.`
+            ? `${formatQty(ask.schedule.qty, ask.line.uomCode)} on ${ask.schedule.requirementDate} stops counting as demand. It stays on the order as Cancelled with your reason.`
             : ''
         }
         confirmLabel="Cancel delivery"

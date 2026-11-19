@@ -14,6 +14,8 @@ import { PLANT_FILTER } from '@/modules/master/resources';
 import type { FormValues, MasterResource } from '@/modules/master/types';
 import { ApprovalPanel, when } from '@/modules/master/version-ui';
 import { ApprovalNotice } from '@/components/approval-notice';
+import { Quantity } from '@/components/quantity';
+import { formatDay, formatQty } from '@/components/format';
 
 /*
  * M4 step 2 (doc 33 §1.2, D-109, G-MPS-6, BR-PLN-01): PPIC → Work Orders on the live API. A planner drafts a manual WO for
@@ -195,13 +197,13 @@ function workOrders(base: string): MasterResource<WorkOrderRow> {
     columns: [
       { id: 'code', header: 'Work order', lead: true, sortable: true, cell: (r) => <span className="font-mono">{r.code}</span>, sub: (r) => r.plantCode },
       { id: 'itemCode', header: 'Item', sortable: true, cell: (r) => <span className="font-mono">{r.itemCode}</span>, sub: (r) => r.itemName },
-      { id: 'qty', header: 'Quantity', numeric: true, critical: true, cell: (r) => `${r.qty} ${r.uomCode}` },
-      { id: 'dueDate', header: 'Due', sortable: true, cell: (r) => r.dueDate },
+      { id: 'qty', header: 'Quantity', numeric: true, critical: true, cell: (r) => <Quantity value={r.qty} uom={r.uomCode} /> },
+      { id: 'dueDate', header: 'Due', sortable: true, cell: (r) => formatDay(r.dueDate) },
       {
         id: 'salesOrderCode',
         header: 'For delivery',
         cell: (r) => r.salesOrderCode ?? '—',
-        sub: (r) => (r.customerCode ? (r.scheduleDate ? `${r.customerCode} · ${r.scheduleDate}` : r.customerCode) : undefined),
+        sub: (r) => (r.customerCode ? (r.scheduleDate ? `${r.customerCode} · ${formatDay(r.scheduleDate)}` : r.customerCode) : undefined),
       },
       { id: 'reasonCode', header: 'Reason', cell: (r) => reason(r.reasonCode) },
       {
@@ -369,15 +371,18 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
   const facts: { label: string; value: React.ReactNode }[] = [
     { label: 'Item', value: `${o.itemCode} · ${o.itemName}` },
     { label: 'Production customer', value: o.customerCode ?? 'None (company material only)' },
-    { label: 'Quantity', value: <span className="font-semibold tabular-nums">{`${o.qty} ${o.uomCode}`}</span> },
+    { label: 'Quantity', value: <span className="font-semibold tabular-nums">{`${formatQty(o.qty, o.uomCode)}`}</span> },
     ...(o.pairedOutput
-      ? [{ label: 'Paired output', value: `${o.qty} ${o.uomCode} of ${o.pairedOutput.itemCode} · ${o.pairedOutput.pairsPerSheet} pairs per sheet` }]
+      ? [{ label: 'Paired output', value: `${formatQty(o.qty, o.uomCode)} of ${o.pairedOutput.itemCode} · ${o.pairedOutput.pairsPerSheet} pairs per sheet` }]
       : []),
-    { label: 'Due', value: o.dueDate },
+    { label: 'Due', value: formatDay(o.dueDate) },
     { label: 'Plant', value: o.plantCode },
     { label: 'Reason', value: o.plannedFrom ? `From the plan (${o.plannedFrom})` : reason(o.reasonCode) },
     { label: 'Note', value: o.note ?? '—' },
-    { label: 'For delivery', value: o.salesOrderCode ? `${o.salesOrderCode} · ${o.customerCode} · ${o.scheduleDate} · ${o.scheduleQty} ${o.uomCode}` : '—' },
+    {
+      label: 'For delivery',
+      value: o.salesOrderCode ? `${o.salesOrderCode} · ${o.customerCode} · ${formatDay(o.scheduleDate)} · ${formatQty(o.scheduleQty, o.uomCode)}` : '—',
+    },
     { label: 'Created', value: `${when(o.createdAt)}${o.createdByName ? ` · ${o.createdByName}` : ''}` },
     ...(o.submittedAt ? [{ label: 'Release asked', value: `${when(o.submittedAt)}${o.submittedByName ? ` · ${o.submittedByName}` : ''}` }] : []),
     ...(o.releasedAt ? [{ label: 'Released', value: `${when(o.releasedAt)}${o.releasedByName ? ` · ${o.releasedByName}` : ''}` }] : []),
@@ -394,10 +399,10 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
   ];
   const materialColumns: EoraColumn<Material>[] = [
     { id: 'itemCode', header: 'Material', lead: true, cell: (m) => <span className="font-mono">{m.itemCode}</span>, sub: (m) => m.itemName },
-    { id: 'grossQtyPer', header: 'Per piece', numeric: true, cell: (m) => `${m.grossQtyPer} ${m.uomCode}` },
-    { id: 'requiredQty', header: 'Required', numeric: true, critical: true, cell: (m) => `${m.requiredQty} ${m.uomCode}` },
-    { id: 'issuedQty', header: 'Issued', numeric: true, cell: (m) => `${m.issuedQty} ${m.baseUomCode}` },
-    { id: 'atProductionQty', header: 'At production', numeric: true, cell: (m) => `${m.atProductionQty} ${m.baseUomCode}` },
+    { id: 'grossQtyPer', header: 'Per piece', numeric: true, cell: (m) => <Quantity value={m.grossQtyPer} uom={m.uomCode} /> },
+    { id: 'requiredQty', header: 'Required', numeric: true, critical: true, cell: (m) => <Quantity value={m.requiredQty} uom={m.uomCode} /> },
+    { id: 'issuedQty', header: 'Issued', numeric: true, cell: (m) => <Quantity value={m.issuedQty} uom={m.baseUomCode} /> },
+    { id: 'atProductionQty', header: 'At production', numeric: true, cell: (m) => <Quantity value={m.atProductionQty} uom={m.baseUomCode} /> },
     { id: 'conversionProfileVersion', header: 'Conversion profile', cell: (m) => (m.conversionProfileVersion ? `v${m.conversionProfileVersion}` : '—') },
   ];
   const status =
@@ -561,7 +566,7 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
                   <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[13px] text-ink-2 tabular-nums">
                     {atProduction.map((m) => (
                       <li key={`${m.locationCode}|${m.itemCode}|${m.lotNo ?? ''}`}>
-                        {m.locationCode} · <span className="font-mono text-ink">{m.itemCode}</span> · {m.lotNo ?? 'no lot'} · {m.qty} {m.uomCode}
+                        {m.locationCode} · <span className="font-mono text-ink">{m.itemCode}</span> · {m.lotNo ?? 'no lot'} · {formatQty(m.qty, m.uomCode)}
                       </li>
                     ))}
                   </ul>
@@ -654,7 +659,7 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
         open={ask === 'release'}
         onOpenChange={(v) => (v ? undefined : setAsk(null))}
         title="Release this work order"
-        description={`${o.qty} ${o.uomCode} of ${o.itemCode}, due ${o.dueDate}. The approved BOM and routing in force today are copied onto it with the materials it needs.`}
+        description={`${formatQty(o.qty, o.uomCode)} of ${o.itemCode}, due ${formatDay(o.dueDate)}. The approved BOM and routing in force today are copied onto it with the materials it needs.`}
         confirmLabel="Release"
         onConfirm={async () => {
           await act('release');
@@ -691,7 +696,7 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
         open={ask === 'exception'}
         onOpenChange={(v) => (v ? undefined : setAsk(null))}
         title="Ask close exception"
-        description={`${atProduction.map((m) => `${m.itemCode} ${m.qty} ${m.uomCode}`).join(', ')} go to the scrap yard once a second person approves it. Nothing moves until then.`}
+        description={`${atProduction.map((m) => `${m.itemCode} ${formatQty(m.qty, m.uomCode)}`).join(', ')} go to the scrap yard once a second person approves it. Nothing moves until then.`}
         confirmLabel="Ask close exception"
         reason={{ label: 'Reason', minLength: 3 }}
         onConfirm={async (why) => {

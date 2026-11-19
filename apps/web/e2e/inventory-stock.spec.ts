@@ -62,7 +62,7 @@ test('stock overview: ledger stock with available quantity; Transfer moves it to
   await expect(page.locator('#main').getByText('Mock data')).toHaveCount(0);
   const row = page.getByRole('table', { name: 'Stock Overview' }).getByRole('row', { name: /COIL-SPCC-12/ });
   await expect(row).toContainText('Unrestricted');
-  await expect(row).toContainText('2000 KG');
+  await expect(row).toContainText('2,000.000 KG');
   await axe(page);
 
   await page.getByRole('button', { name: 'Transfer COIL-SPCC-12 L2610-0001 at RM-A01 Unrestricted' }).click();
@@ -119,7 +119,7 @@ test('stock overview: allocated stock stays put — Transfer offers and allows o
   await choose(page, drawer.getByRole('combobox', { name: 'To location' }), 'P1 / RM-A02 · Coil rack A02');
   await drawer.getByRole('textbox', { name: 'Quantity' }).fill('1800');
   await drawer.getByRole('button', { name: 'Transfer' }).click();
-  await expect(drawer).toContainText('Only 1500 KG is available here; the rest is allocated.');
+  await expect(drawer).toContainText('Only 1,500.000 KG is available here; the rest is allocated.');
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
 });
 
@@ -130,4 +130,60 @@ test('stock overview: a transfer role without the locations list is told why ins
   await page.getByRole('button', { name: /^Transfer COIL-SPCC-12/ }).click();
   await expect(page.getByRole('dialog', { name: /Transfer COIL-SPCC-12/ })).toContainText('which your roles cannot read');
   await expect(page.getByRole('combobox', { name: 'To location' })).toHaveCount(0);
+});
+
+test('saved views: apply a personal view (filters, sort, columns), save the current one and delete one (D-137)', async ({ page }) => {
+  await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['inventory.stock.view', 'master.org.view', 'master.part.view'] } });
+  const stockUrls: string[] = [];
+  await page.route('**/api/v1/query/inventory.stock?*', (route) => {
+    stockUrls.push(route.request().url());
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(page1([LINE]).json) });
+  });
+  await mockApi(page, '/query/core.plants?*', page1([]));
+  await mockApi(page, '/query/core.items?*', page1([]));
+  await mockApi(page, '/query/core.customers?*', page1([{ id: ID(40), code: 'DPM', name: 'Customer DPM', status: 'ACTIVE', version: 1 }]));
+  const VIEW = {
+    id: ID(50),
+    name: 'Company coil',
+    state: { search: 'COIL', filters: { owner: 'COMPANY' }, sort: [{ id: 'qty', desc: true }], columns: { lotNo: false } },
+  };
+  const writes: { method: string; url: string; body: unknown }[] = [];
+  await page.route('**/api/v1/list-views**', (route) => {
+    const req = route.request();
+    if (req.method() === 'GET') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [VIEW] }) });
+    writes.push({ method: req.method(), url: req.url(), body: req.method() === 'POST' ? req.postDataJSON() : null });
+    return req.method() === 'POST'
+      ? route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ data: { ...VIEW, id: ID(51), name: 'Mine' } }) })
+      : route.fulfill({ status: 204 });
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/inventory/stock-overview');
+  const table = page.getByRole('table', { name: 'Stock Overview' });
+  await expect(table.getByRole('columnheader', { name: /Lot/ })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Saved views' }).click();
+  await page.getByRole('menuitem', { name: 'Company coil', exact: true }).click();
+  // one URL update carries the view's search, Owner filter and sort; the list asks the API for company stock only
+  await expect(page).toHaveURL(/q=COIL/);
+  await expect.poll(() => stockUrls.at(-1) ?? '').toContain('ownership');
+  await expect(table.getByRole('columnheader', { name: /Lot/ })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Saved views' }).click();
+  await page.getByRole('menuitem', { name: 'Save current view…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Save current view' });
+  await dialog.getByRole('textbox', { name: 'View name' }).fill('Mine');
+  await dialog.getByRole('button', { name: 'Save view' }).click();
+  await expect(dialog).toBeHidden();
+  expect(writes[0]).toMatchObject({
+    method: 'POST',
+    body: { list: 'stock-overview', name: 'Mine', state: { search: 'COIL', filters: { owner: 'COMPANY' }, columns: { lotNo: false } } },
+  });
+
+  await page.getByRole('button', { name: 'Saved views' }).click();
+  await page.getByRole('menuitem', { name: 'Delete Company coil' }).click();
+  await expect.poll(() => writes.length).toBe(2);
+  expect(writes[1]).toMatchObject({ method: 'DELETE' });
+  expect(writes[1]!.url).toContain(`/list-views/${VIEW.id}`);
+  await axe(page);
 });

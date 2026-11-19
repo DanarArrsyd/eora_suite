@@ -17,6 +17,7 @@ import {
   ListSearch,
   ListWorkspace,
   Pagination,
+  SavedViewsMenu,
   useFilterPanel,
   useListUrlState,
   type ColumnVisibility,
@@ -25,6 +26,7 @@ import {
 import { Button, EmptyState, InlineAlert, LoadingState, PermissionDeniedState, Tooltip } from '@eora/ui';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useSavedViews } from '@/components/use-saved-views';
 import { MasterEditor } from './editor';
 import { exportSource, querySource } from './source';
 import type { MasterResource, MasterRow } from './types';
@@ -76,13 +78,16 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const list = useListUrlState(urlConfig);
   const { query } = list;
   const panel = useFilterPanel();
-  const [visibility, setVisibility] = React.useState<ColumnVisibility>({});
+  const [visibility, setVisibility] = React.useState<ColumnVisibility>(() => Object.fromEntries((config.defaultHidden ?? []).map((id) => [id, false])));
+  const saved = useSavedViews(config.id);
   const [editor, setEditor] = React.useState<{ open: boolean; row: T | null }>({ open: false, row: null });
   const [notice, setNotice] = React.useState<{ title: string; partial: boolean; saved?: boolean } | null>(null);
 
+  // what the API reads: the screen's filters (mapped where one choice stands for several API filters) plus fixed ones
+  const apiFilters = { ...(config.mapFilters ? config.mapFilters(query.filters as Record<string, string | string[]>) : query.filters), ...config.fixedFilters };
   const rows = useQuery({
     queryKey: ['master', config.resource, query, config.fixedFilters],
-    queryFn: ({ signal }) => source.list(config.fixedFilters ? { ...query, filters: { ...query.filters, ...config.fixedFilters } } : query, signal),
+    queryFn: ({ signal }) => source.list({ ...query, filters: apiFilters }, signal),
     placeholderData: keepPreviousData,
     enabled: canView,
   });
@@ -150,11 +155,20 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <SavedViewsMenu
+                views={saved.views}
+                onApply={(v) => {
+                  list.applyView({ filters: v.filters, search: v.search, sort: v.sort });
+                  if (v.columns) setVisibility(v.columns);
+                }}
+                onSave={(name) => saved.save(name, { search: query.search, filters: query.filters, sort: query.sort, columns: visibility })}
+                onDelete={saved.remove}
+              />
               <ExportMenu
                 resource={config.resource}
                 source={exportSource}
                 filtersApplied={filtersApplied}
-                query={{ filters: { ...query.filters, ...config.fixedFilters }, search: query.search, sort: query.sort }}
+                query={{ filters: apiFilters, search: query.search, sort: query.sort }}
                 formats={EXCEL_ONLY}
                 disabledReason={permissions.includes('exchange.export.export') ? undefined : 'Your roles do not allow exports.'}
               />

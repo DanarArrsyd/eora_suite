@@ -8,6 +8,7 @@ import { ApiError, api, call, failureMessage, useMe } from '@eora/features/auth'
 import { EnterprisePage } from '@eora/features/patterns';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState, Field, InlineAlert, Input, LoadingState, PermissionDeniedState } from '@eora/ui';
 import { when } from '@/modules/master/version-ui';
+import { formatQty } from '@/components/format';
 
 /*
  * M4 step 9 (doc 33 §1.9, D-118, doc 14 #18): Traceability → Backward / Forward Trace on the live API. One search box
@@ -303,8 +304,8 @@ function TraceRow({ node: n, direction }: { node: TraceNode; direction: Directio
         {via ? (
           <p className="mt-1 mb-0 text-[13px] text-ink-2 tabular-nums">
             {direction === 'backward'
-              ? `${via.qtyUsed} ${via.uomUsed} used for ${via.qtyMade} ${via.uomMade}`
-              : `${via.qtyMade} ${via.uomMade} made with ${via.qtyUsed} ${via.uomUsed}`}{' '}
+              ? `${formatQty(via.qtyUsed, via.uomUsed)} used for ${formatQty(via.qtyMade, via.uomMade)}`
+              : `${formatQty(via.qtyMade, via.uomMade)} made with ${formatQty(via.qtyUsed, via.uomUsed)}`}{' '}
             · {DOC[via.docType] ?? via.docType} <span className="font-mono text-ink">{via.docNo ?? '—'}</span>
             {via.runNo ? (
               <>
@@ -348,7 +349,7 @@ function TraceRow({ node: n, direction }: { node: TraceNode; direction: Directio
               <li key={`${s.docNo}|${s.soNo}|${s.lineNo}|${s.scheduleNo}`} className="flex flex-wrap items-center gap-2 text-[13px] text-ink-2 tabular-nums">
                 <span>
                   Shipped <span className="font-mono text-ink">{s.docNo}</span> to {s.customerCode} · {s.customerName} · {s.soNo} {s.lineNo}/{s.scheduleNo}
-                  {s.customerPoNo ? ` · customer PO ${s.customerPoNo}` : ''} · {s.qty} {s.uomCode}
+                  {s.customerPoNo ? ` · customer PO ${s.customerPoNo}` : ''} · {formatQty(s.qty, s.uomCode)}
                   {s.postedByName ? ` · ${s.postedByName}` : ''}
                   {s.postedAt ? `, ${when(s.postedAt)}` : ''}
                 </span>

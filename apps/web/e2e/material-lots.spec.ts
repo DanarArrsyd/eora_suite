@@ -77,7 +77,7 @@ test('material lots: lot-tracked stock with its parent; Split posts one child lo
   const drawer = page.getByRole('dialog', { name: 'Split lot L2611-0001' });
   await drawer.getByRole('textbox', { name: 'Child lot quantity' }).fill('600');
   await drawer.getByRole('button', { name: 'Split' }).click();
-  await expect(drawer).toContainText('Only 500 KG is available here; the rest is allocated.');
+  await expect(drawer).toContainText('Only 500.000 KG is available here; the rest is allocated.');
   expect(calls).toHaveLength(0);
 
   await drawer.getByRole('textbox', { name: 'Child lot quantity' }).fill('80');

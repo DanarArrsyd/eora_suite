@@ -138,6 +138,8 @@ export const test = base.extend<{ session: void; page: Page }>({
       await mockApi(page, '/inbox/read', { status: 200, json: { meta: { updated: 1 } } });
       // who decides a waiting document (D-129): nothing waits unless a test says so
       await mockApi(page, '/approvals/**', { status: 200, json: { data: { waiting: false, requestedBy: null, requestedAt: null, roles: [], approvers: [] } } });
+      // saved list views (D-137): none unless a test says so
+      await mockApi(page, '/list-views?*', { status: 200, json: { data: [] } });
       await provide();
     },
     { auto: true },

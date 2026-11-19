@@ -5,8 +5,10 @@ import { ITEM_TYPES as ITEM_TYPE_OPTIONS } from '@/modules/master/part-resources
 import { PHYSICAL_LOCATION_TYPES, PLANT_FILTER } from '@/modules/master/resources';
 import { queryOptions } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
-import { OWNER_CUSTOMER_FILTER, OWNERSHIP_FILTER, ownerColumn, ownerFact } from '@/modules/inventory/owner';
+import { OWNER_FILTER, ownerFilters, ownerColumn, ownerFact } from '@/modules/inventory/owner';
 import { unitPrecisionError } from '@/modules/materials/resources';
+import { Quantity } from '@/components/quantity';
+import { formatQty } from '@/components/format';
 
 /*
  * M3 step 4 (doc 32 §1.4, D-048, D-098): Inventory → Stock Overview on the live API. Every balance above zero from the
@@ -57,8 +59,7 @@ const FILTERS: FilterField[] = [
   { key: 'itemType', type: 'multiselect', source: 'static', label: 'Item type', options: ITEM_TYPE_OPTIONS },
   { key: 'stockStatus', type: 'multiselect', source: 'static', label: 'Status', options: STATUS_OPTIONS },
   { key: 'locationType', type: 'multiselect', source: 'static', label: 'Location kind', options: PHYSICAL_LOCATION_TYPES },
-  OWNERSHIP_FILTER,
-  OWNER_CUSTOMER_FILTER,
+  OWNER_FILTER,
 ];
 
 type Posted = { data: { docNo: string; replayed: boolean } };
@@ -89,7 +90,8 @@ export const STOCK_OVERVIEW: MasterResource<StockLineRow> = {
   ],
   filters: FILTERS,
   // stock is for every role; plant and item options come from master data, which some roles (operators) do not read
-  filterPermissions: { plantId: 'master.org.view', itemId: 'master.part.view', ownerCustomerId: 'master.part.view' },
+  filterPermissions: { plantId: 'master.org.view', itemId: 'master.part.view', owner: 'master.part.view' },
+  mapFilters: ownerFilters,
   columns: [
     { id: 'itemCode', header: 'Item', lead: true, sortable: true, cell: (r) => <span className="font-mono">{r.itemCode}</span>, sub: (r) => r.itemName },
     {
@@ -99,11 +101,19 @@ export const STOCK_OVERVIEW: MasterResource<StockLineRow> = {
       cell: (r) => (r.lotNo ? <span className="font-mono">{r.lotNo}</span> : 'No lot'),
       sub: (r) => (r.supplierLotNo ? `Supplier ${r.supplierLotNo}` : undefined),
     },
-    { id: 'locationCode', header: 'Location', sortable: true, cell: (r) => r.locationCode, sub: (r) => `${place(r)} · ${typeLabel(r.locationType)}` },
+    {
+      id: 'locationCode',
+      header: 'Location',
+      sortable: true,
+      textCol: true,
+      cell: (r) => r.locationCode,
+      sub: (r) => `${place(r)} · ${typeLabel(r.locationType)}`,
+      title: (r) => `${r.locationCode} · ${place(r)} · ${typeLabel(r.locationType)}`,
+    },
     ownerColumn<StockLineRow>(),
     { id: 'stockStatus', header: 'Status', sortable: true, cell: (r) => <DomainStatusBadge domain="stock" status={r.stockStatus} /> },
-    { id: 'qty', header: 'On hand', numeric: true, critical: true, cell: (r) => `${r.qty} ${r.uomCode}` },
-    { id: 'availableQty', header: 'Available', numeric: true, cell: (r) => `${r.availableQty} ${r.uomCode}` },
+    { id: 'qty', header: 'On hand', numeric: true, critical: true, cell: (r) => <Quantity value={r.qty} uom={r.uomCode} /> },
+    { id: 'availableQty', header: 'Available', numeric: true, cell: (r) => <Quantity value={r.availableQty} uom={r.uomCode} /> },
   ],
   fields: [
     {
@@ -139,8 +149,8 @@ export const STOCK_OVERVIEW: MasterResource<StockLineRow> = {
     { label: 'Lot', value: r.lotNo ? `${r.lotNo}${r.supplierLotNo ? ` (supplier ${r.supplierLotNo})` : ''}` : 'No lot' },
     { label: 'From', value: `${r.locationCode} · ${place(r)}` },
     { label: 'Status', value: <DomainStatusBadge domain="stock" status={r.stockStatus} /> },
-    { label: 'On hand', value: `${r.qty} ${r.uomCode}` },
-    { label: 'Available', value: `${r.availableQty} ${r.uomCode}` },
+    { label: 'On hand', value: `${formatQty(r.qty, r.uomCode)}` },
+    { label: 'Available', value: `${formatQty(r.availableQty, r.uomCode)}` },
   ],
   check: async (v, r): Promise<Record<string, string>> => {
     const problems: Record<string, string> = {};
@@ -148,7 +158,7 @@ export const STOCK_OVERVIEW: MasterResource<StockLineRow> = {
     const qty = r && v.qty ? unitPrecisionError(v.qty, r.uomCode, r.uomDecimals) : undefined;
     if (qty) problems.qty = qty;
     else if (r?.stockStatus === 'UNRESTRICTED' && v.qty && Number(v.qty) > Number(r.availableQty)) {
-      problems.qty = `Only ${r.availableQty} ${r.uomCode} is available here; the rest is allocated.`;
+      problems.qty = `Only ${formatQty(r.availableQty, r.uomCode)} is available here; the rest is allocated.`;
     }
     return problems;
   },

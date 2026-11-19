@@ -38,6 +38,7 @@ use App\Platform\Export\ExportController;
 use App\Platform\Http\Controllers\HealthController;
 use App\Platform\Import\ImportController;
 use App\Platform\Inbox\Http\InboxController;
+use App\Platform\ListViews\Http\ListViewController;
 use App\Platform\Query\Http\QueryController;
 use Illuminate\Support\Facades\Route;
 
@@ -64,6 +65,13 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
     Route::middleware('tenant')->group(function (): void {
         Route::get('inbox', [InboxController::class, 'index'])->name('inbox.index');
         Route::post('inbox/read', [InboxController::class, 'markRead'])->name('inbox.read');
+    });
+
+    // Saved list views of the signed-in user in the active tenant (EORA-COMPONENT-STANDARDS §4).
+    Route::middleware('tenant')->group(function (): void {
+        Route::get('list-views', [ListViewController::class, 'index'])->name('list-views.index');
+        Route::post('list-views', [ListViewController::class, 'store'])->name('list-views.store');
+        Route::delete('list-views/{view}', [ListViewController::class, 'destroy'])->name('list-views.destroy');
     });
 
     // Who decides a document waiting for a second person (D-129).
