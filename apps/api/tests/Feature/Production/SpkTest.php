@@ -48,6 +48,9 @@ it('drafts, plans, releases with a daily company number, tells production and re
     AccessFixtures::roles($t);
     $f = spkFixture($this, $t);
     $prl = orgUser($this, $t, 'PRL');
+    // an operator opens runs but does not read SPKs: no notice whose link it cannot open (Codex on #97)
+    $opr = member($this, $t);
+    AccessFixtures::grant($t, $opr['id'], 'OPR');
     rtSwitch($this, $t, 'PPC');
 
     $spk = spa($this)->postJson('/api/v1/production/spk', ['plantId' => $f['plant'], 'workCenterId' => $f['wc2']['id'], 'productionDate' => $f['today'], 'reference' => '2/STP/I/26'])
@@ -81,6 +84,8 @@ it('drafts, plans, releases with a daily company number, tells production and re
         ->toBe("/production/spk-line?spk={$spk['id']}");
     spkDrainOutbox();
     expect(collect(spa($this)->getJson('/api/v1/inbox')->json('data'))->where('kind', 'production.spk_released'))->toHaveCount(1);
+    expect(AccessFixtures::run($t, fn (EoraPostgresConnection $db) => (int) $db->selectOne(
+        "select count(*) as n from inbox_notifications where kind = 'production.spk_released' and user_id = ?", [$opr['id']])->n))->toBe(0);
     spa($this)->getJson("/api/v1/production/spk/{$spk['id']}")->assertOk()->assertJsonPath('data.lines.0.workOrderCode', $f['wo']['code']);
     spa($this)->getJson('/api/v1/query/production.spk?'.http_build_query(['filter' => ['status' => 'RELEASED']]))->assertOk()->assertJsonPath('data.0.code', $released['code']);
     spa($this)->postJson("/api/v1/production/spk/{$spk['id']}/actions/close", [], ['If-Match' => '"'.$released['version'].'"'])->assertForbidden();
