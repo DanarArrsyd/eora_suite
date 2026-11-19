@@ -2,6 +2,8 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Keep a verification build separate from the locally running release.
+  distDir: process.env.EORA_NEXT_DIST_DIR ?? '.next',
   transpilePackages: ['@eora/ui', '@eora/features', '@eora/design-tokens', '@eora/api-client'],
   poweredByHeader: false,
   // `next dev` would otherwise write apps/web/AGENTS.md (repository agent rules live in the root files).

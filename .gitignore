@@ -13,3 +13,6 @@ playwright-report/
 *.tsbuildinfo
 .turbo/
 next-env.d.ts
+
+# Separate local verification builds
+.next-*/
