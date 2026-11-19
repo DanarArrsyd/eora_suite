@@ -28,6 +28,12 @@ final class DailyRecoveryController
     public const array SORTS = ['customer' => 'customerCode', 'part' => 'itemName', 'requiredQty' => 'requiredQty', 'netQty' => 'netQty',
         'proposedQty' => 'proposedQty', 'status' => 'status'];
 
+    /** Sort fields holding decimal quantities (the planner's plain decimal strings). */
+    private const array NUMERIC_SORTS = ['requiredQty', 'netQty', 'proposedQty'];
+
+    /** A plain decimal BCMath accepts (no exponent). */
+    private const string DECIMAL = '/^-?\d+(\.\d+)?$/';
+
     public function __construct(private readonly Authorizer $authorizer, private readonly AuditRecorder $audit,
         private readonly QueryRunner $rows, private readonly DailyRecoveryPlanner $planner, private readonly WorkOrderController $workOrders) {}
 
@@ -54,21 +60,42 @@ final class DailyRecoveryController
         }));
         // Sorting only orders the rows already allocated: allocation runs once over all rows before any filter (D-134).
         if (isset($data['sort'])) {
-            $desc = str_starts_with($data['sort'], '-');
-            $field = self::SORTS[ltrim($data['sort'], '-')];
-            usort($rows, static function (array $a, array $b) use ($field, $desc): int {
-                $order = is_numeric($a[$field] ?? null) && is_numeric($b[$field] ?? null)
-                    ? bccomp((string) $a[$field], (string) $b[$field], 6)
-                    : strcasecmp((string) ($a[$field] ?? ''), (string) ($b[$field] ?? ''));
-
-                return $desc ? -$order : $order;
-            });
+            $rows = self::sortRows($rows, (string) $data['sort']);
         }
         $page = (int) ($data['page'] ?? 1);
         $size = (int) ($data['perPage'] ?? 25);
 
         return response()->json(['data' => array_slice($rows, ($page - 1) * $size, $size),
             'meta' => ['total' => count($rows), 'page' => $page, 'perPage' => $size, ...array_diff_key($result, ['rows' => true])]]);
+    }
+
+    /**
+     * Orders list rows by one `sort` key (`netQty`, `-customer`, …). Quantities compare as decimals, an uncalculated one
+     * first; codes, names and statuses as text even when they look like numbers ("1E3" is a valid customer code, and
+     * BCMath rejects exponents).
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    public static function sortRows(array $rows, string $sort): array
+    {
+        $desc = str_starts_with($sort, '-');
+        $field = self::SORTS[ltrim($sort, '-')] ?? throw new \InvalidArgumentException("Unknown sort {$sort}.");
+        $numeric = in_array($field, self::NUMERIC_SORTS, true);
+        usort($rows, static function (array $a, array $b) use ($field, $desc, $numeric): int {
+            $x = $a[$field] ?? null;
+            $y = $b[$field] ?? null;
+            $order = match (true) {
+                ! $numeric => strcasecmp((string) $x, (string) $y),
+                $x === null || $y === null => ($x === null ? 0 : 1) - ($y === null ? 0 : 1),
+                is_string($x) && is_numeric($x) && preg_match(self::DECIMAL, $x) === 1 && is_string($y) && is_numeric($y) && preg_match(self::DECIMAL, $y) === 1 => bccomp($x, $y, 6),
+                default => strcasecmp((string) $x, (string) $y),
+            };
+
+            return $desc ? -$order : $order;
+        });
+
+        return $rows;
     }
 
     /** Save batch, buffer and editable shifts with If-Match (0 creates the first row). */
