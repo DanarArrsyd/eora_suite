@@ -495,6 +495,9 @@ function MachineLoadPanel({ load }: { load: MachineLoad[] }) {
           {load.map((m) => {
             const capacity = m.capacityHours ? Number(m.capacityHours) : null;
             const pct = capacity ? Math.min(100, (Number(m.hours) / capacity) * 100) : 0;
+            // the day's balance keeps its own sign; an over-full shift is named on its own, so spare hours of another shift never read as excess
+            const overShifts = m.shifts.filter((x) => x.overloaded && x.balanceHours);
+            const dayBalance = m.balanceHours === null ? null : Number(m.balanceHours);
             return (
               <li key={m.machineId} className="grid grid-cols-[160px_1fr_auto] items-center gap-3 text-[13px] max-md:grid-cols-1">
                 <span className="font-medium">
@@ -505,11 +508,14 @@ function MachineLoadPanel({ load }: { load: MachineLoad[] }) {
                 </span>
                 <span className={`tabular-nums ${m.overloaded ? 'font-semibold text-stat-err-fg' : 'text-ink'}`}>
                   {m.hours} h{capacity ? ` of ${m.capacityHours} h` : ''}
-                  {m.balanceHours !== null
-                    ? m.overloaded
-                      ? ` · ${String(Math.abs(Number(m.balanceHours)))} h over`
+                  {dayBalance !== null
+                    ? dayBalance < 0
+                      ? ` · ${String(Math.abs(dayBalance))} h over`
                       : ` · ${m.balanceHours} h left`
                     : ' · hours per shift not configured'}
+                  {dayBalance !== null && dayBalance >= 0 && overShifts.length
+                    ? ` · ${overShifts.map((x) => `${x.shiftCode ?? 'No shift'} ${String(Math.abs(Number(x.balanceHours)))} h over`).join(', ')}`
+                    : ''}
                   {m.notCalculableLines ? ` · ${m.notCalculableLines} line${m.notCalculableLines === 1 ? '' : 's'} without SPH` : ''}
                 </span>
                 {m.shifts.length > 1 || m.shifts.some((x) => x.shiftCode) ? (

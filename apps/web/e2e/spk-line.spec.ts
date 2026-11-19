@@ -165,7 +165,20 @@ test('spk line: production reads the released SPKs of its plant, also on a phone
     version: 3,
     lineCount: 1,
     lines: [{ ...LINE, note: 'Use coil from rack 2' }],
-    machineLoad: LOAD,
+    // shift 1 over by 1 h while shift 2 has room: the day shows 5 h left and names the over-full shift (Codex on #97)
+    machineLoad: [
+      {
+        ...LOAD[0],
+        hours: '9',
+        capacityHours: '14',
+        balanceHours: '5',
+        overloaded: true,
+        shifts: [
+          { shiftId: ID(70), shiftCode: 'S1', hours: '8', capacityHours: '7', balanceHours: '-1', overloaded: true },
+          { shiftId: ID(71), shiftCode: 'S2', hours: '1', capacityHours: '7', balanceHours: '6', overloaded: false },
+        ],
+      },
+    ],
     releasedAt: '2026-11-19T12:22:00Z',
     releasedByName: 'Planner',
   };
@@ -192,6 +205,7 @@ test('spk line: production reads the released SPKs of its plant, also on a phone
   await page.goto(`/production/spk-line?spk=${SPK.id}`);
   await expect(page.getByRole('heading', { level: 1, name: 'SPK-STP-191126-0001' })).toBeVisible();
   await expect(page.getByRole('table', { name: 'Lines of SPK-STP-191126-0001' })).toContainText('WO-P1-2026-0003');
+  await expect(page.getByRole('list', { name: 'Machine load' })).toContainText('9 h of 14 h · 5 h left · S1 1 h over');
   // the planner's line note reaches production (Codex on #97)
   await expect(page.getByRole('table', { name: 'Lines of SPK-STP-191126-0001' })).toContainText('Use coil from rack 2');
   await expect(page.getByRole('button', { name: 'Revise' })).toHaveCount(0);
