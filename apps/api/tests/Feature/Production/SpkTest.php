@@ -172,6 +172,10 @@ it('plans only released WO operations of the line on its machines, also through 
     $csa = orgUser($this, $t, 'CSA');
     expect(fn () => asApp($t, $csa['id'], fn (EoraPostgresConnection $db) => $db->update("update spk_headers set status = 'CANCELLED' where id = ?", [$spk['id']])))
         ->toThrow(QueryException::class, 'its own planner permission');
+    // an empty plan is never released, not by direct SQL either (Codex on #97)
+    expect(fn () => asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update(
+        "update spk_headers set status = 'RELEASED', spk_no = 'SPK-X-191126-0009', released_by = (select c.actor from ctx_api.context() c), released_at = now() where id = ?", [$spk['id']])))
+        ->toThrow(QueryException::class, 'at least one line');
     asApp($t, $f['ppc']['id'], $insert($line()));
     // a machine taken off the line after planning blocks the release, through the API and the database (Codex on #97)
     $machine = fn (string $status) => AccessFixtures::run($t, fn (EoraPostgresConnection $db) => $db->update('update machines set status = ? where id = ?', [$status, $f['m2']['id']]));
@@ -255,4 +259,16 @@ it('holds each shift of a machine to one shift of hours: pooling shifts never hi
     expect($load)->toMatchArray(['hours' => '9.167', 'capacityHours' => '14', 'balanceHours' => '4.833', 'overloaded' => true])
         ->and(collect($load['shifts'])->keyBy('shiftCode')->map(fn ($s) => [$s['hours'], $s['overloaded']])->all())
         ->toBe(['S1' => ['8.083', true], 'S2' => ['1.083', false]]);
+
+    // a calendar version that comes into force on the day after its SPK was released: the revision keeps the lines and clears
+    // the old shifts for the planner to pick again, instead of failing on them (Codex on #97)
+    $tomorrow = (new DateTimeImmutable($f['today']))->modify('+1 day')->format('Y-m-d');
+    $spk = spa($this)->postJson('/api/v1/production/spk', ['plantId' => $f['plant'], 'workCenterId' => $f['wc2']['id'], 'productionDate' => $tomorrow])->assertCreated()->json('data');
+    $spk = spa($this)->putJson("/api/v1/production/spk/{$spk['id']}", ['lines' => [spkLine($f, ['shiftId' => $s1])]], ['If-Match' => '"'.$spk['version'].'"'])->assertOk()->json('data');
+    $spk = spa($this)->postJson("/api/v1/production/spk/{$spk['id']}/actions/release", [], ['If-Match' => '"'.$spk['version'].'"'])->assertOk()->json('data');
+    AccessFixtures::run($t, fn (EoraPostgresConnection $db) => $db->insert(
+        "insert into shift_calendars (tenant_id, plant_id, code, name, effective_from) values (?, ?, 'DAY3', 'Three shifts', ?)", [$t['tenant'], $f['plant'], $tomorrow]));
+    $rev = spa($this)->postJson("/api/v1/production/spk/{$spk['id']}/actions/revise", ['reason' => 'New shift calendar from tomorrow'], ['If-Match' => '"'.$spk['version'].'"'])
+        ->assertCreated()->json('data');
+    expect(array_column($rev['lines'], 'shiftId'))->toBe([null]);
 })->group('integration', 'production');

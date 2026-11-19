@@ -243,10 +243,13 @@ final class SpkController
         )->id;
         $db->insert(
             'insert into spk_lines (tenant_id, spk_id, line_no, work_order_id, routing_operation_id, machine_id, shift_id, planned_qty, priority, setup_minutes, qc_sample_minutes, note)
-             select tenant_id, ?, line_no, work_order_id, routing_operation_id, machine_id, shift_id, planned_qty, priority, setup_minutes, qc_sample_minutes, note
+             select tenant_id, ?, line_no, work_order_id, routing_operation_id, machine_id,
+                    -- a shift of a calendar no longer in force on the day is cleared: the planner picks the new one on the draft
+                    case when exists (select 1 from shifts s where s.id = l.shift_id and s.shift_calendar_id = ?) then shift_id end,
+                    planned_qty, priority, setup_minutes, qc_sample_minutes, note
                from spk_lines l where l.spk_id = ? and exists (select 1 from work_orders w where w.id = l.work_order_id and w.status in (\'RELEASED\', \'IN_PROGRESS\'))
                 and exists (select 1 from machines m where m.id = l.machine_id and m.status = \'ACTIVE\' and m.work_center_id = ?)',
-            [$id, $h->id, $h->work_center_id],
+            [$id, $this->shiftCalendar($db, (string) $h->plant_id, (string) $h->production_date), $h->id, $h->work_center_id],
         );
         $this->audit->record($db, 'spk.revised', 'spk', $id, null, $this->state($db, 'spk_headers', $id), ['revises' => (string) $h->id, 'reason' => trim($data['reason'])], (string) $h->plant_id);
 
