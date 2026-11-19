@@ -154,6 +154,10 @@ return new class extends Migration
                 IF NEW.status = 'RELEASED' AND NOT public.eora_actor_may('production.spk.release', NEW.plant_id) THEN
                   RAISE EXCEPTION 'an SPK is released by a planner of its plant' USING ERRCODE = '42501';
                 END IF;
+                IF NEW.status = 'RELEASED' AND NEW.previous_id IS NOT NULL AND NEW.spk_no IS DISTINCT FROM
+                     (SELECT h.spk_no FROM public.spk_headers h WHERE h.tenant_id = NEW.tenant_id AND h.id = NEW.previous_id) THEN
+                  RAISE EXCEPTION 'a revision keeps the number of the SPK it replaces' USING ERRCODE = '23514';
+                END IF;
                 IF NEW.status = 'RELEASED' AND NOT EXISTS (SELECT 1 FROM public.spk_lines l WHERE l.tenant_id = NEW.tenant_id AND l.spk_id = NEW.id) THEN
                   RAISE EXCEPTION 'an SPK is released with at least one line' USING ERRCODE = '23514';
                 END IF;

@@ -106,6 +106,11 @@ it('drafts, plans, releases with a daily company number, tells production and re
     // superseding without releasing the revision never commits: the line and day would be left without a plan (Codex on #97)
     expect(fn () => asApp($t, $f['ppc']['id'], fn (EoraPostgresConnection $db) => $db->update("update spk_headers set status = 'SUPERSEDED' where id = ?", [$spk['id']])))
         ->toThrow(PDOException::class, 'superseded only by the release of its revision');
+    // a revision keeps its SPK's number, also by direct SQL (Codex on #97)
+    expect(fn () => asApp($t, $f['ppc']['id'], function (EoraPostgresConnection $db) use ($spk, $rev) {
+        $db->update("update spk_headers set status = 'SUPERSEDED' where id = ?", [$spk['id']]);
+        $db->update("update spk_headers set status = 'RELEASED', spk_no = 'SPK-X-191126-0077', released_by = (select c.actor from ctx_api.context() c), released_at = now() where id = ?", [$rev['id']]);
+    }))->toThrow(QueryException::class, 'keeps the number of the SPK it replaces');
     $rev = spa($this)->postJson("/api/v1/production/spk/{$rev['id']}/actions/release", [], ['If-Match' => '"'.$rev['version'].'"'])->assertOk()->json('data');
     expect($rev['code'])->toBe($released['code']);
     spa($this)->getJson("/api/v1/production/spk/{$spk['id']}")->assertOk()->assertJsonPath('data.status', 'SUPERSEDED');
