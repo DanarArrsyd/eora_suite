@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Bookmark, ChevronDown, Plus, Users } from 'lucide-react';
+import { Bookmark, ChevronDown, Plus, Trash2, Users } from 'lucide-react';
 import {
   Button,
   DropdownMenu,
@@ -25,10 +25,12 @@ type Props = {
   onApply: (view: SavedView) => void;
   /** Persists the current filters as a personal view (server-side in production). */
   onSave: (name: string) => Promise<void> | void;
+  /** Removes one of the user's own views; without it the menu offers no delete. */
+  onDelete?: (view: SavedView) => Promise<void> | void;
 };
 
-/** Saved views: my views, shared views and "Save current filters…" (EORA-COMPONENT-STANDARDS §4). */
-export function SavedViewsMenu({ views, onApply, onSave }: Props) {
+/** Saved views: my views, shared views, "Save current view…" and delete (EORA-COMPONENT-STANDARDS §4). */
+export function SavedViewsMenu({ views, onApply, onSave, onDelete }: Props) {
   const [saveOpen, setSaveOpen] = React.useState(false);
   const mine = views.filter((v) => v.scope === 'mine');
   const shared = views.filter((v) => v.scope === 'shared');
@@ -69,8 +71,20 @@ export function SavedViewsMenu({ views, onApply, onSave }: Props) {
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setSaveOpen(true)}>
             <Plus aria-hidden="true" />
-            Save current filters…
+            Save current view…
           </DropdownMenuItem>
+          {onDelete && mine.length ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Delete a view</DropdownMenuLabel>
+              {mine.map((v) => (
+                <DropdownMenuItem key={`delete-${v.id}`} onSelect={() => onDelete(v)}>
+                  <Trash2 aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate">Delete {v.name}</span>
+                </DropdownMenuItem>
+              ))}
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
       <SaveViewDialog open={saveOpen} onOpenChange={setSaveOpen} onSave={onSave} />
@@ -94,16 +108,20 @@ function SaveViewDialog({ open, onOpenChange, onSave }: { open: boolean; onOpenC
       setName('');
       setError(undefined);
       onOpenChange(false);
+    } catch {
+      setError('The view could not be saved. Try again.');
     } finally {
       setBusy(false);
     }
   };
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
-      <ModalContent title="Save current filters as a view" closeLabel="Close">
+      <ModalContent title="Save current view" closeLabel="Close">
         <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col">
           <ModalBody className="flex flex-col gap-4">
-            <p className="m-0 text-[13.5px] text-ink-2">The view stores the status tab, search and filters. Only you can see personal views.</p>
+            <p className="m-0 text-[13.5px] text-ink-2">
+              The view keeps the search, filters, sort and visible columns. Only you see your views; saving a name again replaces it.
+            </p>
             <Field label="View name" required error={error}>
               {(c) => <Input {...c} value={name} maxLength={60} autoFocus onChange={(e) => setName(e.target.value)} />}
             </Field>

@@ -26,6 +26,8 @@ export type ListUrlState = {
   clearFilters: () => void;
   setSearch: (search: string) => void;
   setView: (view: string) => void;
+  /** Applies a saved view in one URL update: its filters, search and sort (EORA-COMPONENT-STANDARDS §4). */
+  applyView: (view: { filters: FilterValues; search?: string; sort?: SortRule[]; view?: string }) => void;
 };
 
 const F = 'f.';
@@ -125,6 +127,8 @@ export function useListUrlState(cfg: ListUrlConfig): ListUrlState {
       clearFilters: () => update((q) => ({ ...q, filters: {}, search: '', page: 1 })),
       setSearch: (search) => update((q) => ({ ...q, search, page: 1 })),
       setView: (view) => update((q) => ({ ...q, view, page: 1 })),
+      applyView: (v) =>
+        update((q) => ({ ...q, filters: v.filters, search: v.search ?? '', sort: v.sort?.length ? v.sort : q.sort, view: v.view ?? q.view, page: 1 })),
     }),
     [query, update],
   );

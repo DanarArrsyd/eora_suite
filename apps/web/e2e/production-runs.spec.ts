@@ -79,20 +79,20 @@ test('production runs: the leader posts measured consumption, output and scrap o
   await page.goto(`/production/runs?run=${ID(1)}`);
   await expect(page.getByRole('heading', { level: 1, name: 'RUN-P1-2026-0001' })).toBeVisible();
   await expect(page.locator('#main').getByText('Mock data')).toHaveCount(0);
-  await expect(page.getByRole('table', { name: 'Material of WO-P1-2026-0002 at PRS-200' })).toContainText('335.5 KG');
+  await expect(page.getByRole('table', { name: 'Material of WO-P1-2026-0002 at PRS-200' })).toContainText('335.500 KG');
 
   // nothing entered yet: the form says what is missing, and sends nothing
   await page.getByRole('button', { name: 'Post production', exact: true }).click();
   await expect(page.getByText('Enter what was consumed: at least one material line, measured.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Add consumed material' }).click();
-  await choose(page, page.getByRole('combobox', { name: 'Material and lot 1' }), 'COIL-SPCC-12 · L2611-0001 · 335.5 KG here');
+  await choose(page, page.getByRole('combobox', { name: 'Material and lot 1' }), 'COIL-SPCC-12 · L2611-0001 · 335.500 KG here');
   await choose(page, page.getByRole('combobox', { name: 'How measured 1' }), 'Weighed what is left');
   await page.getByRole('textbox', { name: 'Left 1 (KG)' }).fill('400');
   await page.getByRole('textbox', { name: 'Evidence 1' }).fill('Scale S-01');
   await page.getByRole('textbox', { name: 'Good (PCS)' }).fill('950');
   await page.getByRole('button', { name: 'Post production', exact: true }).click();
-  await expect(page.getByText('COIL-SPCC-12 L2611-0001: what is left must be less than the 335.5 KG here.')).toBeVisible();
+  await expect(page.getByText('COIL-SPCC-12 L2611-0001: what is left must be less than the 335.500 KG here.')).toBeVisible();
   await page.getByRole('textbox', { name: 'Left 1 (KG)' }).fill('15');
   await page.getByRole('textbox', { name: 'NG rework (PCS)' }).fill('20');
   await page.getByRole('button', { name: 'Add scrap' }).click();
@@ -156,7 +156,7 @@ for (const paired of [false, true]) {
 
     await page.goto(`/production/runs?run=${RUN.id}`);
     await page.getByRole('button', { name: 'Add consumed material' }).click();
-    await choose(page, page.getByRole('combobox', { name: 'Material and lot 1' }), 'COIL-SPCC-12 · L2611-0001 · 335.5 KG here');
+    await choose(page, page.getByRole('combobox', { name: 'Material and lot 1' }), 'COIL-SPCC-12 · L2611-0001 · 335.500 KG here');
     await choose(page, page.getByRole('combobox', { name: 'How measured 1' }), 'Weighed what is left');
     await page.getByRole('textbox', { name: 'Left 1 (KG)' }).fill('15');
     await page.getByRole('textbox', { name: 'Evidence 1' }).fill('Scale S-01');

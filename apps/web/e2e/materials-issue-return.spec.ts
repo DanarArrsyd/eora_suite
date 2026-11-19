@@ -103,12 +103,12 @@ test('material issue: materials issues lots of a released work order to a work c
   await choose(page, page.getByRole('combobox', { name: 'Released work order' }), /^WO-P1-2026-0001 · /);
   // the first operation's work center is proposed
   await expect(page.getByRole('combobox', { name: 'To work center' })).toContainText('PRS-01');
-  await expect(page.getByText('384 KG')).toBeVisible();
+  await expect(page.getByText('384.000 KG')).toBeVisible();
   await page.getByRole('button', { name: 'Add COIL-SPCC-12 lot' }).click();
-  await choose(page, page.getByRole('combobox', { name: 'COIL-SPCC-12 rack and lot 1' }), 'RM-A01 · L2611-0001 · 500 KG available · Company');
+  await choose(page, page.getByRole('combobox', { name: 'COIL-SPCC-12 rack and lot 1' }), 'RM-A01 · L2611-0001 · 500.000 KG available · Company');
   await page.getByRole('textbox', { name: 'COIL-SPCC-12 quantity 1 (KG)' }).fill('600');
   await page.getByRole('button', { name: 'Issue material' }).last().click();
-  await expect(page.getByText('COIL-SPCC-12: only 500 KG is available at RM-A01, lot L2611-0001.')).toBeVisible();
+  await expect(page.getByText('COIL-SPCC-12: only 500.000 KG is available at RM-A01, lot L2611-0001.')).toBeVisible();
   await page.getByRole('textbox', { name: 'COIL-SPCC-12 quantity 1 (KG)' }).fill('400');
   await axe(page);
   await page.getByRole('button', { name: 'Issue material' }).last().click();
@@ -193,7 +193,7 @@ test('material return: production asks, materials receives what it weighed into 
   await expect(page.getByText('RTN-P1-2026-0001 received')).toBeVisible();
   expect(writes[0]!.url).toMatch(/\/material-returns\/.+\/receive$/);
   expect(writes[0]!.body).toEqual({ toLocationId: ID(52), qty: '14.5' });
-  await expect(page.getByText('-0.5 KG')).toBeVisible();
+  await expect(page.getByText('-0.500 KG')).toBeVisible();
 });
 
 test('material issue offers company lots and lots of the work order customer only (D-135)', async ({ page }) => {
@@ -225,7 +225,7 @@ test('material issue offers company lots and lots of the work order customer onl
   await page.goto(`/materials/material-issue?wo=${WO.id}`);
   await page.getByRole('button', { name: 'Add COIL-SPCC-12 lot' }).click();
   await page.getByRole('combobox', { name: 'COIL-SPCC-12 rack and lot 1' }).click();
-  await expect(page.getByRole('option', { name: 'RM-A01 · L2611-0001 · 500 KG available · Company', exact: true })).toBeVisible();
-  await expect(page.getByRole('option', { name: 'RM-A01 · RM-DPM-181126-0001 · 500 KG available · DPM (customer)', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'RM-A01 · L2611-0001 · 500.000 KG available · Company', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'RM-A01 · RM-DPM-181126-0001 · 500.000 KG available · DPM (customer)', exact: true })).toBeVisible();
   await expect(page.getByRole('option', { name: /RM-SJM-/ })).toHaveCount(0);
 });

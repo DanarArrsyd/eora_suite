@@ -129,6 +129,10 @@ export type MasterResource<T extends MasterRow> = {
   drawerTitle?: (row: T) => string;
   /** Filters every list and export of this screen applies (e.g. only BLOCKED stock). */
   fixedFilters?: Record<string, string | string[]>;
+  /** Columns hidden until the user shows them in Column settings (keeps the table inside the page at 1440 px). */
+  defaultHidden?: string[];
+  /** Screen filters as the query API reads them (e.g. one Owner choice → `ownership` or `ownerCustomerId`); list and export alike. */
+  mapFilters?: (filters: Record<string, string | string[]>) => Record<string, string | string[]>;
   /** The notice after a create or row action, from the server's answer. */
   savedMessage?: (result: unknown) => string;
   /** The line under that notice (default: the list shows the posted stock). */

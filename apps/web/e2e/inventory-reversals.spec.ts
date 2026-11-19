@@ -145,7 +145,7 @@ test('reversals: the approver sees the legs that will be undone and approves; a 
   await page.goto(`/inventory/reversals?request=${REQUEST.id}`);
   await expect(page.getByRole('heading', { level: 1, name: 'Reversal of ADJ-P1-2026-0001' })).toBeVisible();
   const legs = page.getByRole('table', { name: 'Legs of ADJ-P1-2026-0001' });
-  await expect(legs.getByRole('row', { name: /RM-A01/ })).toContainText('15 KG');
+  await expect(legs.getByRole('row', { name: /RM-A01/ })).toContainText('15.000 KG');
   await axe(page);
   await page.getByRole('button', { name: 'Approve' }).click();
   await expect(page.getByText('Reverse what came after it first.')).toBeVisible();

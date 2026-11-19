@@ -4,7 +4,9 @@ import { DomainStatusBadge, STATUS_CATALOGUE, type FilterField } from '@eora/fea
 import { Badge } from '@eora/ui';
 import { queryAll, queryOptions } from '@/modules/master/source';
 import type { MasterResource, MasterRow } from '@/modules/master/types';
-import { COMPANY_OWNER, OWNER_CUSTOMER_FILTER, OWNERSHIP_FILTER, ownerColumn, ownerFact } from '@/modules/inventory/owner';
+import { COMPANY_OWNER, OWNER_FILTER, ownerFilters, ownerColumn, ownerFact } from '@/modules/inventory/owner';
+import { Quantity } from '@/components/quantity';
+import { formatQty, formatDay } from '@/components/format';
 
 /*
  * M3 step 3 (doc 32 §1.3, D-062, D-097): Materials → Receiving on the live API. Both screens post through the inventory
@@ -109,11 +111,20 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
       label: 'Supplier',
       loadOptions: (_deps, signal) => queryOptions('core.suppliers', (r) => `${String(r.code)} · ${String(r.name)}`, {}, signal),
     },
-    OWNERSHIP_FILTER,
-    OWNER_CUSTOMER_FILTER,
+    OWNER_FILTER,
   ],
+  filterPermissions: { owner: 'master.part.view' },
+  mapFilters: ownerFilters,
+  defaultHidden: ['postedAt'],
   columns: [
-    { id: 'code', header: 'Receipt', lead: true, sortable: true, cell: (r) => <span className="font-mono">{r.code}</span>, sub: (r) => r.effectiveDate },
+    {
+      id: 'code',
+      header: 'Receipt',
+      lead: true,
+      sortable: true,
+      cell: (r) => <span className="font-mono">{r.code}</span>,
+      sub: (r) => formatDay(r.effectiveDate),
+    },
     { id: 'supplierCode', header: 'Supplier', sortable: true, cell: (r) => r.supplierCode ?? '—', sub: (r) => r.supplierName },
     { id: 'itemCode', header: 'Item', cell: (r) => <span className="font-mono">{r.itemCode}</span>, sub: (r) => r.itemName },
     {
@@ -124,7 +135,7 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
     },
     ownerColumn<ReceiptRow>(),
     { id: 'locationCode', header: 'Location', cell: (r) => r.locationCode, sub: (r) => r.plantCode },
-    { id: 'qty', header: 'Quantity', numeric: true, critical: true, cell: (r) => `${r.qty} ${r.uomCode}` },
+    { id: 'qty', header: 'Quantity', numeric: true, critical: true, cell: (r) => <Quantity value={r.qty} uom={r.uomCode} /> },
     { id: 'stockStatus', header: 'Received as', cell: (r) => <DomainStatusBadge domain="stock" status={r.stockStatus} /> },
     { id: 'postedAt', header: 'Posted by', sortable: true, cell: (r) => r.postedByName ?? '—' },
   ],
@@ -170,12 +181,12 @@ export const RM_RECEIPTS: MasterResource<ReceiptRow> = {
   blank: { ownerCustomerId: COMPANY_OWNER, plantId: '', supplierId: '', itemId: '', locationId: '', qty: '', supplierLotNo: '', inboundLineId: '', note: '' },
   toForm: () => ({}),
   facts: (r) => [
-    { label: 'Received', value: `${r.effectiveDate} · ${r.plantCode}` },
+    { label: 'Received', value: `${formatDay(r.effectiveDate)} · ${r.plantCode}` },
     ownerFact(r),
     { label: 'Supplier', value: r.supplierCode ? `${r.supplierCode} · ${r.supplierName ?? ''}` : '—' },
     { label: 'Item', value: `${r.itemCode} · ${r.itemName}` },
     { label: 'Lot', value: r.lotNo ? `${r.lotNo}${r.supplierLotNo ? ` (supplier ${r.supplierLotNo})` : ''}` : 'No lot' },
-    { label: 'Quantity', value: `${r.qty} ${r.uomCode} at ${r.locationCode}` },
+    { label: 'Quantity', value: `${formatQty(r.qty, r.uomCode)} at ${r.locationCode}` },
     { label: 'Received as', value: <DomainStatusBadge domain="stock" status={r.stockStatus} /> },
     { label: 'Posted by', value: r.postedByName ?? '—' },
     ...(r.note ? [{ label: 'Note', value: r.note }] : []),
@@ -249,7 +260,7 @@ export const INCOMING_RELEASE: MasterResource<StockRow> = {
       sub: (r) => (r.supplierLotNo ? `Supplier ${r.supplierLotNo}` : undefined),
     },
     { id: 'locationCode', header: 'Location', sortable: true, cell: (r) => r.locationCode, sub: (r) => `${r.plantCode} / ${r.warehouseCode}` },
-    { id: 'qty', header: 'Blocked', numeric: true, critical: true, cell: (r) => `${r.qty} ${r.uomCode}` },
+    { id: 'qty', header: 'Blocked', numeric: true, critical: true, cell: (r) => <Quantity value={r.qty} uom={r.uomCode} /> },
   ],
   fields: [
     {
@@ -268,7 +279,7 @@ export const INCOMING_RELEASE: MasterResource<StockRow> = {
   facts: (r) => [
     { label: 'Item', value: `${r.itemCode} · ${r.itemName}` },
     { label: 'Lot', value: r.lotNo ? `${r.lotNo}${r.supplierLotNo ? ` (supplier ${r.supplierLotNo})` : ''}` : 'No lot' },
-    { label: 'Blocked', value: `${r.qty} ${r.uomCode} at ${r.plantCode} / ${r.locationCode}` },
+    { label: 'Blocked', value: `${formatQty(r.qty, r.uomCode)} at ${r.plantCode} / ${r.locationCode}` },
   ],
   check: async (v, r): Promise<Record<string, string>> => {
     const error = r && v.qty ? unitPrecisionError(v.qty, r.uomCode, r.uomDecimals) : undefined;
@@ -369,10 +380,10 @@ export const MATERIAL_LOTS: MasterResource<LotLineRow> = {
       options: Object.entries(STATUS_CATALOGUE.stock).map(([value, e]) => ({ value, label: e.label })),
     },
     { key: 'lotOrigin', type: 'multiselect', source: 'static', label: 'Origin', options: ORIGINS },
-    OWNERSHIP_FILTER,
-    OWNER_CUSTOMER_FILTER,
+    OWNER_FILTER,
   ],
-  filterPermissions: { plantId: 'master.org.view', itemId: 'master.part.view', ownerCustomerId: 'master.part.view' },
+  filterPermissions: { plantId: 'master.org.view', itemId: 'master.part.view', owner: 'master.part.view' },
+  mapFilters: ownerFilters,
   columns: [
     { id: 'itemCode', header: 'Item', lead: true, sortable: true, cell: (r) => <span className="font-mono">{r.itemCode}</span>, sub: (r) => r.itemName },
     {
@@ -386,7 +397,7 @@ export const MATERIAL_LOTS: MasterResource<LotLineRow> = {
     ownerColumn<LotLineRow>(),
     { id: 'locationCode', header: 'Location', sortable: true, cell: (r) => r.locationCode, sub: lotPlace },
     { id: 'stockStatus', header: 'Status', sortable: true, cell: (r) => <DomainStatusBadge domain="stock" status={r.stockStatus} /> },
-    { id: 'qty', header: 'On hand', numeric: true, critical: true, cell: (r) => `${r.qty} ${r.uomCode}` },
+    { id: 'qty', header: 'On hand', numeric: true, critical: true, cell: (r) => <Quantity value={r.qty} uom={r.uomCode} /> },
   ],
   fields: [
     {
@@ -411,7 +422,7 @@ export const MATERIAL_LOTS: MasterResource<LotLineRow> = {
     ...(r.parentLotNo ? [{ label: 'Split from', value: r.parentLotNo }] : []),
     { label: 'At', value: `${r.locationCode} · ${lotPlace(r)}` },
     { label: 'Status', value: <DomainStatusBadge domain="stock" status={r.stockStatus} /> },
-    { label: 'On hand', value: `${r.qty} ${r.uomCode}` },
+    { label: 'On hand', value: `${formatQty(r.qty, r.uomCode)}` },
   ],
   check: async (v, r): Promise<Record<string, string>> => {
     const error = r && v.qty ? unitPrecisionError(v.qty, r.uomCode, r.uomDecimals) : undefined;
@@ -420,7 +431,7 @@ export const MATERIAL_LOTS: MasterResource<LotLineRow> = {
     if (r?.workCenterCode) {
       const line = v.atProductionLineId ? await workOrderLine(v.atProductionLineId) : undefined;
       if (!line) return { atProductionLineId: 'Material at a work center belongs to a work order: choose whose material is split.' };
-      if (v.qty && Number(v.qty) > Number(line.qty)) return { qty: `${line.workOrderCode} has ${line.qty} ${r.uomCode} of this lot here.` };
+      if (v.qty && Number(v.qty) > Number(line.qty)) return { qty: `${line.workOrderCode} has ${formatQty(line.qty, r.uomCode)} of this lot here.` };
       return {};
     }
     if (v.atProductionLineId) return { atProductionLineId: 'Only material at a work center belongs to a work order. Leave it empty.' };
@@ -428,8 +439,8 @@ export const MATERIAL_LOTS: MasterResource<LotLineRow> = {
       return {
         qty:
           r.stockStatus === 'UNRESTRICTED'
-            ? `Only ${r.availableQty} ${r.uomCode} is available here; the rest is allocated.`
-            : `Only ${r.qty} ${r.uomCode} is here.`,
+            ? `Only ${formatQty(r.availableQty, r.uomCode)} is available here; the rest is allocated.`
+            : `Only ${formatQty(r.qty, r.uomCode)} is here.`,
       };
     }
     return {};
@@ -532,18 +543,18 @@ export const INBOUND_SCHEDULE: MasterResource<InboundRow> = {
       header: 'Expected',
       lead: true,
       sortable: true,
-      cell: (r) => r.expectedDate,
+      cell: (r) => formatDay(r.expectedDate),
       sub: (r) => <span className="font-mono">{r.code}</span>,
     },
     { id: 'supplierCode', header: 'Supplier', sortable: true, cell: (r) => r.supplierCode, sub: (r) => r.supplierName },
     { id: 'itemCode', header: 'Item', sortable: true, cell: (r) => <span className="font-mono">{r.itemCode}</span>, sub: (r) => r.itemName },
-    { id: 'qty', header: 'Scheduled', numeric: true, cell: (r) => `${r.qty} ${r.uomCode}` },
+    { id: 'qty', header: 'Scheduled', numeric: true, cell: (r) => <Quantity value={r.qty} uom={r.uomCode} /> },
     {
       id: 'outstandingQty',
       header: 'Outstanding',
       numeric: true,
       critical: true,
-      cell: (r) => `${r.outstandingQty} ${r.uomCode}`,
+      cell: (r) => <Quantity value={r.outstandingQty} uom={r.uomCode} />,
       sub: (r) => `${r.receivedQty} received`,
     },
     { id: 'status', header: 'Status', cell: (r) => inboundBadge(r.status) },
@@ -570,7 +581,7 @@ export const INBOUND_SCHEDULE: MasterResource<InboundRow> = {
     { label: 'Inbound', value: `${r.code} · ${r.plantCode}` },
     { label: 'Supplier', value: `${r.supplierCode} · ${r.supplierName}` },
     { label: 'Item', value: `${r.itemCode} · ${r.itemName}` },
-    { label: 'Received', value: `${r.receivedQty} of ${r.qty} ${r.uomCode} (${r.receipts} ${r.receipts === 1 ? 'receipt' : 'receipts'})` },
+    { label: 'Received', value: `${r.receivedQty} of ${formatQty(r.qty, r.uomCode)} (${r.receipts} ${r.receipts === 1 ? 'receipt' : 'receipts'})` },
     { label: 'Status', value: inboundBadge(r.status) },
     ...(r.cancelReason ? [{ label: 'Cancelled', value: `${r.cancelReason}${r.cancelledByName ? ` — ${r.cancelledByName}` : ''}` }] : []),
   ],

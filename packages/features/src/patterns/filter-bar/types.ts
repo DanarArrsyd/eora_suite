@@ -1,4 +1,4 @@
-import type { FilterValues, Option } from '../../data';
+import type { FilterValues, Option, SortRule } from '../../data';
 
 type Base = {
   key: string;
@@ -31,6 +31,9 @@ export type SavedView = {
   filters: FilterValues;
   view?: string;
   search?: string;
+  /** Sort and visible columns travel with the view too (UI/UX audit U-13). */
+  sort?: SortRule[];
+  columns?: Record<string, boolean>;
 };
 
 /** Date range values travel as `from..to` (ISO dates, either side optional). */

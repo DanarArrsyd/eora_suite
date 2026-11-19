@@ -25,6 +25,7 @@ import { PLANT_FILTER } from '@/modules/master/resources';
 import type { MasterResource } from '@/modules/master/types';
 import { when } from '@/modules/master/version-ui';
 import { isoWeek } from './mps';
+import { formatDay, formatQty } from '@/components/format';
 
 /*
  * M5 step 4 (doc 34 §1.4, D-124, D-059, BR-PLN-06): PPIC → MRP Results on the live API. A run is a read-only snapshot
@@ -114,7 +115,12 @@ export const MRP_RUNS: MasterResource<RunRow> = {
   filterPermissions: { plantId: 'master.org.view' },
   columns: [
     { id: 'code', header: 'MRP run', lead: true, sortable: true, cell: (r) => <span className="font-mono">{r.code}</span>, sub: (r) => r.plantCode },
-    { id: 'mpsNo', header: 'From MPS', cell: (r) => <span className="font-mono">{r.mpsNo}</span>, sub: (r) => `${r.horizonStart} – ${r.horizonEnd}` },
+    {
+      id: 'mpsNo',
+      header: 'From MPS',
+      cell: (r) => <span className="font-mono">{r.mpsNo}</span>,
+      sub: (r) => `${formatDay(r.horizonStart)} – ${formatDay(r.horizonEnd)}`,
+    },
     { id: 'plannedOrderCount', header: 'Planned work orders', numeric: true, cell: (r) => String(r.plannedOrderCount) },
     { id: 'shortItemCount', header: 'Materials short', numeric: true, cell: (r) => String(r.shortItemCount), sub: (r) => `${r.shortageCount} lines` },
     { id: 'createdAt', header: 'Run', sortable: true, cell: (r) => when(r.createdAt), sub: (r) => r.createdByName ?? undefined },
@@ -208,13 +214,13 @@ function RunPage({ id }: { id: string }) {
   const covers = (o: Order) =>
     o.pegs.map((p) => {
       const q = p.requirementId ? requirementById.get(p.requirementId) : undefined;
-      return q ? `${q.parentItemCode} · ${q.dueDate} · ${p.qty}` : `Safety stock · ${p.qty}`;
+      return q ? `${q.parentItemCode} · ${formatDay(q.dueDate)} · ${p.qty}` : `Safety stock · ${p.qty}`;
     });
 
   return (
     <EnterprisePage
       title={r.code}
-      description={`Plant ${r.plantCode} · from ${r.mpsNo} · ${r.horizonStart} – ${r.horizonEnd} · run ${when(r.createdAt)}${r.createdByName ? ` by ${r.createdByName}` : ''}`}
+      description={`Plant ${r.plantCode} · from ${r.mpsNo} · ${formatDay(r.horizonStart)} – ${formatDay(r.horizonEnd)} · run ${when(r.createdAt)}${r.createdByName ? ` by ${r.createdByName}` : ''}`}
       meta={r.mpsStatus === 'APPROVED' ? <Badge tone="success">From the approved MPS</Badge> : <Badge tone="neutral">MPS {r.mpsStatus.toLowerCase()}</Badge>}
       actions={
         <div className="flex flex-wrap gap-2">
@@ -269,11 +275,11 @@ function RunPage({ id }: { id: string }) {
                       <td className="px-2 py-2">
                         <span className="font-mono">{item.itemCode}</span> <span className="text-ink-2">· {item.itemName}</span>
                       </td>
-                      <td className="px-2 py-2 text-right font-semibold tabular-nums">
-                        {order.qty} {item.uomCode}
+                      <td className="px-2 py-2 text-right font-semibold tabular-nums">{formatQty(order.qty, item.uomCode)}</td>
+                      <td className="px-2 py-2 tabular-nums">{formatDay(order.dueDate)}</td>
+                      <td className="px-2 py-2 tabular-nums">
+                        {item.leadTimeDays === null ? <Badge tone="neutral">Not configured</Badge> : formatDay(order.startDate)}
                       </td>
-                      <td className="px-2 py-2 tabular-nums">{order.dueDate}</td>
-                      <td className="px-2 py-2 tabular-nums">{item.leadTimeDays === null ? <Badge tone="neutral">Not configured</Badge> : order.startDate}</td>
                       <td className="px-2 py-2 text-[12.5px]">
                         {covers(order).map((c, i) => (
                           <span key={i} className="block">
@@ -347,7 +353,7 @@ function RunPage({ id }: { id: string }) {
                       {releasing ? (
                         <td className="px-2 py-2">
                           <Checkbox
-                            aria-label={`Select ${item.itemCode} ${order.qty} due ${order.dueDate}`}
+                            aria-label={`Select ${item.itemCode} ${order.qty} due ${formatDay(order.dueDate)}`}
                             checked={picked.includes(order.id)}
                             disabled={order.workOrder !== null}
                             onChange={() => toggle(order.id)}
@@ -358,7 +364,7 @@ function RunPage({ id }: { id: string }) {
                         <span className="font-mono">{item.itemCode}</span> <span className="text-ink-2">· {TYPE[item.itemType] ?? item.itemType}</span>
                       </td>
                       <td className="px-2 py-2 text-right font-semibold tabular-nums">
-                        {order.qty} {item.uomCode}
+                        {formatQty(order.qty, item.uomCode)}
                         {order.pairedWorkload ? (
                           <span className="block text-ink-2">
                             Same target for {order.pairedWorkload.pairedItemCode} · {order.pairedWorkload.sheets} sheets · {order.pairedWorkload.runHours} h
@@ -367,9 +373,9 @@ function RunPage({ id }: { id: string }) {
                         ) : null}
                       </td>
                       <td className="px-2 py-2 tabular-nums">
-                        {order.dueDate} <span className="text-ink-2">W{isoWeek(order.weekStart)}</span>
+                        {formatDay(order.dueDate)} <span className="text-ink-2">W{isoWeek(order.weekStart)}</span>
                       </td>
-                      <td className="px-2 py-2 tabular-nums">{order.startDate}</td>
+                      <td className="px-2 py-2 tabular-nums">{formatDay(order.startDate)}</td>
                       <td className="px-2 py-2 text-[12.5px]">
                         {order.source === 'MPS'
                           ? 'MPS'

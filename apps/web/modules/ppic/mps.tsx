@@ -33,6 +33,7 @@ import { PLANT_FILTER } from '@/modules/master/resources';
 import type { MasterResource } from '@/modules/master/types';
 import { ApprovalNotice } from '@/components/approval-notice';
 import { when } from '@/modules/master/version-ui';
+import { formatDay, formatQty } from '@/components/format';
 
 /*
  * M5 step 3 (doc 34 §1.3, D-123, D-046, BR-PLN-04/05/07): PPIC → Master Production Schedule on the live API. A version
@@ -196,7 +197,13 @@ export const MPS: MasterResource<MpsRow> = {
   filterPermissions: { plantId: 'master.org.view' },
   columns: [
     { id: 'code', header: 'MPS', lead: true, sortable: true, cell: (r) => <span className="font-mono">{r.code}</span>, sub: (r) => r.plantCode },
-    { id: 'horizonStart', header: 'Horizon', sortable: true, cell: (r) => `${r.horizonStart} – ${r.horizonEnd}`, sub: (r) => `${r.horizonWeeks} weeks` },
+    {
+      id: 'horizonStart',
+      header: 'Horizon',
+      sortable: true,
+      cell: (r) => `${formatDay(r.horizonStart)} – ${formatDay(r.horizonEnd)}`,
+      sub: (r) => `${r.horizonWeeks} weeks`,
+    },
     { id: 'plannedOrderCount', header: 'Planned orders', numeric: true, cell: (r) => String(r.plannedOrderCount), sub: (r) => `${r.itemCount} items` },
     { id: 'plannedQty', header: 'Planned qty', numeric: true, cell: (r) => r.plannedQty },
     { id: 'calculatedAt', header: 'Calculated', sortable: true, cell: (r) => when(r.calculatedAt), sub: (r) => r.calculatedByName ?? undefined },
@@ -321,7 +328,7 @@ function MpsPage({ id }: { id: string }) {
   return (
     <EnterprisePage
       title={m.code}
-      description={`Plant ${m.plantCode} · ${m.horizonWeeks} weeks ${m.horizonStart} – ${m.horizonEnd} · calculated ${when(m.calculatedAt)}${m.calculatedByName ? ` by ${m.calculatedByName}` : ''}`}
+      description={`Plant ${m.plantCode} · ${m.horizonWeeks} weeks ${formatDay(m.horizonStart)} – ${formatDay(m.horizonEnd)} · calculated ${when(m.calculatedAt)}${m.calculatedByName ? ` by ${m.calculatedByName}` : ''}`}
       meta={statusBadge(m.status)}
       actions={
         <div className="flex flex-wrap gap-2">
@@ -480,8 +487,8 @@ function MpsPage({ id }: { id: string }) {
               <ul className="my-2 space-y-1 text-[13.5px]">
                 {m.pairedBlanking.workloads.map((w, index) => (
                   <li key={index}>
-                    {w.itemCode} + {w.pairedItemCode} · {w.startDate} · {w.workCenterCode} · {w.sheets} sheets · {w.runHours} h running + {w.setupMinutes} min
-                    setup
+                    {w.itemCode} + {w.pairedItemCode} · {formatDay(w.startDate)} · {w.workCenterCode} · {w.sheets} sheets · {w.runHours} h running +{' '}
+                    {w.setupMinutes} min setup
                   </li>
                 ))}
               </ul>
@@ -655,10 +662,12 @@ function ItemCard({ item, canAdjust, onAdjust }: { item: MpsItem; canAdjust: boo
                       {o.adjusted && o.qty !== o.calcQty ? <span className="block text-[12px] text-ink-2">calculated {o.calcQty}</span> : null}
                     </td>
                     <td className="px-2 py-2 tabular-nums">
-                      {o.dueDate}
-                      {o.adjusted && o.dueDate !== o.calcDueDate ? <span className="block text-[12px] text-ink-2">calculated {o.calcDueDate}</span> : null}
+                      {formatDay(o.dueDate)}
+                      {o.adjusted && o.dueDate !== o.calcDueDate ? (
+                        <span className="block text-[12px] text-ink-2">calculated {formatDay(o.calcDueDate)}</span>
+                      ) : null}
                     </td>
-                    <td className="px-2 py-2 tabular-nums">{o.startDate}</td>
+                    <td className="px-2 py-2 tabular-nums">{formatDay(o.startDate)}</td>
                     <td className="px-2 py-2">
                       {o.adjusted ? <span className="block text-[12px] text-ink-2">Calculated to cover (before the adjustment):</span> : null}
                       <ul className="m-0 list-none p-0 text-[12.5px]">
@@ -668,7 +677,8 @@ function ItemCard({ item, canAdjust, onAdjust }: { item: MpsItem; canAdjust: boo
                             <li key={i}>
                               {d ? (
                                 <>
-                                  {d.kind === 'FIRM' ? <span className="font-mono">{d.reference}</span> : `Forecast ${d.reference}`} · {d.dueDate} · {p.qty}
+                                  {d.kind === 'FIRM' ? <span className="font-mono">{d.reference}</span> : `Forecast ${d.reference}`} · {formatDay(d.dueDate)} ·{' '}
+                                  {p.qty}
                                 </>
                               ) : (
                                 `Safety stock · ${p.qty}`
@@ -726,7 +736,7 @@ function ItemCard({ item, canAdjust, onAdjust }: { item: MpsItem; canAdjust: boo
                   ...item.demands.map((d) => ({
                     day: d.dueDate,
                     what: d.kind === 'FIRM' ? 'Firm order' : 'Net forecast',
-                    ref: `${d.reference} · ${d.customerCode}${d.originalDate !== d.dueDate ? ` (due ${d.originalDate}, past due)` : ''}`,
+                    ref: `${d.reference} · ${d.customerCode}${d.originalDate !== d.dueDate ? ` (due ${formatDay(d.originalDate)}, past due)` : ''}`,
                     qty: `−${d.qty}`,
                   })),
                   ...item.supplies.map((s) => ({
@@ -798,7 +808,7 @@ function AdjustForm({
       !pattern.test(qty) || Number(qty) <= 0
         ? `Enter ${item.uomDecimals === 0 ? 'a whole number' : `a quantity with at most ${item.uomDecimals} decimals`} above zero.`
         : !due || due < mps.planDate || due > mps.horizonEnd
-          ? `Choose a due date from ${mps.planDate} to ${mps.horizonEnd}.`
+          ? `Choose a due date from ${formatDay(mps.planDate)} to ${formatDay(mps.horizonEnd)}.`
           : reason.trim().length < 3
             ? 'Give the reason in at least 3 characters.'
             : null;
@@ -826,8 +836,8 @@ function AdjustForm({
     <>
       <ModalBody>
         <p className="mt-0 mb-3 text-ink-2">
-          Calculated: {order.calcQty} {item.uomCode} due {order.calcDueDate}. The start date follows the lead time; the approver sees the change and your
-          reason. A recalculation replaces it.
+          Calculated: {formatQty(order.calcQty, item.uomCode)} due {formatDay(order.calcDueDate)}. The start date follows the lead time; the approver sees the
+          change and your reason. A recalculation replaces it.
         </p>
         {problem ? (
           <InlineAlert tone="danger" title="Not adjusted" className="mb-3">

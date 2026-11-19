@@ -26,6 +26,8 @@ import { PLANT_FILTER } from '@/modules/master/resources';
 import { queryAll } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
 import { unitPrecisionError } from '@/modules/materials/resources';
+import { Quantity } from '@/components/quantity';
+import { formatDay } from '@/components/format';
 
 /*
  * M4 step 7a (doc 33 §1.7, D-115, doc 04 rows 2 and 11, BR-FG-02, BR-DEM-10): Delivery → Allocation & Pick on the live
@@ -112,7 +114,7 @@ export const OPEN_DEMAND: MasterResource<OpenLine> = {
   filters: [PLANT_FILTER],
   filterPermissions: { plantId: 'master.org.view' },
   columns: [
-    { id: 'requirementDate', header: 'Due', lead: true, sortable: true, cell: (r) => r.requirementDate, sub: (r) => r.plantCode },
+    { id: 'requirementDate', header: 'Due', lead: true, sortable: true, cell: (r) => formatDay(r.requirementDate), sub: (r) => r.plantCode },
     {
       id: 'code',
       header: 'Sales order',
@@ -121,7 +123,7 @@ export const OPEN_DEMAND: MasterResource<OpenLine> = {
       sub: (r) => r.customerCode,
     },
     { id: 'itemCode', header: 'Part', cell: (r) => <span className="font-mono">{r.itemCode}</span>, sub: (r) => r.itemName },
-    { id: 'requiredQty', header: 'Required', numeric: true, cell: (r) => `${r.requiredQty} ${r.uomCode}` },
+    { id: 'requiredQty', header: 'Required', numeric: true, cell: (r) => <Quantity value={r.requiredQty} uom={r.uomCode} /> },
     { id: 'allocatedQty', header: 'Allocated', numeric: true, cell: (r) => r.allocatedQty },
     { id: 'stagedQty', header: 'Staged', numeric: true, cell: (r) => r.stagedQty },
     { id: 'toAllocateQty', header: 'To allocate', numeric: true, critical: true, cell: (r) => r.toAllocateQty },
@@ -305,7 +307,7 @@ function LinePage({ id }: { id: string }) {
     { label: 'Customer', value: `${l.customerCode} · ${l.customerName}` },
     { label: 'Customer PO', value: l.customerPoNo ?? '—' },
     { label: 'Part', value: `${l.itemCode} · ${l.itemName}` },
-    { label: 'Due', value: l.requirementDate },
+    { label: 'Due', value: formatDay(l.requirementDate) },
   ];
   const figures: [string, string][] = [
     ['Required', l.requiredQty],
@@ -318,7 +320,7 @@ function LinePage({ id }: { id: string }) {
   return (
     <EnterprisePage
       title={`${l.soNo} · ${l.lineNo}/${l.scheduleNo}`}
-      description={`${l.itemCode} for ${l.customerCode}, due ${l.requirementDate} at ${l.plantCode}.`}
+      description={`${l.itemCode} for ${l.customerCode}, due ${formatDay(l.requirementDate)} at ${l.plantCode}.`}
       actions={
         <Button onClick={() => router.push('/delivery/allocation-pick')}>
           <ArrowLeft aria-hidden="true" className="size-4" />

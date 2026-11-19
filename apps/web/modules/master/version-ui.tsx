@@ -5,6 +5,7 @@ import { DomainStatusBadge, EoraForm, FormTextareaField } from '@eora/features/p
 import { Button, Card, CardContent, CardHeader, CardTitle, InlineAlert, Modal, ModalBody, ModalContent } from '@eora/ui';
 import { ApprovalNotice, type ApprovalKind } from '@/components/approval-notice';
 import { actionMessage, formFailure } from '@/modules/admin/errors';
+import { formatMoment } from '@/components/format';
 
 /*
  * Shared pieces of the versioned engineering records checked by a second person — routing versions, BOM versions,
@@ -24,7 +25,8 @@ const WORDS = {
 export type Can = { view: boolean; create: boolean; submit: boolean; approve: boolean };
 
 export const dayRange = (from: string, to: string | null) => (to ? `${from} to ${to}` : `From ${from}, until replaced`);
-export const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '');
+/** A moment in the viewer's time, "19 Nov 2026, 09:57" (shared formatter, UI/UX audit U-8). */
+export const when = (iso: string | null) => formatMoment(iso);
 
 /** Today's date (YYYY-MM-DD) in the workspace time zone (D-044). */
 export function todayIn(timeZone: string): string {

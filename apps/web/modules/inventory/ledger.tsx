@@ -5,6 +5,7 @@ import { PLANT_FILTER } from '@/modules/master/resources';
 import { queryOptions } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
 import { when } from '@/modules/master/version-ui';
+import { formatDay } from '@/components/format';
 
 /*
  * M3 step 9 (doc 32 §1.9, BR-INV-02, D-084): Inventory → Ledger → Movement Ledger on the live API. Every posted leg at
@@ -126,7 +127,7 @@ export const MOVEMENT_LEDGER: MasterResource<MovementRow> = {
     { label: 'Location', value: `${r.locationCode} · ${r.plantCode}` },
     { label: 'Status', value: <DomainStatusBadge domain="stock" status={r.stockStatus} /> },
     { label: 'Quantity', value: signed(r) },
-    { label: 'Day', value: r.effectiveDate },
+    { label: 'Day', value: formatDay(r.effectiveDate) },
     { label: 'Posted', value: `${when(r.postedAt)}${r.postedByName ? ` by ${r.postedByName}` : ''}` },
   ],
   create: () => Promise.reject(new Error('The ledger is written by postings only.')),

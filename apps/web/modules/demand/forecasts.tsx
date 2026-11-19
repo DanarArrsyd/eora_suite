@@ -32,6 +32,7 @@ import { PLANT_FILTER } from '@/modules/master/resources';
 import { queryAll } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
 import { when } from '@/modules/master/version-ui';
+import { formatQty } from '@/components/format';
 
 /*
  * M5 step 2 (doc 34 §1.2, D-122, D-040, BR-DEM-08): Demand → Forecast on the live API. A version per customer and plant
@@ -388,9 +389,7 @@ function ForecastPage({ id }: { id: string }) {
                       <td className="px-2 py-2">
                         <span className="font-mono">{l.customerPartNo}</span> <span className="text-ink-2">· {l.itemCode}</span>
                       </td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {l.qty} {l.uomCode}
-                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums">{formatQty(l.qty, l.uomCode)}</td>
                       <td className="px-2 py-2 text-right tabular-nums">{l.firmQty}</td>
                       <td className="px-2 py-2 text-right font-semibold tabular-nums">{l.netQty}</td>
                     </tr>

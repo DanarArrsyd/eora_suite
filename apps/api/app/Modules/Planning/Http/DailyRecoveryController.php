@@ -21,6 +21,13 @@ final class DailyRecoveryController
 {
     use MasterWrites;
 
+    /** Next step of a row (DailyRecoveryPlanner), filterable on the list. */
+    public const array STATUSES = ['WAIT_QC', 'COVERED', 'BATCH_MISSING', 'BOM_MISSING', 'MATERIAL_SHORT', 'PLAN_REQUIRED', 'WO_CREATED'];
+
+    /** Sortable list columns (`sort=key` or `sort=-key`) → row field. */
+    public const array SORTS = ['customer' => 'customerCode', 'part' => 'itemName', 'requiredQty' => 'requiredQty', 'netQty' => 'netQty',
+        'proposedQty' => 'proposedQty', 'status' => 'status'];
+
     public function __construct(private readonly Authorizer $authorizer, private readonly AuditRecorder $audit,
         private readonly QueryRunner $rows, private readonly DailyRecoveryPlanner $planner, private readonly WorkOrderController $workOrders) {}
 
@@ -29,6 +36,8 @@ final class DailyRecoveryController
     {
         $data = $request->validate(['plantId' => ['required', 'uuid'], 'targetDate' => ['required', 'date_format:Y-m-d'],
             'customerId' => ['nullable', 'uuid'], 'q' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'array', 'max:7'], 'status.*' => ['string', 'in:WAIT_QC,COVERED,BATCH_MISSING,BOM_MISSING,MATERIAL_SHORT,PLAN_REQUIRED,WO_CREATED'],
+            'sort' => ['nullable', 'string', 'in:customer,-customer,part,-part,requiredQty,-requiredQty,netQty,-netQty,proposedQty,-proposedQty,status,-status'],
             'page' => ['nullable', 'integer', 'min:1', 'max:100000'], 'perPage' => ['nullable', 'integer', 'min:1', 'max:100']]);
         $db = $this->db();
         $plant = $this->plant($db, $data['plantId'], 'planning.recovery.view');
@@ -40,8 +49,21 @@ final class DailyRecoveryController
             $matchesCustomer = ! isset($data['customerId']) || $row['customerId'] === strtolower($data['customerId']);
             $search = strtolower(trim($data['q'] ?? ''));
 
-            return $matchesCustomer && ($search === '' || str_contains(strtolower($row['customerCode'].' '.$row['itemName'].' '.$row['partNo'].' '.$row['itemCode']), $search));
+            return $matchesCustomer && (! isset($data['status']) || in_array($row['status'], $data['status'], true))
+                && ($search === '' || str_contains(strtolower($row['customerCode'].' '.$row['itemName'].' '.$row['partNo'].' '.$row['itemCode']), $search));
         }));
+        // Sorting only orders the rows already allocated: allocation runs once over all rows before any filter (D-134).
+        if (isset($data['sort'])) {
+            $desc = str_starts_with($data['sort'], '-');
+            $field = self::SORTS[ltrim($data['sort'], '-')];
+            usort($rows, static function (array $a, array $b) use ($field, $desc): int {
+                $order = is_numeric($a[$field] ?? null) && is_numeric($b[$field] ?? null)
+                    ? bccomp((string) $a[$field], (string) $b[$field], 6)
+                    : strcasecmp((string) ($a[$field] ?? ''), (string) ($b[$field] ?? ''));
+
+                return $desc ? -$order : $order;
+            });
+        }
         $page = (int) ($data['page'] ?? 1);
         $size = (int) ($data['perPage'] ?? 25);
 

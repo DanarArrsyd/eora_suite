@@ -211,7 +211,7 @@ test('work orders: a second person releases it (materials fixed) or returns it w
   await page.getByRole('alertdialog', { name: 'Release this work order' }).getByRole('button', { name: 'Release' }).click();
   await expect(page.getByText('WO-P1-2026-0001 released')).toBeVisible();
   expect(writes[0]).toMatchObject({ ifMatch: '"3"' });
-  await expect(page.getByRole('table', { name: 'Materials of WO-P1-2026-0001' })).toContainText('384 KG');
+  await expect(page.getByRole('table', { name: 'Materials of WO-P1-2026-0001' })).toContainText('384.000 KG');
   await expect(page.getByText('BOM v1 · routing R1 v1 · standard yield 0.98')).toBeVisible();
   await axe(page);
 

@@ -9,6 +9,7 @@ import { formFailure } from '@/modules/admin/errors';
 import { PHYSICAL_LOCATION_TYPES } from './resources';
 import { queryOptions } from './source';
 import { PartialSave, type Confirmation, type FieldSpec, type FormValues, type MasterResource, type MasterRow, type OptionSource } from './types';
+import { formatDay, formatQty } from '@/components/format';
 
 const PICKERS: Record<
   OptionSource,
@@ -39,7 +40,7 @@ const PICKERS: Record<
   firmDeliveries: {
     resource: 'demand.schedule_lines',
     label: (r) =>
-      `${String(r.code)} · ${String(r.customerCode)} · ${String(r.itemCode)} · ${String(r.requirementDate)} · ${String(r.qty)} ${String(r.uomCode)}`,
+      `${String(r.code)} · ${String(r.customerCode)} · ${String(r.itemCode)} · ${formatDay(String(r.requirementDate))} · ${formatQty(String(r.qty), String(r.uomCode))}`,
     filters: { status: ['FIRM', 'PARTIALLY_FULFILLED'] },
     sortBy: 'requirementDate',
   },
@@ -84,20 +85,20 @@ const PICKERS: Record<
   stockLines: {
     resource: 'inventory.stock',
     label: (r) =>
-      `${String(r.itemCode)} · ${r.lotNo ? String(r.lotNo) : 'no lot'} · ${String(r.plantCode)} / ${String(r.locationCode)} · ${STATUS_CATALOGUE.stock[r.stockStatus as keyof typeof STATUS_CATALOGUE.stock]?.label ?? String(r.stockStatus)} · ${String(r.qty)} ${String(r.uomCode)}`,
+      `${String(r.itemCode)} · ${r.lotNo ? String(r.lotNo) : 'no lot'} · ${String(r.plantCode)} / ${String(r.locationCode)} · ${STATUS_CATALOGUE.stock[r.stockStatus as keyof typeof STATUS_CATALOGUE.stock]?.label ?? String(r.stockStatus)} · ${formatQty(String(r.qty), String(r.uomCode))}`,
     sortBy: 'itemCode',
   },
   // work orders material at a work center can belong to (M4-D3): released or in production
   workOrders: {
     resource: 'planning.work_orders',
-    label: (r) => `${String(r.code)} · ${String(r.itemCode)} · ${String(r.qty)} ${String(r.uomCode)}`,
+    label: (r) => `${String(r.code)} · ${String(r.itemCode)} · ${formatQty(String(r.qty), String(r.uomCode))}`,
     filters: { status: ['RELEASED', 'IN_PROGRESS', 'ON_HOLD', 'PRODUCTION_COMPLETE'] },
   },
   // supplier deliveries still expected (D-121): what an RM receipt is received against
   inboundLines: {
     resource: 'materials.inbound_schedule',
     label: (r) =>
-      `${String(r.code)} · ${String(r.supplierCode)} · ${String(r.itemCode)} · ${String(r.expectedDate)} · ${String(r.outstandingQty)} ${String(r.uomCode)} outstanding`,
+      `${String(r.code)} · ${String(r.supplierCode)} · ${String(r.itemCode)} · ${formatDay(String(r.expectedDate))} · ${formatQty(String(r.outstandingQty), String(r.uomCode))} outstanding`,
     filters: { status: ['OPEN', 'PARTIALLY_RECEIVED'] },
     sortBy: 'expectedDate',
   },
@@ -105,7 +106,7 @@ const PICKERS: Record<
   materialAtProduction: {
     resource: 'inventory.material_at_production',
     label: (r) =>
-      `${String(r.workOrderCode)} · ${String(r.workCenterCode)} · ${String(r.itemCode)} · ${r.lotNo ? String(r.lotNo) : 'no lot'} · ${String(r.qty)} ${String(r.uomCode)}`,
+      `${String(r.workOrderCode)} · ${String(r.workCenterCode)} · ${String(r.itemCode)} · ${r.lotNo ? String(r.lotNo) : 'no lot'} · ${formatQty(String(r.qty), String(r.uomCode))}`,
     sortBy: 'workOrderCode',
   },
 };

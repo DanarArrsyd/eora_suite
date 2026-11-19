@@ -13,6 +13,7 @@ import { queryAll } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
 import { when } from '@/modules/master/version-ui';
 import { unitPrecisionError } from '@/modules/materials/resources';
+import { formatDay, formatQty } from '@/components/format';
 
 /*
  * M4 step 7b (doc 33 §1.7, D-115, D-116, doc 04 row 11, BR-FG-03, BR-DEM-10): Delivery → Shipments on the live API.
@@ -179,7 +180,7 @@ function ShipPage() {
       if (!/^\d+(\.\d+)?$/.test(q) || scaled(q) <= 0n) return `${name}: enter a quantity above zero.`;
       const precision = unitPrecisionError(q, r.uomCode, r.uomDecimals);
       if (precision) return `${name}: ${precision}`;
-      if (scaled(q) > scaled(r.stagedQty)) return `${name}: only ${r.stagedQty} ${r.uomCode} is staged for it.`;
+      if (scaled(q) > scaled(r.stagedQty)) return `${name}: only ${formatQty(r.stagedQty, r.uomCode)} is staged for it.`;
     }
     return null;
   };
@@ -306,12 +307,12 @@ function ShipPage() {
                     <div className="min-w-0 text-[13.5px]">
                       <span className="font-mono text-ink">{`${r.soNo} · ${r.lineNo}/${r.scheduleNo}`}</span>
                       <div className="text-[13px] text-ink-2">
-                        {r.itemCode} · due {r.requirementDate}
+                        {r.itemCode} · due {formatDay(r.requirementDate)}
                         {r.customerPoNo ? ` · PO ${r.customerPoNo}` : ''}
                       </div>
                     </div>
                     <div className="text-[13px] text-ink-2 tabular-nums">
-                      {r.locationCode} · <span className="font-mono text-ink">{r.lotNo ?? 'no lot'}</span> · {r.stagedQty} {r.uomCode} staged,{' '}
+                      {r.locationCode} · <span className="font-mono text-ink">{r.lotNo ?? 'no lot'}</span> · {formatQty(r.stagedQty, r.uomCode)} staged,{' '}
                       {r.outstandingQty} to deliver
                     </div>
                     <Field label={`Ship (${r.uomCode})`}>

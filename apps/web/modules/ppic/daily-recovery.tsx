@@ -6,8 +6,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ClipboardList, RefreshCw } from 'lucide-react';
 import { api, call, failureMessage, useMe } from '@eora/features/auth';
-import { useDensityPreference, type FilterValues } from '@eora/features/data';
+import { useDensityPreference, usePageSizePreference, type FilterValues, type SortRule } from '@eora/features/data';
 import {
+  ColumnSettings,
   DataTable,
   DensityToggle,
   EnterprisePage,
@@ -16,7 +17,10 @@ import {
   ListSearch,
   ListWorkspace,
   Pagination,
+  SavedViewsMenu,
   useFilterPanel,
+  type ColumnGroup,
+  type ColumnVisibility,
   type EoraColumn,
   statusEntry,
   type FilterField,
@@ -37,7 +41,9 @@ import {
   Textarea,
   type IsoDate,
 } from '@eora/ui';
-import { QuantityWithUom } from '@/components/quantity';
+import { formatDay, formatMoment, formatQty } from '@/components/format';
+import { Quantity } from '@/components/quantity';
+import { useSavedViews } from '@/components/use-saved-views';
 import { queryOptions } from '@/modules/master/source';
 
 type Lot = {
@@ -107,8 +113,16 @@ const STATUSES: Record<string, string> = {
   PLAN_REQUIRED: 'Plan needed',
   WO_CREATED: 'Work order created',
 };
-const pcs = (value: string | null) =>
-  value === null ? <span className="text-ink-2">Not calculated</span> : <QuantityWithUom value={Number(value)} uom="pcs" />;
+const STATUS_OPTIONS = Object.entries(STATUSES).map(([value, label]) => ({ value, label }));
+/** Supply positions and plan figures are grouped under one header each (EORA-COMPONENT-STANDARDS §5 grouped columns). */
+const GROUPS: ColumnGroup[] = [
+  { id: 'supply', label: 'Supply covering the demand', title: 'Each position is counted once: FG stock, Pending QC, QC released and remaining WO output' },
+  { id: 'plan', label: 'Work order plan' },
+];
+/** Shown on demand from Column settings (the detail drawer always lists them). */
+const DEFAULT_HIDDEN: ColumnVisibility = { acceptedQty: false, wo: false, material: false, planQty: false };
+const pcs = (value: string | null) => (value === null ? <span className="text-ink-2">Not calculated</span> : <Quantity value={value} uom="PCS" />);
+const zero = (value: string | null) => value !== null && Number(value) === 0;
 
 export function DailyRecoveryScreen() {
   const me = useMe();
@@ -122,6 +136,9 @@ export function DailyRecoveryScreen() {
   const client = useQueryClient();
   const panel = useFilterPanel();
   const [density, setDensity] = useDensityPreference();
+  const [prefSize, setPrefSize] = usePageSizePreference();
+  const [visibility, setVisibility] = React.useState<ColumnVisibility>(DEFAULT_HIDDEN);
+  const saved = useSavedViews('daily-recovery');
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const plant = params.get('plantId') || me.data?.activePlantId || me.data?.plants[0]?.id || '';
@@ -131,9 +148,12 @@ export function DailyRecoveryScreen() {
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
   const targetDate = params.get('targetDate') || tomorrow.toISOString().slice(0, 10);
   const customer = params.get('customerId') || '';
+  const status = (params.get('status') || '').split(',').filter((s) => s in STATUSES);
   const search = params.get('q') || '';
+  const sortParam = params.get('sort') || '';
+  const sort: SortRule[] = sortParam ? [{ id: sortParam.replace(/^-/, ''), desc: sortParam.startsWith('-') }] : [];
   const page = Math.max(1, Number(params.get('page')) || 1);
-  const size = Math.min(100, Math.max(1, Number(params.get('perPage')) || 25));
+  const size = Math.min(100, Math.max(1, Number(params.get('perPage')) || Number(prefSize) || 20));
   const setParams = (changes: Record<string, string>) => {
     const next = new URLSearchParams(params);
     Object.entries(changes).forEach(([key, value]) => (value ? next.set(key, value) : next.delete(key)));
@@ -156,13 +176,26 @@ export function DailyRecoveryScreen() {
       label: 'Customer',
       loadOptions: (_deps, signal) => queryOptions('core.customers', (r) => `${String(r.code)} · ${String(r.name)}`, {}, signal),
     },
+    { key: 'status', type: 'multiselect', source: 'static', label: 'Next step', options: STATUS_OPTIONS },
   ];
   const query = useQuery({
-    queryKey: ['daily-recovery', plant, targetDate, customer, search, page, size],
+    queryKey: ['daily-recovery', plant, targetDate, customer, status.join(','), search, sortParam, page, size],
     queryFn: async ({ signal }) =>
       (await call(() =>
         api.GET('/planning/daily-recovery', {
-          params: { query: { plantId: plant, targetDate, customerId: customer || undefined, q: search || undefined, page, perPage: size } },
+          params: {
+            query: {
+              plantId: plant,
+              targetDate,
+              customerId: customer || undefined,
+              // Laravel reads repeated `status[]` keys as a list
+              'status[]': (status.length ? status : undefined) as never,
+              sort: (sortParam || undefined) as never,
+              q: search || undefined,
+              page,
+              perPage: size,
+            },
+          },
           signal,
         }),
       )) as unknown as Result,
@@ -172,36 +205,64 @@ export function DailyRecoveryScreen() {
   const rows = query.data?.data ?? [];
   const selected = rows.find((row) => row.id === detailId);
   const columns: EoraColumn<RecoveryRow>[] = [
-    { id: 'customer', header: 'Customer', cell: (r) => r.customerCode, minWidth: 100 },
     {
       id: 'part',
-      header: 'Part Name',
+      header: 'Part',
       lead: true,
       textCol: true,
       critical: true,
+      sortable: true,
       cell: (r) => (
         <button type="button" className="text-left font-medium text-link hover:underline" onClick={() => setDetailId(r.id)}>
           {r.itemName}
         </button>
       ),
-      title: (r) => r.itemName,
+      sub: (r) => r.partNo,
+      title: (r) => `${r.itemName} · ${r.partNo}`,
     },
-    { id: 'partNo', header: 'Part No.', cell: (r) => r.partNo, minWidth: 170 },
-    { id: 'requiredQty', header: 'Demand up to target', cell: (r) => pcs(r.requiredQty), numeric: true, minWidth: 160 },
-    { id: 'fgQty', header: 'FG warehouse stock', cell: (r) => pcs(r.fgQty), numeric: true, minWidth: 120 },
-    { id: 'beforeCheckQty', header: 'Pending QC (Before Check)', cell: (r) => pcs(r.beforeCheckQty), numeric: true, critical: true, minWidth: 130 },
-    { id: 'acceptedQty', header: 'QC released, awaiting FG receipt', cell: (r) => pcs(r.acceptedQty), numeric: true, minWidth: 175 },
-    { id: 'wo', header: 'Remaining WO output', cell: (r) => pcs(r.allocated.wo), numeric: true, minWidth: 175 },
-    { id: 'netQty', header: 'Net work order need', cell: (r) => pcs(r.netQty), numeric: true, critical: true, minWidth: 150 },
-    { id: 'proposedQty', header: 'Proposed (whole batches)', cell: (r) => pcs(r.proposedQty), numeric: true, critical: true, minWidth: 160 },
-    { id: 'material', header: 'Material capacity (estimate)', cell: (r) => pcs(r.materialCapacityQty), numeric: true, minWidth: 180 },
-    { id: 'planQty', header: 'Planned total', cell: (r) => pcs(r.planQty), numeric: true, minWidth: 135 },
+    { id: 'customer', header: 'Customer', sortable: true, cell: (r) => r.customerCode, title: (r) => r.customerName, minWidth: 84 },
     {
       id: 'status',
-      header: 'Action',
+      header: 'Next step',
+      critical: true,
+      sortable: true,
       cell: (r) => <Badge tone={r.status === 'WAIT_QC' || r.status === 'MATERIAL_SHORT' ? 'warning' : 'neutral'}>{STATUSES[r.status] ?? r.status}</Badge>,
-      minWidth: 155,
+      minWidth: 140,
     },
+    { id: 'requiredQty', header: 'Demand to target', numeric: true, critical: true, sortable: true, cell: (r) => pcs(r.requiredQty), minWidth: 124 },
+    { id: 'fgQty', header: 'FG stock', group: 'supply', numeric: true, cell: (r) => pcs(r.fgQty), emptyOnPhone: (r) => zero(r.fgQty), minWidth: 92 },
+    {
+      id: 'beforeCheckQty',
+      header: 'Pending QC',
+      group: 'supply',
+      numeric: true,
+      critical: true,
+      cell: (r) => pcs(r.beforeCheckQty),
+      emptyOnPhone: (r) => zero(r.beforeCheckQty),
+      minWidth: 92,
+    },
+    {
+      id: 'acceptedQty',
+      header: 'QC released',
+      group: 'supply',
+      numeric: true,
+      cell: (r) => pcs(r.acceptedQty),
+      emptyOnPhone: (r) => zero(r.acceptedQty),
+      minWidth: 92,
+    },
+    {
+      id: 'wo',
+      header: 'Remaining WO',
+      group: 'supply',
+      numeric: true,
+      cell: (r) => pcs(r.allocated.wo),
+      emptyOnPhone: (r) => zero(r.allocated.wo),
+      minWidth: 112,
+    },
+    { id: 'netQty', header: 'Net need', group: 'plan', numeric: true, critical: true, sortable: true, cell: (r) => pcs(r.netQty), minWidth: 92 },
+    { id: 'proposedQty', header: 'Proposed', group: 'plan', numeric: true, critical: true, sortable: true, cell: (r) => pcs(r.proposedQty), minWidth: 92 },
+    { id: 'material', header: 'Material capacity', group: 'plan', numeric: true, cell: (r) => pcs(r.materialCapacityQty), minWidth: 130 },
+    { id: 'planQty', header: 'Planned', group: 'plan', numeric: true, cell: (r) => pcs(r.planQty), emptyOnPhone: (r) => zero(r.planQty), minWidth: 92 },
   ];
   if (me.isPending) return <LoadingState title="Loading Daily Recovery" />;
   if (!canView)
@@ -217,6 +278,8 @@ export function DailyRecoveryScreen() {
       </div>
     );
 
+  const total = query.data?.meta.total;
+  const filtersApplied = (customer ? 1 : 0) + (status.length ? 1 : 0);
   return (
     <EnterprisePage
       title="Daily Recovery Planner"
@@ -229,34 +292,54 @@ export function DailyRecoveryScreen() {
       }
     >
       {notice ? <InlineAlert tone="success" title={notice} className="mb-4" /> : null}
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-4 rounded-lg border border-line bg-surface p-4">
-        <Field label="Target production / delivery date">
-          {(control) => (
-            <DatePicker
-              {...control}
-              value={targetDate as IsoDate}
-              min={today as IsoDate}
-              label="Target production / delivery date"
-              onChange={(value) => value && setParams({ targetDate: value })}
-            />
-          )}
-        </Field>
-        <p className="max-w-xl text-xs leading-5 text-ink-2">
-          Pending QC (Before Check) counts as projected supply for planning only. Delivery uses released FG stock. Shared stock is allocated across customers
-          once, before filters.
-        </p>
-      </div>
       <ListWorkspace
         label="Daily Recovery"
         toolbar={
           <>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 max-md:w-full">
+              <div className="w-44 max-md:w-full">
+                <DatePicker
+                  value={targetDate as IsoDate}
+                  min={today as IsoDate}
+                  label="Target production / delivery date"
+                  onChange={(value) => value && setParams({ targetDate: value })}
+                />
+              </div>
               <ListSearch label="Search customer or part" placeholder="Search customer, part or part no…" value={search} onChange={(q) => setParams({ q })} />
-              <span className="text-xs text-ink-2">{query.data?.meta.total ?? '…'} part</span>
+              <FilterToggle panel={panel} count={filtersApplied} controlsId="daily-recovery-filters" />
+              <span className="text-[13px] whitespace-nowrap text-ink-2" aria-live="polite">
+                <b className="font-semibold text-ink tabular-nums">{total ?? '…'}</b> {total === 1 ? 'part' : 'parts'}
+              </span>
             </div>
             <div className="flex items-center gap-2">
-              <FilterToggle panel={panel} count={customer ? 2 : 1} controlsId="daily-recovery-filters" />
+              <SavedViewsMenu
+                views={saved.views}
+                onApply={(v) => {
+                  const pick = (key: string) => {
+                    const value = v.filters[key];
+                    return Array.isArray(value) ? value.join(',') : (value ?? '');
+                  };
+                  const rule = v.sort?.[0];
+                  setParams({
+                    customerId: pick('customerId'),
+                    status: pick('status'),
+                    q: v.search ?? '',
+                    sort: rule ? `${rule.desc ? '-' : ''}${rule.id}` : '',
+                  });
+                  if (v.columns) setVisibility(v.columns);
+                }}
+                onSave={(name) =>
+                  saved.save(name, {
+                    search,
+                    filters: { customerId: customer || undefined, status: status.length ? status : undefined },
+                    sort,
+                    columns: visibility,
+                  })
+                }
+                onDelete={saved.remove}
+              />
               <DensityToggle value={density} onChange={setDensity} />
+              <ColumnSettings columns={columns} value={visibility} onChange={setVisibility} />
             </div>
           </>
         }
@@ -264,27 +347,37 @@ export function DailyRecoveryScreen() {
           <FilterBar
             id="daily-recovery-filters"
             fields={fields}
-            values={{ plantId: plant, customerId: customer }}
+            values={{ plantId: plant, customerId: customer, status }}
             panel={panel}
-            onApply={(values: FilterValues) => setParams({ plantId: String(values.plantId || plant), customerId: String(values.customerId || '') })}
+            onApply={(values: FilterValues) =>
+              setParams({
+                plantId: String(values.plantId || plant),
+                customerId: String(values.customerId || ''),
+                status: Array.isArray(values.status) ? values.status.join(',') : String(values.status || ''),
+              })
+            }
           />
         }
         pagination={
-          query.data?.meta.total ? (
+          total ? (
             <Pagination
               page={page}
               pageSize={size}
-              total={query.data.meta.total}
-              itemLabel="part"
+              total={total}
+              itemLabel="parts"
               onPageChange={(p) => setParams({ page: String(p) })}
-              onPageSizeChange={(s) => setParams({ perPage: String(s) })}
+              onPageSizeChange={(s) => {
+                setPrefSize(String(s));
+                setParams({ perPage: String(s) });
+              }}
             />
           ) : undefined
         }
       >
         <DataTable
-          label="Daily Recovery by customer and part"
+          label="Daily Recovery by part and customer"
           columns={columns}
+          groups={GROUPS}
           rows={rows}
           getRowId={(r) => r.id}
           rowLabel={(r) => `${r.customerCode} ${r.itemName}`}
@@ -292,22 +385,32 @@ export function DailyRecoveryScreen() {
           error={query.error}
           onRetry={() => query.refetch()}
           isFetching={query.isFetching && !query.isPending}
-          sort={[]}
-          onSortChange={() => undefined}
+          sort={sort}
+          onSortChange={(rules) => setParams({ sort: rules[0] ? `${rules[0].desc ? '-' : ''}${rules[0].id}` : '' })}
           density={density}
+          columnVisibility={visibility}
+          onColumnVisibilityChange={setVisibility}
           empty={
-            <EmptyState
-              title="No parts match these filters"
-              description="Add an active customer part and a delivery schedule, or change the customer filter."
-            />
+            filtersApplied || search ? (
+              <EmptyState
+                title="No parts match these filters"
+                description="Nothing in this plant matches the search and filters for the target date."
+                action={
+                  <Button size="sm" onClick={() => setParams({ customerId: '', status: '', q: '' })}>
+                    Clear filters
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState title="No parts to plan" description="Add an active customer part and a delivery schedule for this plant." />
+            )
           }
-          rowActions={{ primary: (r) => ({ id: 'review', label: 'Review plan', icon: ClipboardList, onSelect: () => setDetailId(r.id) }) }}
+          rowActions={{ primary: (r) => ({ id: 'review', label: 'Review', icon: ClipboardList, onSelect: () => setDetailId(r.id) }) }}
         />
       </ListWorkspace>
-      <p className="mt-3 text-xs text-ink-2">Scroll the table right for QC, remaining WO, material capacity and the plan.</p>
       {query.data ? (
         <p className="mt-3 text-xs text-ink-2">
-          Live position {query.data.meta.asOf} · Production date {query.data.meta.today} · {query.data.meta.formulaCode} (in force from 18 Nov 2026)
+          Position as of {formatMoment(query.data.meta.asOf)} · production date {formatDay(query.data.meta.today)} · {query.data.meta.formulaCode}
         </p>
       ) : null}
       <Drawer open={!!selected} onOpenChange={(open) => !open && setDetailId(null)}>
@@ -537,9 +640,7 @@ function RecoveryDetail({
                   <td className="p-2">
                     {lot.stock_status === 'PENDING_QC' ? 'Pending QC (Before Check)' : statusEntry('stock', lot.stock_status as StatusOf<'stock'>).label}
                   </td>
-                  <td className="p-2 text-right">
-                    {lot.qty} {lot.uom}
-                  </td>
+                  <td className="p-2 text-right">{formatQty(lot.qty, lot.uom)}</td>
                 </tr>
               ))}
             </tbody>

@@ -14,6 +14,7 @@ import { queryAll, querySource } from '@/modules/master/source';
 import type { MasterResource } from '@/modules/master/types';
 import { ApprovalPanel, when } from '@/modules/master/version-ui';
 import { unitPrecisionError } from '@/modules/materials/resources';
+import { formatQty, formatDay } from '@/components/format';
 
 /*
  * M3 step 6 (doc 32 §1.6, doc 04 row 12, D-060, D-100): Inventory → Control → Adjustments on the live API. Inventory
@@ -83,7 +84,7 @@ const STATUS_OPTIONS: Option[] = [
   { value: 'REVERSED', label: 'Reversed' },
 ];
 const reason = (code: string) => REASONS.find((r) => r.value === code)?.label ?? code;
-const signed = (r: AdjustmentRow) => `${r.direction === 'PLUS' ? '+' : '−'}${r.qty} ${r.uomCode}`;
+const signed = (r: AdjustmentRow) => `${r.direction === 'PLUS' ? '+' : '−'}${formatQty(r.qty, r.uomCode)}`;
 const label = (r: AdjustmentRow) => r.code ?? `${r.itemCode} adjustment request`;
 
 async function stockLine(id: string): Promise<StockLine | undefined> {
@@ -277,7 +278,7 @@ export const ADJUSTMENTS: MasterResource<AdjustmentRow & { code: string }> = {
     const precision = v.qty ? unitPrecisionError(v.qty, target.uomCode, target.uomDecimals) : undefined;
     if (precision) problems.qty = precision;
     else if (target.onHand !== null && v.direction === 'MINUS' && v.qty && Number(v.qty) > Number(target.onHand)) {
-      problems.qty = `Only ${target.onHand} ${target.uomCode} is on hand there.`;
+      problems.qty = `Only ${formatQty(target.onHand, target.uomCode)} is on hand there.`;
     }
     return problems;
   },
@@ -394,14 +395,14 @@ function AdjustmentPage({ id }: { id: string }) {
     { label: 'Change', value: <span className="font-semibold tabular-nums">{signed(r)}</span> },
     { label: 'Reason', value: reason(r.reasonCode) },
     { label: 'Note', value: r.note ?? '—' },
-    { label: 'Day', value: r.effectiveDate },
+    { label: 'Day', value: formatDay(r.effectiveDate) },
     ...(r.status === 'REJECTED' ? [{ label: 'Rejected because', value: r.rejectReason ?? '—' }] : []),
   ];
 
   return (
     <EnterprisePage
       title={label(r)}
-      description={`${r.direction === 'PLUS' ? 'Adds' : 'Removes'} ${r.qty} ${r.uomCode} of ${r.itemCode} at ${r.locationCode}, ${reason(r.reasonCode).toLowerCase()}.`}
+      description={`${r.direction === 'PLUS' ? 'Adds' : 'Removes'} ${formatQty(r.qty, r.uomCode)} of ${r.itemCode} at ${r.locationCode}, ${reason(r.reasonCode).toLowerCase()}.`}
       meta={<DomainStatusBadge domain="document" status={r.status} />}
       actions={
         <Button onClick={() => router.push('/inventory/adjustments')}>

@@ -140,10 +140,10 @@ test('an MRP run lists the material shortages with need and order-by dates, and 
   await page.goto(`/ppic/mrp?run=${ID(1)}`);
   await expect(page.getByRole('heading', { level: 1, name: 'MRP-P1-2026-0001' })).toBeVisible();
   const short = page.getByRole('table', { name: 'Material shortages' });
-  await expect(short.getByRole('row', { name: /COIL-SPCC-12/ })).toContainText('132 KG');
-  await expect(short.getByRole('row', { name: /COIL-SPCC-12/ })).toContainText('2026-11-25');
-  await expect(short.getByRole('row', { name: /COIL-SPCC-12/ })).toContainText('2026-11-21');
-  await expect(short.getByRole('row', { name: /COIL-SPCC-12/ })).toContainText('PLT-C300 · 2026-11-25 · 132');
+  await expect(short.getByRole('row', { name: /COIL-SPCC-12/ })).toContainText('132.000 KG');
+  await expect(short.getByRole('row', { name: /COIL-SPCC-12/ })).toContainText('25 Nov 2026');
+  await expect(short.getByRole('row', { name: /COIL-SPCC-12/ })).toContainText('21 Nov 2026');
+  await expect(short.getByRole('row', { name: /COIL-SPCC-12/ })).toContainText('PLT-C300 · 25 Nov 2026 · 132');
   const make = page.getByRole('table', { name: 'Planned work orders' });
   await expect(make.getByRole('row', { name: /^PLT-C300/ })).toContainText('600 PCS');
   await expect(make.getByRole('row', { name: /^BRK-A100/ })).toContainText('MPS');

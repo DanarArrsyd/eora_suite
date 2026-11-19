@@ -81,11 +81,11 @@ test('adjustments: inventory control requests one stock line with a reason; noth
 
   await page.getByRole('button', { name: 'New adjustment request' }).click();
   const drawer = page.getByRole('dialog', { name: 'New adjustment request' });
-  await choose(page, drawer.getByRole('combobox', { name: 'Stock line' }), 'SHEET-SPCC-12 · L2611-0001 · P1 / RM-A01 · Unrestricted · 120 KG');
+  await choose(page, drawer.getByRole('combobox', { name: 'Stock line' }), 'SHEET-SPCC-12 · L2611-0001 · P1 / RM-A01 · Unrestricted · 120.000 KG');
   await drawer.getByRole('textbox', { name: 'Quantity' }).fill('200');
   await choose(page, drawer.getByRole('combobox', { name: 'Reason' }), 'Other (explain in the note)');
   await drawer.getByRole('button', { name: 'Request adjustment' }).click();
-  await expect(drawer).toContainText('Only 120 KG is on hand there.');
+  await expect(drawer).toContainText('Only 120.000 KG is on hand there.');
   await expect(drawer).toContainText('Explain the adjustment when the reason is Other.');
   expect(calls).toHaveLength(0);
 
@@ -130,7 +130,7 @@ test('adjustments: an approver without the view permission reads the request and
   await page.getByRole('button', { name: /^Open adjustment request SHEET-SPCC-12/ }).click();
   await expect(page).toHaveURL(new RegExp(`request=${REQUEST.id}`));
   await expect(page.getByRole('heading', { level: 1, name: 'SHEET-SPCC-12 adjustment request' })).toBeVisible();
-  await expect(page.getByText('−15 KG')).toBeVisible();
+  await expect(page.getByText('−15.000 KG')).toBeVisible();
   await axe(page);
   await page.getByRole('button', { name: 'Approve' }).click();
   await expect(page.getByText('Adjustment approved and posted')).toBeVisible();

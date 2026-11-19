@@ -28,6 +28,8 @@ import type { MasterResource } from '@/modules/master/types';
 import { ApprovalPanel, when } from '@/modules/master/version-ui';
 import { unitPrecisionError } from '@/modules/materials/resources';
 import { SemiFinishedLocationField } from '@/modules/materials/semi-finished-location-field';
+import { Quantity } from '@/components/quantity';
+import { formatQty } from '@/components/format';
 
 /*
  * M4 step 5 (doc 33 §1.5, D-113, doc 04 row 9, BR-QC-01..03): Quality → Pending QC Queue and Dispositions on the live API.
@@ -133,7 +135,7 @@ export const PENDING_QC: MasterResource<QcLineRow> = {
     { id: 'lotNo', header: 'Lot', sortable: true, cell: (r) => (r.lotNo ? <span className="font-mono">{r.lotNo}</span> : 'No lot') },
     { id: 'locationCode', header: 'Place', sortable: true, cell: (r) => r.locationCode, sub: (r) => r.plantCode },
     { id: 'stockStatus', header: 'Status', sortable: true, cell: (r) => <DomainStatusBadge domain="stock" status={r.stockStatus} /> },
-    { id: 'qty', header: 'Quantity', numeric: true, critical: true, cell: (r) => `${r.qty} ${r.uomCode}` },
+    { id: 'qty', header: 'Quantity', numeric: true, critical: true, cell: (r) => <Quantity value={r.qty} uom={r.uomCode} /> },
     { id: 'updatedAt', header: 'Waiting since', sortable: true, cell: (r) => when(r.updatedAt) },
   ],
   fields: [],
@@ -307,7 +309,7 @@ function LotPage({ id }: { id: string }) {
       if (d.note.trim() !== '' && d.note.trim().length < 3) return `${label}: write a note of at least 3 characters, or leave it empty.`;
       total += scaled(d.qty);
     }
-    if (total > scaled(r.qty)) return `Only ${r.qty} ${r.uomCode} waits here.`;
+    if (total > scaled(r.qty)) return `Only ${formatQty(r.qty, r.uomCode)} waits here.`;
     return null;
   };
   const decide = async () => {
@@ -352,7 +354,7 @@ function LotPage({ id }: { id: string }) {
   return (
     <EnterprisePage
       title={`${r.itemCode}${r.lotNo ? ` · ${r.lotNo}` : ''}`}
-      description={`${r.qty} ${r.uomCode} at ${r.locationCode}.`}
+      description={`${formatQty(r.qty, r.uomCode)} at ${r.locationCode}.`}
       meta={<DomainStatusBadge domain="stock" status={r.stockStatus} />}
       actions={
         <Button onClick={() => router.push('/quality/pending-qc')}>
@@ -476,7 +478,7 @@ function LotPage({ id }: { id: string }) {
                     !/^\d+(\.\d+)?$/.test(askQty) || Number(askQty) <= 0
                       ? 'Enter the quantity to release.'
                       : scaled(askQty) > scaled(r.qty)
-                        ? `Only ${r.qty} ${r.uomCode} is here.`
+                        ? `Only ${formatQty(r.qty, r.uomCode)} is here.`
                         : (unitPrecisionError(askQty, r.uomCode, r.uomDecimals) ??
                           (askReason.trim().length < 3
                             ? 'Give the reason.'
@@ -513,7 +515,7 @@ function LotPage({ id }: { id: string }) {
         open={confirm === 'ask'}
         onOpenChange={(v) => (v ? undefined : setConfirm(null))}
         title="Ask this release"
-        description={`${askQty} ${r.uomCode} back to released once a second person approves it. Nothing moves until then.`}
+        description={`${formatQty(askQty, r.uomCode)} back to released once a second person approves it. Nothing moves until then.`}
         confirmLabel="Ask release"
         onConfirm={async () => {
           try {
@@ -576,11 +578,11 @@ function DispositionPage({ id }: { id: string }) {
     { label: 'Lot', value: r.lotNo ?? 'No lot' },
     { label: 'From', value: stockLabel(r.fromStatus) },
     ...(Number(r.releasedQty) > 0
-      ? [{ label: r.status === 'SUBMITTED' || r.status === 'REJECTED' ? 'Release asked' : 'Released', value: `${r.releasedQty} ${r.uomCode}` }]
+      ? [{ label: r.status === 'SUBMITTED' || r.status === 'REJECTED' ? 'Release asked' : 'Released', value: `${formatQty(r.releasedQty, r.uomCode)}` }]
       : []),
-    ...(Number(r.holdQty) > 0 ? [{ label: 'Hold', value: `${r.holdQty} ${r.uomCode}` }] : []),
-    ...(Number(r.reworkQty) > 0 ? [{ label: 'Rework', value: `${r.reworkQty} ${r.uomCode}` }] : []),
-    ...(Number(r.rejectQty) > 0 ? [{ label: 'Reject', value: `${r.rejectQty} ${r.uomCode}` }] : []),
+    ...(Number(r.holdQty) > 0 ? [{ label: 'Hold', value: `${formatQty(r.holdQty, r.uomCode)}` }] : []),
+    ...(Number(r.reworkQty) > 0 ? [{ label: 'Rework', value: `${formatQty(r.reworkQty, r.uomCode)}` }] : []),
+    ...(Number(r.rejectQty) > 0 ? [{ label: 'Reject', value: `${formatQty(r.rejectQty, r.uomCode)}` }] : []),
     ...(r.reasons ? [{ label: 'Reasons', value: r.reasons }] : []),
     { label: r.outOfPolicy ? 'Reason' : 'Note', value: r.note ?? '—' },
     ...(r.status === 'REJECTED' ? [{ label: 'Rejected because', value: r.rejectReason ?? '—' }] : []),

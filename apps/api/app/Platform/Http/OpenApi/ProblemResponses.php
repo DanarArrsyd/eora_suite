@@ -66,6 +66,9 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         // tenant routes answer 403 FORBIDDEN while no tenant is selected
         'v1.inbox.index' => self::TENANT_READ,
         'v1.inbox.read' => self::TENANT_WRITE + [403 => ['FORBIDDEN'], 422 => ['VALIDATION_FAILED']],
+        'v1.list-views.index' => self::TENANT_READ + [422 => ['VALIDATION_FAILED']],
+        'v1.list-views.store' => self::TENANT_WRITE + [403 => ['FORBIDDEN'], 422 => ['VALIDATION_FAILED']],
+        'v1.list-views.destroy' => self::TENANT_WRITE + [403 => ['FORBIDDEN'], 404 => ['NOT_FOUND']],
         // who decides a waiting document (D-129): unknown kinds, ids and documents outside the caller's plant scope are 404
         'v1.approvals.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
         'v1.core.roles.index' => self::TENANT_READ,

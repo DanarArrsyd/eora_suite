@@ -28,6 +28,8 @@ import type { MasterResource } from '@/modules/master/types';
 import { when } from '@/modules/master/version-ui';
 import { unitPrecisionError } from '@/modules/materials/resources';
 import { SemiFinishedLocationField } from '@/modules/materials/semi-finished-location-field';
+import { Quantity } from '@/components/quantity';
+import { formatQty, formatDay } from '@/components/format';
 
 /*
  * M4 step 4 (doc 33 §1.4, D-111, doc 04 rows 5 and 8, ADR-0003): Production → Production Runs and Production Postings on
@@ -151,7 +153,7 @@ export const PRODUCTION_RUNS: MasterResource<RunRow> = {
     { id: 'openedAt', header: 'Opened', lead: true, sortable: true, cell: (r) => when(r.openedAt), sub: (r) => <span className="font-mono">{r.code}</span> },
     { id: 'workOrderCode', header: 'Work order', sortable: true, cell: (r) => <span className="font-mono">{r.workOrderCode}</span>, sub: (r) => r.itemCode },
     { id: 'workCenterCode', header: 'Work center', sortable: true, cell: (r) => r.workCenterCode, sub: (r) => r.machineCode ?? r.plantCode },
-    { id: 'goodQty', header: 'Good', numeric: true, critical: true, cell: (r) => `${r.goodQty} ${r.uomCode}` },
+    { id: 'goodQty', header: 'Good', numeric: true, critical: true, cell: (r) => <Quantity value={r.goodQty} uom={r.uomCode} /> },
     { id: 'ngQty', header: 'NG', numeric: true, cell: (r) => `${Number(r.ngReworkQty) + Number(r.ngRejectQty)} ${r.uomCode}` },
     { id: 'status', header: 'Status', sortable: true, cell: (r) => <DomainStatusBadge domain="document" status={runStatus(r.status)} /> },
   ],
@@ -184,11 +186,11 @@ export const PRODUCTION_POSTINGS: MasterResource<PostingRow> = {
       id: 'productionDate',
       header: 'Production date',
       sortable: true,
-      cell: (r) => r.productionDate,
+      cell: (r) => formatDay(r.productionDate),
       sub: (r) => (r.shiftCode ? `Shift ${r.shiftCode}` : undefined),
     },
     { id: 'workOrderCode', header: 'Work order', sortable: true, cell: (r) => <span className="font-mono">{r.workOrderCode}</span>, sub: (r) => r.runCode },
-    { id: 'goodQty', header: 'Good', numeric: true, critical: true, cell: (r) => `${r.goodQty} ${r.uomCode}` },
+    { id: 'goodQty', header: 'Good', numeric: true, critical: true, cell: (r) => <Quantity value={r.goodQty} uom={r.uomCode} /> },
     { id: 'ngQty', header: 'NG', numeric: true, cell: (r) => `${Number(r.ngReworkQty) + Number(r.ngRejectQty)} ${r.uomCode}` },
     { id: 'scrapSummary', header: 'Scrap', numeric: true, cell: (r) => r.scrapSummary ?? '—' },
     { id: 'status', header: 'Status', sortable: true, cell: (r) => <DomainStatusBadge domain="document" status={r.status} /> },
@@ -298,7 +300,7 @@ function OpenRunPage({ initialWo }: { initialWo: string }) {
       <Card>
         <CardContent className="pt-5">
           <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
-            <Field label="Work order" required hint={o ? `${o.itemCode} · ${o.itemName} · ${o.qty} ${o.uomCode}` : 'Released or in production.'}>
+            <Field label="Work order" required hint={o ? `${o.itemCode} · ${o.itemName} · ${formatQty(o.qty, o.uomCode)}` : 'Released or in production.'}>
               {(control) => (
                 <Select
                   {...control}
@@ -309,7 +311,7 @@ function OpenRunPage({ initialWo }: { initialWo: string }) {
                     setProblem(null);
                   }}
                   placeholder={orders.isPending ? 'Loading…' : 'Choose a work order'}
-                  options={(orders.data ?? []).map((w) => ({ value: w.id, label: `${w.code} · ${w.itemCode} · ${w.qty} ${w.uomCode}` }))}
+                  options={(orders.data ?? []).map((w) => ({ value: w.id, label: `${w.code} · ${w.itemCode} · ${formatQty(w.qty, w.uomCode)}` }))}
                 />
               )}
             </Field>
@@ -462,8 +464,8 @@ function RunPage({ id }: { id: string }) {
       if (used <= 0)
         return c.method === 'WEIGHED_CONSUMED'
           ? `${label}: enter the used quantity.`
-          : `${label}: what is left must be less than the ${m.qty} ${m.uomCode} here.`;
-      if (used > Number(m.qty)) return `${label}: only ${m.qty} ${m.uomCode} is at the work center.`;
+          : `${label}: what is left must be less than the ${formatQty(m.qty, m.uomCode)} here.`;
+      if (used > Number(m.qty)) return `${label}: only ${formatQty(m.qty, m.uomCode)} is at the work center.`;
       if (!c.evidence.trim()) return `${label}: enter the evidence (scale, counter).`;
     }
     for (const [label, v] of [
@@ -546,7 +548,7 @@ function RunPage({ id }: { id: string }) {
   const atColumns: EoraColumn<AtWorkCenter>[] = [
     { id: 'itemCode', header: 'Material', lead: true, cell: (m) => <span className="font-mono">{m.itemCode}</span>, sub: (m) => m.itemName },
     { id: 'lotNo', header: 'Lot', cell: (m) => m.lotNo ?? 'No lot' },
-    { id: 'qty', header: 'At the work center', numeric: true, critical: true, cell: (m) => `${m.qty} ${m.uomCode}` },
+    { id: 'qty', header: 'At the work center', numeric: true, critical: true, cell: (m) => <Quantity value={m.qty} uom={m.uomCode} /> },
   ];
   const postingColumns: EoraColumn<PostingRow>[] = [
     {
@@ -554,9 +556,9 @@ function RunPage({ id }: { id: string }) {
       header: 'Posting',
       lead: true,
       cell: (p) => <span className="font-mono">{p.code}</span>,
-      sub: (p) => (p.correctsCode ? `Corrects ${p.correctsCode}` : p.productionDate),
+      sub: (p) => (p.correctsCode ? `Corrects ${p.correctsCode}` : formatDay(p.productionDate)),
     },
-    { id: 'goodQty', header: 'Good', numeric: true, cell: (p) => `${p.goodQty} ${p.uomCode}` },
+    { id: 'goodQty', header: 'Good', numeric: true, cell: (p) => <Quantity value={p.goodQty} uom={p.uomCode} /> },
     { id: 'ngQty', header: 'NG', numeric: true, cell: (p) => `${Number(p.ngReworkQty) + Number(p.ngRejectQty)} ${p.uomCode}` },
     { id: 'scrapSummary', header: 'Scrap', numeric: true, cell: (p) => p.scrapSummary ?? '—' },
     { id: 'outputLotNo', header: 'Output lot', cell: (p) => p.outputLotNo ?? '—' },
@@ -574,7 +576,7 @@ function RunPage({ id }: { id: string }) {
           ? 'Materials location, available for issue'
           : 'QC area, released (no inspection)',
     },
-    { label: 'Made so far', value: `Good ${r.goodQty} · NG rework ${r.ngReworkQty} · NG reject ${r.ngRejectQty} ${r.uomCode}` },
+    { label: 'Made so far', value: `Good ${r.goodQty} · NG rework ${r.ngReworkQty} · NG reject ${formatQty(r.ngRejectQty, r.uomCode)}` },
     { label: 'Opened', value: `${when(r.openedAt)}${r.openedByName ? ` · ${r.openedByName}` : ''}` },
     ...(r.closedAt
       ? [{ label: r.status === 'CANCELLED' ? 'Cancelled' : 'Closed', value: `${when(r.closedAt)}${r.closedByName ? ` · ${r.closedByName}` : ''}` }]
@@ -582,7 +584,7 @@ function RunPage({ id }: { id: string }) {
     ...(r.cancelReason ? [{ label: 'Cancelled because', value: r.cancelReason }] : []),
     ...(r.note ? [{ label: 'Note', value: r.note }] : []),
   ];
-  const lineOptions = r.atWorkCenter.map((m) => ({ value: lineKey(m), label: `${m.itemCode} · ${m.lotNo ?? 'no lot'} · ${m.qty} ${m.uomCode} here` }));
+  const lineOptions = r.atWorkCenter.map((m) => ({ value: lineKey(m), label: `${m.itemCode} · ${m.lotNo ?? 'no lot'} · ${formatQty(m.qty, m.uomCode)} here` }));
   const qtyField = (label: string, value: string, set: (v: string) => void) => (
     <Field label={`${label} (${r.uomCode})`}>
       {(control) => <Input {...control} inputMode="decimal" className="tabular-nums" value={value} onChange={(e) => set(e.target.value.trim())} />}
@@ -816,7 +818,7 @@ function RunPage({ id }: { id: string }) {
                           onValueChange={setCorrects}
                           emptyLabel="Not a correction"
                           placeholder="Not a correction"
-                          options={reversed.map((p) => ({ value: p.id, label: `${p.code} · ${p.productionDate}` }))}
+                          options={reversed.map((p) => ({ value: p.id, label: `${p.code} · ${formatDay(p.productionDate)}` }))}
                         />
                       )}
                     </Field>
