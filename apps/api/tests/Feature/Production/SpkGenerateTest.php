@@ -81,6 +81,51 @@ it('generates the WO the shortfall needs, spreads operations over machines, prop
     expect($status())->toBe('CANCELLED');
 })->group('integration', 'production');
 
+it('makes several WOs in one run from a shared material pool and keeps an operation after what its predecessor already has (Codex on #98)', function () {
+    $t = TenantFixtures::provision();
+    AccessFixtures::roles($t);
+    $f = spkFixture($this, $t);
+    $target = rtDayFrom($f['today'], 5);
+    [$s2, $vPart, $vCustomer] = AccessFixtures::run($t, function (EoraPostgresConnection $db) use ($t, $f) {
+        $calendar = (string) $db->selectOne("insert into shift_calendars (tenant_id, plant_id, code, name, effective_from) values (?, ?, 'DAY2', 'Two shifts', '2026-01-01') returning id",
+            [$t['tenant'], $f['plant']])->id;
+        $db->insert("insert into shifts (tenant_id, shift_calendar_id, code, name, starts_at, ends_at) values (?, ?, 'S1', 'Shift 1', '07:00', '15:00')", [$t['tenant'], $calendar]);
+        $s2 = (string) $db->selectOne("insert into shifts (tenant_id, shift_calendar_id, code, name, starts_at, ends_at) values (?, ?, 'S2', 'Shift 2', '15:00', '23:00') returning id", [$t['tenant'], $calendar])->id;
+        $customer = (string) $db->selectOne("insert into customers (tenant_id, code, name) values (?, 'OEM-V', 'Customer V') returning id", [$t['tenant']])->id;
+        $part = (string) $db->selectOne("insert into customer_items (tenant_id, customer_id, item_id, customer_part_no, effective_from) values (?, ?, ?, 'V-100', '2026-01-01') returning id",
+            [$t['tenant'], $customer, $f['item']['id']])->id;
+
+        return [$s2, $part, $customer];
+    });
+    rtSwitch($this, $t, 'DLV');
+    foreach ([[$f['customer'], $f['part'], '120'], [$vCustomer, $vPart, '100']] as [$customer, $part, $qty]) {
+        $so = spa($this)->postJson('/api/v1/demand/sales-orders', ['plantId' => $f['plant'], 'customerId' => $customer])->assertCreated()->json('data');
+        $so = spa($this)->putJson("/api/v1/demand/sales-orders/{$so['id']}/lines", ['lines' => [[
+            'customerItemId' => $part, 'customerPoNo' => 'GEN-'.$qty, 'customerPoLine' => '10', 'schedules' => [['requirementDate' => $target, 'qty' => $qty]],
+        ]]], ['If-Match' => '"'.$so['version'].'"'])->assertOk()->json('data');
+        spa($this)->postJson("/api/v1/demand/sales-orders/{$so['id']}/actions/confirm", [], ['If-Match' => '"'.$so['version'].'"'])->assertOk();
+    }
+    rtSwitch($this, $t, 'PPC');
+    spa($this)->postJson('/api/v1/planning/plan-parameters', ['plantId' => $f['plant'], 'itemId' => $f['item']['id'], 'safetyStock' => '40'])->assertCreated();
+    // the planner already put the released WO's blanking (op 10) in shift 2 of the press line
+    $op10 = AccessFixtures::run($t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
+        'select o.id from routing_operations o join work_orders w on w.routing_version_id = o.routing_version_id where w.id = ? and o.op_seq = 10', [$f['wo']['id']])->id);
+    $press = spa($this)->postJson('/api/v1/production/spk', ['plantId' => $f['plant'], 'workCenterId' => $f['wc']['id'], 'productionDate' => $target])->assertCreated()->json('data');
+    spa($this)->putJson("/api/v1/production/spk/{$press['id']}", ['lines' => [spkLine($f, ['routingOperationId' => $op10, 'machineId' => $f['m1']['id'], 'plannedQty' => '100', 'shiftId' => $s2])]],
+        ['If-Match' => '"'.$press['version'].'"'])->assertOk();
+
+    $gen = spa($this)->postJson('/api/v1/production/spk/generate', ['plantId' => $f['plant'], 'productionDate' => $target])->assertOk()->json('data');
+    // OEM-V first (code order on the same day): 100 + safety stock 40 − the released WO's 100 = 40; that leaves nuts for 10 more pieces,
+    // so OEM-W's 120 (safety stock counted once per item) gets a WO of 10 and 110 short — two WOs in one run
+    expect(array_column($gen['workOrders'], 'qty', 'customerCode'))->toBe(['OEM-V' => '40', 'OEM-W' => '10'])
+        ->and($gen['materialShort'])->toHaveCount(1)
+        ->and($gen['materialShort'][0])->toMatchArray(['customerCode' => 'OEM-W', 'needQty' => '120', 'plannedQty' => '10', 'shortQty' => '110']);
+    // the released WO's welding (op 20) comes after its blanking: shift 2, never shift 1
+    $weld = collect($gen['spks'])->firstWhere('workCenterCode', 'WLD-01');
+    $lines = collect(spa($this)->getJson("/api/v1/production/spk/{$weld['id']}")->assertOk()->json('data.lines'))->where('workOrderId', $f['wo']['id']);
+    expect($lines->pluck('shiftCode')->unique()->values()->all())->toBe(['S2']);
+})->group('integration', 'production');
+
 it('keeps reason SPK to Generate SPK and its release to the generating planner, also through direct SQL', function () {
     $t = TenantFixtures::provision();
     AccessFixtures::roles($t);

@@ -46,6 +46,13 @@ final class SpkGenerator
         $this->createWorkOrders($db, $plant, $date, $out);
 
         $sheets = [];
+        $calendar = $db->selectOne('select id from shift_calendars where (plant_id = ? or plant_id is null) and effective_from <= ?::date order by (plant_id is null), effective_from desc limit 1', [$plant, $date]);
+        /** @var list<array{id: ?string, code: ?string}> $shifts */
+        $shifts = $calendar === null ? [] : array_values(array_map(static fn (stdClass $s) => ['id' => (string) $s->id, 'code' => (string) $s->code],
+            $db->select('select id, code from shifts where shift_calendar_id = ? order by starts_at, code', [$calendar->id])));
+        if ($shifts === []) {
+            $shifts = [['id' => null, 'code' => null]];
+        }
         $orders = $db->select(
             "select w.id, w.wo_no, w.item_id, i.code as item_code, trim_scale(w.qty)::text as qty, w.routing_version_id, v.paired_item_id, c.code as customer_code
                from work_orders w join items i on i.id = w.item_id and i.item_type = 'FINISHED'
@@ -68,13 +75,18 @@ final class SpkGenerator
             );
             $after = 0; // G-3: a later operation never starts in an earlier shift than the one before it
             foreach ($ops as $op) {
+                // what this operation already has on an SPK of the day also holds the next operation back (G-3)
+                $planned = $this->plannedShift($db, (string) $wo->id, (string) $op->id, $date, $shifts);
                 $qty = bcsub(SpkHours::num($wo->qty), SpkHours::num($op->planned), 6);
                 if (bccomp($qty, '0', 6) <= 0) {
+                    $after = max($after, $planned ?? $after);
+
                     continue;
                 }
-                $sheet = $this->sheet($db, $plant, $date, $op, $sheets);
+                $sheet = $this->sheet($db, $plant, $date, $op, $shifts, $sheets);
                 if ($sheet['blocked'] !== null) {
                     $out['skipped'][] = ['workOrderCode' => $wo->wo_no, 'itemCode' => $wo->item_code, 'opSeq' => (int) $op->op_seq, 'reason' => $sheet['blocked']];
+                    $after = max($after, $planned ?? $after);
 
                     continue;
                 }
@@ -82,10 +94,12 @@ final class SpkGenerator
                 if ($machines === []) {
                     $out['skipped'][] = ['workOrderCode' => $wo->wo_no, 'itemCode' => $wo->item_code, 'opSeq' => (int) $op->op_seq,
                         'reason' => "No active machine on {$op->work_center_code}."];
+                    $after = max($after, $planned ?? $after);
 
                     continue;
                 }
-                $after = $this->place($sheets[$op->work_center_id], $wo, $op, $machines, SpkHours::plain($qty), min(99, $rank + 1), $after, $out);
+                $first = $this->place($sheets[$op->work_center_id], $wo, $op, $machines, SpkHours::plain($qty), min(99, $rank + 1), $after, $out);
+                $after = max($after, min($first, $planned ?? $first));
             }
         }
         $this->write($db, $plant, $date, $sheets, $out);
@@ -97,26 +111,18 @@ final class SpkGenerator
     /** @param array<string, list<array<string, mixed>>> $out */
     private function createWorkOrders(EoraPostgresConnection $db, string $plant, string $date, array &$out): void
     {
-        $recovery = $this->recovery->read($db, $plant, $date);
         $safety = [];
         foreach ($db->select('select item_id, trim_scale(safety_stock)::text as qty from item_plan_parameters where plant_id = ? and safety_stock is not null', [$plant]) as $p) {
-            $safety[(string) $p->item_id] = (string) $p->qty;
+            $safety[(string) $p->item_id] = SpkHours::num($p->qty);
         }
+        // the buffer is raised to the safety stock before supply is allocated, and each part reserves what Generate makes (G-8, G-9)
+        $recovery = $this->recovery->read($db, $plant, $date, $safety);
         foreach ($recovery['rows'] as $row) {
             if ($row['workOrderId'] !== null) {
                 continue;
             }
             $plan = SpkHours::num($row['planQty']);
-            if (bccomp($plan, '0', 6) > 0) {
-                $qty = $plan;
-            } else {
-                $buffer = SpkHours::num($row['bufferQty']);
-                $stock = SpkHours::num($safety[(string) $row['itemId']] ?? '0');
-                $supply = array_reduce($row['allocated'], static fn (string $t, string $q): string => bcadd(SpkHours::num($t), SpkHours::num($q), 6), '0');
-                $calc = RecoveryCalculation::calculate((string) $row['requiredQty'], $supply, bccomp($stock, $buffer, 6) > 0 ? $stock : $buffer,
-                    (string) $row['minimumQty'], $row['batchQty'] === null ? null : (string) $row['batchQty'], '0');
-                $qty = $calc['proposedQty'] ?? self::ceil($calc['netQty']);
-            }
+            $qty = bccomp($plan, '0', 6) > 0 ? $plan : SpkHours::num($row['proposedQty'] ?? RecoveryCalculation::ceil((string) $row['netQty']));
             if (bccomp($qty, '0', 6) <= 0) {
                 continue;
             }
@@ -146,6 +152,8 @@ final class SpkGenerator
                         [$plant, $wo['id'], $date],
                     );
                     $this->workOrders->releaseGenerated($db, (string) $wo['id']);
+                    // the release checked every deferred rule now; the next generated WO needs its record checked at commit again
+                    $db->statement('set constraints all deferred');
                     if ($row['planId'] !== null) {
                         // the saved Daily Recovery plan is now covered by this WO, as with Create work order
                         $db->update('update daily_recovery_plans set work_order_id = ? where id = ? and work_order_id is null', [$wo['id'], $row['planId']]);
@@ -165,10 +173,11 @@ final class SpkGenerator
     /**
      * The draft SPK of the operation's line for the date, with its shifts, hours per shift and current load.
      *
+     * @param  list<array{id: ?string, code: ?string}>  $shifts
      * @param  array<string, array<string, mixed>>  $sheets
      * @return array<string, mixed>
      */
-    private function sheet(EoraPostgresConnection $db, string $plant, string $date, stdClass $op, array &$sheets): array
+    private function sheet(EoraPostgresConnection $db, string $plant, string $date, stdClass $op, array $shifts, array &$sheets): array
     {
         $wc = (string) $op->work_center_id;
         if (isset($sheets[$wc])) {
@@ -176,13 +185,11 @@ final class SpkGenerator
         }
         $draft = $db->selectOne("select id from spk_headers where plant_id = ? and work_center_id = ? and production_date = ? and status = 'DRAFT' for update", [$plant, $wc, $date]);
         $released = $draft === null ? $db->selectOne("select spk_no from spk_headers where plant_id = ? and work_center_id = ? and production_date = ? and status = 'RELEASED'", [$plant, $wc, $date]) : null;
-        $calendar = $db->selectOne('select id from shift_calendars where (plant_id = ? or plant_id is null) and effective_from <= ?::date order by (plant_id is null), effective_from desc limit 1', [$plant, $date]);
-        $shifts = $calendar === null ? [] : $db->select('select id, code from shifts where shift_calendar_id = ? order by starts_at, code', [$calendar->id]);
         $sheets[$wc] = [
             'id' => $draft?->id, 'created' => false, 'code' => (string) $op->work_center_code, 'workCenterId' => $wc,
             'blocked' => $released === null ? null : "SPK {$released->spk_no} is released for {$op->work_center_code} on {$date}: revise it to add lines.",
             'capacity' => $op->hours_per_shift === null ? null : SpkHours::num($op->hours_per_shift),
-            'shifts' => $shifts === [] ? [['id' => null, 'code' => null]] : array_map(static fn (stdClass $s) => ['id' => (string) $s->id, 'code' => (string) $s->code], $shifts),
+            'shifts' => $shifts,
             'load' => [], 'setup' => [], 'existing' => [], 'new' => [],
         ];
         if ($draft !== null) {
@@ -371,6 +378,26 @@ final class SpkGenerator
         }
     }
 
+    /**
+     * The earliest shift an operation of a WO already has on an SPK of the day, or null.
+     *
+     * @param  list<array{id: ?string, code: ?string}>  $shifts
+     */
+    private function plannedShift(EoraPostgresConnection $db, string $wo, string $op, string $date, array $shifts): ?int
+    {
+        $earliest = null;
+        foreach ($db->select(
+            "select l.shift_id from spk_lines l join spk_headers h on h.id = l.spk_id
+              where l.work_order_id = ? and l.routing_operation_id = ? and h.production_date = ? and h.status in ('DRAFT', 'RELEASED', 'CLOSED')",
+            [$wo, $op, $date],
+        ) as $l) {
+            $k = $this->shiftIndex($shifts, $l->shift_id === null ? null : (string) $l->shift_id);
+            $earliest = $earliest === null ? $k : min($earliest, $k);
+        }
+
+        return $earliest;
+    }
+
     /** @param list<array{id: ?string, code: ?string}> $shifts */
     private function shiftIndex(array $shifts, mixed $shift): int
     {
@@ -399,14 +426,5 @@ final class SpkGenerator
     private static function floor(string $value): string
     {
         return bcadd(SpkHours::num($value), '0', 0);
-    }
-
-    /** @return numeric-string */
-    private static function ceil(string $value): string
-    {
-        $value = SpkHours::num($value);
-        $whole = bcadd($value, '0', 0);
-
-        return bccomp($whole, $value, 6) < 0 ? bcadd($whole, '1', 0) : $whole;
     }
 }
