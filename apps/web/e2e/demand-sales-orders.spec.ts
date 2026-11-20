@@ -138,6 +138,10 @@ test('sales orders: delivery drafts an order, adds a line with its delivery and 
 
   await page.getByRole('button', { name: 'Add line' }).first().click();
   const drawer = page.getByRole('form', { name: 'Add line' });
+  // the form has its own address: a reload opens it again (D-140)
+  await expect(page).toHaveURL(/form=line/);
+  await page.reload();
+  await expect(drawer).toBeVisible();
   await choose(page, drawer.getByRole('combobox', { name: 'Customer part' }), /^A-77101-BK · /);
   await drawer.getByRole('textbox', { name: 'Customer PO number' }).fill('PO-5501');
   await drawer.getByRole('textbox', { name: 'Customer PO line' }).fill('10');

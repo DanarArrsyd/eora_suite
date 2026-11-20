@@ -9,6 +9,7 @@ import type { Option } from '@eora/features/data';
 import { ConfirmDialog, DataTable, DomainStatusBadge, EnterprisePage, type EoraColumn } from '@eora/features/patterns';
 import { Button, Card, CardContent, CardHeader, CardTitle, EmptyState, ErrorState, InlineAlert, LoadingState, PermissionDeniedState } from '@eora/ui';
 import { MasterEditor } from '@/modules/master/editor';
+import { useFormParam } from '@/modules/master/form-url';
 import { MasterScreen } from '@/modules/master/master-screen';
 import { PLANT_FILTER } from '@/modules/master/resources';
 import type { FormValues, MasterResource } from '@/modules/master/types';
@@ -265,7 +266,9 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
   const router = useRouter();
   const client = useQueryClient();
   const [notice, setNotice] = React.useState<string | null>(null);
-  const [editing, setEditing] = React.useState(false);
+  // editing the draft has its own address (`?form=edit`, D-140): reloadable, shareable, closed by the browser's Back
+  const formUrl = useFormParam();
+  const editing = formUrl.form === 'edit';
   const [ask, setAsk] = React.useState<null | 'submit' | 'withdraw' | 'release' | 'return' | 'cancel' | 'close' | 'exception'>(null);
   // one key per exception request and approval attempt: a retry replays instead of asking or posting twice (ADR-0014)
   const exceptionKey = React.useRef(`wcx-${crypto.randomUUID()}`);
@@ -421,10 +424,10 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
         config={editConfig}
         row={o}
         canEdit={canCreate}
-        back={{ label: `Back to ${o.code}`, href: typeof window === 'undefined' ? '' : window.location.pathname + window.location.search }}
-        onClose={() => setEditing(false)}
+        back={{ label: `Back to ${o.code}`, href: formUrl.closeHref }}
+        onClose={formUrl.close}
         onSaved={(message) => {
-          setEditing(false);
+          formUrl.close();
           changed(message);
         }}
       />
@@ -451,7 +454,7 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
       actions={
         <div className="flex flex-wrap gap-2">
           {o.status === 'DRAFT' && canCreate ? (
-            <Button onClick={() => setEditing(true)}>
+            <Button onClick={() => formUrl.open('edit')}>
               <Pencil aria-hidden="true" className="size-4" />
               Edit
             </Button>
