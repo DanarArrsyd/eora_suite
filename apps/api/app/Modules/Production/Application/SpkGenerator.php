@@ -92,6 +92,7 @@ final class SpkGenerator
                 $mine = $this->plannedByShift($db, (string) $wo->id, (string) $op->id, $date, $shifts);
                 $has = SpkHours::num($op->planned);
                 $mine[0] = bcadd(SpkHours::num($mine[0] ?? '0'), SpkHours::num($op->planned_before), 6);
+                ksort($mine); // shift order: earlier days' output sits in the first shift
                 $planned = array_keys(array_filter($mine, static fn (string $q): bool => bccomp(SpkHours::num($q), '0', 6) > 0))[0] ?? null;
                 $whole = SpkHours::num($wo->qty);
                 $target = $cap === null || bccomp($cap, $whole, 6) > 0 ? $whole : $cap;
