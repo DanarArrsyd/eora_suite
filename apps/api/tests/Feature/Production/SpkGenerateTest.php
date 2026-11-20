@@ -110,10 +110,13 @@ it('makes several WOs in one run from a shared material pool and keeps an operat
     // the planner already put the released WO's blanking (op 10) in shift 2 of the press line
     $op10 = AccessFixtures::run($t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
         'select o.id from routing_operations o join work_orders w on w.routing_version_id = o.routing_version_id where w.id = ? and o.op_seq = 10', [$f['wo']['id']])->id);
-    $press = spa($this)->postJson('/api/v1/production/spk', ['plantId' => $f['plant'], 'workCenterId' => $f['wc']['id'], 'productionDate' => $target])->assertCreated()->json('data');
-    spa($this)->putJson("/api/v1/production/spk/{$press['id']}", ['lines' => [spkLine($f, ['routingOperationId' => $op10, 'machineId' => $f['m1']['id'], 'plannedQty' => '100', 'shiftId' => $s2])]],
-        ['If-Match' => '"'.$press['version'].'"'])->assertOk();
+    $pressDraft = spa($this)->postJson('/api/v1/production/spk', ['plantId' => $f['plant'], 'workCenterId' => $f['wc']['id'], 'productionDate' => $target])->assertCreated()->json('data');
+    spa($this)->putJson("/api/v1/production/spk/{$pressDraft['id']}", ['lines' => [spkLine($f, ['routingOperationId' => $op10, 'machineId' => $f['m1']['id'], 'plannedQty' => '100', 'shiftId' => $s2])]],
+        ['If-Match' => '"'.$pressDraft['version'].'"'])->assertOk();
 
+    // the press is down: the new WOs' blanking cannot be placed, so their welding is not planned either (G-3)
+    $press = fn (string $status) => AccessFixtures::run($t, fn (EoraPostgresConnection $db) => $db->update('update machines set status = ? where id = ?', [$status, $f['m1']['id']]));
+    $press('INACTIVE');
     $gen = spa($this)->postJson('/api/v1/production/spk/generate', ['plantId' => $f['plant'], 'productionDate' => $target])->assertOk()->json('data');
     // OEM-V first (code order on the same day): 100 + safety stock 40 − the released WO's 100 = 40; that leaves nuts for 10 more pieces,
     // so OEM-W's 120 (safety stock counted once per item) gets a WO of 10 and 110 short — two WOs in one run
@@ -124,6 +127,20 @@ it('makes several WOs in one run from a shared material pool and keeps an operat
     $weld = collect($gen['spks'])->firstWhere('workCenterCode', 'WLD-01');
     $lines = collect(spa($this)->getJson("/api/v1/production/spk/{$weld['id']}")->assertOk()->json('data.lines'))->where('workOrderId', $f['wo']['id']);
     expect($lines->pluck('shiftCode')->unique()->values()->all())->toBe(['S2']);
+    $newWos = collect($gen['workOrders'])->pluck('code')->sort()->values()->all();
+    expect(collect(spa($this)->getJson("/api/v1/production/spk/{$weld['id']}")->json('data.lines'))->whereIn('workOrderCode', $newWos))->toHaveCount(0)
+        ->and(collect($gen['skipped'])->where('opSeq', 20)->pluck('workOrderCode')->sort()->values()->all())->toBe($newWos)
+        ->and(collect($gen['skipped'])->where('opSeq', 10)->pluck('reason')->unique()->values()->all())->toBe(['No active machine on PRS-01.']);
+
+    // with the press back, its SPK released and under revision: Generate adds to the draft revision once, and never again (Codex on #98)
+    $press('ACTIVE');
+    $pressSpk = spa($this)->getJson("/api/v1/production/spk/{$pressDraft['id']}")->json('data');
+    $pressSpk = spa($this)->postJson("/api/v1/production/spk/{$pressSpk['id']}/actions/release", [], ['If-Match' => '"'.$pressSpk['version'].'"'])->assertOk()->json('data');
+    spa($this)->postJson("/api/v1/production/spk/{$pressSpk['id']}/actions/revise", ['reason' => 'Press back in service'], ['If-Match' => '"'.$pressSpk['version'].'"'])->assertCreated();
+    $more = spa($this)->postJson('/api/v1/production/spk/generate', ['plantId' => $f['plant'], 'productionDate' => $target])->assertOk()->json('data');
+    expect($more['workOrders'])->toBe([])->and(collect($more['spks'])->pluck('workCenterCode')->sort()->values()->all())->toBe(['PRS-01', 'WLD-01']);
+    $again = spa($this)->postJson('/api/v1/production/spk/generate', ['plantId' => $f['plant'], 'productionDate' => $target])->assertOk()->json('data');
+    expect($again['spks'])->toBe([])->and($again['workOrders'])->toBe([]);
 })->group('integration', 'production');
 
 it('keeps reason SPK to Generate SPK and its release to the generating planner, also through direct SQL', function () {

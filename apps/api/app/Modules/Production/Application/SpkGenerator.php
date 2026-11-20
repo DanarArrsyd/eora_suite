@@ -68,16 +68,28 @@ final class SpkGenerator
                         trim_scale(o.std_cycle_seconds)::text as cycle_seconds, o.cycle_basis, o.parts_per_cycle,
                         coalesce((select sum(l.planned_qty) from spk_lines l join spk_headers h on h.id = l.spk_id
                                    where l.work_order_id = ? and l.routing_operation_id = o.id
-                                     and (h.status in ('RELEASED', 'CLOSED') or (h.status = 'DRAFT' and h.previous_id is null))), 0)::text as planned
+                                     -- a draft revision stands in for the released SPK it revises (it holds that plan and Generate adds to it)
+                                     and (h.status = 'DRAFT' or (h.status in ('RELEASED', 'CLOSED')
+                                          and not exists (select 1 from spk_headers r where r.previous_id = h.id and r.status = 'DRAFT')))), 0)::text as planned
                    from routing_operations o join work_centers wc on wc.id = o.work_center_id
                   where o.routing_version_id = ? order by o.op_seq",
                 [$wo->id, $wo->routing_version_id],
             );
             $after = 0; // G-3: a later operation never starts in an earlier shift than the one before it
+            $cap = null; // G-3: nor plans more than the operation before it has planned
             foreach ($ops as $op) {
                 // what this operation already has on an SPK of the day also holds the next operation back (G-3)
                 $planned = $this->plannedShift($db, (string) $wo->id, (string) $op->id, $date, $shifts);
-                $qty = bcsub(SpkHours::num($wo->qty), SpkHours::num($op->planned), 6);
+                $whole = SpkHours::num($wo->qty);
+                $target = $cap === null || bccomp($cap, $whole, 6) > 0 ? $whole : $cap;
+                $has = SpkHours::num($op->planned);
+                $qty = bcsub($target, $has, 6);
+                $reach = bccomp($has, $target, 6) > 0 ? $has : $target; // what this operation will have once placed
+                if (bccomp($reach, $whole, 6) < 0) {
+                    $out['skipped'][] = ['workOrderCode' => $wo->wo_no, 'itemCode' => $wo->item_code, 'opSeq' => (int) $op->op_seq,
+                        'reason' => SpkHours::plain(bcsub($whole, $reach, 6)).' not planned: the operation before it is not planned for them.'];
+                }
+                $cap = bccomp($qty, '0', 6) > 0 ? $has : $target; // until it is placed below
                 if (bccomp($qty, '0', 6) <= 0) {
                     $after = max($after, $planned ?? $after);
 
@@ -100,6 +112,7 @@ final class SpkGenerator
                 }
                 $first = $this->place($sheets[$op->work_center_id], $wo, $op, $machines, SpkHours::plain($qty), min(99, $rank + 1), $after, $out);
                 $after = max($after, min($first, $planned ?? $first));
+                $cap = $target;
             }
         }
         $this->write($db, $plant, $date, $sheets, $out);
@@ -118,10 +131,8 @@ final class SpkGenerator
         // the buffer is raised to the safety stock before supply is allocated, and each part reserves what Generate makes (G-8, G-9)
         $recovery = $this->recovery->read($db, $plant, $date, $safety);
         foreach ($recovery['rows'] as $row) {
-            if ($row['workOrderId'] !== null) {
-                continue;
-            }
-            $plan = SpkHours::num($row['planQty']);
+            // a part whose plan already has a WO counts that WO as supply; what is still short is made like any other need
+            $plan = $row['workOrderId'] === null ? SpkHours::num($row['planQty']) : '0';
             $qty = bccomp($plan, '0', 6) > 0 ? $plan : SpkHours::num($row['proposedQty'] ?? RecoveryCalculation::ceil((string) $row['netQty']));
             if (bccomp($qty, '0', 6) <= 0) {
                 continue;
@@ -245,21 +256,25 @@ final class SpkGenerator
         $after = min($after, $count - 1);
         $first = null;
         $left = SpkHours::num($qty);
-        $overhead = function (string $machine) use (&$sheet, $wo, $op, $setup): array {
+        // a chunk that merges into the operation's line already on this machine and shift adds no setup or QC sample (G-4)
+        $overhead = function (string $machine, int $k) use (&$sheet, $wo, $op, $setup): array {
+            if ($this->hasLine($sheet, $wo, $op, $machine, $k)) {
+                return ['0', '0'];
+            }
             $minutes = isset($sheet['setup'][$machine.'|'.$wo->item_id.'|'.$op->id]) ? '0' : $setup;
 
             return [$minutes, bcdiv(bcadd($minutes, self::QC_MINUTES, 6), '60', 6)];
         };
         if ($sph === null) {
             // no SPH: the hours are not calculable, so the whole quantity goes to the preferred machine's first allowed shift
-            [$minutes] = $overhead((string) $machines[0]->id);
-            $this->addLine($sheet, $wo, $op, (string) $machines[0]->id, $after, $left, $priority, $minutes, null);
+            [$minutes] = $overhead((string) $machines[0]->id, $after);
+            $this->addLine($sheet, $wo, $op, (string) $machines[0]->id, $after, $left, $priority, $minutes, null, '0');
 
             return $after;
         }
         foreach ($machines as $machine) {
             for ($k = $after; $k < $count && bccomp($left, '0', 6) > 0; $k++) {
-                [$minutes, $hours] = $overhead((string) $machine->id);
+                [$minutes, $hours] = $overhead((string) $machine->id, $k);
                 $key = $machine->id.'|'.$k;
                 if ($sheet['capacity'] === null) {
                     $take = $left;
@@ -271,33 +286,57 @@ final class SpkGenerator
                 if (bccomp($take, '0', 6) <= 0) {
                     continue;
                 }
-                $this->addLine($sheet, $wo, $op, (string) $machine->id, $k, $take, $priority, $minutes, $sph);
+                $this->addLine($sheet, $wo, $op, (string) $machine->id, $k, $take, $priority, $minutes, $sph, $hours);
                 $first ??= $k;
                 $left = bcsub($left, $take, 6);
             }
         }
         if (bccomp($left, '0', 6) > 0) {
-            // G-5: what fits nowhere stays on the preferred machine's last shift and is proposed as overtime
+            // G-5: what fits nowhere stays on the preferred machine's last shift; the overtime is what that shift then holds
+            // beyond its hours, with each line's setup and QC sample counted once
             $k = $count - 1;
             $machine = $machines[0];
-            [$minutes] = $overhead((string) $machine->id);
-            $hours = SpkHours::hours($sph, bcmul($left, $factor, 6), $minutes, self::QC_MINUTES) ?? '0';
-            $this->addLine($sheet, $wo, $op, (string) $machine->id, $k, SpkHours::plain($left), $priority, $minutes, $sph);
+            $key = $machine->id.'|'.$k;
+            [$minutes, $hours] = $overhead((string) $machine->id, $k);
+            $before = SpkHours::num($sheet['load'][$key] ?? '0');
+            $this->addLine($sheet, $wo, $op, (string) $machine->id, $k, SpkHours::plain($left), $priority, $minutes, $sph, $hours);
             $first ??= $k;
+            $capacity = SpkHours::num($sheet['capacity'] ?? '0');
+            $over = static fn (string $load): string => bccomp(SpkHours::num($load), $capacity, 6) > 0 ? bcsub(SpkHours::num($load), $capacity, 6) : '0';
             $out['overtime'][] = ['machineId' => (string) $machine->id, 'machineCode' => (string) $machine->code, 'workCenterCode' => $sheet['code'],
-                'shiftCode' => $sheet['shifts'][$k]['code'], 'hours' => SpkHours::round3($hours), 'qty' => SpkHours::plain($left),
-                'workOrderCode' => (string) $wo->wo_no, 'itemCode' => (string) $wo->item_code, 'customerCode' => $wo->customer_code, 'opSeq' => (int) $op->op_seq];
+                'shiftCode' => $sheet['shifts'][$k]['code'], 'hours' => SpkHours::round3(bcsub($over(SpkHours::num($sheet['load'][$key])), $over($before), 6)),
+                'qty' => SpkHours::plain($left), 'workOrderCode' => (string) $wo->wo_no, 'itemCode' => (string) $wo->item_code,
+                'customerCode' => $wo->customer_code, 'opSeq' => (int) $op->op_seq];
         }
 
         return $first ?? $after;
     }
 
-    /** @param array<string, mixed> $sheet */
-    private function addLine(array &$sheet, stdClass $wo, stdClass $op, string $machine, int $shift, string $qty, int $priority, string $setup, ?string $sph): void
+    /** @param array<string, mixed> $sheet whether the operation of this WO already has a line on the machine and shift (new or saved) */
+    private function hasLine(array $sheet, stdClass $wo, stdClass $op, string $machine, int $shift): bool
     {
-        $hours = $sph === null ? '0' : (SpkHours::hours($sph, self::runQty($qty, $wo->paired_item_id), $setup, self::QC_MINUTES) ?? '0');
+        if (isset($sheet['new'][$wo->id.'|'.$op->id.'|'.$machine.'|'.$shift])) {
+            return true;
+        }
+        foreach ($sheet['existing'] as $l) {
+            if ((string) $l->work_order_id === (string) $wo->id && (string) $l->routing_operation_id === (string) $op->id
+                && (string) $l->machine_id === $machine && ($l->shift_id === null ? null : (string) $l->shift_id) === $sheet['shifts'][$shift]['id']) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $sheet
+     * @param  numeric-string  $overhead  hours of setup and QC sample this chunk adds (none when it merges into a line)
+     */
+    private function addLine(array &$sheet, stdClass $wo, stdClass $op, string $machine, int $shift, string $qty, int $priority, string $setup, ?string $sph, string $overhead): void
+    {
+        $run = $sph === null ? '0' : bcdiv(self::runQty($qty, $wo->paired_item_id), SpkHours::num($sph), 6);
         $key = $machine.'|'.$shift;
-        $sheet['load'][$key] = bcadd(SpkHours::num($sheet['load'][$key] ?? '0'), $hours, 6);
+        $sheet['load'][$key] = bcadd(bcadd(SpkHours::num($sheet['load'][$key] ?? '0'), $run, 6), $overhead, 6);
         $sheet['setup'][$machine.'|'.$wo->item_id.'|'.$op->id] = true;
         // G-4: the same work order and operation on the same machine and shift is one line
         $line = $wo->id.'|'.$op->id.'|'.$key;

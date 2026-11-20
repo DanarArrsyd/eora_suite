@@ -188,8 +188,10 @@ final class DailyRecoveryPlanner
             // Once linked, the shifts are history: their WO already contributes projected supply.
             $calc['planQty'] = $planQty;
             $capacity = $this->materials->estimate($db, $plant, (string) $part->item_id, $target, $materialPool);
-            $reserve = bccomp($planQty, '0', 0) > 0 ? $planQty : ($calc['proposedQty'] ?? ($safetyStock === null ? '0' : RecoveryCalculation::ceil($calc['netQty'])));
-            if ($capacity !== null && $p?->work_order_id === null && bccomp($reserve, '0', 0) > 0) {
+            // a linked plan's shifts are history; in Generate mode its residual need is still made, so it reserves material too
+            $reserve = $p?->work_order_id === null && bccomp($planQty, '0', 0) > 0 ? $planQty
+                : ($calc['proposedQty'] ?? ($safetyStock === null ? '0' : RecoveryCalculation::ceil($calc['netQty'])));
+            if ($capacity !== null && ($p?->work_order_id === null || $safetyStock !== null) && bccomp($reserve, '0', 0) > 0) {
                 $reserve = bccomp($reserve, $capacity, 0) < 0 ? $reserve : $capacity;
                 $this->materials->consume($db, $plant, (string) $part->item_id, $reserve, $target, $materialPool, []);
             }
