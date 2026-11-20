@@ -77,7 +77,13 @@ it('generates the WO the shortfall needs, spreads operations over machines, prop
     spa($this)->putJson("/api/v1/production/spk/{$weld['id']}", ['lines' => $keep($weldSpk, $gen['workOrders'][0]['id'])], ['If-Match' => '"'.$weldSpk['version'].'"'])->assertOk();
     $status = fn () => AccessFixtures::run($t, fn (EoraPostgresConnection $db) => $db->selectOne('select status from work_orders where id = ?', [$gen['workOrders'][0]['id']])->status);
     expect($status())->toBe('RELEASED');
-    spa($this)->putJson("/api/v1/production/spk/{$press['id']}", ['lines' => $keep($press, $gen['workOrders'][0]['id'])], ['If-Match' => '"'.$press['version'].'"'])->assertOk();
+    // on a released SPK the WO goes once the revision without it is released, not when the revision is saved (Codex on #98)
+    $press = spa($this)->postJson("/api/v1/production/spk/{$press['id']}/actions/release", [], ['If-Match' => '"'.$press['version'].'"'])->assertOk()->json('data');
+    $rev = spa($this)->postJson("/api/v1/production/spk/{$press['id']}/actions/revise", ['reason' => 'Second WO moves to tomorrow'], ['If-Match' => '"'.$press['version'].'"'])
+        ->assertCreated()->json('data');
+    $rev = spa($this)->putJson("/api/v1/production/spk/{$rev['id']}", ['lines' => $keep($rev, $gen['workOrders'][0]['id'])], ['If-Match' => '"'.$rev['version'].'"'])->assertOk()->json('data');
+    expect($status())->toBe('RELEASED');
+    spa($this)->postJson("/api/v1/production/spk/{$rev['id']}/actions/release", [], ['If-Match' => '"'.$rev['version'].'"'])->assertOk();
     expect($status())->toBe('CANCELLED');
 })->group('integration', 'production');
 

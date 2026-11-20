@@ -138,65 +138,94 @@ final class SpkGenerator
         foreach ($db->select('select item_id, trim_scale(safety_stock)::text as qty from item_plan_parameters where plant_id = ? and safety_stock is not null', [$plant]) as $p) {
             $safety[(string) $p->item_id] = SpkHours::num($p->qty);
         }
-        // the buffer is raised to the safety stock before supply is allocated, and each part reserves what Generate makes (G-8, G-9)
-        $recovery = $this->recovery->read($db, $plant, $date, $safety);
-        foreach ($recovery['rows'] as $row) {
-            // a part whose plan already has a WO counts that WO as supply; what is still short is made like any other need
-            $plan = $row['workOrderId'] === null ? SpkHours::num($row['planQty']) : '0';
-            $qty = bccomp($plan, '0', 6) > 0 ? $plan : SpkHours::num($row['proposedQty'] ?? RecoveryCalculation::ceil((string) $row['netQty']));
-            if (bccomp($qty, '0', 6) <= 0) {
-                continue;
-            }
-            $who = ['itemCode' => $row['itemCode'], 'itemName' => $row['itemName'], 'customerCode' => $row['customerCode']];
-            if ($row['materialCapacityQty'] === null) {
-                $out['skipped'][] = $who + ['qty' => SpkHours::plain($qty), 'reason' => 'No approved BOM in force: material cannot be checked.'];
+        // the buffer is raised to the safety stock before supply is allocated, and each part reserves what Generate makes (G-8, G-9);
+        // a part whose WO cannot be made gives its material back: Daily Recovery is read again without it, the parts already done skipped
+        $done = [];
+        $unmade = [];
+        do {
+            $again = false;
+            $recovery = $this->recovery->read($db, $plant, $date, $safety, $unmade);
+            foreach ($recovery['rows'] as $row) {
+                $key = $row['customerId'].'|'.$row['itemId'];
+                if (isset($done[$key]) || isset($unmade[$key])) {
+                    continue;
+                }
+                $done[$key] = true;
+                if (! $this->makeWorkOrder($db, $plant, $date, $row, $out)) {
+                    $unmade[$key] = true;
+                    $again = true;
 
-                continue;
+                    break;
+                }
             }
-            // paired blanking (D-132) releases whole sheets only: the quantity goes up to whole sheets, a material cap down to them
-            $pairs = $this->pairsPerSheet($db, $plant, (string) $row['itemId']);
-            if ($pairs !== null) {
-                $qty = bcmul(RecoveryCalculation::ceil(bcdiv($qty, $pairs, 6)), $pairs, 0);
-            }
-            $capacity = self::floor(SpkHours::num($row['materialCapacityQty']));
-            if ($pairs !== null) {
-                $capacity = bcmul(self::floor(bcdiv($capacity, $pairs, 6)), $pairs, 0);
-            }
-            if (bccomp($capacity, $qty, 6) < 0) {
-                $out['materialShort'][] = $who + ['needQty' => SpkHours::plain($qty), 'plannedQty' => $capacity, 'shortQty' => SpkHours::plain(bcsub($qty, $capacity, 6))];
-                $qty = $capacity;
-            }
-            if (bccomp($qty, '0', 6) <= 0) {
-                continue;
-            }
-            $demands = $row['demands'];
-            try {
-                $wo = $db->transaction(function () use ($db, $plant, $date, $row, $qty, $demands): array {
-                    $wo = $this->workOrders->createDraft(['plantId' => $plant, 'itemId' => $row['itemId'], 'qty' => SpkHours::plain($qty), 'dueDate' => $date,
-                        'reasonCode' => 'SPK', 'note' => "Generate SPK {$date} / {$row['customerCode']}",
-                        'scheduleLineId' => count($demands) === 1 ? $demands[0]->id : null, 'productionCustomerId' => $row['customerId']])->getData(true)['data'];
-                    $db->insert(
-                        'insert into spk_generated_orders (tenant_id, plant_id, work_order_id, production_date, generated_by)
-                         values ((select c.tenant from ctx_api.context() c), ?, ?, ?, (select c.actor from ctx_api.context() c))',
-                        [$plant, $wo['id'], $date],
-                    );
-                    $this->workOrders->releaseGenerated($db, (string) $wo['id']);
-                    // the release checked every deferred rule now; the next generated WO needs its record checked at commit again
-                    $db->statement('set constraints all deferred');
-                    if ($row['planId'] !== null) {
-                        // the saved Daily Recovery plan is now covered by this WO, as with Create work order
-                        $db->update('update daily_recovery_plans set work_order_id = ? where id = ? and work_order_id is null', [$wo['id'], $row['planId']]);
-                    }
+        } while ($again);
+    }
 
-                    return $wo;
-                });
-            } catch (DomainProblem|ValidationException $e) {
-                $out['skipped'][] = $who + ['qty' => SpkHours::plain($qty), 'reason' => $e instanceof DomainProblem ? $e->getMessage() : implode(' ', array_merge(...array_values($e->errors())))];
-
-                continue;
-            }
-            $out['workOrders'][] = ['id' => (string) $wo['id'], 'code' => (string) $wo['code']] + $who + ['qty' => SpkHours::plain($qty)];
+    /**
+     * One part's WO: created with reason SPK and released by the generating planner; false when it could not be made.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<string, list<array<string, mixed>>>  $out
+     */
+    private function makeWorkOrder(EoraPostgresConnection $db, string $plant, string $date, array $row, array &$out): bool
+    {
+        // a part whose plan already has a WO counts that WO as supply; what is still short is made like any other need
+        $plan = $row['workOrderId'] === null ? SpkHours::num($row['planQty']) : '0';
+        $qty = bccomp($plan, '0', 6) > 0 ? $plan : SpkHours::num($row['proposedQty'] ?? RecoveryCalculation::ceil((string) $row['netQty']));
+        if (bccomp($qty, '0', 6) <= 0) {
+            return true;
         }
+        $who = ['itemCode' => $row['itemCode'], 'itemName' => $row['itemName'], 'customerCode' => $row['customerCode']];
+        if ($row['materialCapacityQty'] === null) {
+            $out['skipped'][] = $who + ['qty' => SpkHours::plain($qty), 'reason' => 'No approved BOM in force: material cannot be checked.'];
+
+            return true;
+        }
+        // paired blanking (D-132) releases whole sheets only: the quantity goes up to whole sheets, a material cap down to them
+        $pairs = $this->pairsPerSheet($db, $plant, (string) $row['itemId']);
+        if ($pairs !== null) {
+            $qty = bcmul(RecoveryCalculation::ceil(bcdiv($qty, $pairs, 6)), $pairs, 0);
+        }
+        $capacity = self::floor(SpkHours::num($row['materialCapacityQty']));
+        if ($pairs !== null) {
+            $capacity = bcmul(self::floor(bcdiv($capacity, $pairs, 6)), $pairs, 0);
+        }
+        if (bccomp($capacity, $qty, 6) < 0) {
+            $out['materialShort'][] = $who + ['needQty' => SpkHours::plain($qty), 'plannedQty' => $capacity, 'shortQty' => SpkHours::plain(bcsub($qty, $capacity, 6))];
+            $qty = $capacity;
+        }
+        if (bccomp($qty, '0', 6) <= 0) {
+            return true;
+        }
+        $demands = $row['demands'];
+        try {
+            $wo = $db->transaction(function () use ($db, $plant, $date, $row, $qty, $demands): array {
+                $wo = $this->workOrders->createDraft(['plantId' => $plant, 'itemId' => $row['itemId'], 'qty' => SpkHours::plain($qty), 'dueDate' => $date,
+                    'reasonCode' => 'SPK', 'note' => "Generate SPK {$date} / {$row['customerCode']}",
+                    'scheduleLineId' => count($demands) === 1 ? $demands[0]->id : null, 'productionCustomerId' => $row['customerId']])->getData(true)['data'];
+                $db->insert(
+                    'insert into spk_generated_orders (tenant_id, plant_id, work_order_id, production_date, generated_by)
+                         values ((select c.tenant from ctx_api.context() c), ?, ?, ?, (select c.actor from ctx_api.context() c))',
+                    [$plant, $wo['id'], $date],
+                );
+                $this->workOrders->releaseGenerated($db, (string) $wo['id']);
+                // the release checked every deferred rule now; the next generated WO needs its record checked at commit again
+                $db->statement('set constraints all deferred');
+                if ($row['planId'] !== null) {
+                    // the saved Daily Recovery plan is now covered by this WO, as with Create work order
+                    $db->update('update daily_recovery_plans set work_order_id = ? where id = ? and work_order_id is null', [$wo['id'], $row['planId']]);
+                }
+
+                return $wo;
+            });
+        } catch (DomainProblem|ValidationException $e) {
+            $out['skipped'][] = $who + ['qty' => SpkHours::plain($qty), 'reason' => $e instanceof DomainProblem ? $e->getMessage() : implode(' ', array_merge(...array_values($e->errors())))];
+
+            return false;
+        }
+        $out['workOrders'][] = ['id' => (string) $wo['id'], 'code' => (string) $wo['code']] + $who + ['qty' => SpkHours::plain($qty)];
+
+        return true;
     }
 
     /**
@@ -336,7 +365,7 @@ final class SpkGenerator
                 [$minutes] = $overhead((string) $machines[0]->id, $k);
                 $this->addLine($sheet, $wo, $op, (string) $machines[0]->id, $k, $take, $priority, $minutes, null, '0');
                 $placed[$k] = bcadd(SpkHours::num($placed[$k] ?? '0'), $take, 6);
-                $first ??= $k;
+                $first = $first === null ? $k : min($first, $k); // the earliest shift used on any machine
                 $left = bcsub($left, $take, 6);
             }
 
@@ -359,7 +388,7 @@ final class SpkGenerator
                 }
                 $this->addLine($sheet, $wo, $op, (string) $machine->id, $k, $take, $priority, $minutes, $sph, $hours);
                 $placed[$k] = bcadd(SpkHours::num($placed[$k] ?? '0'), $take, 6);
-                $first ??= $k;
+                $first = $first === null ? $k : min($first, $k); // the earliest shift used on any machine
                 $left = bcsub($left, $take, 6);
             }
         }
@@ -380,7 +409,7 @@ final class SpkGenerator
             $before = SpkHours::num($sheet['load'][$key] ?? '0');
             $this->addLine($sheet, $wo, $op, (string) $machine->id, $k, SpkHours::plain($left), $priority, $minutes, $sph, $hours);
             $placed[$k] = bcadd(SpkHours::num($placed[$k] ?? '0'), $left, 6);
-            $first ??= $k;
+            $first = $first === null ? $k : min($first, $k); // the earliest shift used on any machine
             $capacity = SpkHours::num($sheet['capacity'] ?? '0');
             $over = static fn (string $load): string => bccomp(SpkHours::num($load), $capacity, 6) > 0 ? bcsub(SpkHours::num($load), $capacity, 6) : '0';
             $out['overtime'][] = ['machineId' => (string) $machine->id, 'machineCode' => (string) $machine->code, 'workCenterCode' => $sheet['code'],

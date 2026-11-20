@@ -20,9 +20,10 @@ final class DailyRecoveryPlanner
      * @param  array<string, numeric-string>|null  $safetyStock  Generate SPK (D-139): item => safety stock. Each part's buffer is
      *                                                           raised to it before supply is allocated (G-8), and the material pool reserves what Generate makes
      *                                                           (the proposal, else the shortfall rounded up), so later parts see what is really left (G-9).
+     * @param  array<string, true>  $unmade  Generate SPK: parts (`customerId|itemId`) whose WO could not be made reserve no material
      * @return array<string,mixed>
      */
-    public function read(EoraPostgresConnection $db, string $plant, string $target, ?array $safetyStock = null): array
+    public function read(EoraPostgresConnection $db, string $plant, string $target, ?array $safetyStock = null, array $unmade = []): array
     {
         MaterialOwnership::requireAggregatePlanning($db, $plant);
         $today = $this->calendar->resolve($db, $plant, new DateTimeImmutable)->productionDate;
@@ -195,7 +196,7 @@ final class DailyRecoveryPlanner
             // a linked plan's shifts are history; in Generate mode its residual need is still made, so it reserves material too
             $reserve = $p?->work_order_id === null && bccomp($planQty, '0', 0) > 0 ? $planQty
                 : ($calc['proposedQty'] ?? ($safetyStock === null ? '0' : RecoveryCalculation::ceil($calc['netQty'])));
-            if ($capacity !== null && ($p?->work_order_id === null || $safetyStock !== null) && bccomp($reserve, '0', 0) > 0) {
+            if ($capacity !== null && ($p?->work_order_id === null || $safetyStock !== null) && ! isset($unmade[$key]) && bccomp($reserve, '0', 0) > 0) {
                 $reserve = bccomp($reserve, $capacity, 0) < 0 ? $reserve : $capacity;
                 $this->materials->consume($db, $plant, (string) $part->item_id, $reserve, $materialDate, $materialPool, []);
             }

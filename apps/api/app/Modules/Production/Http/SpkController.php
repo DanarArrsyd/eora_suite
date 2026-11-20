@@ -249,6 +249,8 @@ final class SpkController
             ? (string) $db->selectOne('select spk_no from spk_headers where id = ?', [$h->previous_id])->spk_no
             : $this->nextNumber($db, $h);
         $before = $this->state($db, 'spk_headers', (string) $h->id);
+        // generated WOs the revision dropped are reconciled once the released plan they were on is superseded (D-139)
+        $generated = $h->previous_id === null ? [] : $this->generatedOn($db, (string) $h->previous_id);
         if ($h->previous_id !== null) {
             $previous = $this->state($db, 'spk_headers', (string) $h->previous_id);
             if ($db->update("update spk_headers set status = 'SUPERSEDED' where id = ? and status = 'RELEASED'", [$h->previous_id]) !== 1) {
@@ -261,6 +263,7 @@ final class SpkController
             throw Concurrency::conflict();
         }
         $this->audit->record($db, 'spk.released', 'spk', (string) $h->id, $before, $this->state($db, 'spk_headers', (string) $h->id), ['spkNo' => $number], (string) $h->plant_id);
+        $this->cancelUnplanned($db, $generated, (string) $h->plant_id);
         // production is told through the outbox (SpkReleasedNotifier), in this transaction
         $this->outbox->publish($db, 'production.spk_released', 'spk', (string) $h->id, ['plantId' => (string) $h->plant_id, 'spkNo' => $number, 'revision' => (int) $h->revision]);
 
@@ -439,7 +442,7 @@ final class SpkController
     }
 
     /**
-     * A generated WO that no SPK plans any more is cancelled while nothing was issued or run for it (D-139), when the
+     * A generated WO that no SPK in force or in draft plans any more (superseded history does not count) is cancelled while nothing was issued or run for it (D-139), when the
      * planner may cancel released work orders; otherwise it stays for the planner to plan or cancel.
      *
      * @param  list<string>  $orders
@@ -447,7 +450,7 @@ final class SpkController
     private function cancelUnplanned(EoraPostgresConnection $db, array $orders, string $plant): void
     {
         foreach ($orders as $wo) {
-            if ($db->selectOne("select 1 as planned from spk_lines l join spk_headers h on h.id = l.spk_id where l.work_order_id = ? and h.status <> 'CANCELLED' limit 1", [$wo]) === null
+            if ($db->selectOne("select 1 as planned from spk_lines l join spk_headers h on h.id = l.spk_id where l.work_order_id = ? and h.status in ('DRAFT', 'RELEASED', 'CLOSED') limit 1", [$wo]) === null
                 && (bool) $db->selectOne("select public.eora_actor_may('planning.wo.post', ?::uuid) as ok", [$plant])->ok) {
                 $this->workOrders->cancelGenerated($db, $wo, 'No SPK plans it any more (Generate SPK).');
             }
