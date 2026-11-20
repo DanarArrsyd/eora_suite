@@ -39,7 +39,7 @@ final class CompaniesQuery extends QueryDefinition
     public function fields(): array
     {
         return [
-            new Field('id', 'c.id', Field::UUID),
+            new Field('id', 'c.id', Field::UUID, filterable: true),
             new Field('code', 'c.code', sortable: true, filterable: true, search: 'prefix'),
             new Field('legalName', 'c.legal_name', sortable: true, search: 'contains'),
             new Field('updatedAt', 'c.updated_at', Field::INSTANT, sortable: true),

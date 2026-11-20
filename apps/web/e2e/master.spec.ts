@@ -209,3 +209,28 @@ test('pickers read every page of a long list, not only the first 200 rows', asyn
   await page.getByRole('button', { name: 'New machine' }).click();
   await choose(page, page.getByRole('form', { name: 'New machine' }).getByRole('combobox', { name: 'Work center' }), 'P1 / WC-230 · Line 230');
 });
+
+test('form pages ask before unsaved changes are left by a menu link or the browser back button (D-140)', async ({ page }) => {
+  await setup(page, WRITER, [WC]);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/master/work-centers');
+  await page.getByRole('button', { name: 'New work center' }).click();
+  const form = page.getByRole('form', { name: 'New work center' });
+  await form.getByRole('textbox', { name: 'Name', exact: true }).fill('Welding cell 2');
+  // a menu link asks first; staying keeps the typed value
+  await page.getByRole('link', { name: 'Plants & Warehouses' }).first().click();
+  const ask = page.getByRole('alertdialog', { name: 'Leave without saving?' });
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Welding cell 2');
+  // the browser's back button asks too; discarding returns to the list
+  await page.goBack();
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Welding cell 2');
+  await page.goBack();
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Discard changes' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Work Centers' })).toBeVisible();
+  expect(page.url()).not.toContain('new=1');
+});

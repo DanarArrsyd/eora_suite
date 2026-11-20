@@ -114,6 +114,7 @@ export function FormPage({ title, description, back, facts, aside, notice, width
       <a
         href={back.href}
         onClick={back.onNavigate}
+        data-form-back=""
         className="mb-3 inline-flex min-h-9 items-center gap-1.5 rounded-md text-[13px] font-medium text-link no-underline hover:underline focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11"
       >
         <ArrowLeft aria-hidden="true" className="size-4" />

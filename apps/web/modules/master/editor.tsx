@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { useMe } from '@eora/features/auth';
 import {
@@ -280,16 +281,52 @@ export function MasterEditor<T extends MasterRow>({
       });
     });
 
-  // unsaved changes: leaving asks first, and the browser warns on reload or close
+  // unsaved changes: every way out asks first (D-140) — Back and Cancel, any in-app link (sidebar, breadcrumb, topbar),
+  // the browser's Back button; the browser itself warns on reload or close
+  const router = useRouter();
   const [dirty, setDirty] = React.useState(false);
-  const [leaving, setLeaving] = React.useState(false);
+  const [leaveTo, setLeaveTo] = React.useState<string | null>(null);
+  const released = React.useRef(false);
   React.useEffect(() => {
     if (!dirty || mode !== 'page') return;
+    released.current = false;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const link = e.target instanceof Element ? e.target.closest('a[href]') : null;
+      if (!(link instanceof HTMLAnchorElement) || link.target === '_blank' || link.hasAttribute('download') || link.hasAttribute('data-form-back')) return;
+      const url = new URL(link.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLeaveTo(url.pathname + url.search + url.hash);
+    };
+    // a guard entry of this same page: the browser's Back lands on it, and the page asks before going further back
+    window.history.pushState(window.history.state, '', window.location.href);
+    const onPop = () => {
+      if (released.current) return;
+      window.history.pushState(window.history.state, '', window.location.href);
+      setLeaveTo('history');
+    };
     window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
+    document.addEventListener('click', onClick, true);
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+      document.removeEventListener('click', onClick, true);
+      window.removeEventListener('popstate', onPop);
+    };
   }, [dirty, mode]);
-  const leave = () => (dirty && mode === 'page' ? setLeaving(true) : onClose());
+  const leave = () => (dirty && mode === 'page' ? setLeaveTo('close') : onClose());
+  const discard = () => {
+    const target = leaveTo;
+    released.current = true;
+    setLeaveTo(null);
+    setDirty(false);
+    if (target === 'history') window.history.go(-2);
+    else if (target && target !== 'close') router.push(target);
+    else onClose();
+  };
 
   const form = lockedReason ? (
     <InlineAlert tone="info" title="This record cannot be changed">
@@ -437,17 +474,13 @@ export function MasterEditor<T extends MasterRow>({
         {form}
       </FormPage>
       <ConfirmDialog
-        open={leaving}
-        onOpenChange={setLeaving}
+        open={leaveTo !== null}
+        onOpenChange={(open) => (open ? undefined : setLeaveTo(null))}
         title="Leave without saving?"
         description="Your changes on this form are not saved yet. Leaving discards them."
         confirmLabel="Discard changes"
         tone="danger"
-        onConfirm={async () => {
-          setLeaving(false);
-          setDirty(false);
-          onClose();
-        }}
+        onConfirm={async () => discard()}
       />
     </>
   );

@@ -120,6 +120,8 @@ it('keeps plant-scoped users inside their plant, and users without the permissio
     $second = spa($this)->postJson('/api/v1/core/companies', ['code' => 'CO2', 'legalName' => 'Second company'])->assertCreated()->json('data.id');
     spa($this)->postJson('/api/v1/core/plants', ['companyId' => $second, 'code' => 'Q1', 'name' => 'Other company plant'])->assertCreated();
     spa($this)->getJson('/api/v1/query/core.companies')->assertOk()->assertJsonPath('meta.total', 2);
+    // an edit page reloaded or shared reads its company by id (D-140)
+    spa($this)->getJson('/api/v1/query/core.companies?filter[id]='.$second)->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.code', 'CO2');
     spa($this)->postJson('/api/v1/auth/logout')->assertNoContent();
 
     // MAT holds master.org.view in plant 1 only
