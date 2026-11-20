@@ -109,6 +109,8 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
     queryFn: async ({ signal }) =>
       (await source.list({ filters: { id: targetId! }, search: '', sort: config.defaultSort, page: 1, pageSize: 1, view: 'all' }, signal)).rows[0] ?? null,
     enabled: canView && !!targetId && picked?.id !== targetId,
+    // read once per opening: a background refetch would reset a form being filled in
+    refetchOnWindowFocus: false,
   });
   const targetRow = targetId ? (picked?.id === targetId ? picked : (target.data ?? null)) : null;
   const closeEditor = () => router.push(listHref);
@@ -159,6 +161,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const onSaved = (message: string, partial?: boolean, created?: unknown) => {
     // the row clicked is now out of date: an edit URL opened again (e.g. by Back) reads the record afresh
     setPicked(null);
+    client.removeQueries({ queryKey: ['master', config.resource, 'one'] });
     void client.invalidateQueries({ queryKey: ['master'] });
     // a record with its own page opens there once created
     const record = (created as { data?: T } | undefined)?.data;
@@ -177,7 +180,8 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
         </div>
       );
     }
-    if (editId && !targetRow) {
+    // a record read by id is shown only once fresh: never a cached copy older than the last save
+    if (editId && (!targetRow || (picked?.id !== editId && !target.isFetchedAfterMount))) {
       return target.isPending || target.isFetching ? (
         <LoadingState title={`Loading ${config.singular}`} />
       ) : (

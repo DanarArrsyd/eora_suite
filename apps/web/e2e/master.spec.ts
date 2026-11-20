@@ -223,6 +223,9 @@ test('form pages ask before unsaved changes are left by a menu link or the brows
   await page.goto('/master/work-centers');
   await page.getByRole('button', { name: 'New work center' }).click();
   const form = page.getByRole('form', { name: 'New work center' });
+  // an in-page jump before any change adds a history entry of its own; Discard after Back still leaves the form (Codex on #99)
+  await page.getByRole('link', { name: 'Skip to main content' }).focus();
+  await page.keyboard.press('Enter');
   // typing, clearing and typing again keeps one guard: Discard after Back still lands on the list (Codex on #99)
   await form.getByRole('textbox', { name: 'Name', exact: true }).fill('W');
   await form.getByRole('textbox', { name: 'Name', exact: true }).fill('');
@@ -248,10 +251,13 @@ test('form pages ask before unsaved changes are left by a menu link or the brows
   await page.keyboard.press('Enter');
   await expect(ask).toBeHidden();
   await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Welding cell 2');
-  // the first Back only undoes the in-page jump; the next one would leave the form, so it asks; discarding returns to the list
-  await page.goBack();
-  await expect(ask).toBeHidden();
-  await page.goBack();
+  // Back first undoes in-page jumps (nothing asked, the value stays); the Back that would leave the form asks; Discard
+  // returns to the list however many entries lie behind
+  for (let i = 0; i < 4 && !(await ask.isVisible()); i++) {
+    await page.goBack();
+    await page.waitForTimeout(300);
+    if (!(await ask.isVisible())) await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Welding cell 2');
+  }
   await expect(ask).toBeVisible();
   await ask.getByRole('button', { name: 'Cancel' }).click();
   await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Welding cell 2');

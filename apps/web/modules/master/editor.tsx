@@ -361,8 +361,8 @@ export function MasterEditor<T extends MasterRow>({
     released.current = true;
     setLeaveTo(null);
     setDirty(false);
-    // leave the guard entry and the form's own entry behind
-    if (target === 'history') window.history.go(onGuardEntry() ? -2 : -1);
+    // the browser's Back: go to the page the form came from, however many entries (in-page jumps, the guard) lie behind
+    if (target === 'history') router.replace(back.href);
     else if (target && target !== 'close') router.push(target);
     else onClose();
   };
