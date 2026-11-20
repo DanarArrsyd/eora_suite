@@ -99,6 +99,8 @@ test('work centers: an edit sends only the changed fields at the row version; a 
   await drawer.getByLabel('Available hours per shift').fill('');
   await drawer.getByRole('button', { name: 'Save changes' }).click();
   await expect(drawer.getByText(/Someone changed this record after you opened it/)).toBeVisible();
+  // from the successful save on the server holds version 4 (the app may read it again right after saving)
+  await mockApi(page, '/query/core.work_centers?*', page1([{ ...WC, availableHoursPerShift: null, version: 4 }]));
   await drawer.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText('PRS-01 saved')).toBeVisible();
   expect(sent).toEqual([
@@ -106,7 +108,6 @@ test('work centers: an edit sends only the changed fields at the row version; a 
     { ifMatch: '"3"', body: { availableHoursPerShift: null } },
   ]);
   // Back reopens the edit page with the saved record, not the row as it was before saving (Codex on #99)
-  await mockApi(page, '/query/core.work_centers?*', page1([{ ...WC, availableHoursPerShift: null, version: 4 }]));
   await page.goBack();
   await expect(drawer.getByLabel('Available hours per shift')).toHaveValue('');
   await drawer.getByRole('textbox', { name: 'Name', exact: true }).fill('Press line 1A');
