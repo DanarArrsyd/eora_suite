@@ -184,6 +184,22 @@ it('skips an operation on an inactive line instead of failing the whole run (Cod
         ->and(collect($gen['skipped'])->where('workOrderCode', $f['wo']['code'])->where('opSeq', 20)->pluck('reason')->all())->toBe(['Line WLD-01 is inactive.']);
 })->group('integration', 'production');
 
+it('keeps an operation to the machines its routing names, even when they are all down (Codex on #98)', function () {
+    $t = TenantFixtures::provision();
+    AccessFixtures::roles($t);
+    $f = spkFixture($this, $t);
+    $target = rtDayFrom($f['today'], 5);
+    // the blanking names the 200 t press only; another press on the line is not an alternative
+    AccessFixtures::run($t, function (EoraPostgresConnection $db) use ($t, $f) {
+        $db->update("update machines set status = 'INACTIVE' where id = ?", [$f['m1']['id']]);
+        $db->insert("insert into machines (tenant_id, plant_id, work_center_id, code, name) values (?, ?, ?, 'M-300', 'Press 300 t')", [$t['tenant'], $f['plant'], $f['wc']['id']]);
+    });
+
+    $gen = spa($this)->postJson('/api/v1/production/spk/generate', ['plantId' => $f['plant'], 'productionDate' => $target])->assertOk()->json('data');
+    expect($gen['spks'])->toBe([])
+        ->and(collect($gen['skipped'])->where('opSeq', 10)->pluck('reason')->all())->toBe(['No active machine on PRS-01.']);
+})->group('integration', 'production');
+
 it('keeps reason SPK to Generate SPK and its release to the generating planner, also through direct SQL', function () {
     $t = TenantFixtures::provision();
     AccessFixtures::roles($t);

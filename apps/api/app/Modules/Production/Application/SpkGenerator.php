@@ -56,19 +56,20 @@ final class SpkGenerator
         if ($shifts === []) {
             $shifts = [['id' => null, 'code' => null]];
         }
+        $today = $this->calendar->resolve($db, $plant, new DateTimeImmutable)->productionDate;
         $orders = $db->select(
             "select w.id, w.wo_no, w.item_id, i.code as item_code, trim_scale(w.qty)::text as qty, w.routing_version_id, v.paired_item_id, c.code as customer_code,
-                    -- good output already posted for the WO (runs without an SPK too), as Daily Recovery counts it
+                    -- good output posted for the WO before today (runs without an SPK too); today's output is still inside today's plans
                     coalesce(g.qty, 0)::text as posted
                from work_orders w join items i on i.id = w.item_id and i.item_type = 'FINISHED'
                left join routing_versions v on v.id = w.routing_version_id left join customers c on c.id = w.production_customer_id
                left join lateral (select sum(m.qty_signed) as qty from inventory_movements m
                    join inventory_documents d on d.id = m.document_id and d.doc_type = 'PRODUCTION_POSTING' and d.status = 'POSTED'
                    join production_runs r on r.id = d.source_id and r.work_order_id = w.id
-                  where m.item_id = w.item_id and m.movement_code = 'OUTPUT_GOOD' and m.qty_signed > 0) g on true
+                  where m.item_id = w.item_id and m.movement_code = 'OUTPUT_GOOD' and m.qty_signed > 0 and d.production_date < ?::date) g on true
               where w.plant_id = ? and w.status in ('RELEASED', 'IN_PROGRESS') and w.due_date <= ?::date
               order by w.due_date, w.wo_no",
-            [$plant, $date],
+            [$today, $plant, $date],
         );
         foreach ($orders as $rank => $wo) {
             $ops = $db->select(
@@ -84,10 +85,15 @@ final class SpkGenerator
                         coalesce((select sum(l.planned_qty) from spk_lines l join spk_headers h on h.id = l.spk_id
                                    where l.work_order_id = ? and l.routing_operation_id = o.id and h.production_date < ?::date
                                      and (h.status = 'DRAFT' or (h.status in ('RELEASED', 'CLOSED')
-                                          and not exists (select 1 from spk_headers r where r.previous_id = h.id and r.status = 'DRAFT')))), 0)::text as planned_before
+                                          and not exists (select 1 from spk_headers r where r.previous_id = h.id and r.status = 'DRAFT')))), 0)::text as planned_before,
+                        -- plans from today on are work still to do: posted output before today does not overlap them
+                        coalesce((select sum(l.planned_qty) from spk_lines l join spk_headers h on h.id = l.spk_id
+                                   where l.work_order_id = ? and l.routing_operation_id = o.id and h.production_date >= ?::date
+                                     and (h.status = 'DRAFT' or (h.status in ('RELEASED', 'CLOSED')
+                                          and not exists (select 1 from spk_headers r where r.previous_id = h.id and r.status = 'DRAFT')))), 0)::text as planned_ahead
                    from routing_operations o join work_centers wc on wc.id = o.work_center_id
                   where o.routing_version_id = ? order by o.op_seq",
-                [$wo->id, $wo->id, $date, $wo->routing_version_id],
+                [$wo->id, $wo->id, $date, $wo->id, $today, $wo->routing_version_id],
             );
             $after = 0; // G-3: a later operation never starts in an earlier shift than the one before it
             $cap = null; // G-3: nor plans more than the operation before it has planned
@@ -96,10 +102,11 @@ final class SpkGenerator
                 // this operation's lines on SPKs of the day, per shift; its lines on earlier days count as ready from the first shift,
                 // its lines on later days cover the operation but are no input for the next one today
                 $mine = $this->plannedByShift($db, (string) $wo->id, (string) $op->id, $date, $shifts);
-                // posted good output covers every operation (it went through all of them) and is ready input from the first shift
+                // output posted before today went through every operation; with the plans from today on it covers the operation
+                // (its older SPK lines are the same pieces, so they do not add), and what exceeds the SPK lines is ready input
                 $spk = SpkHours::num($op->planned);
-                $posted = SpkHours::num($wo->posted);
-                $has = bccomp($posted, $spk, 6) > 0 ? $posted : $spk;
+                $done = bcadd(SpkHours::num($wo->posted), SpkHours::num($op->planned_ahead), 6);
+                $has = bccomp($done, $spk, 6) > 0 ? $done : $spk;
                 $mine[0] = bcadd(bcadd(SpkHours::num($mine[0] ?? '0'), SpkHours::num($op->planned_before), 6), bcsub($has, $spk, 6), 6);
                 ksort($mine); // shift order: earlier days' output sits in the first shift
                 $planned = array_keys(array_filter($mine, static fn (string $q): bool => bccomp(SpkHours::num($q), '0', 6) > 0))[0] ?? null;
@@ -307,7 +314,8 @@ final class SpkGenerator
     }
 
     /**
-     * Machines for an operation: the routing's machines on the line (preferred first), else every active machine of the line.
+     * Machines for an operation: the routing's active machines on the line (preferred first); every active machine of the line
+     * only when the routing names none.
      *
      * @return list<stdClass>
      */
@@ -319,7 +327,11 @@ final class SpkGenerator
             [$op->id, $op->work_center_id],
         );
 
-        return array_values($listed !== [] ? $listed : $db->select("select id, code from machines where work_center_id = ? and status = 'ACTIVE' order by code", [$op->work_center_id]));
+        // machines named on the routing are the only choice, even when none of them is active now; only an operation that
+        // names none may use any active machine of its line
+        $named = $db->selectOne('select 1 as named from routing_operation_machines where operation_id = ? limit 1', [$op->id]) !== null;
+
+        return array_values($named ? $listed : $db->select("select id, code from machines where work_center_id = ? and status = 'ACTIVE' order by code", [$op->work_center_id]));
     }
 
     /**
