@@ -16,8 +16,14 @@ final class DailyRecoveryPlanner
 {
     public function __construct(private readonly BusinessCalendar $calendar, private readonly MaterialCapacity $materials) {}
 
-    /** @return array<string,mixed> */
-    public function read(EoraPostgresConnection $db, string $plant, string $target): array
+    /**
+     * @param  array<string, numeric-string>|null  $safetyStock  Generate SPK (D-139): item => safety stock. Each part's buffer is
+     *                                                           raised to it before supply is allocated (G-8), and the material pool reserves what Generate makes
+     *                                                           (the proposal, else the shortfall rounded up), so later parts see what is really left (G-9).
+     * @param  array<string, true>  $unmade  Generate SPK: parts (`customerId|itemId`) whose WO could not be made reserve no material
+     * @return array<string,mixed>
+     */
+    public function read(EoraPostgresConnection $db, string $plant, string $target, ?array $safetyStock = null, array $unmade = []): array
     {
         MaterialOwnership::requireAggregatePlanning($db, $plant);
         $today = $this->calendar->resolve($db, $plant, new DateTimeImmutable)->productionDate;
@@ -151,13 +157,23 @@ final class DailyRecoveryPlanner
              and v.status in ('APPROVED','SUPERSEDED') and v.effective_from <= ?::date and (v.effective_to is null or v.effective_to >= ?::date) order by v.id", [$plant, $target, $target]);
         $fingerprint = hash('sha256', json_encode([$plant, $today, $target, $requirements, $stocks, $workOrders, $production, $commitments, $parameterFingerprint, $bomInputs, $conversions, $paired], JSON_THROW_ON_ERROR));
         $rows = [];
+        $floorTaken = [];
+        // the day a work order release snapshots its masters (WorkOrderController::today)
+        $releaseDay = $this->calendar->resolve($db, $plant, new DateTimeImmutable)->calendarDate;
         foreach ($parts as $part) {
             $key = $part->customer_id.'|'.$part->item_id;
             $p = $params[$key] ?? null;
             $demands = $byPart[$key] ?? [];
             $required = $this->sum($demands, 'outstanding');
             $protected = $this->sum($demands, 'protected_qty');
-            $remaining = bcadd($required, MpsItemInput::num($p->buffer_qty ?? 0), 6);
+            $buffer = MpsItemInput::num($p->buffer_qty ?? 0);
+            // safety stock is the item's: it raises the buffer of the item's first part only (earliest due), never once per customer
+            $floor = isset($floorTaken[(string) $part->item_id]) ? null : ($safetyStock[(string) $part->item_id] ?? null);
+            $floorTaken[(string) $part->item_id] = true;
+            if ($floor !== null && bccomp($floor, $buffer, 6) > 0) {
+                $buffer = $floor;
+            }
+            $remaining = bcadd($required, $buffer, 6);
             $own = $boundWo[$key] ?? '0';
             $allocated = ['fg' => $protected, 'beforeCheck' => '0', 'accepted' => '0', 'wo' => $own];
             $remaining = bcsub(bcsub($remaining, $protected, 6), $own, 6);
@@ -170,15 +186,19 @@ final class DailyRecoveryPlanner
             }
             $planQty = bcadd(bcadd(MpsItemInput::num($p->shift_1_qty ?? 0), MpsItemInput::num($p->shift_2_qty ?? 0), 0), MpsItemInput::num($p->shift_3_qty ?? 0), 0);
             $supply = array_reduce($allocated, static fn (string $total, string $qty): string => bcadd(MpsItemInput::num($total), MpsItemInput::num($qty), 6), '0');
-            $calc = RecoveryCalculation::calculate($required, $supply, MpsItemInput::num($p->buffer_qty ?? 0), (string) ($p->minimum_qty ?? 500),
+            $calc = RecoveryCalculation::calculate($required, $supply, $buffer, (string) ($p->minimum_qty ?? 500),
                 $p?->batch_qty === null ? null : (string) $p->batch_qty, $p?->work_order_id === null ? $planQty : '0');
             // Once linked, the shifts are history: their WO already contributes projected supply.
             $calc['planQty'] = $planQty;
-            $capacity = $this->materials->estimate($db, $plant, (string) $part->item_id, $target, $materialPool);
-            $reserve = bccomp($planQty, '0', 0) > 0 ? $planQty : ($calc['proposedQty'] ?? '0');
-            if ($capacity !== null && $p?->work_order_id === null && bccomp($reserve, '0', 0) > 0) {
+            // Generate releases its WOs today, so it checks material against the BOM and conversions in force today (the snapshot)
+            $materialDate = $safetyStock === null ? $target : $releaseDay;
+            $capacity = $this->materials->estimate($db, $plant, (string) $part->item_id, $materialDate, $materialPool);
+            // a linked plan's shifts are history; in Generate mode its residual need is still made, so it reserves material too
+            $reserve = $p?->work_order_id === null && bccomp($planQty, '0', 0) > 0 ? $planQty
+                : ($calc['proposedQty'] ?? ($safetyStock === null ? '0' : RecoveryCalculation::ceil($calc['netQty'])));
+            if ($capacity !== null && ($p?->work_order_id === null || $safetyStock !== null) && ! isset($unmade[$key]) && bccomp($reserve, '0', 0) > 0) {
                 $reserve = bccomp($reserve, $capacity, 0) < 0 ? $reserve : $capacity;
-                $this->materials->consume($db, $plant, (string) $part->item_id, $reserve, $target, $materialPool, []);
+                $this->materials->consume($db, $plant, (string) $part->item_id, $reserve, $materialDate, $materialPool, []);
             }
             $stockRows = array_values(array_filter($stocks, static fn (stdClass $s): bool => $s->item_id === $part->item_id));
             $before = $this->sum(array_filter($stockRows, static fn (stdClass $s): bool => $s->stock_status === 'PENDING_QC'), 'qty');
@@ -195,7 +215,7 @@ final class DailyRecoveryPlanner
                 'fgQty' => RecoveryCalculation::plain($fg), 'beforeCheckQty' => RecoveryCalculation::plain($before), 'acceptedQty' => RecoveryCalculation::plain($accepted),
                 'allocated' => array_map(RecoveryCalculation::plain(...), $allocated), 'materialCapacityQty' => $capacity,
                 'minimumQty' => (string) ($p->minimum_qty ?? 500), 'batchQty' => $p?->batch_qty === null ? null : (string) $p->batch_qty,
-                'bufferQty' => MpsItemInput::num($p->buffer_qty ?? 0), 'shift1Qty' => MpsItemInput::num($p->shift_1_qty ?? 0),
+                'bufferQty' => $buffer, 'shift1Qty' => MpsItemInput::num($p->shift_1_qty ?? 0),
                 'shift2Qty' => MpsItemInput::num($p->shift_2_qty ?? 0), 'shift3Qty' => MpsItemInput::num($p->shift_3_qty ?? 0),
                 'reason' => $p?->reason, 'workOrderId' => $p?->work_order_id, 'workOrderCode' => $p?->wo_no,
                 'workOrderStatus' => $p?->wo_status, 'status' => $status, 'inputsChanged' => $p !== null && $p->input_fingerprint !== $fingerprint,

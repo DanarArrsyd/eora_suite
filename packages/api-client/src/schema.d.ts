@@ -3269,6 +3269,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/production/spk/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate SPK (doc 38 §12, D-139) for a plant and a production day (today or later): work orders for the Daily
+         *     Recovery shortfall + safety stock, released by the planner, and draft SPK lines per line over preferred and
+         *     alternative machines and shifts, with proposed overtime. Serialised per plant with Daily Recovery; nothing is
+         *     released to production — the planner reviews each draft SPK
+         */
+        post: operations["v1.production.spk.generate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/production/spk/{spk}": {
         parameters: {
             query?: never;
@@ -22720,6 +22742,8 @@ export interface operations {
             content: {
                 "application/json": {
                     name: string;
+                    /** @description D-139: proposed SPK overtime per machine and day above this is flagged; null clears it (no limit) */
+                    spkOtLimitHours?: number | null;
                 };
             };
         };
@@ -36634,6 +36658,173 @@ export interface operations {
                         status: 409;
                         /** @enum {string} */
                         code: "SPK_EXISTS";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description CSRF_TOKEN_MISMATCH */
+            419: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 419;
+                        /** @enum {string} */
+                        code: "CSRF_TOKEN_MISMATCH";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description VALIDATION_FAILED */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 422;
+                        /** @enum {string} */
+                        code: "VALIDATION_FAILED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                        errors?: {
+                            [key: string]: string[];
+                        };
+                    };
+                };
+            };
+            /** @description RETRYABLE_CONFLICT */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before retrying. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 503;
+                        /** @enum {string} */
+                        code: "RETRYABLE_CONFLICT";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+        };
+    };
+    "v1.production.spk.generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    plantId: string;
+                    /** Format: date */
+                    productionDate: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: unknown[];
+                    };
+                };
+            };
+            /** @description UNAUTHENTICATED, SESSION_EXPIRED */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 401;
+                        /** @enum {string} */
+                        code: "UNAUTHENTICATED" | "SESSION_EXPIRED";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description FORBIDDEN, SCOPE_FORBIDDEN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 403;
+                        /** @enum {string} */
+                        code: "FORBIDDEN" | "SCOPE_FORBIDDEN";
+                        /** @description Safe to show; never names permissions, scopes or other tenants. */
+                        detail?: string;
+                        correlationId?: string;
+                        /** @description Short support reference derived from the correlation id. */
+                        reference?: string;
+                    };
+                };
+            };
+            /** @description OWNER_PEGGING_REQUIRED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": {
+                        /** Format: uri */
+                        type: string;
+                        title: string;
+                        /** @enum {integer} */
+                        status: 409;
+                        /** @enum {string} */
+                        code: "OWNER_PEGGING_REQUIRED";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;

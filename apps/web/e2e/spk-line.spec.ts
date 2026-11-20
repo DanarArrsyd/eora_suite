@@ -228,3 +228,60 @@ test('spk line: production reads the released SPKs of its plant, also on a phone
   await expect(page.getByRole('button', { name: 'Close SPK' })).toHaveCount(0);
   await axe(page);
 });
+
+test('spk line: the planner generates the day from Daily Recovery and sees what it planned, proposed and could not plan', async ({ page }) => {
+  await mockApi(page, '/auth/me', {
+    status: 200,
+    json: { ...SESSION, permissions: [...SESSION.permissions, 'production.spk.create', 'planning.wo.create', 'planning.wo.submit'] },
+  });
+  const bodies: unknown[] = [];
+  await page.route('**/api/v1/production/spk/generate', (route) => {
+    bodies.push(route.request().postDataJSON());
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          plantId: SESSION.plants[0]!.id,
+          productionDate: '2026-11-21',
+          spks: [{ id: ID(10), workCenterCode: 'PRS-200', created: true, linesAdded: 2 }],
+          workOrders: [{ id: ID(31), code: 'WO-P1-2026-0004', itemCode: 'BRK-A100', itemName: 'Bracket front A100', customerCode: 'OEM-W', qty: '50' }],
+          overtime: [
+            {
+              machineCode: 'M-PRS200',
+              workCenterCode: 'PRS-200',
+              shiftCode: 'S2',
+              hours: '1.5',
+              qty: '300',
+              workOrderCode: 'WO-P1-2026-0004',
+              itemCode: 'BRK-A100',
+              customerCode: 'OEM-W',
+              opSeq: 10,
+              overLimit: true,
+              limitHours: '1',
+              machineDayHours: '1.5',
+            },
+          ],
+          materialShort: [{ itemCode: 'BRK-A100', itemName: 'Bracket front A100', customerCode: 'OEM-W', needQty: '60', plannedQty: '50', shortQty: '10' }],
+          skipped: [{ itemCode: 'PLT-9', customerCode: 'OEM-W', reason: 'No approved BOM in force: material cannot be checked.' }],
+        },
+      }),
+    });
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ppic/spk-line?new=1');
+  await expect(page.getByRole('heading', { level: 1, name: 'New SPK' })).toBeVisible();
+  await page.getByRole('button', { name: 'Generate SPK' }).click();
+  await page.getByRole('alertdialog', { name: 'Generate SPK' }).getByRole('button', { name: 'Generate' }).click();
+  const result = page.getByLabel('Generate result');
+  await expect(result).toContainText('PRS-200 · 2 lines added (new draft)');
+  await expect(result).toContainText('WO-P1-2026-0004 · BRK-A100 · OEM-W');
+  await expect(result).toContainText('+1.5 h for WO-P1-2026-0004');
+  await expect(result).toContainText('machine day total 1.5 h, over the plant limit of 1 h');
+  await expect(result).toContainText('short');
+  await expect(result).toContainText('No approved BOM in force');
+  expect(bodies[0]).toMatchObject({ plantId: SESSION.plants[0]!.id });
+  await expect(page.getByRole('link', { name: 'PRS-200' })).toHaveAttribute('href', `/ppic/spk-line?spk=${ID(10)}`);
+  await axe(page);
+});

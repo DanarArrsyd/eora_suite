@@ -77,4 +77,16 @@ Catatan:
 4. **Release to production**: nomor `SPK-{kode perusahaan}-{DDMMYY}-{urut}` diberikan saat rilis, dan tim produksi menerima notifikasi.
 5. Perlu ubah setelah rilis? **Revise** + alasan → draft revisi baru dengan baris yang sama; SPK lama tetap berlaku sampai revisi dirilis, lalu jadi *Superseded* dan nomornya tetap sama. **Close SPK** bila rencana hari itu selesai.
 
-SPK tidak memindahkan stok: WO tetap dirilis orang kedua seperti biasa, dan hasil produksi tetap dicatat lewat Production Runs.
+### Generate SPK (D-139)
+
+1. **PPIC → SPK Line → New SPK → Generate SPK**: pilih **Production date** lalu **Generate SPK** → **Generate**.
+2. Sistem mengambil kekurangan dari **Daily Recovery** tanggal itu (part finished goods), dengan buffer = nilai terbesar antara buffer Daily Recovery dan **safety stock** di Plan Parameters. Kalau rencana shift Daily Recovery sudah disimpan, qty itu yang dipakai.
+3. Untuk kebutuhan itu sistem membuat **WO dengan reason SPK** dan langsung merilisnya atas nama Anda (tanpa orang kedua, tercatat di audit). Material hanya cukup untuk sebagian? WO dibuat sebesar yang cukup, sisanya muncul di **Material short**.
+4. Semua WO finished goods yang sudah rilis dan jatuh tempo sampai tanggal itu dibagi ke **draft SPK per line**: mesin *preferred* dulu, lalu shift lain, lalu mesin alternatif. Proses 20 boleh di hari yang sama setelah proses 10. Part dan proses yang sama di satu mesin hanya kena setup sekali.
+5. Jam yang tidak muat ditaruh di mesin preferred shift terakhir dan ditampilkan sebagai **Proposed overtime** (mesin, shift, jam, WO, customer); melewati batas OT plant ditandai *over the plant limit*.
+6. Buka tiap draft SPK dari link hasil generate, cek dan ubah seperlunya, lalu **Release to production** seperti biasa. Generate ulang di tanggal yang sama hanya menambah yang belum direncanakan.
+7. Baris WO hasil generate dihapus dari semua SPK (atau draft-nya dibatalkan)? WO itu otomatis dibatalkan selama belum ada issue material atau production run.
+
+Selama ada stok milik customer di plant, Generate ikut tertahan seperti Daily Recovery sampai perencanaan per pemilik tersedia.
+
+SPK tidak memindahkan stok: WO manual tetap dirilis orang kedua seperti biasa, dan hasil produksi tetap dicatat lewat Production Runs.

@@ -32,7 +32,7 @@ Legend: **V** view · **C** create/edit draft · **S** submit · **P** post/exec
 | planning.control_tower | V | V X | V | V | — | V | V | V | V | V | V |
 | materials.issue | V | V | VCSP | V (accept custody P) | — | — | — | — | — | V | V |
 | materials.return | V | V | VP (receive) | VCS | VC | — | — | — | — | V | V |
-| production.spk (SPK per Line, D-138) | VP (release) | VCP (create, release, close) | — | V | — | — | — | — | — | — | V |
+| production.spk (SPK per Line, D-138; ¹ Generate SPK D-139 also needs `planning.wo.create` + `planning.wo.submit`, and releases the WOs it creates without a second person) | VP (release) | VCP (create, release, close, generate¹) | — | V | — | — | — | — | — | — | V |
 | production.run | V | V | V | VCSP | VCS (own) | V | V | — | — | V | V |
 | production.posting (consume/output/scrap) | V | V | V | VCSP | VCS | V | V | — | — | V | V |
 | production.lot_split (remnant) | V | V | V (accept) | VCSP | VC | — | — | — | — | V | V |

@@ -32,6 +32,15 @@ final class RecoveryCalculation
             'positionQty' => self::plain(bcsub(bcadd($supply, $plan, 6), bcadd($demand, $buffer, 6), 6))];
     }
 
+    /** @return numeric-string the quantity rounded up to whole pieces */
+    public static function ceil(string $number): string
+    {
+        $number = MpsItemInput::num($number);
+        $whole = bcadd($number, '0', 0);
+
+        return bccomp($whole, $number, 6) < 0 ? bcadd($whole, '1', 0) : $whole;
+    }
+
     /** @return numeric-string */
     public static function plain(string $number): string
     {

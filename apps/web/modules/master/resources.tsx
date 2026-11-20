@@ -12,7 +12,15 @@ import type { FormValues, MasterResource, MasterRow } from './types';
 
 type Status = 'ACTIVE' | 'INACTIVE';
 export type CompanyRow = MasterRow & { legalName: string; updatedAt: string };
-export type PlantRow = MasterRow & { name: string; timezone: string; companyId: string; companyCode: string; companyName: string; updatedAt: string };
+export type PlantRow = MasterRow & {
+  name: string;
+  timezone: string;
+  companyId: string;
+  companyCode: string;
+  companyName: string;
+  spkOtLimitHours: string | null;
+  updatedAt: string;
+};
 export type WarehouseRow = MasterRow & {
   name: string;
   warehouseType: string;
@@ -197,15 +205,33 @@ export const PLANTS: MasterResource<PlantRow> = {
       createOnly: true,
       hint: 'Fixed once created: production dates and planning weeks of this plant follow it.',
     },
+    {
+      key: 'spkOtLimitHours',
+      label: 'SPK overtime limit per machine per day (h)',
+      kind: 'number',
+      editOnly: true,
+      decimals: 2,
+      min: 0.01,
+      max: 24,
+      hint: 'Generate SPK flags proposed overtime above it. Leave empty for no limit.',
+    },
   ],
-  blank: { companyId: '', code: '', name: '', timezone: '' },
-  toForm: (r) => ({ companyId: r.companyId, code: r.code, name: r.name }),
+  blank: { companyId: '', code: '', name: '', timezone: '', spkOtLimitHours: '' },
+  toForm: (r) => ({ companyId: r.companyId, code: r.code, name: r.name, spkOtLimitHours: r.spkOtLimitHours ? String(Number(r.spkOtLimitHours)) : '' }),
   facts: (r) => [
     { label: 'Company', value: `${r.companyCode} · ${r.companyName}` },
     { label: 'Time zone', value: r.timezone },
+    { label: 'SPK overtime limit', value: r.spkOtLimitHours ? `${r.spkOtLimitHours} h per machine per day` : 'No limit' },
   ],
   create: (v) => call(() => api.POST('/core/plants', { body: { companyId: v.companyId!, code: v.code!, name: v.name!, timezone: v.timezone as never } })),
-  update: (r, v) => call(() => api.PATCH('/core/plants/{plant}', { params: { path: { plant: r.id } }, headers: ifMatch(r), body: { name: v.name! } })),
+  update: (r, v) =>
+    call(() =>
+      api.PATCH('/core/plants/{plant}', {
+        params: { path: { plant: r.id } },
+        headers: ifMatch(r),
+        body: { name: v.name!, spkOtLimitHours: v.spkOtLimitHours ? Number(v.spkOtLimitHours) : null },
+      }),
+    ),
 };
 
 export const WAREHOUSES: MasterResource<WarehouseRow> = {
