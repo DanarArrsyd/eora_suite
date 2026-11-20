@@ -820,11 +820,13 @@ function ReturnPage({ id }: { id: string }) {
         </CardContent>
       </Card>
       <MasterEditor
+        mode="dialog"
         config={receiveConfig}
         row={r}
         canEdit={canReceive}
         open={receiving}
-        onOpenChange={setReceiving}
+        back={{ label: 'Back', href: '' }}
+        onClose={() => setReceiving(false)}
         onSaved={(message) => {
           setReceiving(false);
           changed(message);

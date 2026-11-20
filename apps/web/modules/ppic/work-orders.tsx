@@ -413,6 +413,24 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
   const exception = o.closeException ?? null;
   const pendingException = exception?.status === 'SUBMITTED';
 
+  // editing the draft is a form page of its own (D-140); Back returns to this work order
+  if (editing) {
+    return (
+      <MasterEditor
+        mode="page"
+        config={editConfig}
+        row={o}
+        canEdit={canCreate}
+        back={{ label: `Back to ${o.code}`, href: typeof window === 'undefined' ? '' : window.location.pathname + window.location.search }}
+        onClose={() => setEditing(false)}
+        onSaved={(message) => {
+          setEditing(false);
+          changed(message);
+        }}
+      />
+    );
+  }
+
   return (
     <EnterprisePage
       title={o.code}
@@ -620,17 +638,6 @@ function WorkOrderPage({ id, base }: { id: string; base: string }) {
         </InlineAlert>
       ) : null}
 
-      <MasterEditor
-        config={editConfig}
-        row={o}
-        canEdit={canCreate}
-        open={editing}
-        onOpenChange={setEditing}
-        onSaved={(message) => {
-          setEditing(false);
-          changed(message);
-        }}
-      />
       <ConfirmDialog
         open={ask === 'submit'}
         onOpenChange={(v) => (v ? undefined : setAsk(null))}

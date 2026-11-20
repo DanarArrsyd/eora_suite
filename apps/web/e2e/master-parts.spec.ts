@@ -67,7 +67,7 @@ test('items: create posts the item, then its material specification', async ({ p
   });
   await page.goto('/master/items');
   await page.getByRole('button', { name: 'New item' }).click();
-  const drawer = page.getByRole('dialog', { name: 'New item' });
+  const drawer = page.getByRole('form', { name: 'New item' });
   await drawer.getByRole('textbox', { name: 'Code', exact: true }).fill('coil-spcc-1.2');
   await drawer.getByRole('textbox', { name: 'Name', exact: true }).fill('SPCC coil 1.2 mm');
   await choose(page, drawer.getByRole('combobox', { name: 'Type' }), 'Raw material');
@@ -92,7 +92,7 @@ test('items: a spec-only edit sends the spec at its own version and leaves the i
   });
   await page.goto('/master/items');
   await page.getByRole('button', { name: /Edit COIL-SPCC-1\.2/ }).click();
-  const drawer = page.getByRole('dialog', { name: 'COIL-SPCC-1.2' });
+  const drawer = page.getByRole('form', { name: 'COIL-SPCC-1.2' });
   await expect(drawer.getByRole('combobox', { name: 'Base unit' })).toHaveCount(0); // fixed once created
   await drawer.getByRole('textbox', { name: 'Width (mm)' }).fill('1219');
   await drawer.getByRole('button', { name: 'Save changes' }).click();
@@ -129,7 +129,7 @@ test('unit conversions: versions open read-only; a new version cannot start befo
   await expect(page.getByText(/Conversion versions never change/)).toBeVisible();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'New conversion version' }).click();
-  await expect(page.getByRole('dialog', { name: 'New conversion version' }).getByText('Today or later. Past days keep the factor they had.')).toBeVisible();
+  await expect(page.getByRole('form', { name: 'New conversion version' }).getByText('Today or later. Past days keep the factor they had.')).toBeVisible();
   await axe(page);
 });
 
@@ -163,7 +163,7 @@ test('items: when the item saves but its specification fails, the screen says ex
   );
   await page.goto('/master/items');
   await page.getByRole('button', { name: 'New item' }).click();
-  const drawer = page.getByRole('dialog', { name: 'New item' });
+  const drawer = page.getByRole('form', { name: 'New item' });
   await drawer.getByRole('textbox', { name: 'Code', exact: true }).fill('COIL-X');
   await drawer.getByRole('textbox', { name: 'Name', exact: true }).fill('Coil X');
   await choose(page, drawer.getByRole('combobox', { name: 'Type' }), 'Raw material');

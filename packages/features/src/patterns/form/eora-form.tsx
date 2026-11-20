@@ -38,6 +38,8 @@ type EoraFormProps<S extends z.ZodType<FieldValues, FieldValues>> = {
   stickyActions?: boolean;
   /** `stack`: full-width primary action (single-column task forms such as sign-in). Default `end`. */
   actionsLayout?: 'end' | 'stack';
+  /** Told when the values first differ from the defaults and when they match again (unsaved-changes guard). */
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 function newKey(): string {
@@ -60,6 +62,7 @@ export function EoraForm<S extends z.ZodType<FieldValues, FieldValues>>({
   className,
   stickyActions,
   actionsLayout = 'end',
+  onDirtyChange,
 }: EoraFormProps<S>) {
   const form = useForm<z.input<S>, unknown, z.output<S>>({
     resolver: zodResolver(schema as never) as unknown as Resolver<z.input<S>, unknown, z.output<S>>,
@@ -68,6 +71,8 @@ export function EoraForm<S extends z.ZodType<FieldValues, FieldValues>>({
     // The error summary receives focus instead (it lists every error with a link to its field).
     shouldFocusError: false,
   });
+  const dirty = form.formState.isDirty;
+  React.useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
   const [key, setKey] = React.useState(newKey);
   const [result, setResult] = React.useState<SubmitResult | null>(null);
   const summaryRef = React.useRef<HTMLDivElement>(null);
@@ -129,7 +134,7 @@ export function EoraForm<S extends z.ZodType<FieldValues, FieldValues>>({
           className={cn(
             'flex gap-2 pt-2',
             actionsLayout === 'stack' ? 'flex-col-reverse' : 'flex-wrap justify-end',
-            stickyActions && 'sticky bottom-0 -mx-5 border-t border-line bg-surface px-5 py-3',
+            stickyActions && 'sticky bottom-0 z-10 -mx-5 -mb-5 rounded-b-lg border-t border-line bg-surface px-5 py-3 max-md:-mx-4 max-md:-mb-4 max-md:px-4',
           )}
         >
           {secondary}

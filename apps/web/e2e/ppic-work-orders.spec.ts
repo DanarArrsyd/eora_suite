@@ -137,7 +137,7 @@ test('work orders: a planner drafts a manual work order with its reason and asks
   await axe(page);
 
   await page.getByRole('button', { name: 'New work order' }).first().click();
-  const drawer = page.getByRole('dialog', { name: 'New work order' });
+  const drawer = page.getByRole('form', { name: 'New work order' });
   await choose(page, drawer.getByRole('combobox', { name: 'Plant' }), /^P1 · /);
   await choose(page, drawer.getByRole('combobox', { name: 'Item' }), /^BRK-A100 · /);
   await drawer.getByRole('textbox', { name: 'Quantity' }).fill('1200');

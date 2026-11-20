@@ -70,7 +70,7 @@ test('work centers: create sends upper-case code and a number for hours; status 
   await page.goto('/master/work-centers');
   await expect(page.getByText('No work centers yet')).toBeVisible();
   await page.getByRole('button', { name: 'New work center' }).click();
-  const drawer = page.getByRole('dialog', { name: 'New work center' });
+  const drawer = page.getByRole('form', { name: 'New work center' });
   await expect(drawer.getByLabel('Status')).toHaveCount(0);
   await choose(page, drawer.getByRole('combobox', { name: 'Plant' }), 'P1 · Plant 1');
   await drawer.getByRole('textbox', { name: 'Code', exact: true }).fill('wld-02');
@@ -94,7 +94,7 @@ test('work centers: an edit sends only the changed fields at the row version; a 
   });
   await page.goto('/master/work-centers');
   await page.getByRole('button', { name: /Edit PRS-01/ }).click();
-  const drawer = page.getByRole('dialog', { name: 'PRS-01' });
+  const drawer = page.getByRole('form', { name: 'PRS-01' });
   await expect(drawer.getByRole('textbox', { name: 'Code', exact: true })).toHaveCount(0); // codes are fixed: shown in the title, not as a field
   await drawer.getByLabel('Available hours per shift').fill('');
   await drawer.getByRole('button', { name: 'Save changes' }).click();
@@ -178,7 +178,7 @@ test('plants & warehouses: sections switch in the page, keep their place in the 
 
   await sections.getByRole('link', { name: 'Plants' }).click();
   await page.getByRole('button', { name: 'New plant' }).click();
-  const drawer = page.getByRole('dialog', { name: 'New plant' });
+  const drawer = page.getByRole('form', { name: 'New plant' });
   await expect(drawer.getByRole('combobox', { name: 'Time zone' })).toContainText('Asia/Jakarta'); // the workspace zone
   await choose(page, drawer.getByRole('combobox', { name: 'Company' }), 'CO1 · Demo Co');
   await drawer.getByRole('textbox', { name: 'Code', exact: true }).fill('p2');
@@ -207,5 +207,5 @@ test('pickers read every page of a long list, not only the first 200 rows', asyn
   await mockApi(page, '/query/core.machines?*', page1([]));
   await page.goto('/master/work-centers?show=machines');
   await page.getByRole('button', { name: 'New machine' }).click();
-  await choose(page, page.getByRole('dialog', { name: 'New machine' }).getByRole('combobox', { name: 'Work center' }), 'P1 / WC-230 · Line 230');
+  await choose(page, page.getByRole('form', { name: 'New machine' }).getByRole('combobox', { name: 'Work center' }), 'P1 / WC-230 · Line 230');
 });

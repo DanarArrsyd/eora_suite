@@ -421,6 +421,24 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
     },
   ];
 
+  // adding a line or a delivery is a form page of its own (D-140); Back returns to this order
+  if (drawer !== null) {
+    return (
+      <MasterEditor
+        mode="page"
+        config={drawer.kind === 'delivery' ? deliveryDrawer : lineDrawer}
+        row={null}
+        canEdit={mayChange}
+        back={{ label: `Back to ${o.code ?? 'the sales order'}`, href: typeof window === 'undefined' ? '' : window.location.pathname + window.location.search }}
+        onClose={() => setDrawer(null)}
+        onSaved={(message) => {
+          setDrawer(null);
+          changed(message);
+        }}
+      />
+    );
+  }
+
   return (
     <EnterprisePage
       title={o.code}
@@ -554,17 +572,6 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
         </Card>
       </div>
 
-      <MasterEditor
-        config={drawer?.kind === 'delivery' ? deliveryDrawer : lineDrawer}
-        row={null}
-        canEdit={mayChange}
-        open={drawer !== null}
-        onOpenChange={(v) => (v ? undefined : setDrawer(null))}
-        onSaved={(message) => {
-          setDrawer(null);
-          changed(message);
-        }}
-      />
       <ReviseDialog
         open={revise !== null}
         onOpenChange={(v) => (v ? undefined : setRevise(null))}

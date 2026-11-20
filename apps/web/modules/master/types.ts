@@ -48,6 +48,8 @@ export type FieldSpec = {
   createOnly?: boolean;
   /** Shown only when editing (e.g. status: a new record always starts active). */
   editOnly?: boolean;
+  /** Takes the whole row of the form page's two-column grid (long choices, notes). */
+  wide?: boolean;
   /** Codes: upper-cased while typing. */
   code?: boolean;
   /** Allowed code characters (default A-Z, 0-9, "_", "-"). */
@@ -92,8 +94,10 @@ export type MasterResource<T extends MasterRow> = {
   description: string;
   /** The create button when it is not "New <singular>" (e.g. "New close request" on a list of periods). */
   createLabel?: string;
-  /** The create button opens this page instead of the drawer (a record with several lines, e.g. a material issue). */
+  /** The create button opens this page instead of the built-in form page (a record with several lines, e.g. a material issue). */
   createHref?: string;
+  /** One more page to start from, beside the create button (e.g. Generate SPK); shown to holders of every permission listed. */
+  secondaryAction?: { label: string; href: string; permissions: string[] };
   /** The drawer's submit button when it is not "Create <singular>" (e.g. "Add line" on an order's page). */
   submitLabel?: string;
   /** Plural and singular nouns for counts, empty states and buttons. */

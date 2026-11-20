@@ -270,18 +270,27 @@ test('spk line: the planner generates the day from Daily Recovery and sees what 
   });
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/ppic/spk-line?new=1');
-  await expect(page.getByRole('heading', { level: 1, name: 'New SPK' })).toBeVisible();
-  await page.getByRole('button', { name: 'Generate SPK' }).click();
+  // the SPK list offers Generate SPK beside New SPK; it opens its own form page (D-140)
+  await page.goto('/ppic/spk-line?generate=1');
+  await expect(page.getByRole('heading', { level: 1, name: 'Generate SPK' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Back to SPK Line' })).toBeVisible();
+  await page.getByRole('form', { name: 'Generate SPK' }).getByRole('button', { name: 'Generate SPK' }).click();
   await page.getByRole('alertdialog', { name: 'Generate SPK' }).getByRole('button', { name: 'Generate' }).click();
   const result = page.getByLabel('Generate result');
-  await expect(result).toContainText('PRS-200 · 2 lines added (new draft)');
-  await expect(result).toContainText('WO-P1-2026-0004 · BRK-A100 · OEM-W');
-  await expect(result).toContainText('+1.5 h for WO-P1-2026-0004');
-  await expect(result).toContainText('machine day total 1.5 h, over the plant limit of 1 h');
-  await expect(result).toContainText('short');
-  await expect(result).toContainText('No approved BOM in force');
+  await expect(result.getByRole('table', { name: 'Draft SPKs' })).toContainText('PRS-200');
+  await expect(result.getByRole('table', { name: 'Draft SPKs' })).toContainText('New draft');
+  await expect(result.getByRole('table', { name: 'Work orders created' })).toContainText('WO-P1-2026-0004');
+  const overtime = result.getByRole('table', { name: 'Proposed overtime' });
+  await expect(overtime).toContainText('1.5 h');
+  await expect(overtime).toContainText('Day total 1.5 h');
+  await expect(overtime).toContainText('Over 1 h');
+  await expect(result.getByRole('table', { name: 'Material short' })).toContainText('10');
+  await expect(result.getByRole('table', { name: 'Not planned' })).toContainText('No approved BOM in force');
   expect(bodies[0]).toMatchObject({ plantId: SESSION.plants[0]!.id });
   await expect(page.getByRole('link', { name: 'PRS-200' })).toHaveAttribute('href', `/ppic/spk-line?spk=${ID(10)}`);
+  await expect(page.getByRole('button', { name: 'Generate again' })).toBeVisible();
+  // and on a phone the page has no sideways scroll
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await axe(page);
 });
