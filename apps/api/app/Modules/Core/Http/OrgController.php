@@ -101,14 +101,20 @@ final class OrgController
     /** Rename a plant (If-Match). Code, company and time zone are fixed once the plant exists. */
     public function updatePlant(Request $request, string $plant): JsonResponse
     {
-        $data = $request->validate(['name' => ['required', 'string', 'min:1', 'max:200']]);
+        $data = $request->validate(['name' => ['required', 'string', 'min:1', 'max:200'],
+            // D-139: proposed SPK overtime per machine and day above this is flagged; null clears it (no limit)
+            'spkOtLimitHours' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'lte:24', 'decimal:0,2']]);
         $version = Concurrency::expectedVersion($request);
         $db = $this->db();
         $this->authorizer->requireAnywhere($db, self::CREATE);
         $id = $this->existing($db, 'plants', $plant);
         $this->authorizer->authorize($db, self::CREATE, $this->plantScope($db, $id));
 
-        $this->update($db, 'plants', 'plant', $id, $version, ['name' => $data['name']], 'plant.updated', $id);
+        $changes = ['name' => $data['name']];
+        if (array_key_exists('spkOtLimitHours', $data)) {
+            $changes['spk_ot_limit_hours'] = $data['spkOtLimitHours'] === null ? null : (string) $data['spkOtLimitHours'];
+        }
+        $this->update($db, 'plants', 'plant', $id, $version, $changes, 'plant.updated', $id);
 
         return $this->respond($db, new PlantsQuery, $id);
     }

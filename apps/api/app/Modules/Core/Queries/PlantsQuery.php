@@ -48,6 +48,7 @@ final class PlantsQuery extends QueryDefinition
             new Field('code', 'p.code', sortable: true, filterable: true, search: 'prefix'),
             new Field('name', 'p.name', sortable: true, search: 'contains'),
             new Field('timezone', 'p.timezone'),
+            new Field('spkOtLimitHours', 'trim_scale(p.spk_ot_limit_hours)::text'),
             new Field('companyId', 'p.company_id', Field::UUID, filterable: true),
             new Field('companyCode', 'c.code', sortable: true),
             new Field('companyName', 'c.legal_name'),

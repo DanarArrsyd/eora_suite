@@ -25,7 +25,7 @@ import {
   Select,
   type IsoDate,
 } from '@eora/ui';
-import { formatDay, formatMoment } from '@/components/format';
+import { formatDay, formatMoment, formatNumber } from '@/components/format';
 import { Quantity } from '@/components/quantity';
 import { MasterScreen } from '@/modules/master/master-screen';
 import { PLANT_FILTER } from '@/modules/master/resources';
@@ -263,9 +263,13 @@ function NewSpk() {
     }
   };
   return (
-    <EnterprisePage title="New SPK" description="Choose the line and the production day; add the lines next.">
+    <EnterprisePage title="New SPK" description="Generate the day's SPKs from Daily Recovery, or start an empty SPK for one line.">
+      <GenerateSpk plant={plant} today={today} canGenerate={permissions.includes('planning.wo.create') && permissions.includes('planning.wo.submit')} />
       <Card className="max-w-xl">
-        <CardContent className="pt-6">
+        <CardHeader>
+          <CardTitle>Empty SPK for one line</CardTitle>
+        </CardHeader>
+        <CardContent>
           <form onSubmit={create} className="flex flex-col gap-4">
             <Field label="Line" required>
               {(c) => (
@@ -295,6 +299,165 @@ function NewSpk() {
         </CardContent>
       </Card>
     </EnterprisePage>
+  );
+}
+
+type Generated = {
+  productionDate: string;
+  spks: { id: string; workCenterCode: string; created: boolean; linesAdded: number }[];
+  workOrders: { id: string; code: string; itemCode: string; itemName: string; customerCode: string; qty: string }[];
+  overtime: {
+    machineCode: string;
+    workCenterCode: string;
+    shiftCode: string | null;
+    hours: string;
+    qty: string;
+    workOrderCode: string;
+    itemCode: string;
+    customerCode: string | null;
+    opSeq: number;
+    overLimit: boolean;
+    limitHours: string | null;
+  }[];
+  materialShort: { itemCode: string; itemName: string; customerCode: string; needQty: string; plannedQty: string; shortQty: string }[];
+  skipped: { itemCode?: string; workOrderCode?: string; customerCode?: string; opSeq?: number; reason: string }[];
+};
+
+/** Generate SPK (doc 38 §12, D-139): the day's draft SPKs from the Daily Recovery shortfall, with what it could not plan. */
+function GenerateSpk({ plant, today, canGenerate }: { plant: string; today: string; canGenerate: boolean }) {
+  const client = useQueryClient();
+  const [date, setDate] = React.useState(today);
+  const [ask, setAsk] = React.useState(false);
+  const [result, setResult] = React.useState<Generated | null>(null);
+  const [problem, setProblem] = React.useState<string | null>(null);
+  const run = async () => {
+    setProblem(null);
+    try {
+      const res = (await call(() => api.POST('/production/spk/generate', { body: { plantId: plant, productionDate: date } }))) as unknown as {
+        data: Generated;
+      };
+      setResult(res.data);
+      void client.invalidateQueries({ queryKey: ['master'] });
+    } catch (error) {
+      setProblem(failureMessage(error));
+    } finally {
+      setAsk(false);
+    }
+  };
+  const nothing =
+    result && !result.spks.length && !result.workOrders.length && !result.overtime.length && !result.materialShort.length && !result.skipped.length;
+  return (
+    <Card className="mb-4 max-w-3xl">
+      <CardHeader>
+        <CardTitle>Generate SPK</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <p className="m-0 text-[13px] text-ink-2">
+          Plans the Daily Recovery shortfall plus safety stock for the day: creates and releases the work orders it needs, then fills each line&apos;s draft SPK
+          over the preferred and alternative machines. Hours that fit nowhere are proposed as overtime. Production sees nothing until you release each SPK.
+        </p>
+        {!canGenerate ? (
+          <InlineAlert tone="info" title="Generating needs the work order planner role">
+            Ask a tenant administrator for permission to create and submit work orders at this plant.
+          </InlineAlert>
+        ) : (
+          <div className="flex flex-wrap items-end gap-3">
+            <Field label="Production date" required>
+              {(c) => <DatePicker {...c} value={date as IsoDate} min={today as IsoDate} label="Production date" onChange={(v) => v && setDate(v)} />}
+            </Field>
+            <Button variant="primary" onClick={() => setAsk(true)} disabled={!plant}>
+              Generate SPK
+            </Button>
+          </div>
+        )}
+        {problem ? (
+          <InlineAlert tone="danger" title="SPK not generated">
+            {problem}
+          </InlineAlert>
+        ) : null}
+        {nothing ? (
+          <InlineAlert tone="info" title="Nothing to plan">
+            Every need of {formatDay(result.productionDate)} is covered and every released work order is already on an SPK.
+          </InlineAlert>
+        ) : null}
+        {result && !nothing ? (
+          <div className="flex flex-col gap-4 text-[13px]" aria-label="Generate result">
+            {result.spks.length ? (
+              <section>
+                <h3 className="m-0 mb-1 text-sm font-semibold">Draft SPKs for {formatDay(result.productionDate)}</h3>
+                <ul className="m-0 list-none p-0">
+                  {result.spks.map((x) => (
+                    <li key={x.id}>
+                      <a className="text-accent underline" href={`${BASE.plan}?spk=${x.id}`}>
+                        {x.workCenterCode}
+                      </a>{' '}
+                      · {x.linesAdded} line{x.linesAdded === 1 ? '' : 's'} added{x.created ? ' (new draft)' : ''}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            {result.workOrders.length ? (
+              <section>
+                <h3 className="m-0 mb-1 text-sm font-semibold">Work orders created and released</h3>
+                <ul className="m-0 list-none p-0">
+                  {result.workOrders.map((w) => (
+                    <li key={w.id}>
+                      <span className="font-mono">{w.code}</span> · {w.itemCode} · {w.customerCode} · {formatNumber(w.qty, 'PCS')}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            {result.overtime.length ? (
+              <InlineAlert tone="warning" title="Proposed overtime">
+                <ul className="m-0 list-none p-0">
+                  {result.overtime.map((o, i) => (
+                    <li key={i}>
+                      {o.workCenterCode} {o.machineCode}
+                      {o.shiftCode ? ` (${o.shiftCode})` : ''}: +{o.hours} h for {o.workOrderCode} · {o.itemCode}
+                      {o.customerCode ? ` · ${o.customerCode}` : ''} · op {o.opSeq}
+                      {o.overLimit ? ` — over the plant limit of ${o.limitHours} h` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </InlineAlert>
+            ) : null}
+            {result.materialShort.length ? (
+              <InlineAlert tone="warning" title="Material short">
+                <ul className="m-0 list-none p-0">
+                  {result.materialShort.map((m, i) => (
+                    <li key={i}>
+                      {m.itemCode} · {m.customerCode}: needs {formatNumber(m.needQty, 'PCS')}, planned {formatNumber(m.plannedQty, 'PCS')}, short{' '}
+                      {formatNumber(m.shortQty, 'PCS')}
+                    </li>
+                  ))}
+                </ul>
+              </InlineAlert>
+            ) : null}
+            {result.skipped.length ? (
+              <InlineAlert tone="info" title="Not planned">
+                <ul className="m-0 list-none p-0">
+                  {result.skipped.map((x, i) => (
+                    <li key={i}>
+                      {[x.workOrderCode, x.itemCode, x.customerCode, x.opSeq ? `op ${x.opSeq}` : null].filter(Boolean).join(' · ')}: {x.reason}
+                    </li>
+                  ))}
+                </ul>
+              </InlineAlert>
+            ) : null}
+          </div>
+        ) : null}
+      </CardContent>
+      <ConfirmDialog
+        open={ask}
+        onOpenChange={setAsk}
+        title="Generate SPK"
+        description={`Work orders the plan needs for ${formatDay(date)} are created and released in your name, and lines are added to each line's draft SPK. Nothing is released to production.`}
+        confirmLabel="Generate"
+        onConfirm={run}
+      />
+    </Card>
   );
 }
 

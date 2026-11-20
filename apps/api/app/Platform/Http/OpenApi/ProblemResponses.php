@@ -268,6 +268,7 @@ final class ProblemResponses implements DocumentTransformer, OperationTransforme
         'v1.production.runs.close' => self::MASTER_EDIT + self::SCOPED_403 + [409 => ['INVALID_STATE_TRANSITION']],
         'v1.production.runs.cancel' => self::MASTER_EDIT + self::SCOPED_403 + [409 => ['INVALID_STATE_TRANSITION']],
         'v1.production.spk.store' => self::TENANT_WRITE + self::MASTER_403 + [409 => ['SPK_EXISTS'], 422 => ['VALIDATION_FAILED']],
+        'v1.production.spk.generate' => self::TENANT_WRITE + self::MASTER_403 + [409 => ['OWNER_PEGGING_REQUIRED'], 422 => ['VALIDATION_FAILED']],
         'v1.production.spk.show' => self::TENANT_READ + [404 => ['NOT_FOUND']],
         'v1.production.spk.options' => self::TENANT_READ + [404 => ['NOT_FOUND']],
         'v1.production.spk.update' => self::MASTER_EDIT + [409 => ['INVALID_STATE_TRANSITION']],

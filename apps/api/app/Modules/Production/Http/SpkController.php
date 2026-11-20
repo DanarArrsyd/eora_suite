@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Http;
 
+use App\Modules\Planning\Http\WorkOrderController;
+use App\Modules\Production\Application\SpkGenerator;
+use App\Modules\Production\Application\SpkHours;
 use App\Modules\Production\Queries\SpkQuery;
 use App\Platform\Access\Authorizer;
 use App\Platform\Access\Scope;
@@ -49,7 +52,36 @@ final class SpkController
         private readonly QueryRunner $rows,
         private readonly BusinessCalendar $calendar,
         private readonly OutboxPublisher $outbox,
+        private readonly SpkGenerator $generator,
+        private readonly WorkOrderController $workOrders,
     ) {}
+
+    /**
+     * Generate SPK (doc 38 §12, D-139) for a plant and a production day (today or later): work orders for the Daily
+     * Recovery shortfall + safety stock, released by the planner, and draft SPK lines per line over preferred and
+     * alternative machines and shifts, with proposed overtime. Serialised per plant with Daily Recovery; nothing is
+     * released to production — the planner reviews each draft SPK.
+     */
+    public function generate(Request $request): JsonResponse
+    {
+        $data = $request->validate(['plantId' => ['required', 'uuid'], 'productionDate' => ['required', 'date_format:Y-m-d']]);
+        $db = $this->db();
+        $plant = $db->selectOne('select id, company_id from plants where id = ?', [strtolower($data['plantId'])])
+            ?? throw ValidationException::withMessages(['plantId' => 'Unknown plant.']);
+        $scope = Scope::plant((string) $plant->id, (string) $plant->company_id);
+        foreach ([self::CREATE, 'planning.wo.create', 'planning.wo.submit'] as $permission) {
+            $this->authorizer->authorize($db, $permission, $scope);
+        }
+        $today = $this->today($db, (string) $plant->id);
+        if ($data['productionDate'] < $today) {
+            throw ValidationException::withMessages(['productionDate' => "Choose today ({$today}) or a later day."]);
+        }
+        // one generate or Daily Recovery write at a time per plant: both read and change the same supply
+        $db->select('select pg_advisory_xact_lock(hashtextextended(?,0))', ['daily-recovery:'.$plant->id]);
+        $result = $this->generator->generate($db, (string) $plant->id, $data['productionDate']);
+
+        return response()->json(['data' => ['plantId' => (string) $plant->id, 'productionDate' => $data['productionDate']] + $result]);
+    }
 
     /** A new DRAFT SPK for a line and a production day (today or later at the plant). */
     public function store(Request $request): JsonResponse
@@ -115,7 +147,7 @@ final class SpkController
                 'workOrderId' => (string) $o->work_order_id, 'workOrderCode' => (string) $o->wo_no, 'workOrderStatus' => (string) $o->status,
                 'itemCode' => (string) $o->item_code, 'itemName' => (string) $o->item_name, 'qty' => (string) $o->qty, 'uomCode' => (string) $o->uom_code,
                 'dueDate' => (string) $o->due_date, 'operationId' => (string) $o->operation_id, 'opSeq' => (int) $o->op_seq, 'processName' => (string) $o->process_name,
-                'setupMinutes' => self::plain((string) $o->std_setup_minutes), 'sph' => self::sph($o),
+                'setupMinutes' => SpkHours::plain((string) $o->std_setup_minutes), 'sph' => SpkHours::sph($o),
             ], $operations),
             'machines' => array_map(static fn (stdClass $m) => ['id' => (string) $m->id, 'code' => (string) $m->code, 'name' => (string) $m->name],
                 $db->select("select id, code, name from machines where work_center_id = ? and status = 'ACTIVE' order by code", [$h->work_center_id])),
@@ -149,6 +181,7 @@ final class SpkController
         foreach ($data['lines'] as $i => $line) {
             $checked[] = $this->checkedLine($db, $h, $line, $i);
         }
+        $generated = $this->generatedOn($db, (string) $h->id);
         $before = $this->state($db, 'spk_headers', (string) $h->id);
         if ($db->update('update spk_headers set reference = ?, note = ? where id = ? and version = ?',
             [self::optionalText($data['reference'] ?? null), self::optionalText($data['note'] ?? null), $h->id, $expected]) === 0) {
@@ -163,6 +196,7 @@ final class SpkController
             );
         }
         $this->audit->record($db, 'spk.updated', 'spk', (string) $h->id, $before, $this->state($db, 'spk_headers', (string) $h->id), ['lines' => count($checked)], (string) $h->plant_id);
+        $this->cancelUnplanned($db, $generated, (string) $h->plant_id);
 
         return $this->respondSpk($db, (string) $h->id);
     }
@@ -283,11 +317,13 @@ final class SpkController
         $expected = Concurrency::expectedVersion($request);
         $db = $this->db();
         $h = $this->writable($db, $spk, [$from], $permission);
+        $generated = $to === 'CANCELLED' ? $this->generatedOn($db, (string) $h->id) : [];
         $before = $this->state($db, 'spk_headers', (string) $h->id);
         if ($db->update("update spk_headers set status = '{$to}'{$extra} where id = ? and version = ?", [$h->id, $expected]) === 0) {
             throw Concurrency::conflict();
         }
         $this->audit->record($db, $action, 'spk', (string) $h->id, $before, $this->state($db, 'spk_headers', (string) $h->id), [], (string) $h->plant_id);
+        $this->cancelUnplanned($db, $generated, (string) $h->plant_id);
 
         return $this->respondSpk($db, (string) $h->id);
     }
@@ -302,7 +338,7 @@ final class SpkController
         if ($wo === null || (string) $wo->plant_id !== (string) $h->plant_id || ! in_array($wo->status, ['RELEASED', 'IN_PROGRESS'], true)) {
             throw ValidationException::withMessages(["lines.{$i}.workOrderId" => 'Choose a released or in-production work order of this plant.']);
         }
-        if (bccomp(self::num($line['plannedQty']), '0', 6) <= 0) {
+        if (bccomp(SpkHours::num($line['plannedQty']), '0', 6) <= 0) {
             throw ValidationException::withMessages(["lines.{$i}.plannedQty" => 'Enter a quantity above zero.']);
         }
         $op = $db->selectOne('select id, std_setup_minutes from routing_operations where id = ? and routing_version_id = ? and work_center_id = ?',
@@ -391,56 +427,31 @@ final class SpkController
         return $this->calendar->resolve($db, $plant, new DateTimeImmutable)->calendarDate;
     }
 
-    /** @return numeric-string */
-    private static function num(mixed $value): string
+    /**
+     * Generated work orders (D-139) planned on this SPK.
+     *
+     * @return list<string>
+     */
+    private function generatedOn(EoraPostgresConnection $db, string $spk): array
     {
-        $text = is_scalar($value) ? (string) $value : '';
-
-        return is_numeric($text) ? $text : '0';
-    }
-
-    /** @param numeric-string $value  rounded half away from zero to 3 decimals, trailing zeros dropped */
-    private static function round3(string $value): string
-    {
-        return self::plain(bcadd($value, bccomp($value, '0', 6) < 0 ? '-0.0005' : '0.0005', 3));
-    }
-
-    private static function plain(string $number): string
-    {
-        return str_contains($number, '.') ? rtrim(rtrim($number, '0'), '.') : $number;
-    }
-
-    /** Good pieces per running hour: the routing's standard good output (D-130), or 3600 / cycle for a per-piece cycle; null when not calculable. */
-    private static function sph(stdClass $op): ?string
-    {
-        if ($op->sph !== null) {
-            return (string) $op->sph;
-        }
-        $cycle = self::num($op->cycle_seconds);
-        if (bccomp($cycle, '0', 6) <= 0) {
-            return null;
-        }
-
-        return match ($op->cycle_basis) {
-            'PER_PIECE' => self::plain(bcdiv('3600', $cycle, 3)),
-            // a stroke makes `parts per cycle` pieces
-            'PER_STROKE' => $op->parts_per_cycle === null ? null : self::plain(bcdiv(bcmul('3600', self::num($op->parts_per_cycle), 6), $cycle, 3)),
-            default => null,
-        };
+        return array_values(array_map(static fn (stdClass $r) => (string) $r->work_order_id, $db->select(
+            'select distinct l.work_order_id from spk_lines l join spk_generated_orders g on g.work_order_id = l.work_order_id where l.spk_id = ?', [$spk])));
     }
 
     /**
-     * Hours of one line: qty / SPH + setup / 60 + QC sample / 60 (doc 38 §3); null without SPH.
+     * A generated WO that no SPK plans any more is cancelled while nothing was issued or run for it (D-139), when the
+     * planner may cancel released work orders; otherwise it stays for the planner to plan or cancel.
      *
-     * @return numeric-string|null
+     * @param  list<string>  $orders
      */
-    private static function hours(?string $sph, string $qty, string $setup, string $qc): ?string
+    private function cancelUnplanned(EoraPostgresConnection $db, array $orders, string $plant): void
     {
-        if ($sph === null || ! is_numeric($sph) || bccomp($sph, '0', 6) <= 0 || ! is_numeric($qty) || ! is_numeric($setup) || ! is_numeric($qc)) {
-            return null;
+        foreach ($orders as $wo) {
+            if ($db->selectOne("select 1 as planned from spk_lines l join spk_headers h on h.id = l.spk_id where l.work_order_id = ? and h.status <> 'CANCELLED' limit 1", [$wo]) === null
+                && (bool) $db->selectOne("select public.eora_actor_may('planning.wo.post', ?::uuid) as ok", [$plant])->ok) {
+                $this->workOrders->cancelGenerated($db, $wo, 'No SPK plans it any more (Generate SPK).');
+            }
         }
-
-        return bcadd(bcdiv($qty, $sph, 6), bcdiv(bcadd($setup, $qc, 6), '60', 6), 6);
     }
 
     private function respondSpk(EoraPostgresConnection $db, string $id, int $status = 200): JsonResponse
@@ -465,10 +476,10 @@ final class SpkController
         /** @var array<string, array{machineId: string, machineCode: string, machineName: string, hours: string, notCalculable: int, shifts: array<string, array{shiftId: ?string, shiftCode: ?string, hours: string}>}> $load */
         $load = [];
         $row['lines'] = array_map(static function (stdClass $l) use (&$load): array {
-            $sph = self::sph($l);
+            $sph = SpkHours::sph($l);
             // a paired blanking WO plans pieces per side while SPH counts both sides' good output (D-130, as MPS capacity does)
-            $runQty = $l->paired_item_id === null ? (string) $l->planned_qty : bcmul(self::num($l->planned_qty), '2', 6);
-            $hours = self::hours($sph, $runQty, (string) $l->setup_minutes, (string) $l->qc_sample_minutes);
+            $runQty = $l->paired_item_id === null ? (string) $l->planned_qty : bcmul(SpkHours::num($l->planned_qty), '2', 6);
+            $hours = SpkHours::hours($sph, $runQty, (string) $l->setup_minutes, (string) $l->qc_sample_minutes);
             $key = (string) $l->machine_id;
             $load[$key] ??= ['machineId' => $key, 'machineCode' => (string) $l->machine_code, 'machineName' => (string) $l->machine_name, 'hours' => '0', 'notCalculable' => 0, 'shifts' => []];
             // one bucket per shift of the machine (lines without a shift share one bucket): each bucket is held to one shift's hours
@@ -477,8 +488,8 @@ final class SpkController
             if ($hours === null) {
                 $load[$key]['notCalculable']++;
             } else {
-                $load[$key]['hours'] = bcadd(self::num($load[$key]['hours']), self::num($hours), 6);
-                $load[$key]['shifts'][$bucket]['hours'] = bcadd(self::num($load[$key]['shifts'][$bucket]['hours']), self::num($hours), 6);
+                $load[$key]['hours'] = bcadd(SpkHours::num($load[$key]['hours']), SpkHours::num($hours), 6);
+                $load[$key]['shifts'][$bucket]['hours'] = bcadd(SpkHours::num($load[$key]['shifts'][$bucket]['hours']), SpkHours::num($hours), 6);
             }
 
             return [
@@ -490,7 +501,7 @@ final class SpkController
                 'machineName' => (string) $l->machine_name, 'shiftId' => $l->shift_id, 'shiftCode' => $l->shift_code,
                 'plannedQty' => (string) $l->planned_qty, 'priority' => (int) $l->priority, 'setupMinutes' => (string) $l->setup_minutes,
                 'qcSampleMinutes' => (string) $l->qc_sample_minutes, 'note' => $l->note, 'sph' => $sph,
-                'hours' => $hours === null ? null : self::round3($hours),
+                'hours' => $hours === null ? null : SpkHours::round3($hours),
             ];
         }, $lines);
         $perShift = $db->selectOne('select trim_scale(available_hours_per_shift)::text as hours from work_centers where id = ?', [$row['workCenterId']])->hours;
@@ -498,20 +509,20 @@ final class SpkController
         // a machine is overloaded when any one of its shifts is: pooling shifts would hide an over-full shift (doc 38 §3)
         $row['machineLoad'] = array_values(array_map(static function (array $m) use ($perShift): array {
             $shifts = array_values(array_map(static function (array $b) use ($perShift): array {
-                $hours = self::num($b['hours']);
+                $hours = SpkHours::num($b['hours']);
 
-                return ['shiftId' => $b['shiftId'] ?? null, 'shiftCode' => $b['shiftCode'] ?? null, 'hours' => self::round3($hours),
-                    'capacityHours' => $perShift === null ? null : self::round3(self::num($perShift)),
-                    'balanceHours' => $perShift === null ? null : self::round3(bcsub(self::num($perShift), $hours, 6)),
-                    'overloaded' => $perShift !== null && bccomp($hours, self::num($perShift), 6) > 0];
+                return ['shiftId' => $b['shiftId'] ?? null, 'shiftCode' => $b['shiftCode'] ?? null, 'hours' => SpkHours::round3($hours),
+                    'capacityHours' => $perShift === null ? null : SpkHours::round3(SpkHours::num($perShift)),
+                    'balanceHours' => $perShift === null ? null : SpkHours::round3(bcsub(SpkHours::num($perShift), $hours, 6)),
+                    'overloaded' => $perShift !== null && bccomp($hours, SpkHours::num($perShift), 6) > 0];
             }, $m['shifts']));
-            $capacity = $perShift === null ? null : bcmul(self::num($perShift), (string) max(1, count($shifts)), 6);
-            $hours = self::num($m['hours']);
+            $capacity = $perShift === null ? null : bcmul(SpkHours::num($perShift), (string) max(1, count($shifts)), 6);
+            $hours = SpkHours::num($m['hours']);
 
             return ['machineId' => $m['machineId'], 'machineCode' => $m['machineCode'], 'machineName' => $m['machineName'],
-                'hours' => self::round3($hours), 'notCalculableLines' => $m['notCalculable'],
-                'capacityHours' => $capacity === null ? null : self::round3(self::num($capacity)),
-                'balanceHours' => $capacity === null ? null : self::round3(bcsub(self::num($capacity), $hours, 6)),
+                'hours' => SpkHours::round3($hours), 'notCalculableLines' => $m['notCalculable'],
+                'capacityHours' => $capacity === null ? null : SpkHours::round3(SpkHours::num($capacity)),
+                'balanceHours' => $capacity === null ? null : SpkHours::round3(bcsub(SpkHours::num($capacity), $hours, 6)),
                 'overloaded' => in_array(true, array_column($shifts, 'overloaded'), true), 'shifts' => $shifts];
         }, $load));
         $row['revisions'] = array_map(static fn (stdClass $r) => ['id' => (string) $r->id, 'revision' => (int) $r->revision, 'status' => (string) $r->status,

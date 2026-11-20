@@ -274,6 +274,7 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('postings', [ProductionController::class, 'post'])->name('postings.store');
         // SPK per Line — daily dispatch (doc 38, D-138)
         Route::post('spk', [SpkController::class, 'store'])->name('spk.store');
+        Route::post('spk/generate', [SpkController::class, 'generate'])->name('spk.generate');
         Route::get('spk/{spk}', [SpkController::class, 'show'])->name('spk.show');
         Route::get('spk/{spk}/options', [SpkController::class, 'options'])->name('spk.options');
         Route::put('spk/{spk}', [SpkController::class, 'update'])->name('spk.update');

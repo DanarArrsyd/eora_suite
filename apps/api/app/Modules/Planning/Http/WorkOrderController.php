@@ -51,8 +51,8 @@ final class WorkOrderController
     /** G-MPS-6 planning-exception reasons (D-109; tenant configuration later); OTHER needs a note. */
     public const array REASONS = ['URGENT_ORDER', 'NO_MPS_YET', 'SAMPLE_TRIAL', 'NG_REPLACEMENT', 'OTHER'];
 
-    /** Reasons a work order shows: the exceptions, or PLANNED for one released from the plan (D-125). */
-    public const array ALL_REASONS = [...self::REASONS, 'PLANNED'];
+    /** Reasons a work order shows: the exceptions, PLANNED for one released from the plan (D-125), SPK for one made by Generate SPK (D-139). */
+    public const array ALL_REASONS = [...self::REASONS, 'PLANNED', 'SPK'];
 
     public const string QTY = '/^\d{1,14}(\.\d{1,6})?$/';
 
@@ -226,6 +226,42 @@ final class WorkOrderController
         $wo = $this->writable($db, $order, ['SUBMITTED']);
         $this->authorizer->authorize($db, self::APPROVE, $this->plantScope($db, (string) $wo->plant_id));
         $this->authorizer->refuseSelf($db, (string) $wo->submitted_by);
+        $this->snapshotRelease($db, $wo, $expected);
+
+        return $this->respondOrder($db, (string) $wo->id);
+    }
+
+    /**
+     * Generate SPK (D-139 G-2): a work order the generate drafted with reason SPK is asked for and released at once by the
+     * generating planner — no second person, no approval notice; the database checks the generated record and the
+     * planner's SPK permission. Same snapshot as any release (BR-PLN-01).
+     */
+    public function releaseGenerated(EoraPostgresConnection $db, string $id): void
+    {
+        $wo = $db->selectOne('select w.*, w.due_date::text as due_date from work_orders w where w.id = ? for update', [$id]) ?? throw new LogicException('Generated WO not visible.');
+        $this->transition($db, $wo, (int) $wo->version, "status = 'SUBMITTED', submitted_by = ?, submitted_at = now(), return_reason = null", [$this->actor($db)], 'work_order.submitted');
+        $wo = $db->selectOne('select w.*, w.due_date::text as due_date from work_orders w where w.id = ?', [$id]) ?? throw new LogicException('Generated WO not visible.');
+        $this->snapshotRelease($db, $wo, (int) $wo->version);
+    }
+
+    /** Generate SPK (D-139): a generated WO no SPK plans any more is cancelled while nothing was issued or run for it. */
+    public function cancelGenerated(EoraPostgresConnection $db, string $id, string $reason): bool
+    {
+        $wo = $db->selectOne("select w.*, w.due_date::text as due_date from work_orders w where w.id = ? and w.reason_code = 'SPK' for update", [$id]);
+        if ($wo === null || $wo->status !== 'RELEASED'
+            || $db->selectOne("select 1 as posted from inventory_documents where doc_type = 'MAT_ISSUE' and status = 'POSTED' and source_id = ?", [$id]) !== null
+            || $db->selectOne('select 1 as run from production_runs where work_order_id = ? limit 1', [$id]) !== null) {
+            return false;
+        }
+        $this->transition($db, $wo, (int) $wo->version, "status = 'CANCELLED', cancelled_by = ?, cancelled_at = now(), cancel_reason = ?", [$this->actor($db), $reason], 'work_order.cancelled');
+        $this->outbox->publish($db, 'wo.cancelled', 'work_order', (string) $wo->id, ['plantId' => $wo->plant_id]);
+
+        return true;
+    }
+
+    /** SUBMITTED → RELEASED with the snapshot of the masters in force today (BR-PLN-01) and the material lines. */
+    private function snapshotRelease(EoraPostgresConnection $db, stdClass $wo, int $expected): void
+    {
         $today = $this->today($db, (string) $wo->plant_id);
         $bom = $db->selectOne(
             "select id, version_no from bom_versions where item_id = ? and status in ('APPROVED', 'SUPERSEDED')
@@ -279,8 +315,6 @@ final class WorkOrderController
         $db->statement('set constraints all immediate');
         $this->outbox->publish($db, 'wo.released', 'work_order', (string) $wo->id, ['plantId' => $wo->plant_id, 'itemId' => $wo->item_id]);
         app(Approvals::class)->decided($db, 'work_order', (string) $wo->id, 'approved'); // D-129: released
-
-        return $this->respondOrder($db, (string) $wo->id);
     }
 
     /**
