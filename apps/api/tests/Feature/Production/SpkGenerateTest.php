@@ -172,6 +172,18 @@ it('never treats a plan of the operation before on a later day as input for toda
         ->toBe(['100 not planned: the operation before it is not planned for them.']);
 })->group('integration', 'production');
 
+it('skips an operation on an inactive line instead of failing the whole run (Codex on #98)', function () {
+    $t = TenantFixtures::provision();
+    AccessFixtures::roles($t);
+    $f = spkFixture($this, $t);
+    $target = rtDayFrom($f['today'], 5);
+    AccessFixtures::run($t, fn (EoraPostgresConnection $db) => $db->update("update work_centers set status = 'INACTIVE' where id = ?", [$f['wc2']['id']]));
+
+    $gen = spa($this)->postJson('/api/v1/production/spk/generate', ['plantId' => $f['plant'], 'productionDate' => $target])->assertOk()->json('data');
+    expect(collect($gen['spks'])->pluck('workCenterCode')->all())->toBe(['PRS-01'])
+        ->and(collect($gen['skipped'])->where('workOrderCode', $f['wo']['code'])->where('opSeq', 20)->pluck('reason')->all())->toBe(['Line WLD-01 is inactive.']);
+})->group('integration', 'production');
+
 it('keeps reason SPK to Generate SPK and its release to the generating planner, also through direct SQL', function () {
     $t = TenantFixtures::provision();
     AccessFixtures::roles($t);

@@ -57,16 +57,22 @@ final class SpkGenerator
             $shifts = [['id' => null, 'code' => null]];
         }
         $orders = $db->select(
-            "select w.id, w.wo_no, w.item_id, i.code as item_code, trim_scale(w.qty)::text as qty, w.routing_version_id, v.paired_item_id, c.code as customer_code
+            "select w.id, w.wo_no, w.item_id, i.code as item_code, trim_scale(w.qty)::text as qty, w.routing_version_id, v.paired_item_id, c.code as customer_code,
+                    -- good output already posted for the WO (runs without an SPK too), as Daily Recovery counts it
+                    coalesce(g.qty, 0)::text as posted
                from work_orders w join items i on i.id = w.item_id and i.item_type = 'FINISHED'
                left join routing_versions v on v.id = w.routing_version_id left join customers c on c.id = w.production_customer_id
+               left join lateral (select sum(m.qty_signed) as qty from inventory_movements m
+                   join inventory_documents d on d.id = m.document_id and d.doc_type = 'PRODUCTION_POSTING' and d.status = 'POSTED'
+                   join production_runs r on r.id = d.source_id and r.work_order_id = w.id
+                  where m.item_id = w.item_id and m.movement_code = 'OUTPUT_GOOD' and m.qty_signed > 0) g on true
               where w.plant_id = ? and w.status in ('RELEASED', 'IN_PROGRESS') and w.due_date <= ?::date
               order by w.due_date, w.wo_no",
             [$plant, $date],
         );
         foreach ($orders as $rank => $wo) {
             $ops = $db->select(
-                "select o.id, o.op_seq, o.work_center_id, wc.code as work_center_code, trim_scale(wc.available_hours_per_shift)::text as hours_per_shift,
+                "select o.id, o.op_seq, o.work_center_id, wc.code as work_center_code, wc.status as work_center_status, trim_scale(wc.available_hours_per_shift)::text as hours_per_shift,
                         trim_scale(o.std_setup_minutes)::text as setup_minutes, trim_scale(o.std_good_output_per_hour)::text as sph,
                         trim_scale(o.std_cycle_seconds)::text as cycle_seconds, o.cycle_basis, o.parts_per_cycle,
                         coalesce((select sum(l.planned_qty) from spk_lines l join spk_headers h on h.id = l.spk_id
@@ -90,8 +96,11 @@ final class SpkGenerator
                 // this operation's lines on SPKs of the day, per shift; its lines on earlier days count as ready from the first shift,
                 // its lines on later days cover the operation but are no input for the next one today
                 $mine = $this->plannedByShift($db, (string) $wo->id, (string) $op->id, $date, $shifts);
-                $has = SpkHours::num($op->planned);
-                $mine[0] = bcadd(SpkHours::num($mine[0] ?? '0'), SpkHours::num($op->planned_before), 6);
+                // posted good output covers every operation (it went through all of them) and is ready input from the first shift
+                $spk = SpkHours::num($op->planned);
+                $posted = SpkHours::num($wo->posted);
+                $has = bccomp($posted, $spk, 6) > 0 ? $posted : $spk;
+                $mine[0] = bcadd(bcadd(SpkHours::num($mine[0] ?? '0'), SpkHours::num($op->planned_before), 6), bcsub($has, $spk, 6), 6);
                 ksort($mine); // shift order: earlier days' output sits in the first shift
                 $planned = array_keys(array_filter($mine, static fn (string $q): bool => bccomp(SpkHours::num($q), '0', 6) > 0))[0] ?? null;
                 $whole = SpkHours::num($wo->qty);
@@ -105,6 +114,12 @@ final class SpkGenerator
                 $cap = $has; // until it is placed below
                 $placed = [];
                 $skip = bccomp($qty, '0', 6) <= 0;
+                if (! $skip && $op->work_center_status !== 'ACTIVE') {
+                    // an inactive line takes no SPK: the operation waits, and so does what follows it
+                    $out['skipped'][] = ['workOrderCode' => $wo->wo_no, 'itemCode' => $wo->item_code, 'opSeq' => (int) $op->op_seq,
+                        'reason' => "Line {$op->work_center_code} is inactive."];
+                    $skip = true;
+                }
                 if (! $skip) {
                     $sheet = $this->sheet($db, $plant, $date, $op, $shifts, $sheets);
                     $machines = $sheet['blocked'] === null ? $this->machines($db, $op) : [];
