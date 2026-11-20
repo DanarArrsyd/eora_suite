@@ -8,8 +8,10 @@ use App\Modules\Planning\Http\WorkOrderController;
 use App\Modules\Planning\Recovery\DailyRecoveryPlanner;
 use App\Modules\Planning\Recovery\RecoveryCalculation;
 use App\Platform\Audit\AuditRecorder;
+use App\Platform\Calendar\BusinessCalendar;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
+use DateTimeImmutable;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 use stdClass;
@@ -37,6 +39,7 @@ final class SpkGenerator
         private readonly DailyRecoveryPlanner $recovery,
         private readonly WorkOrderController $workOrders,
         private readonly AuditRecorder $audit,
+        private readonly BusinessCalendar $calendar,
     ) {}
 
     /** @return array<string, list<array<string, mixed>>> spks, workOrders, overtime, materialShort, skipped */
@@ -70,20 +73,25 @@ final class SpkGenerator
                                    where l.work_order_id = ? and l.routing_operation_id = o.id
                                      -- a draft revision stands in for the released SPK it revises (it holds that plan and Generate adds to it)
                                      and (h.status = 'DRAFT' or (h.status in ('RELEASED', 'CLOSED')
-                                          and not exists (select 1 from spk_headers r where r.previous_id = h.id and r.status = 'DRAFT')))), 0)::text as planned
+                                          and not exists (select 1 from spk_headers r where r.previous_id = h.id and r.status = 'DRAFT')))), 0)::text as planned,
+                        -- what earlier days planned is ready for the next operation today; later days' plans are not
+                        coalesce((select sum(l.planned_qty) from spk_lines l join spk_headers h on h.id = l.spk_id
+                                   where l.work_order_id = ? and l.routing_operation_id = o.id and h.production_date < ?::date
+                                     and (h.status = 'DRAFT' or (h.status in ('RELEASED', 'CLOSED')
+                                          and not exists (select 1 from spk_headers r where r.previous_id = h.id and r.status = 'DRAFT')))), 0)::text as planned_before
                    from routing_operations o join work_centers wc on wc.id = o.work_center_id
                   where o.routing_version_id = ? order by o.op_seq",
-                [$wo->id, $wo->routing_version_id],
+                [$wo->id, $wo->id, $date, $wo->routing_version_id],
             );
             $after = 0; // G-3: a later operation never starts in an earlier shift than the one before it
             $cap = null; // G-3: nor plans more than the operation before it has planned
             $supply = null; // G-3: nor more by the end of any shift than the operation before it has made by then
             foreach ($ops as $op) {
-                // this operation's lines on SPKs of the day, per shift; its lines on other days count as ready from the first shift
+                // this operation's lines on SPKs of the day, per shift; its lines on earlier days count as ready from the first shift,
+                // its lines on later days cover the operation but are no input for the next one today
                 $mine = $this->plannedByShift($db, (string) $wo->id, (string) $op->id, $date, $shifts);
                 $has = SpkHours::num($op->planned);
-                $other = bcsub($has, array_reduce($mine, static fn (string $t, string $q): string => bcadd(SpkHours::num($t), SpkHours::num($q), 6), '0'), 6);
-                $mine[0] = bcadd(SpkHours::num($mine[0] ?? '0'), bccomp($other, '0', 6) > 0 ? $other : '0', 6);
+                $mine[0] = bcadd(SpkHours::num($mine[0] ?? '0'), SpkHours::num($op->planned_before), 6);
                 $planned = array_keys(array_filter($mine, static fn (string $q): bool => bccomp(SpkHours::num($q), '0', 6) > 0))[0] ?? null;
                 $whole = SpkHours::num($wo->qty);
                 $target = $cap === null || bccomp($cap, $whole, 6) > 0 ? $whole : $cap;
@@ -145,7 +153,15 @@ final class SpkGenerator
 
                 continue;
             }
+            // paired blanking (D-132) releases whole sheets only: the quantity goes up to whole sheets, a material cap down to them
+            $pairs = $this->pairsPerSheet($db, $plant, (string) $row['itemId']);
+            if ($pairs !== null) {
+                $qty = bcmul(RecoveryCalculation::ceil(bcdiv($qty, $pairs, 6)), $pairs, 0);
+            }
             $capacity = self::floor(SpkHours::num($row['materialCapacityQty']));
+            if ($pairs !== null) {
+                $capacity = bcmul(self::floor(bcdiv($capacity, $pairs, 6)), $pairs, 0);
+            }
             if (bccomp($capacity, $qty, 6) < 0) {
                 $out['materialShort'][] = $who + ['needQty' => SpkHours::plain($qty), 'plannedQty' => $capacity, 'shortQty' => SpkHours::plain(bcsub($qty, $capacity, 6))];
                 $qty = $capacity;
@@ -181,6 +197,24 @@ final class SpkGenerator
             }
             $out['workOrders'][] = ['id' => (string) $wo['id'], 'code' => (string) $wo['code']] + $who + ['qty' => SpkHours::plain($qty)];
         }
+    }
+
+    /**
+     * Pairs per sheet of the item's paired primary routing in force today at the plant (the one its WO release snapshots), or null.
+     *
+     * @return numeric-string|null
+     */
+    private function pairsPerSheet(EoraPostgresConnection $db, string $plant, string $item): ?string
+    {
+        $today = $this->calendar->resolve($db, $plant, new DateTimeImmutable)->calendarDate;
+        $pairs = $db->selectOne(
+            "select v.pairs_per_sheet from routings r join routing_versions v on v.routing_id = r.id
+              where r.plant_id = ? and r.item_id = ? and r.routing_kind = 'PRIMARY' and r.status = 'ACTIVE' and v.status in ('APPROVED', 'SUPERSEDED')
+                and v.effective_from <= ?::date and (v.effective_to is null or v.effective_to >= ?::date) order by v.effective_from desc limit 1",
+            [$plant, $item, $today, $today],
+        )?->pairs_per_sheet;
+
+        return $pairs === null ? null : SpkHours::num($pairs);
     }
 
     /**

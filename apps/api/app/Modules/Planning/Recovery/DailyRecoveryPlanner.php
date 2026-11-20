@@ -157,6 +157,8 @@ final class DailyRecoveryPlanner
         $fingerprint = hash('sha256', json_encode([$plant, $today, $target, $requirements, $stocks, $workOrders, $production, $commitments, $parameterFingerprint, $bomInputs, $conversions, $paired], JSON_THROW_ON_ERROR));
         $rows = [];
         $floorTaken = [];
+        // the day a work order release snapshots its masters (WorkOrderController::today)
+        $releaseDay = $this->calendar->resolve($db, $plant, new DateTimeImmutable)->calendarDate;
         foreach ($parts as $part) {
             $key = $part->customer_id.'|'.$part->item_id;
             $p = $params[$key] ?? null;
@@ -188,7 +190,7 @@ final class DailyRecoveryPlanner
             // Once linked, the shifts are history: their WO already contributes projected supply.
             $calc['planQty'] = $planQty;
             // Generate releases its WOs today, so it checks material against the BOM and conversions in force today (the snapshot)
-            $materialDate = $safetyStock === null ? $target : $today;
+            $materialDate = $safetyStock === null ? $target : $releaseDay;
             $capacity = $this->materials->estimate($db, $plant, (string) $part->item_id, $materialDate, $materialPool);
             // a linked plan's shifts are history; in Generate mode its residual need is still made, so it reserves material too
             $reserve = $p?->work_order_id === null && bccomp($planQty, '0', 0) > 0 ? $planQty

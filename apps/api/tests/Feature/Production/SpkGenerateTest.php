@@ -148,6 +148,24 @@ it('makes several WOs in one run from a shared material pool and keeps an operat
     expect($again['spks'])->toBe([])->and($again['workOrders'])->toBe([]);
 })->group('integration', 'production');
 
+it('never treats a plan of the operation before on a later day as input for today (Codex on #98)', function () {
+    $t = TenantFixtures::provision();
+    AccessFixtures::roles($t);
+    $f = spkFixture($this, $t);
+    $target = rtDayFrom($f['today'], 5); // the released WO of 100 is due that day
+    $op10 = AccessFixtures::run($t, fn (EoraPostgresConnection $db) => (string) $db->selectOne(
+        'select o.id from routing_operations o join work_orders w on w.routing_version_id = o.routing_version_id where w.id = ? and o.op_seq = 10', [$f['wo']['id']])->id);
+    // its blanking is planned the day after: the welding cannot be planned for the due day
+    $later = spa($this)->postJson('/api/v1/production/spk', ['plantId' => $f['plant'], 'workCenterId' => $f['wc']['id'], 'productionDate' => rtDayFrom($target, 1)])->assertCreated()->json('data');
+    spa($this)->putJson("/api/v1/production/spk/{$later['id']}", ['lines' => [spkLine($f, ['routingOperationId' => $op10, 'machineId' => $f['m1']['id'], 'plannedQty' => '100'])]],
+        ['If-Match' => '"'.$later['version'].'"'])->assertOk();
+
+    $gen = spa($this)->postJson('/api/v1/production/spk/generate', ['plantId' => $f['plant'], 'productionDate' => $target])->assertOk()->json('data');
+    expect($gen['spks'])->toBe([])
+        ->and(collect($gen['skipped'])->where('workOrderCode', $f['wo']['code'])->where('opSeq', 20)->pluck('reason')->all())
+        ->toBe(['100 not planned: the operation before it is not planned for them.']);
+})->group('integration', 'production');
+
 it('keeps reason SPK to Generate SPK and its release to the generating planner, also through direct SQL', function () {
     $t = TenantFixtures::provision();
     AccessFixtures::roles($t);
