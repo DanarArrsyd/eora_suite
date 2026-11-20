@@ -197,7 +197,8 @@ final class SpkGenerator
         if (bccomp($qty, '0', 6) <= 0) {
             return true;
         }
-        $demands = $row['demands'];
+        // a WO pegs only to a delivery still open (a fulfilled one is history); replenishment for stock pegs to none
+        $demands = array_values(array_filter($row['demands'], static fn (stdClass $d): bool => bccomp(SpkHours::num($d->outstanding), '0', 6) > 0));
         try {
             $wo = $db->transaction(function () use ($db, $plant, $date, $row, $qty, $demands): array {
                 $wo = $this->workOrders->createDraft(['plantId' => $plant, 'itemId' => $row['itemId'], 'qty' => SpkHours::plain($qty), 'dueDate' => $date,
