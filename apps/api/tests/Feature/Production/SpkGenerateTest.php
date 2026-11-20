@@ -200,6 +200,30 @@ it('keeps an operation to the machines its routing names, even when they are all
         ->and(collect($gen['skipped'])->where('opSeq', 10)->pluck('reason')->all())->toBe(['No active machine on PRS-01.']);
 })->group('integration', 'production');
 
+it('runs the shifts in production-day order from the day start, not by clock time (Codex on #98)', function () {
+    $t = TenantFixtures::provision();
+    AccessFixtures::roles($t);
+    $f = spkFixture($this, $t);
+    $target = rtDayFrom($f['today'], 5);
+    // the production day starts at 08:00: the 00:00 shift is the day's last one
+    AccessFixtures::run($t, function (EoraPostgresConnection $db) use ($t, $f) {
+        $db->insert("insert into business_calendars (tenant_id, plant_id, timezone, production_day_starts_at, effective_from) values (?, ?, 'Asia/Jakarta', '08:00', '2026-01-01')",
+            [$t['tenant'], $f['plant']]);
+        $calendar = (string) $db->selectOne("insert into shift_calendars (tenant_id, plant_id, code, name, effective_from) values (?, ?, 'DAY3', 'Three shifts', '2026-01-01') returning id",
+            [$t['tenant'], $f['plant']])->id;
+        foreach ([['N', '00:00', '08:00'], ['A', '08:00', '16:00'], ['B', '16:00', '00:00']] as [$code, $from, $to]) {
+            $db->insert('insert into shifts (tenant_id, shift_calendar_id, code, name, starts_at, ends_at) values (?, ?, ?, ?, ?, ?)', [$t['tenant'], $calendar, $code, "Shift {$code}", $from, $to]);
+        }
+        // the weld line holds 50 pieces (300 pcs/h) per shift: the released WO of 100 needs two shifts
+        $db->update('update work_centers set available_hours_per_shift = 0.25 where id = ?', [$f['wc2']['id']]);
+    });
+
+    $gen = spa($this)->postJson('/api/v1/production/spk/generate', ['plantId' => $f['plant'], 'productionDate' => $target])->assertOk()->json('data');
+    $weld = collect($gen['spks'])->firstWhere('workCenterCode', 'WLD-01');
+    $lines = collect(spa($this)->getJson("/api/v1/production/spk/{$weld['id']}")->assertOk()->json('data.lines'))->where('workOrderId', $f['wo']['id']);
+    expect($lines->pluck('plannedQty', 'shiftCode')->all())->toBe(['A' => '50', 'B' => '50']);
+})->group('integration', 'production');
+
 it('keeps reason SPK to Generate SPK and its release to the generating planner, also through direct SQL', function () {
     $t = TenantFixtures::provision();
     AccessFixtures::roles($t);

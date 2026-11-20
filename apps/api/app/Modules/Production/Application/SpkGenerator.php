@@ -52,7 +52,8 @@ final class SpkGenerator
         $calendar = $db->selectOne('select id from shift_calendars where (plant_id = ? or plant_id is null) and effective_from <= ?::date order by (plant_id is null), effective_from desc limit 1', [$plant, $date]);
         /** @var list<array{id: ?string, code: ?string}> $shifts */
         $shifts = $calendar === null ? [] : array_values(array_map(static fn (stdClass $s) => ['id' => (string) $s->id, 'code' => (string) $s->code],
-            $db->select('select id, code from shifts where shift_calendar_id = ? order by starts_at, code', [$calendar->id])));
+            // in the order they run within the production day: from the business calendar's day start (a shift before it runs last)
+            $db->select('select id, code from shifts where shift_calendar_id = ? order by (starts_at < ?::time), starts_at, code', [$calendar->id, $this->dayStart($db, $plant, $date)])));
         if ($shifts === []) {
             $shifts = [['id' => null, 'code' => null]];
         }
@@ -250,6 +251,16 @@ final class SpkGenerator
         $out['workOrders'][] = ['id' => (string) $wo['id'], 'code' => (string) $wo['code']] + $who + ['qty' => SpkHours::plain($qty)];
 
         return true;
+    }
+
+    /** The production day's start at the plant on that date (business calendar: plant before tenant, latest version). */
+    private function dayStart(EoraPostgresConnection $db, string $plant, string $date): string
+    {
+        return (string) ($db->selectOne(
+            'select production_day_starts_at::text as t from business_calendars where (plant_id = ? or plant_id is null) and effective_from <= ?::date
+              order by (plant_id is null), effective_from desc limit 1',
+            [$plant, $date],
+        )?->t ?? '00:00');
     }
 
     /**
