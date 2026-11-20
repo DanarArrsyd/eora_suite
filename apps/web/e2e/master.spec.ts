@@ -220,6 +220,10 @@ test('form pages ask before unsaved changes are left by a menu link or the brows
   await form.getByRole('textbox', { name: 'Name', exact: true }).fill('W');
   await form.getByRole('textbox', { name: 'Name', exact: true }).fill('');
   await form.getByRole('textbox', { name: 'Name', exact: true }).fill('Welding cell 2');
+  // a reload keeps the one guard: type, reload (the browser warns; Playwright accepts), type again (Codex on #99)
+  page.once('dialog', (d) => void d.accept());
+  await page.reload();
+  await form.getByRole('textbox', { name: 'Name', exact: true }).fill('Welding cell 2');
   // a menu link asks first; staying keeps the typed value
   await page.getByRole('link', { name: 'Plants & Warehouses' }).first().click();
   const ask = page.getByRole('alertdialog', { name: 'Leave without saving?' });

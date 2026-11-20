@@ -292,13 +292,18 @@ export function MasterEditor<T extends MasterRow>({
   React.useEffect(() => {
     dirtyRef.current = dirty;
   }, [dirty]);
-  // one guard entry of this same page per form, pushed the first time it gets dirty: the browser's Back lands on it and
-  // the page asks before going further back; once the form is clean again, that Back simply carries on
+  // one guard entry of this same page per form, pushed the first time it gets dirty and marked in its history state, so a
+  // reload on it reuses it: the browser's Back lands on the form's own entry and the page asks before going further back;
+  // once the form is clean again, that Back simply carries on
   const guarded = React.useRef(false);
+  React.useEffect(() => {
+    if (mode !== 'page' || !onGuardEntry()) return;
+    guarded.current = true;
+  }, [mode]);
   React.useEffect(() => {
     if (!dirty || mode !== 'page' || guarded.current) return;
     guarded.current = true;
-    window.history.pushState(window.history.state, '', window.location.href);
+    if (!onGuardEntry()) pushGuardEntry();
   }, [dirty, mode]);
   React.useEffect(() => {
     if (mode !== 'page') return;
@@ -309,13 +314,13 @@ export function MasterEditor<T extends MasterRow>({
         hash = window.location.hash;
         return;
       }
-      if (!guarded.current || released.current) return;
+      if (!guarded.current || released.current || onGuardEntry()) return;
       if (!dirtyRef.current) {
         guarded.current = false;
         window.history.back();
         return;
       }
-      window.history.pushState(window.history.state, '', window.location.href);
+      pushGuardEntry();
       setLeaveTo('history');
     };
     window.addEventListener('popstate', onPop);
@@ -356,7 +361,8 @@ export function MasterEditor<T extends MasterRow>({
     released.current = true;
     setLeaveTo(null);
     setDirty(false);
-    if (target === 'history') window.history.go(-2);
+    // leave the guard entry and the form's own entry behind
+    if (target === 'history') window.history.go(onGuardEntry() ? -2 : -1);
     else if (target && target !== 'close') router.push(target);
     else onClose();
   };
@@ -517,6 +523,17 @@ export function MasterEditor<T extends MasterRow>({
       />
     </>
   );
+}
+
+/** Whether the current history entry is a form page's guard entry (kept across reloads in its history state). */
+function onGuardEntry(): boolean {
+  const state: unknown = window.history.state;
+  return typeof state === 'object' && state !== null && (state as { eoraFormGuard?: boolean }).eoraFormGuard === true;
+}
+
+function pushGuardEntry(): void {
+  const state: unknown = window.history.state;
+  window.history.pushState({ ...(typeof state === 'object' && state !== null ? state : {}), eoraFormGuard: true }, '', window.location.href);
 }
 
 function conflictAware(error: unknown) {
