@@ -179,3 +179,15 @@ Login sebagai planner (PPC) di plant uji; pastikan line (work center) punya **ho
 6. **Tutup / batal:** **Close SPK** pada SPK released (hanya PPC dengan hak close) dan **Cancel** pada draft. Teks SPK yang sudah released tidak bisa diubah tanpa revisi. Export list **SPK Line** mengikuti filter yang sama.
 
 SPK slice 1 tidak memposting stok; jumlah aktual tetap dari Production Run dan posting. Generate SPK otomatis, Start run dari SPK dan print PDF ada di slice berikutnya (doc 38 §9).
+
+## Generate SPK — D-139 (slice 2)
+
+Login sebagai planner (PPC) di plant uji tanpa stok milik customer. Siapkan part finished goods dengan sales order firm untuk tanggal uji, BOM dan routing primary yang approved (proses di line yang punya **hours per shift**, mesin preferred di routing dan satu mesin lain di line yang sama), material RM yang cukup untuk sebagian, dan **safety stock** di Plan Parameters.
+
+1. **PPIC → SPK Line → New SPK → Generate SPK**, pilih tanggal, **Generate**. Harapan: **Work orders created and released** berisi WO reason SPK untuk kekurangan Daily Recovery + safety stock (buffer terbesar, bukan dijumlah); di **PPIC → Work Orders** WO itu berstatus Released dengan peminta dan perilis Anda sendiri.
+2. **Material short** menampilkan qty kebutuhan, qty yang direncanakan dan kekurangannya; WO hanya sebesar material yang cukup.
+3. Buka link draft SPK tiap line. Harapan: WO lama yang jatuh tempo sampai tanggal itu dan WO baru terbagi ke mesin preferred, lalu shift lain, lalu mesin alternatif; proses berikutnya tidak di shift lebih awal; setup hanya sekali per part dan proses di satu mesin.
+4. Bila jam tidak cukup: **Proposed overtime** menyebut mesin, shift, jam, WO dan customer, dan *over the plant limit* bila melewati batas OT plant. Beban mesin di SPK menunjukkan shift yang *over*.
+5. **Generate** lagi di tanggal yang sama. Harapan: tidak ada WO atau baris baru (*Nothing to plan*).
+6. Hapus baris WO hasil generate dari semua SPK lalu **Save SPK** (atau **Cancel** draft-nya). Harapan: WO itu menjadi Cancelled; WO manual tidak pernah dibatalkan atau dirilis oleh Generate.
+7. User tanpa hak membuat/mengajukan WO melihat keterangan bahwa Generate butuh role planner WO; plant dengan stok milik customer menolak Generate dengan pesan perencanaan per pemilik.

@@ -1,6 +1,6 @@
 # 38 — SPK per Line (daily production dispatch) — scope for approval
 
-**Status:** DECIDED decisions S-1..S-8 (owner 2026-11-19, D-138) and G-1..G-5 (owner 2026-11-20, D-139, §12); slice 1 implemented (owner go 2026-11-19: "SPK slice 1 dulu"); slice 2 (Generate SPK, §12) scope approved by the owner 2026-11-20; slices 3–4 start on the owner's go. Asked by the owner after trying the Production module: when a planner makes an SPK/WO, production should see it in its own menu, shaped like `docs/MASTER_SPK_HOURS_PROD.xlsx` (SPK LINE A / B / C…), editable by the planner and released to production.
+**Status:** DECIDED decisions S-1..S-8 (owner 2026-11-19, D-138) and G-1..G-5 (owner 2026-11-20, D-139, §12); slice 1 implemented (owner go 2026-11-19: "SPK slice 1 dulu"); slice 2 (Generate SPK, §12) approved 2026-11-20 and implemented (backend, Generate SPK on PPIC → SPK Line → New SPK); slices 3–4 start on the owner's go. Asked by the owner after trying the Production module: when a planner makes an SPK/WO, production should see it in its own menu, shaped like `docs/MASTER_SPK_HOURS_PROD.xlsx` (SPK LINE A / B / C…), editable by the planner and released to production.
 
 **Basis:** D-109 (WO release), D-130 (Standard Good Output = good pcs per running hour), D-134 (Daily Recovery), D-135 (material owner), D-136 (UI English, guides Indonesian), D-049 (numbering), ADR-0014 (idempotency), doc 16 (state machines), doc 18 (RBAC), doc 22 (frontend gates).
 
@@ -142,9 +142,9 @@ A full optimising scheduler (APS: sequence by die family, minimum-cost search) b
    - two needs of the **same item and operation on the same machine and day** become one line with one setup.
 6. **Over capacity:** what still does not fit stays on the preferred machine and is shown as **Proposed OT: machine, shift, hours, WO and customer** (G-5). Nothing is hidden or dropped.
 7. One **draft SPK per line** is created or added to (an existing draft is never overwritten without the planner's confirmation). The planner edits anything — part, qty, machine, shift, priority, note, delete or add lines — before release.
-8. **Release** of the SPK by the planner **also releases the work orders the generate created** for it (G-2); manual work orders keep their second-person release (D-109).
+8. The work orders the generate creates are **released at Generate by the generating planner** (G-2, G-6) so their operations can be planned; manual work orders keep their second-person release (D-109). Each SPK is then released to production by the planner as in slice 1.
 
-### Decisions (owner 2026-11-20)
+### Decisions (owner 2026-11-20; G-6..G-9 "Ya, pakai default")
 
 | ID | Question | Decision |
 |---|---|---|
@@ -153,10 +153,14 @@ A full optimising scheduler (APS: sequence by die family, minimum-cost search) b
 | G-3 | Same-day operations | **Allowed**: operation 20 may run on the same day as operation 10, after it, within its output. |
 | G-4 | Machine order | **Due date first**, then priority; same item + operation on the same machine and day merged into one line with one setup. |
 | G-5 | OT | **The system proposes OT** per machine and shift for the hours over capacity, for the customer need it serves. More than 4 h a day is allowed. An optional plant limit of OT hours per machine per day (empty = no limit); proposals beyond it are flagged, not blocked. Manpower and OT approval stay deferred (S-8). |
+| G-6 | When a generated WO is released (a draft WO has no routing snapshot to point SPK lines at) | **At Generate**, by the generating planner: the WO is created with reason `SPK`, recorded in `spk_generated_orders` and released at once with the usual snapshot. A generated WO that no SPK plans any more (line removed, draft cancelled) is cancelled automatically while nothing was issued or run for it. |
+| G-7 | Items | **Finished goods** (Daily Recovery's scope) first; generated semi-finished work orders follow later. |
+| G-8 | Need formula | The Daily Recovery quantity (min / batch as Daily Recovery rounds it; without a batch the shortfall rounded up), with its buffer = **the larger of the Daily Recovery buffer and the safety stock**, never both. A saved Daily Recovery shift plan without a WO counts as the planner's quantity and is linked to the generated WO. |
+| G-9 | Material short | Generate plans up to what the material allows; the rest is listed as **Material short** and gets no line. |
 
 ### Acceptance (slice 2)
 
 1. A shortfall of 2 800 pcs for tomorrow + safety stock 200 on an item whose preferred machine A1 runs 350 pcs/h with 7 h per shift plans 3 000 pcs = 8.571 h + setup and QC: A1 shift 1 up to 7 h, the rest on A1 shift 2 or on alternative A2; hours that fit nowhere are proposed as OT, never planned above capacity silently.
 2. Re-running Generate for the same date adds only needs not yet planned (idempotent per item and date), never double-counts a WO already on an SPK (D-034).
-3. The planner's edits after generate are kept; releasing the SPK releases its generated WOs and notifies production once; a manual WO on the same SPK is not released by it.
+3. The planner's edits after generate are kept; a generated WO the planner removes from every SPK is cancelled while nothing was issued or run; a manual WO is never released or cancelled by Generate.
 4. RLS, plant scope and every rule also through direct SQL as the runtime role; audit per generated and per released WO.
