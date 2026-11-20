@@ -80,7 +80,7 @@ test('adjustments: inventory control requests one stock line with a reason; noth
   await axe(page);
 
   await page.getByRole('button', { name: 'New adjustment request' }).click();
-  const drawer = page.getByRole('dialog', { name: 'New adjustment request' });
+  const drawer = page.getByRole('form', { name: 'New adjustment request' });
   await choose(page, drawer.getByRole('combobox', { name: 'Stock line' }), 'SHEET-SPCC-12 · L2611-0001 · P1 / RM-A01 · Unrestricted · 120.000 KG');
   await drawer.getByRole('textbox', { name: 'Quantity' }).fill('200');
   await choose(page, drawer.getByRole('combobox', { name: 'Reason' }), 'Other (explain in the note)');
@@ -191,7 +191,7 @@ test('adjustments: found stock where none is recorded is added by naming locatio
 
   await page.goto('/inventory/adjustments');
   await page.getByRole('button', { name: 'New adjustment request' }).click();
-  const drawer = page.getByRole('dialog', { name: 'New adjustment request' });
+  const drawer = page.getByRole('form', { name: 'New adjustment request' });
   await drawer.getByRole('textbox', { name: 'Quantity' }).fill('40');
   await choose(page, drawer.getByRole('combobox', { name: 'Reason' }), 'Found stock');
   await drawer.getByRole('button', { name: 'Request adjustment' }).click();

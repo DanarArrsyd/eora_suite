@@ -98,7 +98,7 @@ test('reversals: a correction requester picks a posted document and gives the re
   await axe(page);
 
   await page.getByRole('button', { name: 'New reversal request' }).click();
-  const drawer = page.getByRole('dialog', { name: 'New reversal request' });
+  const drawer = page.getByRole('form', { name: 'New reversal request' });
   await drawer.getByRole('textbox', { name: 'Document number' }).fill('ADJ-P1-2026-0009');
   await drawer.getByRole('textbox', { name: 'Reason' }).fill('x');
   await drawer.getByRole('button', { name: 'Request reversal' }).click();

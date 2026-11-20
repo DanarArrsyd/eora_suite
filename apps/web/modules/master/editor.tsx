@@ -1,10 +1,22 @@
 import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { useMe } from '@eora/features/auth';
-import { ConfirmDialog, EoraForm, FormDateField, FormSelectField, FormTextField, STATUS_CATALOGUE } from '@eora/features/patterns';
+import { setNavigationGuard } from '@eora/features/navigation';
+import {
+  ConfirmDialog,
+  EoraForm,
+  FormDateField,
+  FormGrid,
+  FormGridWide,
+  FormPage,
+  FormSelectField,
+  FormTextField,
+  STATUS_CATALOGUE,
+} from '@eora/features/patterns';
 import type { Option } from '@eora/features/data';
-import { Button, Drawer, DrawerContent, InlineAlert, type IsoDate } from '@eora/ui';
+import { Button, Drawer, DrawerContent, InlineAlert, Modal, ModalBody, ModalContent, type IsoDate } from '@eora/ui';
 import { formFailure } from '@/modules/admin/errors';
 import { PHYSICAL_LOCATION_TYPES } from './resources';
 import { queryOptions } from './source';
@@ -150,6 +162,14 @@ function schemaFor(fields: FieldSpec[]) {
   return z.object(shape);
 }
 
+/** Pickers whose choices are long sentences (order · customer · item · date · qty): they take the whole row of the grid. */
+const LONG_PICKERS = new Set<OptionSource>(['firmDeliveries', 'stockLines', 'inboundLines', 'materialAtProduction', 'workOrders', 'lots']);
+
+function FieldCell({ field, today, row }: { field: FieldSpec; today: string; row: unknown }) {
+  const control = <FieldControl field={field} today={today} row={row} />;
+  return field.wide || (typeof field.options === 'string' && LONG_PICKERS.has(field.options)) ? <FormGridWide>{control}</FormGridWide> : control;
+}
+
 function FieldControl({ field, today, row }: { field: FieldSpec; today: string; row: unknown }) {
   const picker = usePicker(typeof field.options === 'string' ? field.options : undefined, row && field.optionFilter ? field.optionFilter(row) : undefined);
   if (field.kind === 'date') {
@@ -166,7 +186,7 @@ function FieldControl({ field, today, row }: { field: FieldSpec; today: string; 
   }
   if (field.kind === 'select') {
     const options: Option[] = Array.isArray(field.options) ? field.options : [...(field.leadOptions ?? []), ...(picker.data ?? [])];
-    const hint = picker.isError ? 'The list could not be loaded. Close and reopen to try again.' : field.hint;
+    const hint = picker.isError ? 'The list could not be loaded. Go back and open the form again to retry.' : field.hint;
     return (
       <FormSelectField
         name={field.key}
@@ -194,16 +214,19 @@ function FieldControl({ field, today, row }: { field: FieldSpec; today: string; 
 }
 
 /**
- * Create or edit drawer of a master record (EoraForm, doc 29 §1). Codes and parents are chosen once; an edit saves at the
- * version the row was read with, so a concurrent change answers 412 and asks for a reload instead of overwriting it.
+ * Create or edit form of a master record (EoraForm, doc 29 §1) on its own page (D-140, EoraFormPage); a row action such
+ * as Release or Split opens as a dialog instead. Codes and parents are chosen once; an edit saves at the version the
+ * row was read with, so a concurrent change answers 412 and asks for a reload instead of overwriting it.
  */
 export function MasterEditor<T extends MasterRow>({
   config,
   row,
   canEdit,
   deniedReason,
-  open,
-  onOpenChange,
+  mode,
+  open = true,
+  back,
+  onClose,
   onSaved,
 }: {
   config: MasterResource<T>;
@@ -211,15 +234,19 @@ export function MasterEditor<T extends MasterRow>({
   row: T | null;
   /** The caller's create/edit permission hint (the server decides). */
   canEdit: boolean;
-  /** Why the row action is not available (its permission or a list its drawer reads). */
+  /** Why the row action is not available (its permission or a list its form reads). */
   deniedReason?: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  /** `page` for create and edit, `dialog` for a row action, `view` for a record that is only read (detail drawer). */
+  mode: 'page' | 'dialog' | 'view';
+  open?: boolean;
+  /** The list the page returns to. */
+  back: { label: string; href: string };
+  onClose: () => void;
   /** Called after a save; `partial` names what was saved when a later write failed; `created` is the create response. */
   onSaved: (message: string, partial?: boolean, created?: unknown) => void;
 }) {
   const editing = row !== null;
-  // codes and parents are fixed once created: the drawer title names the record, its facts show the parents
+  // codes and parents are fixed once created: the title names the record, its facts show the parents
   const fields = editing ? config.fields.filter((f) => !f.createOnly) : config.fields.filter((f) => !f.editOnly);
   const lockedReason = row
     ? (config.appendOnly ??
@@ -255,99 +282,267 @@ export function MasterEditor<T extends MasterRow>({
       });
     });
 
-  return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent title={title} closeLabel="Close">
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-          {row && config.facts ? (
-            <dl className="m-0 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-[13px]">
-              {config.facts(row).map((f) => (
-                <React.Fragment key={f.label}>
-                  <dt className="text-ink-2">{f.label}</dt>
-                  <dd className="m-0 text-ink">{f.value}</dd>
-                </React.Fragment>
-              ))}
-            </dl>
-          ) : null}
-          {lockedReason ? (
-            <InlineAlert tone="info" title="This record cannot be changed">
-              {lockedReason}
-            </InlineAlert>
-          ) : (
-            <>
-              <EoraForm
-                key={row ? `${row.id}:${row.version}` : 'new'}
-                label={title}
-                schema={schema}
-                defaultValues={defaults}
-                submitLabel={
-                  editing
-                    ? (config.rowAction?.label ?? 'Save changes')
-                    : config.confirm
-                      ? config.confirm(config.blank, null).confirmLabel
-                      : (config.submitLabel ?? `Create ${config.singular}`)
-                }
-                secondary={
-                  <Button type="button" onClick={() => onOpenChange(false)}>
-                    Cancel
-                  </Button>
-                }
-                onSubmit={async (values: FormValues, ctx) => {
-                  const clean = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])) as FormValues;
-                  const problems = config.check ? await config.check(clean, row).catch(() => ({})) : {};
-                  if (Object.keys(problems).length) {
-                    return { ok: false, message: 'Fix the highlighted field before posting.', fieldErrors: problems };
-                  }
-                  if (config.confirm && !(await ask(config.confirm(clean, row)))) {
-                    return { ok: false, message: 'Nothing was posted. Check the values and post again when they are right.' };
-                  }
-                  try {
-                    const created = row ? await config.update(row, clean, ctx) : await config.create(clean, ctx);
-                    onSaved(
-                      config.savedMessage
-                        ? config.savedMessage(created)
-                        : editing
-                          ? `${row.code} saved`
-                          : `${config.singular[0]?.toUpperCase()}${config.singular.slice(1)} ${clean.code ?? ''} created`.trim(),
-                      false,
-                      row ? undefined : created,
-                    );
-                    return { ok: true, message: editing ? 'Saved' : 'Created' };
-                  } catch (e) {
-                    if (e instanceof PartialSave) {
-                      onSaved(e.message, true);
-                      return { ok: true };
-                    }
-                    return conflictAware(e);
-                  }
-                }}
-              >
-                {fields.map((f) => (
-                  <FieldControl key={f.key} field={f} today={todayIn(tenantZone)} row={row} />
-                ))}
-              </EoraForm>
-              <ConfirmDialog
-                open={asking !== null}
-                onOpenChange={(open) => {
-                  if (!open) asking?.answer(false);
-                }}
-                title={asking?.question.title ?? ''}
-                description={asking?.question.description ?? ''}
-                confirmLabel={asking?.question.confirmLabel ?? 'Confirm'}
-                onConfirm={async () => asking?.answer(true)}
-              />
-            </>
-          )}
-        </div>
-      </DrawerContent>
-    </Drawer>
+  // unsaved changes: every way out asks first (D-140) — Back and Cancel, any in-app link (sidebar, breadcrumb, topbar),
+  // the browser's Back button; the browser itself warns on reload or close
+  const router = useRouter();
+  const [dirty, setDirty] = React.useState(false);
+  const [leaveTo, setLeaveTo] = React.useState<string | null>(null);
+  const released = React.useRef(false);
+  const dirtyRef = React.useRef(false);
+  React.useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
+  // one guard entry of this same page per form, pushed the first time it gets dirty and marked in its history state, so a
+  // reload on it reuses it: the browser's Back lands on the form's own entry and the page asks before going further back;
+  // once the form is clean again, that Back simply carries on
+  const guarded = React.useRef(false);
+  React.useEffect(() => {
+    if (mode !== 'page' || !onGuardEntry()) return;
+    guarded.current = true;
+  }, [mode]);
+  React.useEffect(() => {
+    if (!dirty || mode !== 'page' || guarded.current) return;
+    guarded.current = true;
+    if (!onGuardEntry()) pushGuardEntry();
+  }, [dirty, mode]);
+  React.useEffect(() => {
+    if (mode !== 'page') return;
+    let hash = window.location.hash;
+    const onPop = () => {
+      // a move within the page (`#main`) changes only the fragment: it is not a way out
+      if (window.location.hash !== hash) {
+        hash = window.location.hash;
+        return;
+      }
+      if (!guarded.current || released.current || onGuardEntry()) return;
+      if (!dirtyRef.current) {
+        guarded.current = false;
+        window.history.back();
+        return;
+      }
+      pushGuardEntry();
+      setLeaveTo('history');
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [mode]);
+  React.useEffect(() => {
+    if (!dirty || mode !== 'page') return;
+    released.current = false;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const link = e.target instanceof Element ? e.target.closest('a[href]') : null;
+      if (!(link instanceof HTMLAnchorElement) || link.target === '_blank' || link.hasAttribute('download') || link.hasAttribute('data-form-back')) return;
+      const url = new URL(link.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      // a link within this page (e.g. Skip to main content, `#main`) does not leave it
+      if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLeaveTo(url.pathname + url.search + url.hash);
+    };
+    // navigation in code (the global search) asks through the same dialog
+    const release = setNavigationGuard((href) => {
+      setLeaveTo(href);
+      return true;
+    });
+    window.addEventListener('beforeunload', warn);
+    document.addEventListener('click', onClick, true);
+    return () => {
+      release();
+      window.removeEventListener('beforeunload', warn);
+      document.removeEventListener('click', onClick, true);
+    };
+  }, [dirty, mode]);
+  const leave = () => (dirty && mode === 'page' ? setLeaveTo('close') : onClose());
+  const discard = () => {
+    const target = leaveTo;
+    released.current = true;
+    setLeaveTo(null);
+    setDirty(false);
+    // the browser's Back: go to the page the form came from, however many entries (in-page jumps, the guard) lie behind
+    if (target === 'history') router.replace(back.href);
+    else if (target && target !== 'close') router.push(target);
+    else onClose();
+  };
+
+  const form = lockedReason ? (
+    <InlineAlert tone="info" title="This record cannot be changed">
+      {lockedReason}
+    </InlineAlert>
+  ) : (
+    <>
+      <EoraForm
+        key={row ? `${row.id}:${row.version}` : 'new'}
+        label={title}
+        schema={schema}
+        defaultValues={defaults}
+        stickyActions={mode === 'page'}
+        onDirtyChange={setDirty}
+        submitLabel={
+          editing
+            ? (config.rowAction?.label ?? 'Save changes')
+            : config.confirm
+              ? config.confirm(config.blank, null).confirmLabel
+              : (config.submitLabel ?? `Create ${config.singular}`)
+        }
+        secondary={
+          <Button type="button" onClick={leave}>
+            Cancel
+          </Button>
+        }
+        onSubmit={async (values: FormValues, ctx) => {
+          const clean = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])) as FormValues;
+          const problems = config.check ? await config.check(clean, row).catch(() => ({})) : {};
+          if (Object.keys(problems).length) {
+            return { ok: false, message: 'Fix the highlighted field before posting.', fieldErrors: problems };
+          }
+          if (config.confirm && !(await ask(config.confirm(clean, row)))) {
+            return { ok: false, message: 'Nothing was posted. Check the values and post again when they are right.' };
+          }
+          try {
+            const created = row ? await config.update(row, clean, ctx) : await config.create(clean, ctx);
+            setDirty(false);
+            onSaved(
+              config.savedMessage
+                ? config.savedMessage(created)
+                : editing
+                  ? `${row.code} saved`
+                  : `${config.singular[0]?.toUpperCase()}${config.singular.slice(1)} ${clean.code ?? ''} created`.trim(),
+              false,
+              row ? undefined : created,
+            );
+            return { ok: true, message: editing ? 'Saved' : 'Created' };
+          } catch (e) {
+            if (e instanceof PartialSave) {
+              setDirty(false);
+              onSaved(e.message, true);
+              return { ok: true };
+            }
+            return conflictAware(e);
+          }
+        }}
+      >
+        {mode === 'page' ? (
+          <FormGrid>
+            {fields.map((f) => (
+              <FieldCell key={f.key} field={f} today={todayIn(tenantZone)} row={row} />
+            ))}
+          </FormGrid>
+        ) : (
+          fields.map((f) => <FieldControl key={f.key} field={f} today={todayIn(tenantZone)} row={row} />)
+        )}
+      </EoraForm>
+      <ConfirmDialog
+        open={asking !== null}
+        onOpenChange={(open) => {
+          if (!open) asking?.answer(false);
+        }}
+        title={asking?.question.title ?? ''}
+        description={asking?.question.description ?? ''}
+        confirmLabel={asking?.question.confirmLabel ?? 'Confirm'}
+        onConfirm={async () => asking?.answer(true)}
+      />
+    </>
   );
+  const facts = row && config.facts ? config.facts(row) : undefined;
+
+  if (mode === 'view') {
+    // a record that is only read keeps the detail drawer (D-140): facts and why it cannot be changed, no form
+    return (
+      <Drawer open={open} onOpenChange={(o) => (o ? undefined : onClose())}>
+        <DrawerContent title={title} closeLabel="Close">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
+            {facts ? (
+              <dl className="m-0 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-[13px]">
+                {facts.map((f) => (
+                  <React.Fragment key={f.label}>
+                    <dt className="text-ink-2">{f.label}</dt>
+                    <dd className="m-0 text-ink">{f.value}</dd>
+                  </React.Fragment>
+                ))}
+              </dl>
+            ) : null}
+            {lockedReason ? (
+              <InlineAlert tone="info" title="This record cannot be changed">
+                {lockedReason}
+              </InlineAlert>
+            ) : null}
+          </div>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+  if (mode === 'dialog') {
+    return (
+      <Modal open={open} onOpenChange={(o) => (o ? undefined : onClose())}>
+        <ModalContent title={title} closeLabel="Close">
+          <ModalBody className="flex flex-col gap-4">
+            {facts ? (
+              <dl className="m-0 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-[13px]">
+                {facts.map((f) => (
+                  <React.Fragment key={f.label}>
+                    <dt className="text-ink-2">{f.label}</dt>
+                    <dd className="m-0 text-ink">{f.value}</dd>
+                  </React.Fragment>
+                ))}
+              </dl>
+            ) : null}
+            {form}
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+    );
+  }
+  return (
+    <>
+      <FormPage
+        title={title}
+        description={editing ? undefined : `Fields marked * are required. ${config.description}`}
+        back={{
+          label: back.label,
+          href: back.href,
+          onNavigate: (e) => {
+            e.preventDefault();
+            leave();
+          },
+        }}
+        facts={facts}
+      >
+        {form}
+      </FormPage>
+      <ConfirmDialog
+        open={leaveTo !== null}
+        onOpenChange={(open) => (open ? undefined : setLeaveTo(null))}
+        title="Leave without saving?"
+        description="Your changes on this form are not saved yet. Leaving discards them."
+        confirmLabel="Discard changes"
+        tone="danger"
+        onConfirm={async () => discard()}
+      />
+    </>
+  );
+}
+
+/** Whether the current history entry is a form page's guard entry (kept across reloads in its history state). */
+function onGuardEntry(): boolean {
+  const state: unknown = window.history.state;
+  return typeof state === 'object' && state !== null && (state as { eoraFormGuard?: boolean }).eoraFormGuard === true;
+}
+
+function pushGuardEntry(): void {
+  const state: unknown = window.history.state;
+  window.history.pushState({ ...(typeof state === 'object' && state !== null ? state : {}), eoraFormGuard: true }, '', window.location.href);
 }
 
 function conflictAware(error: unknown) {
   const status = (error as { status?: number } | null)?.status;
   if (status === 412) {
-    return { ok: false as const, message: 'Someone changed this record after you opened it. Close the drawer, reopen the record and apply your change again.' };
+    return {
+      ok: false as const,
+      message: 'Someone changed this record after you opened it. Go back to the list, open the record again and apply your change.',
+    };
   }
   return formFailure(error, 'Nothing was saved.');
 }

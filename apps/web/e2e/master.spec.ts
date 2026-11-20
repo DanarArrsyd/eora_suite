@@ -70,7 +70,7 @@ test('work centers: create sends upper-case code and a number for hours; status 
   await page.goto('/master/work-centers');
   await expect(page.getByText('No work centers yet')).toBeVisible();
   await page.getByRole('button', { name: 'New work center' }).click();
-  const drawer = page.getByRole('dialog', { name: 'New work center' });
+  const drawer = page.getByRole('form', { name: 'New work center' });
   await expect(drawer.getByLabel('Status')).toHaveCount(0);
   await choose(page, drawer.getByRole('combobox', { name: 'Plant' }), 'P1 · Plant 1');
   await drawer.getByRole('textbox', { name: 'Code', exact: true }).fill('wld-02');
@@ -94,17 +94,36 @@ test('work centers: an edit sends only the changed fields at the row version; a 
   });
   await page.goto('/master/work-centers');
   await page.getByRole('button', { name: /Edit PRS-01/ }).click();
-  const drawer = page.getByRole('dialog', { name: 'PRS-01' });
+  const drawer = page.getByRole('form', { name: 'PRS-01' });
   await expect(drawer.getByRole('textbox', { name: 'Code', exact: true })).toHaveCount(0); // codes are fixed: shown in the title, not as a field
   await drawer.getByLabel('Available hours per shift').fill('');
   await drawer.getByRole('button', { name: 'Save changes' }).click();
   await expect(drawer.getByText(/Someone changed this record after you opened it/)).toBeVisible();
+  // from the successful save on the server holds version 4 (the app may read it again right after saving)
+  await mockApi(page, '/query/core.work_centers?*', page1([{ ...WC, availableHoursPerShift: null, version: 4 }]));
   await drawer.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText('PRS-01 saved')).toBeVisible();
   expect(sent).toEqual([
     { ifMatch: '"3"', body: { availableHoursPerShift: null } },
     { ifMatch: '"3"', body: { availableHoursPerShift: null } },
   ]);
+  // Back reopens the edit page with the saved record, not the row as it was before saving (Codex on #99)
+  await page.goBack();
+  await expect(drawer.getByLabel('Available hours per shift')).toHaveValue('');
+  await drawer.getByRole('textbox', { name: 'Name', exact: true }).fill('Press line 1A');
+  await drawer.getByRole('button', { name: 'Save changes' }).click();
+  await expect.poll(() => sent.at(-1)?.ifMatch).toBe('"4"');
+});
+
+test('an edit page opened from a link, left with Cancel and reopened with Back shows the record again (Codex on #99)', async ({ page }) => {
+  await setup(page);
+  await page.goto(`/master/work-centers?edit=${WC.id}`);
+  const form = page.getByRole('form', { name: 'PRS-01' });
+  await expect(form.getByLabel('Available hours per shift')).toHaveValue('7.5');
+  await form.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Work Centers' })).toBeVisible();
+  await page.goBack();
+  await expect(form.getByLabel('Available hours per shift')).toHaveValue('7.5');
 });
 
 test('a viewer sees the list but cannot create or change records', async ({ page }) => {
@@ -178,7 +197,7 @@ test('plants & warehouses: sections switch in the page, keep their place in the 
 
   await sections.getByRole('link', { name: 'Plants' }).click();
   await page.getByRole('button', { name: 'New plant' }).click();
-  const drawer = page.getByRole('dialog', { name: 'New plant' });
+  const drawer = page.getByRole('form', { name: 'New plant' });
   await expect(drawer.getByRole('combobox', { name: 'Time zone' })).toContainText('Asia/Jakarta'); // the workspace zone
   await choose(page, drawer.getByRole('combobox', { name: 'Company' }), 'CO1 · Demo Co');
   await drawer.getByRole('textbox', { name: 'Code', exact: true }).fill('p2');
@@ -207,5 +226,56 @@ test('pickers read every page of a long list, not only the first 200 rows', asyn
   await mockApi(page, '/query/core.machines?*', page1([]));
   await page.goto('/master/work-centers?show=machines');
   await page.getByRole('button', { name: 'New machine' }).click();
-  await choose(page, page.getByRole('dialog', { name: 'New machine' }).getByRole('combobox', { name: 'Work center' }), 'P1 / WC-230 · Line 230');
+  await choose(page, page.getByRole('form', { name: 'New machine' }).getByRole('combobox', { name: 'Work center' }), 'P1 / WC-230 · Line 230');
+});
+
+test('form pages ask before unsaved changes are left by a menu link or the browser back button (D-140)', async ({ page }) => {
+  await setup(page, WRITER, [WC]);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/master/work-centers');
+  await page.getByRole('button', { name: 'New work center' }).click();
+  const form = page.getByRole('form', { name: 'New work center' });
+  // an in-page jump before any change adds a history entry of its own; Discard after Back still leaves the form (Codex on #99)
+  await page.getByRole('link', { name: 'Skip to main content' }).focus();
+  await page.keyboard.press('Enter');
+  // typing, clearing and typing again keeps one guard: Discard after Back still lands on the list (Codex on #99)
+  await form.getByRole('textbox', { name: 'Name', exact: true }).fill('W');
+  await form.getByRole('textbox', { name: 'Name', exact: true }).fill('');
+  await form.getByRole('textbox', { name: 'Name', exact: true }).fill('Welding cell 2');
+  // a reload keeps the one guard: type, reload (the browser warns; Playwright accepts), type again (Codex on #99)
+  page.once('dialog', (d) => void d.accept());
+  await page.reload();
+  await form.getByRole('textbox', { name: 'Name', exact: true }).fill('Welding cell 2');
+  // a menu link asks first; staying keeps the typed value
+  await page.getByRole('link', { name: 'Plants & Warehouses' }).first().click();
+  const ask = page.getByRole('alertdialog', { name: 'Leave without saving?' });
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Welding cell 2');
+  // the global search asks too; Skip to main content stays on the page without asking (Codex on #99)
+  await page.keyboard.press('Control+k');
+  await page.getByRole('combobox', { name: 'Search' }).fill('plants');
+  await page.keyboard.press('Enter');
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Welding cell 2');
+  await page.getByRole('link', { name: 'Skip to main content' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(ask).toBeHidden();
+  await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Welding cell 2');
+  // Back first undoes in-page jumps (nothing asked, the value stays); the Back that would leave the form asks; Discard
+  // returns to the list however many entries lie behind
+  for (let i = 0; i < 4 && !(await ask.isVisible()); i++) {
+    await page.goBack();
+    await page.waitForTimeout(300);
+    if (!(await ask.isVisible())) await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Welding cell 2');
+  }
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Welding cell 2');
+  await page.goBack();
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Discard changes' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Work Centers' })).toBeVisible();
+  expect(page.url()).not.toContain('new=1');
 });

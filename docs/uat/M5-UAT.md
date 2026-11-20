@@ -191,3 +191,11 @@ Login sebagai planner (PPC) di plant uji tanpa stok milik customer. Siapkan part
 5. **Generate** lagi di tanggal yang sama. Harapan: tidak ada WO atau baris baru (*Nothing to plan*).
 6. Hapus baris WO hasil generate dari semua SPK lalu **Save SPK** (atau **Cancel** draft-nya). Harapan: WO itu menjadi Cancelled; WO manual tidak pernah dibatalkan atau dirilis oleh Generate.
 7. User tanpa hak membuat/mengajukan WO melihat keterangan bahwa Generate butuh role planner WO; plant dengan stok milik customer menolak Generate dengan pesan perencanaan per pemilik.
+
+## Form halaman penuh — D-140
+
+1. Buka list master mana pun (misalnya **Master Data → Work Centers**) lalu klik **New …**. Harapan: form terbuka sebagai halaman (alamat `?new=1`), ada link **Back to …**, field dua kolom di desktop dan satu kolom di ponsel, serta tombol **Cancel / Create …** di bar bawah yang tetap terlihat saat di-scroll.
+2. Isi satu field lalu klik **Back to …**. Harapan: muncul **Leave without saving?**. **Discard changes** kembali ke list dengan filter yang sama.
+3. Klik **Edit** pada satu baris. Harapan: halaman `?edit=<id>` dengan data record (kode, plant, dll.) di samping form; reload halaman membuka form yang sama.
+4. Record yang hanya bisa dilihat (Movement Ledger, lokasi virtual, atau tanpa hak ubah) tetap terbuka di **drawer detail**; aksi baris seperti **Release** / **Split** / **Receive** terbuka sebagai dialog.
+5. **PPIC → SPK Line → Generate SPK** membuka halaman sendiri; hasilnya tampil sebagai tabel (Draft SPKs, Work orders created and released, Proposed overtime, Material short, Not planned).

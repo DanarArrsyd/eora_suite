@@ -19,6 +19,7 @@ Rules: a shared pattern never imports a business module; no component exceeds on
 | `EoraInput` / `EoraSelect` / `EoraDatePicker` | label required (visible or `aria-label`), hint and error slots wired with `aria-describedby`, `aria-invalid`; control border `--color-border-control`. **No native `<select>` or `<input type="date">` (owner, 2026-10-14):** `Select` is a Radix listbox (keyboard, typeahead, clear item); dates use `Calendar` / `DatePicker` / `DateRangePicker` — month grid with ISO weeks (Monday first, week numbers, D-044), arrows/Home/End/PageUp/PageDown, Today and Clear, range preview |
 | `EoraModal` | Dialog for forms; **AlertDialog** for destructive/irreversible confirmation |
 | `EoraDrawer` | right sheet 520 px (full width < 768), focus trap, Esc closes, focus returns |
+| `EoraFormPage` | every create/edit form (D-140): back link, header, form card with `FormGrid` (2 columns ≥ 768 px), sticky `FormActions`, record facts aside, unsaved-changes guard; drawers are for read-only detail only |
 | `EoraStatusBadge` | maps a domain status to tone + optional icon; text always present; tones: success, warning, danger, info, neutral |
 
 ## 3. EoraStatusTabs

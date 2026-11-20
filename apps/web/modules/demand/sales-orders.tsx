@@ -10,6 +10,7 @@ import { ConfirmDialog, DataTable, DomainStatusBadge, EnterprisePage, type EoraC
 import { ReviseDialog } from './revise-dialog';
 import { Button, Card, CardContent, CardHeader, CardTitle, EmptyState, ErrorState, InlineAlert, LoadingState, PermissionDeniedState } from '@eora/ui';
 import { MasterEditor } from '@/modules/master/editor';
+import { useFormParam } from '@/modules/master/form-url';
 import { MasterScreen } from '@/modules/master/master-screen';
 import { PLANT_FILTER } from '@/modules/master/resources';
 import { queryAll } from '@/modules/master/source';
@@ -196,7 +197,8 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
   const router = useRouter();
   const client = useQueryClient();
   const [notice, setNotice] = React.useState<string | null>(null);
-  const [drawer, setDrawer] = React.useState<null | { kind: 'line' } | { kind: 'delivery'; line: Line }>(null);
+  // adding a line or a delivery has its own address (`?form=line`, `?form=delivery&line=<id>`, D-140)
+  const formUrl = useFormParam(['line']);
   const [revise, setRevise] = React.useState<null | { line: Line; schedule: Schedule }>(null);
   const [ask, setAsk] = React.useState<
     null | { kind: 'confirm' } | { kind: 'cancel' } | { kind: 'removeLine'; line: Line } | { kind: 'cancelDelivery'; line: Line; schedule: Schedule }
@@ -209,6 +211,9 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
     retry: false,
   });
   const o = order.data?.data;
+  const deliveryFor = formUrl.form === 'delivery' ? (o?.lines.find((l) => l.id === formUrl.get('line')) ?? null) : null;
+  const drawer: null | { kind: 'line' } | { kind: 'delivery'; line: Line } =
+    formUrl.form === 'line' ? { kind: 'line' } : deliveryFor ? { kind: 'delivery', line: deliveryFor } : null;
   const parts = useQuery({
     queryKey: ['master', 'picker', 'customerParts', o?.customerId],
     queryFn: async () =>
@@ -421,6 +426,24 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
     },
   ];
 
+  // adding a line or a delivery is a form page of its own (D-140); Back returns to this order
+  if (drawer !== null) {
+    return (
+      <MasterEditor
+        mode="page"
+        config={drawer.kind === 'delivery' ? deliveryDrawer : lineDrawer}
+        row={null}
+        canEdit={mayChange}
+        back={{ label: `Back to ${o.code ?? 'the sales order'}`, href: formUrl.closeHref }}
+        onClose={formUrl.close}
+        onSaved={(message) => {
+          formUrl.close();
+          changed(message);
+        }}
+      />
+    );
+  }
+
   return (
     <EnterprisePage
       title={o.code}
@@ -440,7 +463,7 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
             </Button>
           ) : null}
           {mayChange ? (
-            <Button onClick={() => setDrawer({ kind: 'line' })}>
+            <Button onClick={() => formUrl.open('line')}>
               <Plus aria-hidden="true" className="size-4" />
               Add line
             </Button>
@@ -484,7 +507,7 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
                   description="Add a line for each customer PO line: the customer part, its PO number and line, and the first delivery."
                   action={
                     mayChange ? (
-                      <Button size="sm" onClick={() => setDrawer({ kind: 'line' })}>
+                      <Button size="sm" onClick={() => formUrl.open('line')}>
                         Add line
                       </Button>
                     ) : undefined
@@ -513,7 +536,7 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
                           Remove line
                         </Button>
                       ) : null}
-                      <Button size="sm" onClick={() => setDrawer({ kind: 'delivery', line })}>
+                      <Button size="sm" onClick={() => formUrl.open('delivery', { line: line.id })}>
                         Add delivery
                       </Button>
                     </div>
@@ -554,17 +577,6 @@ function SalesOrderPage({ id, base }: { id: string; base: string }) {
         </Card>
       </div>
 
-      <MasterEditor
-        config={drawer?.kind === 'delivery' ? deliveryDrawer : lineDrawer}
-        row={null}
-        canEdit={mayChange}
-        open={drawer !== null}
-        onOpenChange={(v) => (v ? undefined : setDrawer(null))}
-        onSaved={(message) => {
-          setDrawer(null);
-          changed(message);
-        }}
-      />
       <ReviseDialog
         open={revise !== null}
         onOpenChange={(v) => (v ? undefined : setRevise(null))}

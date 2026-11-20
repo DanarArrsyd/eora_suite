@@ -41,5 +41,28 @@ Page header with as-of and scope → filter bar → **max 4 decision KPI cards**
 ## 5. Mobile task template (PWA, mockup 03)
 Navy app header (title + context + one icon action, 44 px) → content cards → bottom navigation *Home · Tasks · Scan (centre) · Inbox · Profile* with safe-area padding; Tasks and Inbox carry actionable numeric badges only (navigation doc §10). The PWA never shows the desktop dual sidebar. Inputs: steppers with numeric keypad (`inputmode`), 48 px targets, units under values. Flows: scan → validate (server) → enter → review → post → server-confirmed result with document number. Offline: banner + "Save draft"; submit disabled with reason. Errors say what failed, that nothing was posted, and the next action. Screens: My Shift, My Tasks, Scan Material, Production Reporting, Quality Inspection, Material Confirmation, Notification Inbox, User Profile.
 
-## 6. Other templates (to be mocked when their module is designed)
-Master data form (`EoraForm` in drawer or page) · approval inbox (list + review drawer) · import wizard (stepper) · report viewer (`EoraDocumentViewer`, A4/A3 preview, grayscale-safe) · planning board (V2).
+## 6. Form page template — `EoraFormPage` (D-140)
+```
+← Back to <list>
+Page title · description
+┌ form card ─────────────────────────────────────────┐  ┌ Record (edit only) ┐
+│ [error summary]                                     │  │ Code      PRS-01   │
+│ Field (col 1)            Field (col 2)              │  │ Plant     P1       │
+│ Long choice / note (spans both columns)             │  └────────────────────┘
+│ …                                                   │  ┌ aside (optional)   ┐
+├─────────────────────────────────────────────────────┤  └────────────────────┘
+│                               [Cancel] [Create …]   │  ← sticky at the card's foot
+└─────────────────────────────────────────────────────┘
+```
+- **Every** create or edit form is a page in this template (`FormPage`, `FormGrid`, `FormGridWide`, `FormActions` in `@eora/features/patterns`; master lists get it from `MasterScreen` + `MasterEditor`). No screen builds its own form layout and no form opens in a drawer.
+- Address: `?new=1` / `?edit=<id>` on the list URL; Back returns to the same filters; a reload or shared link opens the same form.
+- Fields: two columns from 768 px, one on phones; long pickers (deliveries, stock lines, work orders, lots) and notes span both (`FieldSpec.wide`).
+- Actions: sticky bar at the card's foot, secondary first, primary last, labelled by what happens (`Create item`, `Save changes`, `Release`).
+- Facts of the record (codes, parents, status) beside the form on wide screens, above it on phones.
+- Unsaved changes: leaving asks *Leave without saving?*; the browser warns on reload or close.
+- Stay as dialogs: confirmations and row actions that post (Release, Split, Receive). Stay as drawers: read-only detail views.
+- Result pages (e.g. Generate SPK) use `width="wide"` and show their results as tables under the form.
+- **Migration status:** master lists, SPK New / Generate, sales-order line and delivery, work-order edit are converted; the BOM, routing and conversion editors and the Daily Recovery plan still open drawers and move to this template in the next step.
+
+## 7. Other templates (to be mocked when their module is designed)
+Master data form (now §6) · approval inbox (list + review drawer) · import wizard (stepper) · report viewer (`EoraDocumentViewer`, A4/A3 preview, grayscale-safe) · planning board (V2).

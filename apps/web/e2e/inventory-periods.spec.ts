@@ -58,7 +58,7 @@ test('period close: inventory control asks to close a month that has ended', asy
   await expect(page.locator('#main').getByText('Mock data')).toHaveCount(0);
   await axe(page);
   await page.getByRole('button', { name: 'New close request' }).click();
-  const drawer = page.getByRole('dialog', { name: 'New close request' });
+  const drawer = page.getByRole('form', { name: 'New close request' });
   await choose(page, drawer.getByRole('combobox', { name: 'Plant' }), 'P1 · Plant 1');
   // only months that have ended are offered
   await drawer.getByRole('combobox', { name: 'Month' }).click();

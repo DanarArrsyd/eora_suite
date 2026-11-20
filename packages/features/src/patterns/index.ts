@@ -1,5 +1,5 @@
 export { StatusTabs, type StatusTabItem } from './status-tabs';
-export { EnterprisePage, ListWorkspace } from './page-template';
+export { EnterprisePage, FormActions, FormGrid, FormGridWide, FormPage, ListWorkspace } from './page-template';
 export { DomainStatusBadge, STATUS_CATALOGUE, statusEntry, type StatusDomain, type StatusOf } from './status-badge';
 export { useListUrlState, readListQuery, writeListQuery, parseSort, serializeSort, type ListUrlConfig, type ListUrlState } from './list-state';
 export * from './filter-bar';

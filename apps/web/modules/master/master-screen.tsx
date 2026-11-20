@@ -71,7 +71,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
       defaultSort: config.defaultSort,
       defaultView: 'all',
       defaultPageSize: Number(prefSize),
-      keepParams: ['show'],
+      keepParams: ['show', 'new', 'edit', 'act', 'view'],
     }),
     [filters, config.defaultSort, prefSize],
   );
@@ -80,8 +80,40 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const panel = useFilterPanel();
   const [visibility, setVisibility] = React.useState<ColumnVisibility>(() => Object.fromEntries((config.defaultHidden ?? []).map((id) => [id, false])));
   const saved = useSavedViews(config.id);
-  const [editor, setEditor] = React.useState<{ open: boolean; row: T | null }>({ open: false, row: null });
+  // create and edit are pages of their own (D-140): `?new=1` and `?edit=<id>` on the list's URL, so Back returns to the
+  // same filters and a page can be reloaded or shared; a row action (`?act=<id>`) opens as a dialog over the list
+  const pathname = usePathname() ?? '/';
+  const params = useSearchParams();
+  const editId = params?.get('edit') ?? null;
+  const actId = params?.get('act') ?? null;
+  const viewId = params?.get('view') ?? null;
+  const creating = params?.get('new') === '1';
+  const [picked, setPicked] = React.useState<T | null>(null);
   const [notice, setNotice] = React.useState<{ title: string; partial: boolean; saved?: boolean } | null>(null);
+  const listHref = React.useMemo(() => {
+    const next = new URLSearchParams(params?.toString() ?? '');
+    for (const k of ['new', 'edit', 'act', 'view']) next.delete(k);
+    const qs = next.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  }, [params, pathname]);
+  const hrefWith = (key: 'new' | 'edit' | 'act' | 'view', value: string) => {
+    const next = new URLSearchParams(params?.toString() ?? '');
+    for (const k of ['new', 'edit', 'act', 'view']) next.delete(k);
+    next.set(key, value);
+    return `${pathname}?${next.toString()}`;
+  };
+  const targetId = editId ?? actId ?? viewId;
+  // the record of `?edit=` / `?act=`: the row clicked, else read by id (a reload or a shared link)
+  const target = useQuery({
+    queryKey: ['master', config.resource, 'one', targetId],
+    queryFn: async ({ signal }) =>
+      (await source.list({ filters: { id: targetId! }, search: '', sort: config.defaultSort, page: 1, pageSize: 1, view: 'all' }, signal)).rows[0] ?? null,
+    enabled: canView && !!targetId && picked?.id !== targetId,
+    // read once per opening: a background refetch would reset a form being filled in
+    refetchOnWindowFocus: false,
+  });
+  const targetRow = targetId ? (picked?.id === targetId ? picked : (target.data ?? null)) : null;
+  const closeEditor = () => router.push(listHref);
 
   // what the API reads: the screen's filters (mapped where one choice stands for several API filters) plus fixed ones
   const apiFilters = { ...(config.mapFilters ? config.mapFilters(query.filters as Record<string, string | string[]>) : query.filters), ...config.fixedFilters };
@@ -113,7 +145,7 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   const createReason = `Your roles do not allow changes to ${perm.label}.`;
 
   const createButton = config.noCreate ? undefined : canCreate ? (
-    <Button variant="primary" onClick={() => (config.createHref ? router.push(config.createHref) : setEditor({ open: true, row: null }))}>
+    <Button variant="primary" onClick={() => router.push(config.createHref ?? hrefWith('new', '1'))}>
       <Plus aria-hidden="true" className="size-4" />
       {createLabel}
     </Button>
@@ -126,8 +158,75 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
     </Tooltip>
   );
 
+  const onSaved = (message: string, partial?: boolean, created?: unknown) => {
+    // the row clicked is now out of date: an edit URL opened again (e.g. by Back) reads the record afresh
+    setPicked(null);
+    client.removeQueries({ queryKey: ['master', config.resource, 'one'] });
+    void client.invalidateQueries({ queryKey: ['master'] });
+    // a record with its own page opens there once created
+    const record = (created as { data?: T } | undefined)?.data;
+    if (config.openHref && record?.id && !partial) router.push(config.openHref(record));
+    else {
+      setNotice({ title: message, partial: !!partial, saved: config.savedMessage !== undefined });
+      router.push(listHref);
+    }
+  };
+  const back = { label: `Back to ${(heading?.title ?? config.title).toLowerCase()}`, href: listHref };
+  if (creating || editId) {
+    if (creating && !canCreate) {
+      return (
+        <div className="p-6 max-md:p-4">
+          <PermissionDeniedState title={`Creating a ${config.singular} is not available for your roles`} description={createReason} />
+        </div>
+      );
+    }
+    // a save drops the cached record (onSaved), so a cached copy here is never older than the last save
+    if (editId && !targetRow) {
+      return target.isPending || target.isFetching ? (
+        <LoadingState title={`Loading ${config.singular}`} />
+      ) : (
+        <div className="p-6 max-md:p-4">
+          <EmptyState
+            title={`This ${config.singular} is not in your scope`}
+            description="It may have been removed, or your roles do not cover it."
+            action={
+              <Button size="sm" onClick={closeEditor}>
+                {back.label}
+              </Button>
+            }
+          />
+        </div>
+      );
+    }
+    return (
+      <MasterEditor
+        key={editId ?? 'new'}
+        mode="page"
+        config={config}
+        row={editId ? targetRow : null}
+        canEdit={canCreate}
+        back={back}
+        onClose={closeEditor}
+        onSaved={onSaved}
+      />
+    );
+  }
+
   return (
-    <EnterprisePage title={heading?.title ?? config.title} description={config.description} actions={createButton}>
+    <EnterprisePage
+      title={heading?.title ?? config.title}
+      description={config.description}
+      actions={
+        config.secondaryAction && config.secondaryAction.permissions.every((p) => permissions.includes(p)) ? (
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => router.push(config.secondaryAction!.href)}>{config.secondaryAction.label}</Button>
+            {createButton}
+          </div>
+        ) : (
+          createButton
+        )
+      }
+    >
       {heading?.sections}
       {notice ? (
         <InlineAlert
@@ -248,32 +347,53 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
               config.openHref
                 ? { id: 'open', label: 'Open', icon: FolderOpen, onSelect: () => router.push(config.openHref!(r)) }
                 : config.rowAction
-                  ? { id: 'act', label: config.rowAction.label, icon: Pencil, onSelect: () => setEditor({ open: true, row: r }) }
-                  : {
-                      id: 'open',
-                      label: config.appendOnly || config.readOnly?.(r) || !canCreate ? 'View' : 'Edit',
+                  ? {
+                      id: 'act',
+                      label: config.rowAction.label,
                       icon: Pencil,
-                      onSelect: () => setEditor({ open: true, row: r }),
-                    },
+                      onSelect: () => {
+                        setPicked(r);
+                        router.push(hrefWith('act', r.id));
+                      },
+                    }
+                  : config.appendOnly || config.readOnly?.(r) || !canCreate
+                    ? {
+                        id: 'open',
+                        label: 'View',
+                        icon: Pencil,
+                        onSelect: () => {
+                          setPicked(r);
+                          router.push(hrefWith('view', r.id));
+                        },
+                      }
+                    : {
+                        id: 'open',
+                        label: 'Edit',
+                        icon: Pencil,
+                        onSelect: () => {
+                          setPicked(r);
+                          router.push(hrefWith('edit', r.id));
+                        },
+                      },
           }}
         />
       </ListWorkspace>
-      <MasterEditor
-        config={config}
-        row={editor.row}
-        canEdit={canAct}
-        deniedReason={actDenied}
-        open={editor.open}
-        onOpenChange={(open) => setEditor((e) => ({ ...e, open }))}
-        onSaved={(message, partial, created) => {
-          setEditor({ open: false, row: null });
-          void client.invalidateQueries({ queryKey: ['master'] });
-          // a record with its own page opens there once created
-          const record = (created as { data?: T } | undefined)?.data;
-          if (config.openHref && record?.id && !partial) router.push(config.openHref(record));
-          else setNotice({ title: message, partial: !!partial, saved: config.savedMessage !== undefined });
-        }}
-      />
+      {viewId && targetRow ? (
+        <MasterEditor key={viewId} mode="view" config={config} row={targetRow} canEdit={false} back={back} onClose={closeEditor} onSaved={onSaved} />
+      ) : null}
+      {config.rowAction && actId && targetRow ? (
+        <MasterEditor
+          key={actId}
+          mode="dialog"
+          config={config}
+          row={targetRow}
+          canEdit={canAct}
+          deniedReason={actDenied}
+          back={back}
+          onClose={closeEditor}
+          onSaved={onSaved}
+        />
+      ) : null}
     </EnterprisePage>
   );
 }

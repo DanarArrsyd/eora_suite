@@ -84,7 +84,7 @@ test('RM receipts: a receipt is confirmed before it posts, with one idempotency 
   // live screen: no Mock data label on the page (the global pre-release banner mentions the words, outside #main)
   await expect(page.locator('#main').getByText('Mock data')).toHaveCount(0);
   await page.getByRole('button', { name: 'New receipt' }).click();
-  const drawer = page.getByRole('dialog', { name: 'New receipt' });
+  const drawer = page.getByRole('form', { name: 'New receipt' });
   await choose(page, drawer.getByRole('combobox', { name: 'Plant' }), 'P1 · Plant 1');
   await choose(page, drawer.getByRole('combobox', { name: 'Supplier' }), 'SUP-STEEL · Steel service centre');
   await choose(page, drawer.getByRole('combobox', { name: 'Item' }), 'COIL-SPCC-12 · SPCC coil 1.2 mm (KG)');
@@ -195,7 +195,7 @@ test('customer material: select an owner independently from the sender and keep 
   const calls = await capture(page, '/inventory/receipts', { documentId: ID(50), docNo: 'RCV-P1-2026-0001', lotNo: 'RM-DPM-181126-0001', replayed: false });
   await page.goto('/materials/rm-receipts');
   await page.getByRole('button', { name: 'New receipt' }).click();
-  const form = page.getByRole('dialog', { name: 'New receipt' });
+  const form = page.getByRole('form', { name: 'New receipt' });
   await choose(page, form.getByRole('combobox', { name: 'Plant' }), 'P1 · Plant 1');
   await choose(page, form.getByRole('combobox', { name: 'Supplier' }), 'SUP-STEEL · Steel service centre');
   await choose(page, form.getByRole('combobox', { name: 'Material owner' }), 'DPM · Customer DPM');
