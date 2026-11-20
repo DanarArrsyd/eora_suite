@@ -226,7 +226,20 @@ test('form pages ask before unsaved changes are left by a menu link or the brows
   await expect(ask).toBeVisible();
   await ask.getByRole('button', { name: 'Cancel' }).click();
   await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Welding cell 2');
-  // the browser's back button asks too; discarding returns to the list
+  // the global search asks too; Skip to main content stays on the page without asking (Codex on #99)
+  await page.keyboard.press('Control+k');
+  await page.getByRole('combobox', { name: 'Search' }).fill('plants');
+  await page.keyboard.press('Enter');
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Welding cell 2');
+  await page.getByRole('link', { name: 'Skip to main content' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(ask).toBeHidden();
+  await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Welding cell 2');
+  // the first Back only undoes the in-page jump; the next one would leave the form, so it asks; discarding returns to the list
+  await page.goBack();
+  await expect(ask).toBeHidden();
   await page.goBack();
   await expect(ask).toBeVisible();
   await ask.getByRole('button', { name: 'Cancel' }).click();

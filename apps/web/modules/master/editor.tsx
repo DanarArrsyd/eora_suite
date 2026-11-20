@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { useMe } from '@eora/features/auth';
+import { setNavigationGuard } from '@eora/features/navigation';
 import {
   ConfirmDialog,
   EoraForm,
@@ -301,7 +302,13 @@ export function MasterEditor<T extends MasterRow>({
   }, [dirty, mode]);
   React.useEffect(() => {
     if (mode !== 'page') return;
+    let hash = window.location.hash;
     const onPop = () => {
+      // a move within the page (`#main`) changes only the fragment: it is not a way out
+      if (window.location.hash !== hash) {
+        hash = window.location.hash;
+        return;
+      }
       if (!guarded.current || released.current) return;
       if (!dirtyRef.current) {
         guarded.current = false;
@@ -324,13 +331,21 @@ export function MasterEditor<T extends MasterRow>({
       if (!(link instanceof HTMLAnchorElement) || link.target === '_blank' || link.hasAttribute('download') || link.hasAttribute('data-form-back')) return;
       const url = new URL(link.href, window.location.href);
       if (url.origin !== window.location.origin) return;
+      // a link within this page (e.g. Skip to main content, `#main`) does not leave it
+      if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) return;
       e.preventDefault();
       e.stopPropagation();
       setLeaveTo(url.pathname + url.search + url.hash);
     };
+    // navigation in code (the global search) asks through the same dialog
+    const release = setNavigationGuard((href) => {
+      setLeaveTo(href);
+      return true;
+    });
     window.addEventListener('beforeunload', warn);
     document.addEventListener('click', onClick, true);
     return () => {
+      release();
       window.removeEventListener('beforeunload', warn);
       document.removeEventListener('click', onClick, true);
     };

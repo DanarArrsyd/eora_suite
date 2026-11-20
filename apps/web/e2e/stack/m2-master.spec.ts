@@ -66,7 +66,7 @@ test('M2 master data end to end on the real stack', async ({ browser }) => {
 
     await supervisor.goto('/master/items');
     await supervisor.getByRole('button', { name: 'New item' }).click();
-    const drawer = supervisor.getByRole('dialog', { name: 'New item' });
+    const drawer = supervisor.getByRole('form', { name: 'New item' });
     await drawer.getByRole('textbox', { name: 'Code', exact: true }).fill(ITEM);
     await drawer.getByRole('textbox', { name: 'Name', exact: true }).fill(`Stack e2e bracket ${run}`);
     await choose(supervisor, drawer.getByRole('combobox', { name: 'Type' }), 'Finished good');
@@ -81,7 +81,7 @@ test('M2 master data end to end on the real stack', async ({ browser }) => {
   await test.step('the Supervisor prepares its routing and submits it', async () => {
     await planner.goto('/master/routings');
     await planner.getByRole('button', { name: 'New routing' }).click();
-    const drawer = planner.getByRole('dialog', { name: 'New routing' });
+    const drawer = planner.getByRole('form', { name: 'New routing' });
     await choose(planner, drawer.getByRole('combobox', { name: 'Plant' }), /^P1 · /);
     await choose(planner, drawer.getByRole('combobox', { name: 'Item' }), new RegExp(`^${ITEM} · `));
     await drawer.getByRole('textbox', { name: 'Routing code' }).fill('R1');

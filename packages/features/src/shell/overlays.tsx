@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, CornerDownLeft, Menu, Search, X } from 'lucide-react';
 import { DialogPrimitive, EmptyState, EoraMark, Kbd, NumericBadge, cn } from '@eora/ui';
-import { buildPageIndex, moduleHref, searchPages, type BadgeCounts, type NavModule } from '../navigation';
+import { buildPageIndex, guardedNavigate, moduleHref, searchPages, type BadgeCounts, type NavModule } from '../navigation';
 import { ModuleMenu } from './sidebars';
 
 /* ===================== EoraGlobalSearch dialog ===================== */
@@ -81,7 +81,8 @@ function SearchBody({ modules, onDone }: { modules: readonly NavModule[]; onDone
 
   const open = (href: string) => {
     onDone();
-    router.push(href);
+    // a form page with unsaved changes asks first (D-140)
+    guardedNavigate(href, (to) => router.push(to));
   };
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!shown.length) return;

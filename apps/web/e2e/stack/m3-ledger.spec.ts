@@ -128,7 +128,7 @@ test('M3 ledger end to end on the real stack', async ({ browser }) => {
   await test.step('inventory control requests an adjustment of the child lot; the administrator approves it', async () => {
     await inventory.goto('/inventory/adjustments');
     await inventory.getByRole('button', { name: 'New adjustment request' }).click();
-    const drawer = inventory.getByRole('dialog', { name: 'New adjustment request' });
+    const drawer = inventory.getByRole('form', { name: 'New adjustment request' });
     await choose(inventory, drawer.getByRole('combobox', { name: 'Stock line' }), `COIL-SPCC-12 · ${released}-01 · P1 / RM-A02 · Unrestricted · 100.000 KG`);
     await drawer.getByRole('textbox', { name: 'Quantity' }).fill('20');
     await choose(inventory, drawer.getByRole('combobox', { name: 'Reason' }), 'Damage');
@@ -150,7 +150,7 @@ test('M3 ledger end to end on the real stack', async ({ browser }) => {
   await test.step('the materials PIC requests its reversal; inventory control approves it', async () => {
     await materials.goto('/inventory/reversals');
     await materials.getByRole('button', { name: 'New reversal request' }).click();
-    const drawer = materials.getByRole('dialog', { name: 'New reversal request' });
+    const drawer = materials.getByRole('form', { name: 'New reversal request' });
     await drawer.getByRole('textbox', { name: 'Document number' }).fill(adjustment.toLowerCase());
     await drawer.getByRole('textbox', { name: 'Reason' }).fill('The damage was on another coil');
     await drawer.getByRole('button', { name: 'Request reversal' }).click();
