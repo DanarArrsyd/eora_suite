@@ -318,6 +318,7 @@ type Generated = {
     opSeq: number;
     overLimit: boolean;
     limitHours: string | null;
+    machineDayHours: string;
   }[];
   materialShort: { itemCode: string; itemName: string; customerCode: string; needQty: string; plannedQty: string; shortQty: string }[];
   skipped: { itemCode?: string; workOrderCode?: string; customerCode?: string; opSeq?: number; reason: string }[];
@@ -417,7 +418,7 @@ function GenerateSpk({ plant, today, canGenerate }: { plant: string; today: stri
                       {o.workCenterCode} {o.machineCode}
                       {o.shiftCode ? ` (${o.shiftCode})` : ''}: +{o.hours} h for {o.workOrderCode} · {o.itemCode}
                       {o.customerCode ? ` · ${o.customerCode}` : ''} · op {o.opSeq}
-                      {o.overLimit ? ` — over the plant limit of ${o.limitHours} h` : ''}
+                      {o.overLimit ? ` — machine day total ${o.machineDayHours} h, over the plant limit of ${o.limitHours} h` : ''}
                     </li>
                   ))}
                 </ul>

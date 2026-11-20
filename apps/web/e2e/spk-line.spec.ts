@@ -259,6 +259,7 @@ test('spk line: the planner generates the day from Daily Recovery and sees what 
               opSeq: 10,
               overLimit: true,
               limitHours: '1',
+              machineDayHours: '1.5',
             },
           ],
           materialShort: [{ itemCode: 'BRK-A100', itemName: 'Bracket front A100', customerCode: 'OEM-W', needQty: '60', plannedQty: '50', shortQty: '10' }],
@@ -277,7 +278,7 @@ test('spk line: the planner generates the day from Daily Recovery and sees what 
   await expect(result).toContainText('PRS-200 · 2 lines added (new draft)');
   await expect(result).toContainText('WO-P1-2026-0004 · BRK-A100 · OEM-W');
   await expect(result).toContainText('+1.5 h for WO-P1-2026-0004');
-  await expect(result).toContainText('over the plant limit of 1 h');
+  await expect(result).toContainText('machine day total 1.5 h, over the plant limit of 1 h');
   await expect(result).toContainText('short');
   await expect(result).toContainText('No approved BOM in force');
   expect(bodies[0]).toMatchObject({ plantId: SESSION.plants[0]!.id });

@@ -52,7 +52,7 @@ it('generates the WO the shortfall needs, spreads operations over machines, prop
     expect(collect($gen['spks'])->pluck('linesAdded', 'workCenterCode')->all())->toBe(['PRS-01' => 2, 'WLD-01' => 3])
         ->and($gen['overtime'])->toHaveCount(1)
         ->and($gen['overtime'][0])->toMatchArray(['machineCode' => 'W-1', 'workCenterCode' => 'WLD-01', 'hours' => '0.25', 'qty' => '50',
-            'workOrderCode' => $gen['workOrders'][0]['code'], 'overLimit' => true, 'limitHours' => '0.2']);
+            'workOrderCode' => $gen['workOrders'][0]['code'], 'overLimit' => true, 'limitHours' => '0.2', 'machineDayHours' => '0.25']);
     $weld = collect($gen['spks'])->firstWhere('workCenterCode', 'WLD-01');
     $lines = spa($this)->getJson("/api/v1/production/spk/{$weld['id']}")->assertOk()->json('data.lines');
     expect(array_map(fn ($l) => [$l['workOrderCode'], $l['machineCode'], $l['plannedQty'], $l['hours']], $lines))->toBe([
@@ -137,8 +137,13 @@ it('makes several WOs in one run from a shared material pool and keeps an operat
     $pressSpk = spa($this)->getJson("/api/v1/production/spk/{$pressDraft['id']}")->json('data');
     $pressSpk = spa($this)->postJson("/api/v1/production/spk/{$pressSpk['id']}/actions/release", [], ['If-Match' => '"'.$pressSpk['version'].'"'])->assertOk()->json('data');
     spa($this)->postJson("/api/v1/production/spk/{$pressSpk['id']}/actions/revise", ['reason' => 'Press back in service'], ['If-Match' => '"'.$pressSpk['version'].'"'])->assertCreated();
+    // the press line has a short shift: the new WOs' blanking only fits as overtime at the end of shift 2, so their welding
+    // cannot run ahead of it in shift 1 (G-3, per shift)
+    AccessFixtures::run($t, fn (EoraPostgresConnection $db) => $db->update('update work_centers set available_hours_per_shift = 0.05 where id = ?', [$f['wc']['id']]));
     $more = spa($this)->postJson('/api/v1/production/spk/generate', ['plantId' => $f['plant'], 'productionDate' => $target])->assertOk()->json('data');
     expect($more['workOrders'])->toBe([])->and(collect($more['spks'])->pluck('workCenterCode')->sort()->values()->all())->toBe(['PRS-01', 'WLD-01']);
+    $weldLines = collect(spa($this)->getJson("/api/v1/production/spk/{$weld['id']}")->json('data.lines'))->whereIn('workOrderCode', $newWos);
+    expect($weldLines)->not->toBeEmpty()->and($weldLines->pluck('shiftCode')->unique()->values()->all())->toBe(['S2']);
     $again = spa($this)->postJson('/api/v1/production/spk/generate', ['plantId' => $f['plant'], 'productionDate' => $target])->assertOk()->json('data');
     expect($again['spks'])->toBe([])->and($again['workOrders'])->toBe([]);
 })->group('integration', 'production');

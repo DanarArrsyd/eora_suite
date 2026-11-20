@@ -187,13 +187,15 @@ final class DailyRecoveryPlanner
                 $p?->batch_qty === null ? null : (string) $p->batch_qty, $p?->work_order_id === null ? $planQty : '0');
             // Once linked, the shifts are history: their WO already contributes projected supply.
             $calc['planQty'] = $planQty;
-            $capacity = $this->materials->estimate($db, $plant, (string) $part->item_id, $target, $materialPool);
+            // Generate releases its WOs today, so it checks material against the BOM and conversions in force today (the snapshot)
+            $materialDate = $safetyStock === null ? $target : $today;
+            $capacity = $this->materials->estimate($db, $plant, (string) $part->item_id, $materialDate, $materialPool);
             // a linked plan's shifts are history; in Generate mode its residual need is still made, so it reserves material too
             $reserve = $p?->work_order_id === null && bccomp($planQty, '0', 0) > 0 ? $planQty
                 : ($calc['proposedQty'] ?? ($safetyStock === null ? '0' : RecoveryCalculation::ceil($calc['netQty'])));
             if ($capacity !== null && ($p?->work_order_id === null || $safetyStock !== null) && bccomp($reserve, '0', 0) > 0) {
                 $reserve = bccomp($reserve, $capacity, 0) < 0 ? $reserve : $capacity;
-                $this->materials->consume($db, $plant, (string) $part->item_id, $reserve, $target, $materialPool, []);
+                $this->materials->consume($db, $plant, (string) $part->item_id, $reserve, $materialDate, $materialPool, []);
             }
             $stockRows = array_values(array_filter($stocks, static fn (stdClass $s): bool => $s->item_id === $part->item_id));
             $before = $this->sum(array_filter($stockRows, static fn (stdClass $s): bool => $s->stock_status === 'PENDING_QC'), 'qty');

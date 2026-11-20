@@ -77,46 +77,48 @@ final class SpkGenerator
             );
             $after = 0; // G-3: a later operation never starts in an earlier shift than the one before it
             $cap = null; // G-3: nor plans more than the operation before it has planned
+            $supply = null; // G-3: nor more by the end of any shift than the operation before it has made by then
             foreach ($ops as $op) {
-                // what this operation already has on an SPK of the day also holds the next operation back (G-3)
-                $planned = $this->plannedShift($db, (string) $wo->id, (string) $op->id, $date, $shifts);
+                // this operation's lines on SPKs of the day, per shift; its lines on other days count as ready from the first shift
+                $mine = $this->plannedByShift($db, (string) $wo->id, (string) $op->id, $date, $shifts);
+                $has = SpkHours::num($op->planned);
+                $other = bcsub($has, array_reduce($mine, static fn (string $t, string $q): string => bcadd(SpkHours::num($t), SpkHours::num($q), 6), '0'), 6);
+                $mine[0] = bcadd(SpkHours::num($mine[0] ?? '0'), bccomp($other, '0', 6) > 0 ? $other : '0', 6);
+                $planned = array_keys(array_filter($mine, static fn (string $q): bool => bccomp(SpkHours::num($q), '0', 6) > 0))[0] ?? null;
                 $whole = SpkHours::num($wo->qty);
                 $target = $cap === null || bccomp($cap, $whole, 6) > 0 ? $whole : $cap;
-                $has = SpkHours::num($op->planned);
                 $qty = bcsub($target, $has, 6);
                 $reach = bccomp($has, $target, 6) > 0 ? $has : $target; // what this operation will have once placed
                 if (bccomp($reach, $whole, 6) < 0) {
                     $out['skipped'][] = ['workOrderCode' => $wo->wo_no, 'itemCode' => $wo->item_code, 'opSeq' => (int) $op->op_seq,
                         'reason' => SpkHours::plain(bcsub($whole, $reach, 6)).' not planned: the operation before it is not planned for them.'];
                 }
-                $cap = bccomp($qty, '0', 6) > 0 ? $has : $target; // until it is placed below
-                if (bccomp($qty, '0', 6) <= 0) {
-                    $after = max($after, $planned ?? $after);
-
-                    continue;
+                $cap = $has; // until it is placed below
+                $placed = [];
+                $skip = bccomp($qty, '0', 6) <= 0;
+                if (! $skip) {
+                    $sheet = $this->sheet($db, $plant, $date, $op, $shifts, $sheets);
+                    $machines = $sheet['blocked'] === null ? $this->machines($db, $op) : [];
+                    if ($sheet['blocked'] !== null || $machines === []) {
+                        $out['skipped'][] = ['workOrderCode' => $wo->wo_no, 'itemCode' => $wo->item_code, 'opSeq' => (int) $op->op_seq,
+                            'reason' => $sheet['blocked'] ?? "No active machine on {$op->work_center_code}."];
+                        $skip = true;
+                    } else {
+                        $first = $this->place($sheets[$op->work_center_id], $wo, $op, $machines, SpkHours::plain($qty), min(99, $rank + 1), $after, $supply, $mine, $placed, $out);
+                        $planned = $planned === null ? $first : min($first, $planned);
+                    }
                 }
-                $sheet = $this->sheet($db, $plant, $date, $op, $shifts, $sheets);
-                if ($sheet['blocked'] !== null) {
-                    $out['skipped'][] = ['workOrderCode' => $wo->wo_no, 'itemCode' => $wo->item_code, 'opSeq' => (int) $op->op_seq, 'reason' => $sheet['blocked']];
-                    $after = max($after, $planned ?? $after);
-
-                    continue;
+                $after = max($after, $planned ?? $after);
+                $total = $mine;
+                foreach ($placed as $k => $q) {
+                    $total[$k] = bcadd(SpkHours::num($total[$k] ?? '0'), SpkHours::num($q), 6);
                 }
-                $machines = $this->machines($db, $op);
-                if ($machines === []) {
-                    $out['skipped'][] = ['workOrderCode' => $wo->wo_no, 'itemCode' => $wo->item_code, 'opSeq' => (int) $op->op_seq,
-                        'reason' => "No active machine on {$op->work_center_code}."];
-                    $after = max($after, $planned ?? $after);
-
-                    continue;
-                }
-                $first = $this->place($sheets[$op->work_center_id], $wo, $op, $machines, SpkHours::plain($qty), min(99, $rank + 1), $after, $out);
-                $after = max($after, min($first, $planned ?? $first));
-                $cap = $target;
+                $supply = $total;
+                $cap = array_reduce($total, static fn (string $t, string $q): string => bcadd(SpkHours::num($t), SpkHours::num($q), 6), '0');
             }
         }
         $this->write($db, $plant, $date, $sheets, $out);
-        $this->flagOvertime($db, $plant, $out);
+        $this->flagOvertime($db, $plant, $sheets, $out);
 
         return $out;
     }
@@ -245,14 +247,38 @@ final class SpkGenerator
      *
      * @param  array<string, mixed>  $sheet
      * @param  list<stdClass>  $machines
+     * @param  array<int, numeric-string>|null  $supply  the operation before it, per shift (null for the first operation)
+     * @param  array<int, numeric-string>  $mine  this operation's lines already on SPKs, per shift (other days in the first)
+     * @param  array<int, numeric-string>  $placed  filled with what is placed now, per shift
      * @param  array<string, list<array<string, mixed>>>  $out
      */
-    private function place(array &$sheet, stdClass $wo, stdClass $op, array $machines, string $qty, int $priority, int $after, array &$out): int
+    private function place(array &$sheet, stdClass $wo, stdClass $op, array $machines, string $qty, int $priority, int $after, ?array $supply, array $mine, array &$placed, array &$out): int
     {
+        $count = count($sheet['shifts']);
+        // G-3: what may still go into shift $k without running ahead of the operation before it at the end of that or any later shift
+        $room = function (int $k) use (&$placed, $supply, $mine, $count): ?string {
+            if ($supply === null) {
+                return null;
+            }
+            $made = '0';
+            $done = '0';
+            $least = null;
+            for ($j = 0; $j < $count; $j++) {
+                $made = bcadd($made, SpkHours::num($supply[$j] ?? '0'), 6);
+                $done = bcadd(bcadd($done, SpkHours::num($mine[$j] ?? '0'), 6), SpkHours::num($placed[$j] ?? '0'), 6);
+                if ($j >= $k) {
+                    $free = bcsub($made, $done, 6);
+                    $least = $least === null || bccomp($free, $least, 6) < 0 ? $free : $least;
+                }
+            }
+
+            return $least === null || bccomp($least, '0', 6) < 0 ? '0' : self::floor($least);
+        };
+        /** @return numeric-string */
+        $fit = static fn (string $take, ?string $limit): string => SpkHours::num($limit !== null && bccomp(SpkHours::num($take), SpkHours::num($limit), 6) > 0 ? $limit : $take);
         $sph = SpkHours::sph($op);
         $factor = $wo->paired_item_id === null ? '1' : '2';
         $setup = SpkHours::num($op->setup_minutes);
-        $count = count($sheet['shifts']);
         $after = min($after, $count - 1);
         $first = null;
         $left = SpkHours::num($qty);
@@ -266,11 +292,21 @@ final class SpkGenerator
             return [$minutes, bcdiv(bcadd($minutes, self::QC_MINUTES, 6), '60', 6)];
         };
         if ($sph === null) {
-            // no SPH: the hours are not calculable, so the whole quantity goes to the preferred machine's first allowed shift
-            [$minutes] = $overhead((string) $machines[0]->id, $after);
-            $this->addLine($sheet, $wo, $op, (string) $machines[0]->id, $after, $left, $priority, $minutes, null, '0');
+            // no SPH: the hours are not calculable, so the quantity goes to the preferred machine, in the first shifts the input allows
+            $first = null;
+            for ($k = $after; $k < $count && bccomp($left, '0', 6) > 0; $k++) {
+                $take = $fit($left, $room($k));
+                if (bccomp($take, '0', 6) <= 0) {
+                    continue;
+                }
+                [$minutes] = $overhead((string) $machines[0]->id, $k);
+                $this->addLine($sheet, $wo, $op, (string) $machines[0]->id, $k, $take, $priority, $minutes, null, '0');
+                $placed[$k] = bcadd(SpkHours::num($placed[$k] ?? '0'), $take, 6);
+                $first ??= $k;
+                $left = bcsub($left, $take, 6);
+            }
 
-            return $after;
+            return $first ?? $after;
         }
         foreach ($machines as $machine) {
             for ($k = $after; $k < $count && bccomp($left, '0', 6) > 0; $k++) {
@@ -283,23 +319,33 @@ final class SpkGenerator
                     $take = bccomp($free, '0', 6) > 0 ? self::floor(bcdiv(bcmul($free, SpkHours::num($sph), 6), $factor, 6)) : '0';
                     $take = bccomp($take, $left, 6) > 0 ? $left : $take;
                 }
+                $take = $fit($take, $room($k));
                 if (bccomp($take, '0', 6) <= 0) {
                     continue;
                 }
                 $this->addLine($sheet, $wo, $op, (string) $machine->id, $k, $take, $priority, $minutes, $sph, $hours);
+                $placed[$k] = bcadd(SpkHours::num($placed[$k] ?? '0'), $take, 6);
                 $first ??= $k;
                 $left = bcsub($left, $take, 6);
             }
         }
+        $k = $count - 1;
+        $limit = $room($k);
+        if ($limit !== null && bccomp($left, $limit, 6) > 0) {
+            // the operation before it does not make enough by the last shift: the rest waits for it
+            $out['skipped'][] = ['workOrderCode' => (string) $wo->wo_no, 'itemCode' => (string) $wo->item_code, 'opSeq' => (int) $op->op_seq,
+                'reason' => SpkHours::plain(bcsub($left, $limit, 6)).' not planned: the operation before it does not make them in time.'];
+            $left = $limit;
+        }
         if (bccomp($left, '0', 6) > 0) {
             // G-5: what fits nowhere stays on the preferred machine's last shift; the overtime is what that shift then holds
             // beyond its hours, with each line's setup and QC sample counted once
-            $k = $count - 1;
             $machine = $machines[0];
             $key = $machine->id.'|'.$k;
             [$minutes, $hours] = $overhead((string) $machine->id, $k);
             $before = SpkHours::num($sheet['load'][$key] ?? '0');
             $this->addLine($sheet, $wo, $op, (string) $machine->id, $k, SpkHours::plain($left), $priority, $minutes, $sph, $hours);
+            $placed[$k] = bcadd(SpkHours::num($placed[$k] ?? '0'), $left, 6);
             $first ??= $k;
             $capacity = SpkHours::num($sheet['capacity'] ?? '0');
             $over = static fn (string $load): string => bccomp(SpkHours::num($load), $capacity, 6) > 0 ? bcsub(SpkHours::num($load), $capacity, 6) : '0';
@@ -403,38 +449,57 @@ final class SpkGenerator
         }
     }
 
-    /** @param array<string, list<array<string, mixed>>> $out */
-    private function flagOvertime(EoraPostgresConnection $db, string $plant, array &$out): void
+    /**
+     * @param  array<string, array<string, mixed>>  $sheets
+     * @param  array<string, list<array<string, mixed>>>  $out
+     */
+    private function flagOvertime(EoraPostgresConnection $db, string $plant, array $sheets, array &$out): void
     {
         $limit = $db->selectOne('select trim_scale(spk_ot_limit_hours)::text as h from plants where id = ?', [$plant])?->h;
+        // the limit holds for the machine's whole day as its draft now stands (lines already there included), not only what was added now
         $perMachine = [];
-        foreach ($out['overtime'] as $ot) {
-            $perMachine[$ot['machineId']] = bcadd($perMachine[$ot['machineId']] ?? '0', SpkHours::num($ot['hours']), 6);
+        foreach ($sheets as $sheet) {
+            if ($sheet['capacity'] === null) {
+                continue;
+            }
+            foreach ($sheet['load'] as $key => $load) {
+                $machine = explode('|', (string) $key)[0];
+                $over = bcsub(SpkHours::num($load), SpkHours::num($sheet['capacity']), 6);
+                if (bccomp($over, '0', 6) > 0) {
+                    $perMachine[$machine] = bcadd(SpkHours::num($perMachine[$machine] ?? '0'), $over, 6);
+                }
+            }
         }
         foreach ($out['overtime'] as $i => $ot) {
-            $out['overtime'][$i]['overLimit'] = $limit !== null && bccomp($perMachine[$ot['machineId']], SpkHours::num($limit), 6) > 0;
+            $day = SpkHours::num($perMachine[$ot['machineId']] ?? $ot['hours']);
+            $out['overtime'][$i]['machineDayHours'] = SpkHours::round3($day);
+            $out['overtime'][$i]['overLimit'] = $limit !== null && bccomp($day, SpkHours::num($limit), 6) > 0;
             $out['overtime'][$i]['limitHours'] = $limit;
         }
     }
 
     /**
-     * The earliest shift an operation of a WO already has on an SPK of the day, or null.
+     * What an operation of a WO already has on the SPKs of the day, per shift (a draft revision in place of its released SPK).
      *
      * @param  list<array{id: ?string, code: ?string}>  $shifts
+     * @return array<int, numeric-string>
      */
-    private function plannedShift(EoraPostgresConnection $db, string $wo, string $op, string $date, array $shifts): ?int
+    private function plannedByShift(EoraPostgresConnection $db, string $wo, string $op, string $date, array $shifts): array
     {
-        $earliest = null;
+        $by = [];
         foreach ($db->select(
-            "select l.shift_id from spk_lines l join spk_headers h on h.id = l.spk_id
-              where l.work_order_id = ? and l.routing_operation_id = ? and h.production_date = ? and h.status in ('DRAFT', 'RELEASED', 'CLOSED')",
+            "select l.shift_id, trim_scale(l.planned_qty)::text as qty from spk_lines l join spk_headers h on h.id = l.spk_id
+              where l.work_order_id = ? and l.routing_operation_id = ? and h.production_date = ?
+                and (h.status = 'DRAFT' or (h.status in ('RELEASED', 'CLOSED')
+                     and not exists (select 1 from spk_headers r where r.previous_id = h.id and r.status = 'DRAFT')))",
             [$wo, $op, $date],
         ) as $l) {
             $k = $this->shiftIndex($shifts, $l->shift_id === null ? null : (string) $l->shift_id);
-            $earliest = $earliest === null ? $k : min($earliest, $k);
+            $by[$k] = bcadd(SpkHours::num($by[$k] ?? '0'), SpkHours::num($l->qty), 6);
         }
+        ksort($by);
 
-        return $earliest;
+        return $by;
     }
 
     /** @param list<array{id: ?string, code: ?string}> $shifts */
