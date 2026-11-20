@@ -180,8 +180,8 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
         </div>
       );
     }
-    // a record read by id is shown only once fresh: never a cached copy older than the last save
-    if (editId && (!targetRow || (picked?.id !== editId && !target.isFetchedAfterMount))) {
+    // a save drops the cached record (onSaved), so a cached copy here is never older than the last save
+    if (editId && !targetRow) {
       return target.isPending || target.isFetching ? (
         <LoadingState title={`Loading ${config.singular}`} />
       ) : (

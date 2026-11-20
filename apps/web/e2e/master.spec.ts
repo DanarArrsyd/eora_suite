@@ -115,6 +115,17 @@ test('work centers: an edit sends only the changed fields at the row version; a 
   await expect.poll(() => sent.at(-1)?.ifMatch).toBe('"4"');
 });
 
+test('an edit page opened from a link, left with Cancel and reopened with Back shows the record again (Codex on #99)', async ({ page }) => {
+  await setup(page);
+  await page.goto(`/master/work-centers?edit=${WC.id}`);
+  const form = page.getByRole('form', { name: 'PRS-01' });
+  await expect(form.getByLabel('Available hours per shift')).toHaveValue('7.5');
+  await form.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Work Centers' })).toBeVisible();
+  await page.goBack();
+  await expect(form.getByLabel('Available hours per shift')).toHaveValue('7.5');
+});
+
 test('a viewer sees the list but cannot create or change records', async ({ page }) => {
   await setup(page, VIEWER);
   await page.goto('/master/work-centers');
