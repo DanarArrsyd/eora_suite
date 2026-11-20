@@ -256,11 +256,13 @@ final class SpkGenerator
     /** The production day's start at the plant on that date (business calendar: plant before tenant, latest version). */
     private function dayStart(EoraPostgresConnection $db, string $plant, string $date): string
     {
-        return (string) ($db->selectOne(
+        $row = $db->selectOne(
             'select production_day_starts_at::text as t from business_calendars where (plant_id = ? or plant_id is null) and effective_from <= ?::date
               order by (plant_id is null), effective_from desc limit 1',
             [$plant, $date],
-        )?->t ?? '00:00');
+        );
+
+        return $row instanceof stdClass ? (string) $row->t : '00:00';
     }
 
     /**
