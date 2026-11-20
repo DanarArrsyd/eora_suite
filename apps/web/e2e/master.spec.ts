@@ -105,6 +105,13 @@ test('work centers: an edit sends only the changed fields at the row version; a 
     { ifMatch: '"3"', body: { availableHoursPerShift: null } },
     { ifMatch: '"3"', body: { availableHoursPerShift: null } },
   ]);
+  // Back reopens the edit page with the saved record, not the row as it was before saving (Codex on #99)
+  await mockApi(page, '/query/core.work_centers?*', page1([{ ...WC, availableHoursPerShift: null, version: 4 }]));
+  await page.goBack();
+  await expect(drawer.getByLabel('Available hours per shift')).toHaveValue('');
+  await drawer.getByRole('textbox', { name: 'Name', exact: true }).fill('Press line 1A');
+  await drawer.getByRole('button', { name: 'Save changes' }).click();
+  await expect.poll(() => sent.at(-1)?.ifMatch).toBe('"4"');
 });
 
 test('a viewer sees the list but cannot create or change records', async ({ page }) => {

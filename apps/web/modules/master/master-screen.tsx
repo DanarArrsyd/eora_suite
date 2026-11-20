@@ -157,6 +157,8 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   );
 
   const onSaved = (message: string, partial?: boolean, created?: unknown) => {
+    // the row clicked is now out of date: an edit URL opened again (e.g. by Back) reads the record afresh
+    setPicked(null);
     void client.invalidateQueries({ queryKey: ['master'] });
     // a record with its own page opens there once created
     const record = (created as { data?: T } | undefined)?.data;
