@@ -27,6 +27,7 @@ use App\Modules\Planning\Http\RoutingController;
 use App\Modules\Planning\Http\WoCloseExceptionController;
 use App\Modules\Planning\Http\WorkOrderController;
 use App\Modules\Production\Http\ProductionController;
+use App\Modules\Production\Http\SpkController;
 use App\Modules\Quality\Http\QualityController;
 use App\Modules\Traceability\Http\LotTraceController;
 use App\Modules\Warehouse\Http\FgReceiptController;
@@ -271,6 +272,15 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::post('runs/{run}/actions/close', [ProductionController::class, 'close'])->name('runs.close');
         Route::post('runs/{run}/actions/cancel', [ProductionController::class, 'cancel'])->name('runs.cancel');
         Route::post('postings', [ProductionController::class, 'post'])->name('postings.store');
+        // SPK per Line — daily dispatch (doc 38, D-138)
+        Route::post('spk', [SpkController::class, 'store'])->name('spk.store');
+        Route::get('spk/{spk}', [SpkController::class, 'show'])->name('spk.show');
+        Route::get('spk/{spk}/options', [SpkController::class, 'options'])->name('spk.options');
+        Route::put('spk/{spk}', [SpkController::class, 'update'])->name('spk.update');
+        Route::post('spk/{spk}/actions/release', [SpkController::class, 'release'])->name('spk.release');
+        Route::post('spk/{spk}/actions/revise', [SpkController::class, 'revise'])->name('spk.revise');
+        Route::post('spk/{spk}/actions/close', [SpkController::class, 'close'])->name('spk.close');
+        Route::post('spk/{spk}/actions/cancel', [SpkController::class, 'cancel'])->name('spk.cancel');
     });
 
     // Quality → disposition (doc 33 §1.5, D-113): one tenant transaction, retried on deadlock (postings are idempotent)

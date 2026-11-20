@@ -49,7 +49,9 @@ it('documents every v1 error as problem+json with codes from the doc 24 §5 cata
         // delivery (M4)
         'OVER_ALLOCATION',
         // MPS (M5)
-        'MPS_INPUTS_CHANGED', 'RECOVERY_INPUTS_CHANGED', 'OWNER_PEGGING_REQUIRED'];
+        'MPS_INPUTS_CHANGED', 'RECOVERY_INPUTS_CHANGED', 'OWNER_PEGGING_REQUIRED',
+        // SPK per Line (D-138)
+        'SPK_EXISTS', 'SPK_NUMBER_UNAVAILABLE'];
     $routes = collect(Route::getRoutes()->getRoutes())->map->getName()->filter(fn ($n) => is_string($n) && str_starts_with($n, 'v1.'))->values();
     $declared = array_keys(ProblemResponses::ERRORS);
 

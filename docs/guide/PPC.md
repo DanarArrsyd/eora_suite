@@ -13,6 +13,7 @@ Merencanakan produksi dari order dan forecast yang dicatat Delivery: MPS, MRP, d
 
 - **Master Production Schedule** — Rencana produksi per minggu (12 minggu); dihitung, disubmit, disetujui.
 - **MRP Results** — Hasil MRP: planned work order dan daftar kekurangan bahan; rilis planned order ke WO.
+- **SPK Line** — SPK per line per hari dari WO yang sudah rilis: mesin, qty, prioritas, shift, beban jam per mesin; rilis ke produksi.
 - **Work Orders** — Work order: Draft, minta rilis, rilis (orang kedua), tutup.
 - **WO Close Exceptions** — Sisa bahan di produksi yang dibuang ke scrap agar WO bisa ditutup.
 
@@ -67,3 +68,13 @@ Catatan:
 - Menekan ulang **Create draft work order** membuka WO yang sama. Rencana tambahan setelah WO dibuat menjadi revisi baru; revisi lama tetap tersimpan.
 - Tanpa BOM yang berlaku atau konversi batch, **Material capacity** tidak terhitung.
 - Bila plant menyimpan bahan milik customer, MPS, MRP dan Daily Recovery ditolak dengan pesan **Customer material in stock**. Untuk sementara, buat work order manual dengan **Production customer** yang sesuai.
+
+## SPK Line (D-138)
+
+1. Buka **PPIC → SPK Line** → **New SPK**: pilih **Line** dan **Production date** (hari ini atau sesudahnya). Satu line hanya punya satu SPK per hari. **Factory reference** boleh diisi nomor di form kertas.
+2. Di draft: **Add line** → pilih **Work order operation** (hanya WO yang sudah rilis / in progress dengan proses di line ini), **Machine** di line itu, **Shift** (boleh kosong), **Planned qty**, **Priority**. **Setup (min)** diambil dari routing; **QC sample (min)** default 5. Klik **Save SPK**.
+3. Panel **Machine load** menghitung jam per mesin: qty ÷ SPH + setup/60 + QC sample/60, dibandingkan jam per shift line (Work Center → hours per shift). Lewat kapasitas ditandai merah, tapi tetap boleh disimpan. Tanpa SPH tertulis *Not calculable*.
+4. **Release to production**: nomor `SPK-{kode perusahaan}-{DDMMYY}-{urut}` diberikan saat rilis, dan tim produksi menerima notifikasi.
+5. Perlu ubah setelah rilis? **Revise** + alasan → draft revisi baru dengan baris yang sama; SPK lama tetap berlaku sampai revisi dirilis, lalu jadi *Superseded* dan nomornya tetap sama. **Close SPK** bila rencana hari itu selesai.
+
+SPK tidak memindahkan stok: WO tetap dirilis orang kedua seperti biasa, dan hasil produksi tetap dicatat lewat Production Runs.

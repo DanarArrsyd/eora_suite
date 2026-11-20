@@ -64,8 +64,10 @@ use App\Modules\Planning\Queries\RoutingsQuery;
 use App\Modules\Planning\Queries\RoutingVersionsQuery;
 use App\Modules\Planning\Queries\WoCloseExceptionsQuery;
 use App\Modules\Planning\Queries\WorkOrdersQuery;
+use App\Modules\Production\Application\SpkReleasedNotifier;
 use App\Modules\Production\Queries\ProductionPostingsQuery;
 use App\Modules\Production\Queries\ProductionRunsQuery;
+use App\Modules\Production\Queries\SpkQuery;
 use App\Modules\Quality\Queries\DispositionsQuery;
 use App\Modules\Warehouse\Queries\FgReceiptsQuery;
 use App\Platform\Export\ExportJobsQuery;
@@ -104,6 +106,14 @@ return [
     // D-B1-06: factory NAT addresses/CIDRs that get the higher per-IP login limit (60/min instead of 20/min), e.g.
     // "203.0.113.10,198.51.100.0/24". Empty by default.
     'login_nat_allowlist' => array_values(array_filter(array_map('trim', explode(',', (string) env('EORA_LOGIN_NAT_ALLOWLIST', ''))))),
+
+    /*
+     | Outbox consumers of business modules (event type => consumer classes), run by the relay once per event after the
+     | Platform's own consumers (doc 25 §6.4). The Platform never imports Modules, so modules register here.
+     */
+    'outbox_consumers' => [
+        'production.spk_released' => [SpkReleasedNotifier::class],
+    ],
 
     // Query resources (ADR-0008): name => QueryDefinition class, registered by the modules.
     'queries' => [
@@ -144,6 +154,7 @@ return [
         'materials.returns' => MaterialReturnsQuery::class,
         'inventory.material_at_production' => MaterialAtProductionQuery::class,
         'production.runs' => ProductionRunsQuery::class,
+        'production.spk' => SpkQuery::class,
         'production.postings' => ProductionPostingsQuery::class,
         'quality.dispositions' => DispositionsQuery::class,
         'warehouse.fg_receipts' => FgReceiptsQuery::class,

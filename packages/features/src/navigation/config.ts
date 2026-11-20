@@ -198,6 +198,16 @@ export const NAV_MODULES: readonly NavModule[] = [
             phase: 5,
           },
           {
+            id: 'spk-line',
+            live: true,
+            menu: ['production.spk.create'],
+            label: 'SPK Line',
+            icon: CalendarClock,
+            release: 'R1',
+            permission: 'production.spk.view',
+            phase: 5,
+          },
+          {
             id: 'mps',
             live: true,
             menu: ['planning.mps.create', 'planning.mps.approve'],
@@ -376,6 +386,16 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         label: 'Execution',
         items: [
+          {
+            id: 'spk-line',
+            live: true,
+            menu: ['production.run.create'],
+            label: 'SPK Line',
+            icon: CalendarClock,
+            release: 'R1',
+            permission: 'production.spk.view',
+            phase: 5,
+          },
           {
             id: 'runs',
             live: true,

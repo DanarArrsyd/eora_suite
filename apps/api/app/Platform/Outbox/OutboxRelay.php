@@ -57,7 +57,10 @@ final class OutboxRelay
         $event = $db->selectOne('select * from outbox_events where id = ?', [$eventId])
             ?? throw new RuntimeException('Outbox event not visible in the claimed tenant.');
 
-        foreach (self::CONSUMERS[(string) $event->event_type] ?? [] as $class) {
+        // platform consumers here; business-module consumers are registered in config `eora.outbox_consumers` (Platform never imports Modules)
+        /** @var array<string, list<class-string<OutboxConsumer>>> $modules */
+        $modules = (array) config('eora.outbox_consumers', []);
+        foreach ([...(self::CONSUMERS[(string) $event->event_type] ?? []), ...($modules[(string) $event->event_type] ?? [])] as $class) {
             $consumer = app($class);
             $first = $db->affectingStatement(
                 'insert into processed_events (tenant_id, consumer, event_id) values (?, ?, ?) on conflict do nothing',

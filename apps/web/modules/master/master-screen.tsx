@@ -86,7 +86,8 @@ export function MasterScreen<T extends MasterRow>({ config, heading }: { config:
   // what the API reads: the screen's filters (mapped where one choice stands for several API filters) plus fixed ones
   const apiFilters = { ...(config.mapFilters ? config.mapFilters(query.filters as Record<string, string | string[]>) : query.filters), ...config.fixedFilters };
   const rows = useQuery({
-    queryKey: ['master', config.resource, query, config.fixedFilters],
+    // keyed by what the API reads: two screens on one resource with different mapped or fixed filters never share a cache entry
+    queryKey: ['master', config.resource, query, apiFilters],
     queryFn: ({ signal }) => source.list({ ...query, filters: apiFilters }, signal),
     placeholderData: keepPreviousData,
     enabled: canView,

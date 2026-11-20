@@ -4,6 +4,7 @@ import * as React from 'react';
 import { SalesOrdersScreen } from '@/modules/demand/sales-orders';
 import { MpsScreen } from './mps';
 import { DailyRecoveryScreen } from './daily-recovery';
+import { SpkLineScreen } from '@/modules/production/spk';
 import { MrpScreen } from './mrp';
 import { WoCloseExceptionsScreen } from './wo-close-exceptions';
 import { WorkOrdersScreen } from './work-orders';
@@ -38,6 +39,7 @@ export const PPIC_SCREENS: Record<string, React.ComponentType> = {
   'work-orders': () => <WorkOrdersScreen base="/ppic/work-orders" />,
   'wo-close-exceptions': WoCloseExceptionsScreen,
   'daily-recovery': DailyRecoveryScreen,
+  'spk-line': () => <SpkLineScreen mode="plan" />,
   mps: MpsScreen,
   mrp: MrpScreen,
 };
