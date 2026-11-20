@@ -216,6 +216,9 @@ test('form pages ask before unsaved changes are left by a menu link or the brows
   await page.goto('/master/work-centers');
   await page.getByRole('button', { name: 'New work center' }).click();
   const form = page.getByRole('form', { name: 'New work center' });
+  // typing, clearing and typing again keeps one guard: Discard after Back still lands on the list (Codex on #99)
+  await form.getByRole('textbox', { name: 'Name', exact: true }).fill('W');
+  await form.getByRole('textbox', { name: 'Name', exact: true }).fill('');
   await form.getByRole('textbox', { name: 'Name', exact: true }).fill('Welding cell 2');
   // a menu link asks first; staying keeps the typed value
   await page.getByRole('link', { name: 'Plants & Warehouses' }).first().click();

@@ -287,6 +287,33 @@ export function MasterEditor<T extends MasterRow>({
   const [dirty, setDirty] = React.useState(false);
   const [leaveTo, setLeaveTo] = React.useState<string | null>(null);
   const released = React.useRef(false);
+  const dirtyRef = React.useRef(false);
+  React.useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
+  // one guard entry of this same page per form, pushed the first time it gets dirty: the browser's Back lands on it and
+  // the page asks before going further back; once the form is clean again, that Back simply carries on
+  const guarded = React.useRef(false);
+  React.useEffect(() => {
+    if (!dirty || mode !== 'page' || guarded.current) return;
+    guarded.current = true;
+    window.history.pushState(window.history.state, '', window.location.href);
+  }, [dirty, mode]);
+  React.useEffect(() => {
+    if (mode !== 'page') return;
+    const onPop = () => {
+      if (!guarded.current || released.current) return;
+      if (!dirtyRef.current) {
+        guarded.current = false;
+        window.history.back();
+        return;
+      }
+      window.history.pushState(window.history.state, '', window.location.href);
+      setLeaveTo('history');
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [mode]);
   React.useEffect(() => {
     if (!dirty || mode !== 'page') return;
     released.current = false;
@@ -301,20 +328,11 @@ export function MasterEditor<T extends MasterRow>({
       e.stopPropagation();
       setLeaveTo(url.pathname + url.search + url.hash);
     };
-    // a guard entry of this same page: the browser's Back lands on it, and the page asks before going further back
-    window.history.pushState(window.history.state, '', window.location.href);
-    const onPop = () => {
-      if (released.current) return;
-      window.history.pushState(window.history.state, '', window.location.href);
-      setLeaveTo('history');
-    };
     window.addEventListener('beforeunload', warn);
     document.addEventListener('click', onClick, true);
-    window.addEventListener('popstate', onPop);
     return () => {
       window.removeEventListener('beforeunload', warn);
       document.removeEventListener('click', onClick, true);
-      window.removeEventListener('popstate', onPop);
     };
   }, [dirty, mode]);
   const leave = () => (dirty && mode === 'page' ? setLeaveTo('close') : onClose());
