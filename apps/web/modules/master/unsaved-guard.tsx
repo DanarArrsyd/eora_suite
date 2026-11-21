@@ -25,8 +25,14 @@ export function useUnsavedGuard({ active, backHref, onClose }: { active: boolean
   // once the form is clean again, that Back simply carries on
   const guarded = React.useRef(false);
   React.useEffect(() => {
-    if (!active || !onGuardEntry()) return;
-    guarded.current = true;
+    // a form laid over its page (FormLayer) keeps this hook mounted between openings: each opening starts afresh, so a
+    // later edit pushes its own guard entry again
+    if (!active) {
+      guarded.current = false;
+      released.current = false;
+      return;
+    }
+    if (onGuardEntry()) guarded.current = true;
   }, [active]);
   React.useEffect(() => {
     if (!dirty || !active || guarded.current) return;
