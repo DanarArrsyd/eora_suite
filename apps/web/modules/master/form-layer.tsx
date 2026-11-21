@@ -34,7 +34,11 @@ export function FormLayer({
 }) {
   const guard = useUnsavedGuard({ active: open, backHref: back.href, onClose });
   // the shell's content area exists only in the browser: the server renders no layer
-  const client = React.useSyncExternalStore(noSubscribe, () => true, () => false);
+  const client = React.useSyncExternalStore(
+    noSubscribe,
+    () => true,
+    () => false,
+  );
   const host = client ? document.getElementById('main') : null;
   const layer = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
