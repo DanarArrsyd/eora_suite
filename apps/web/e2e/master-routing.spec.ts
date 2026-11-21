@@ -274,6 +274,8 @@ test('an operation opens as a form page named in the URL; leaving it with change
   await expect(page).toHaveURL(/form=operation/);
   await page.goBack();
   await expect(page.getByRole('form', { name: 'Add operation' })).toBeHidden();
+  // focus returns to the control that opened the form
+  await expect(page.getByRole('button', { name: 'Add operation' })).toBeFocused();
 
   // reopened after a discard, the form guards the browser's Back again
   await page.getByRole('button', { name: 'Add operation' }).click();

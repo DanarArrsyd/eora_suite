@@ -45,6 +45,8 @@ export function FormLayer({
     // runs once the layer is in the page (after hydration on a direct link too)
     const main = open && host ? document.getElementById('main') : null;
     if (!main || !layer.current) return;
+    // the control that opened the form gets focus back when it closes, as a drawer's did (WCAG 2.4.3)
+    const opener = document.activeElement instanceof HTMLElement && !layer.current.contains(document.activeElement) ? document.activeElement : null;
     // the page under the form keeps its state but takes no focus or reading while the form is open
     const others = Array.from(main.children).filter((c) => c !== layer.current?.parentElement && c !== layer.current);
     for (const el of others) el.setAttribute('inert', '');
@@ -58,6 +60,7 @@ export function FormLayer({
     return () => {
       for (const el of others) el.removeAttribute('inert');
       main.style.overflow = overflow;
+      if (opener?.isConnected && opener !== document.body) opener.focus({ preventScroll: true });
     };
   }, [open, host]);
   if (!open || !host) return null;
