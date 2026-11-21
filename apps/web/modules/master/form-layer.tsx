@@ -42,20 +42,24 @@ export function FormLayer({
   const host = client ? document.getElementById('main') : null;
   const layer = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
-    const main = open ? document.getElementById('main') : null;
-    if (!main) return;
+    // runs once the layer is in the page (after hydration on a direct link too)
+    const main = open && host ? document.getElementById('main') : null;
+    if (!main || !layer.current) return;
     // the page under the form keeps its state but takes no focus or reading while the form is open
     const others = Array.from(main.children).filter((c) => c !== layer.current?.parentElement && c !== layer.current);
     for (const el of others) el.setAttribute('inert', '');
     const overflow = main.style.overflow;
     main.scrollTop = 0;
     main.style.overflow = 'hidden';
-    layer.current?.querySelector<HTMLElement>('h1')?.focus?.();
+    // the title takes focus (as a drawer's did), so it is announced and Tab starts in the form
+    const heading = layer.current?.querySelector<HTMLElement>('h1');
+    heading?.setAttribute('tabindex', '-1');
+    heading?.focus({ preventScroll: true });
     return () => {
       for (const el of others) el.removeAttribute('inert');
       main.style.overflow = overflow;
     };
-  }, [open]);
+  }, [open, host]);
   if (!open || !host) return null;
   return createPortal(
     <div ref={layer} role="region" aria-label={title} className="absolute inset-0 z-30 overflow-auto bg-[var(--color-bg-workspace)]">

@@ -253,7 +253,8 @@ test('an operation opens as a form page named in the URL; leaving it with change
   await page.goto(`/master/routings?routing=${ROUTING.id}&version=${V2.id}&form=operation&op=${OP.id}`);
   const form = page.getByRole('form', { name: 'Operation 10' });
   await expect(form.getByRole('textbox', { name: 'Sequence' })).toHaveValue('10');
-  await expect(page.getByRole('heading', { level: 1, name: 'Operation 10' })).toBeVisible();
+  // focus moves into the form page: its title is announced and Tab starts there
+  await expect(page.getByRole('heading', { level: 1, name: 'Operation 10' })).toBeFocused();
   await axe(page);
 
   await form.getByRole('textbox', { name: 'What to inspect' }).fill('Burr height');
@@ -278,6 +279,8 @@ test('an operation opens as a form page named in the URL; leaving it with change
   await page.getByRole('button', { name: 'Add operation' }).click();
   const reopened = page.getByRole('form', { name: 'Add operation' });
   await reopened.getByRole('textbox', { name: 'What to inspect' }).fill('Flatness');
+  // the change has reached the guard once its history entry is in place
+  await expect.poll(() => page.evaluate(() => (window.history.state as { eoraFormGuard?: boolean } | null)?.eoraFormGuard)).toBe(true);
   await page.goBack();
   await page.getByRole('alertdialog', { name: 'Leave without saving?' }).getByRole('button', { name: 'Cancel' }).click();
   await expect(reopened.getByRole('textbox', { name: 'What to inspect' })).toHaveValue('Flatness');
