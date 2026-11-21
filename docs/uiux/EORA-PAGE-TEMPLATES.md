@@ -62,7 +62,8 @@ Page title · description
 - Unsaved changes: leaving asks *Leave without saving?*; the browser warns on reload or close.
 - Stay as dialogs: confirmations and row actions that post (Release, Split, Receive). Stay as drawers: read-only detail views.
 - Result pages (e.g. Generate SPK) use `width="wide"` and show their results as tables under the form.
-- **Migration status:** master lists, SPK New / Generate, sales-order line and delivery, work-order edit are converted; the BOM, routing and conversion editors and the Daily Recovery plan still open drawers and move to this template in the next step.
+- **Forms opened from a document page** (a routing's operation, a BOM line or routing map, conversion inputs, version details, a Daily Recovery plan) use the same `FormPage`, laid over the page's content area by `FormLayer` while the URL names it (`?form=<mode>` plus its key, e.g. `?form=operation&op=<id>`, `?form=review&row=<id>`; a routing map keeps `?map=<id>`). It can be reloaded or shared, the browser's Back closes it, and the same unsaved-changes guard applies; the page underneath stays as it was.
+- **Migration status:** every create and edit form is converted: master lists, SPK New / Generate, sales-order line and delivery, work-order edit, the BOM, routing and conversion editors (new version, version details, operation, line, routing map, inputs) and the Daily Recovery plan review.
 
 ## 7. Other templates (to be mocked when their module is designed)
 Master data form (now §6) · approval inbox (list + review drawer) · import wizard (stepper) · report viewer (`EoraDocumentViewer`, A4/A3 preview, grayscale-safe) · planning board (V2).

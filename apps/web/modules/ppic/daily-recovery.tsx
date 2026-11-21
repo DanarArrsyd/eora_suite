@@ -26,22 +26,10 @@ import {
   type FilterField,
   type StatusOf,
 } from '@eora/features/patterns';
-import {
-  Badge,
-  Button,
-  DatePicker,
-  Drawer,
-  DrawerContent,
-  EmptyState,
-  Field,
-  InlineAlert,
-  Input,
-  LoadingState,
-  PermissionDeniedState,
-  Textarea,
-  type IsoDate,
-} from '@eora/ui';
+import { Badge, Button, DatePicker, EmptyState, Field, InlineAlert, Input, LoadingState, PermissionDeniedState, Textarea, type IsoDate } from '@eora/ui';
 import { formatDay, formatMoment, formatQty } from '@/components/format';
+import { FormLayer } from '@/modules/master/form-layer';
+import { useFormParam } from '@/modules/master/form-url';
 import { Quantity } from '@/components/quantity';
 import { useSavedViews } from '@/components/use-saved-views';
 import { queryOptions } from '@/modules/master/source';
@@ -139,7 +127,10 @@ export function DailyRecoveryScreen() {
   const [prefSize, setPrefSize] = usePageSizePreference();
   const [visibility, setVisibility] = React.useState<ColumnVisibility>(DEFAULT_HIDDEN);
   const saved = useSavedViews('daily-recovery');
-  const [detailId, setDetailId] = React.useState<string | null>(null);
+  // the plan under review is a form page named in the URL (D-140): `?form=review&row=<id>`
+  const formUrl = useFormParam(['row']);
+  const detailId = formUrl.form === 'review' ? formUrl.get('row') : null;
+  const review = (id: string) => formUrl.open('review', { row: id });
   const [notice, setNotice] = React.useState<string | null>(null);
   const plant = params.get('plantId') || me.data?.activePlantId || me.data?.plants[0]?.id || '';
   const tenant = me.data?.tenants.find((t) => t.id === me.data?.activeTenantId);
@@ -158,7 +149,8 @@ export function DailyRecoveryScreen() {
     const next = new URLSearchParams(params);
     Object.entries(changes).forEach(([key, value]) => (value ? next.set(key, value) : next.delete(key)));
     if (!('page' in changes)) next.delete('page');
-    setDetailId(null);
+    next.delete('form');
+    next.delete('row');
     router.replace(`${pathname}?${next}`);
   };
   const fields: FilterField[] = [
@@ -213,7 +205,7 @@ export function DailyRecoveryScreen() {
       critical: true,
       sortable: true,
       cell: (r) => (
-        <button type="button" className="text-left font-medium text-link hover:underline" onClick={() => setDetailId(r.id)}>
+        <button type="button" className="text-left font-medium text-link hover:underline" onClick={() => review(r.id)}>
           {r.itemName}
         </button>
       ),
@@ -405,7 +397,7 @@ export function DailyRecoveryScreen() {
               <EmptyState title="No parts to plan" description="Add an active customer part and a delivery schedule for this plant." />
             )
           }
-          rowActions={{ primary: (r) => ({ id: 'review', label: 'Review', icon: ClipboardList, onSelect: () => setDetailId(r.id) }) }}
+          rowActions={{ primary: (r) => ({ id: 'review', label: 'Review', icon: ClipboardList, onSelect: () => review(r.id) }) }}
         />
       </ListWorkspace>
       {query.data ? (
@@ -413,9 +405,22 @@ export function DailyRecoveryScreen() {
           Position as of {formatMoment(query.data.meta.asOf)} · production date {formatDay(query.data.meta.today)} · {query.data.meta.formulaCode}
         </p>
       ) : null}
-      <Drawer open={!!selected} onOpenChange={(open) => !open && setDetailId(null)}>
-        <DrawerContent title={selected ? `${selected.customerCode} · ${selected.itemName}` : 'Review plan'} closeLabel="Close review">
-          {selected ? (
+      <FormLayer
+        open={!!selected}
+        title={selected ? `${selected.customerCode} · ${selected.itemName}` : 'Review plan'}
+        back={{ label: 'Back to Daily Recovery', href: formUrl.closeHref }}
+        facts={
+          selected
+            ? [
+                { label: 'Part', value: selected.partNo },
+                { label: 'Target', value: formatDay(targetDate) },
+              ]
+            : undefined
+        }
+        onClose={formUrl.close}
+      >
+        {(guard) =>
+          selected ? (
             <RecoveryDetail
               key={`${selected.id}-${selected.version}`}
               row={selected}
@@ -423,15 +428,16 @@ export function DailyRecoveryScreen() {
               targetDate={targetDate}
               canEdit={canEdit}
               canCreateWo={canCreateWo}
+              onDirtyChange={guard.setDirty}
               onSaved={async () => {
                 await client.invalidateQueries({ queryKey: ['daily-recovery'] });
                 setNotice('Shift plan saved');
               }}
               onCreated={(id) => router.push(`/ppic/work-orders?order=${id}`)}
             />
-          ) : null}
-        </DrawerContent>
-      </Drawer>
+          ) : null
+        }
+      </FormLayer>
     </EnterprisePage>
   );
 }
@@ -442,6 +448,7 @@ function RecoveryDetail({
   targetDate,
   canEdit,
   canCreateWo,
+  onDirtyChange,
   onSaved,
   onCreated,
 }: {
@@ -450,6 +457,7 @@ function RecoveryDetail({
   targetDate: string;
   canEdit: boolean;
   canCreateWo: boolean;
+  onDirtyChange: (dirty: boolean) => void;
   onSaved: () => Promise<void>;
   onCreated: (id: string) => void;
 }) {
@@ -466,6 +474,7 @@ function RecoveryDetail({
   const [busy, setBusy] = React.useState(false);
   const [problem, setProblem] = React.useState<string | null>(null);
   const [dirty, setDirty] = React.useState(false);
+  React.useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const set = (key: keyof typeof values, value: string) => {
     setDirty(true);
     setValues((old) => ({ ...old, [key]: value }));
@@ -529,7 +538,7 @@ function RecoveryDetail({
     { key: 'shift3Qty', label: 'Shift III plan (pcs)' },
   ];
   return (
-    <div tabIndex={0} role="region" aria-label="Production plan detail" className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5 text-[13px]">
+    <div role="region" aria-label="Production plan detail" className="flex flex-col gap-5 text-[13px]">
       <p className="text-ink-2">
         {row.partNo} · Target {targetDate} · Backlog {pcs(row.backlogQty)} · Shipped today {pcs(row.shippedTodayQty)}
       </p>

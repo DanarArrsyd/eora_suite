@@ -152,7 +152,7 @@ test('routing page: the open Draft shows first; operations are replaced as one l
   await axe(page);
 
   await page.getByRole('button', { name: 'Add operation' }).click();
-  const drawer = page.getByRole('dialog', { name: 'Add operation' });
+  const drawer = page.getByRole('form', { name: 'Add operation' });
   await expect(drawer.getByRole('textbox', { name: 'Sequence' })).toHaveValue('20');
   await choose(page, drawer.getByRole('combobox', { name: 'Process' }), 'BLANK · Blanking');
   await choose(page, drawer.getByRole('combobox', { name: 'Work center' }), 'PRS-01 · Press line 1');
@@ -229,7 +229,7 @@ test('editing an operation keeps hidden attributes; a new work center clears the
   });
   await page.goto(`/master/routings?routing=${ROUTING.id}`);
   await page.getByRole('button', { name: /Edit .*Blanking/ }).click();
-  const drawer = page.getByRole('dialog', { name: 'Operation 10' });
+  const drawer = page.getByRole('form', { name: 'Operation 10' });
   await drawer.getByRole('textbox', { name: 'Cycle time (s)' }).fill('4');
   await drawer.getByRole('button', { name: 'Save operation' }).click();
   await expect(drawer).toBeHidden();
@@ -240,12 +240,39 @@ test('editing an operation keeps hidden attributes; a new work center clears the
   });
 
   await page.getByRole('button', { name: /Edit .*Blanking/ }).click();
-  const again = page.getByRole('dialog', { name: 'Operation 10' });
+  const again = page.getByRole('form', { name: 'Operation 10' });
   await expect(again.getByRole('checkbox', { name: 'M-200 · Press 200 t' })).toBeChecked();
   await choose(page, again.getByRole('combobox', { name: 'Work center' }), 'PRS-02 · Press line 2');
   await again.getByRole('button', { name: 'Save operation' }).click();
   await expect(again).toBeHidden();
   expect(bodies[1]!.operations[0]).toMatchObject({ workCenterId: '00000000-0000-7000-8000-0000000001f2', machines: [] });
+});
+
+test('an operation opens as a form page named in the URL; leaving it with changes asks first (D-140)', async ({ page }) => {
+  await setup(page);
+  await page.goto(`/master/routings?routing=${ROUTING.id}&version=${V2.id}&form=operation&op=${OP.id}`);
+  const form = page.getByRole('form', { name: 'Operation 10' });
+  await expect(form.getByRole('textbox', { name: 'Sequence' })).toHaveValue('10');
+  await expect(page.getByRole('heading', { level: 1, name: 'Operation 10' })).toBeVisible();
+  await axe(page);
+
+  await form.getByRole('textbox', { name: 'What to inspect' }).fill('Burr height');
+  await page.getByRole('link', { name: 'Back to routing R1 version 2' }).click();
+  const leave = page.getByRole('alertdialog', { name: 'Leave without saving?' });
+  await leave.getByRole('button', { name: 'Cancel' }).click();
+  await expect(form).toBeVisible();
+
+  await form.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('alertdialog', { name: 'Leave without saving?' }).getByRole('button', { name: 'Discard changes' }).click();
+  await expect(form).toBeHidden();
+  await expect(page).not.toHaveURL(/form=operation/);
+  await expect(page.getByRole('table', { name: 'Operations of version 2' })).toBeVisible();
+
+  // a clean form closes on the browser's Back
+  await page.getByRole('button', { name: 'Add operation' }).click();
+  await expect(page).toHaveURL(/form=operation/);
+  await page.goBack();
+  await expect(page.getByRole('form', { name: 'Add operation' })).toBeHidden();
 });
 
 test('a routing is deactivated at its version; a refused activation says why', async ({ page }) => {

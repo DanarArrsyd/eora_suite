@@ -125,7 +125,7 @@ test('net weight page: a Draft weight is edited at its ETag and submitted', asyn
   await axe(page);
 
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  const drawer = page.getByRole('dialog', { name: 'Version 1' });
+  const drawer = page.getByRole('form', { name: 'Version 1' });
   await expect(drawer.getByRole('textbox', { name: 'Net weight (kg per piece)' })).toHaveValue('0.2905');
   await drawer.getByRole('textbox', { name: 'Net weight (kg per piece)' }).fill('0.288');
   await drawer.getByRole('button', { name: 'Save changes' }).click();
@@ -182,7 +182,7 @@ test('profile page: inputs show their units; saving sends only filled values wit
   await axe(page);
 
   await page.getByRole('button', { name: 'Edit inputs' }).click();
-  const drawer = page.getByRole('dialog', { name: 'Inputs of version 1' });
+  const drawer = page.getByRole('form', { name: 'Inputs of version 1' });
   await drawer.getByRole('textbox', { name: 'Pitch (mm)' }).fill('320');
   await drawer.getByRole('textbox', { name: 'Parts per stroke (cavities) (pc/stroke)' }).fill('1');
   await drawer.getByRole('button', { name: 'Save inputs' }).click();
@@ -210,7 +210,7 @@ test("a refused input shows the server's reason on that input", async ({ page })
   );
   await page.goto(`/master/conversion-data?profile=${PROFILE.id}`);
   await page.getByRole('button', { name: 'Edit inputs' }).click();
-  const drawer = page.getByRole('dialog', { name: 'Inputs of version 1' });
+  const drawer = page.getByRole('form', { name: 'Inputs of version 1' });
   await drawer.getByRole('textbox', { name: 'Parts per stroke (cavities) (pc/stroke)' }).fill('1.5');
   await drawer.getByRole('button', { name: 'Save inputs' }).click();
   await expect(drawer.getByText('Must be a whole number of at least 1.').first()).toBeVisible();
