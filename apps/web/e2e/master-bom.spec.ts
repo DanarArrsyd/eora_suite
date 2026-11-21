@@ -154,7 +154,7 @@ test('BOM page: lines are replaced as one list at the version ETag; scrap allowa
   await axe(page);
 
   await page.getByRole('button', { name: 'Add line' }).click();
-  const drawer = page.getByRole('dialog', { name: 'Add line' });
+  const drawer = page.getByRole('form', { name: 'Add line' });
   await expect(drawer.getByRole('textbox', { name: 'Line' })).toHaveValue('20');
   await choose(page, drawer.getByRole('combobox', { name: 'Component' }), 'NUT-M6 · Nut M6');
   await drawer.getByRole('textbox', { name: 'Quantity per piece' }).fill('2');
@@ -183,7 +183,7 @@ test('a line can name the conversion profile of its component for this item (D-0
   });
   await page.goto(`/master/boms?item=${ITEM}`);
   await page.getByRole('table', { name: 'Lines of version 1' }).getByRole('button', { name: /Edit/ }).click();
-  const drawer = page.getByRole('dialog', { name: 'Line 10' });
+  const drawer = page.getByRole('form', { name: 'Line 10' });
   await choose(page, drawer.getByRole('combobox', { name: 'Conversion profile' }), 'Coil profile, version 1 in use');
   await drawer.getByRole('button', { name: 'Save line' }).click();
   await expect.poll(() => puts.length).toBe(1);
@@ -205,7 +205,7 @@ test("a refused line shows the server's reason on that line's field", async ({ p
   );
   await page.goto(`/master/boms?item=${ITEM}`);
   await page.getByRole('button', { name: 'Add line' }).click();
-  const drawer = page.getByRole('dialog', { name: 'Add line' });
+  const drawer = page.getByRole('form', { name: 'Add line' });
   await choose(page, drawer.getByRole('combobox', { name: 'Component' }), 'NUT-M6 · Nut M6');
   await drawer.getByRole('textbox', { name: 'Quantity per piece' }).fill('2');
   await choose(page, drawer.getByRole('combobox', { name: 'Unit' }), 'KG · Kilogram');
@@ -226,7 +226,7 @@ test('routing map: each line gets its operation, saved as one list; approval wai
   await expect(maps.getByRole('row', { name: /R1/ })).toContainText('0 of 1');
   await maps.getByRole('button', { name: /Open/ }).click();
   await expect(page).toHaveURL(new RegExp(`map=${MAP.id}`));
-  const drawer = page.getByRole('dialog', { name: 'Map R1 revision 1' });
+  const drawer = page.getByRole('region', { name: 'Map R1 revision 1' });
   await choose(page, drawer.getByRole('combobox', { name: 'Operation for line 10 COIL-1' }), '10 · Blanking · PRS-01');
   await drawer.getByRole('button', { name: 'Save mapping' }).click();
   await expect.poll(() => puts.length).toBe(1);
@@ -242,7 +242,7 @@ test('approving a map before the BOM version is approved says what to do first',
     problem(409, 'INVALID_STATE_TRANSITION', 'Cannot approve', { detail: 'Approve the BOM version and the routing version first.' }),
   );
   await page.goto(`/master/boms?item=${ITEM}&version=${V1.id}&map=${MAP.id}`);
-  const drawer = page.getByRole('dialog', { name: 'Map R1 revision 1' });
+  const drawer = page.getByRole('region', { name: 'Map R1 revision 1' });
   await drawer.getByRole('button', { name: 'Approve' }).click();
   await expect(drawer.getByText('Approve the BOM version and the routing version first.')).toBeVisible();
 });

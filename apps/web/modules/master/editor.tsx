@@ -1,9 +1,7 @@
 import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { useMe } from '@eora/features/auth';
-import { setNavigationGuard } from '@eora/features/navigation';
 import {
   ConfirmDialog,
   EoraForm,
@@ -22,6 +20,7 @@ import { PHYSICAL_LOCATION_TYPES } from './resources';
 import { queryOptions } from './source';
 import { PartialSave, type Confirmation, type FieldSpec, type FormValues, type MasterResource, type MasterRow, type OptionSource } from './types';
 import { formatDay, formatQty } from '@/components/format';
+import { useUnsavedGuard } from './unsaved-guard';
 
 const PICKERS: Record<
   OptionSource,
@@ -282,90 +281,9 @@ export function MasterEditor<T extends MasterRow>({
       });
     });
 
-  // unsaved changes: every way out asks first (D-140) — Back and Cancel, any in-app link (sidebar, breadcrumb, topbar),
-  // the browser's Back button; the browser itself warns on reload or close
-  const router = useRouter();
-  const [dirty, setDirty] = React.useState(false);
-  const [leaveTo, setLeaveTo] = React.useState<string | null>(null);
-  const released = React.useRef(false);
-  const dirtyRef = React.useRef(false);
-  React.useEffect(() => {
-    dirtyRef.current = dirty;
-  }, [dirty]);
-  // one guard entry of this same page per form, pushed the first time it gets dirty and marked in its history state, so a
-  // reload on it reuses it: the browser's Back lands on the form's own entry and the page asks before going further back;
-  // once the form is clean again, that Back simply carries on
-  const guarded = React.useRef(false);
-  React.useEffect(() => {
-    if (mode !== 'page' || !onGuardEntry()) return;
-    guarded.current = true;
-  }, [mode]);
-  React.useEffect(() => {
-    if (!dirty || mode !== 'page' || guarded.current) return;
-    guarded.current = true;
-    if (!onGuardEntry()) pushGuardEntry();
-  }, [dirty, mode]);
-  React.useEffect(() => {
-    if (mode !== 'page') return;
-    let hash = window.location.hash;
-    const onPop = () => {
-      // a move within the page (`#main`) changes only the fragment: it is not a way out
-      if (window.location.hash !== hash) {
-        hash = window.location.hash;
-        return;
-      }
-      if (!guarded.current || released.current || onGuardEntry()) return;
-      if (!dirtyRef.current) {
-        guarded.current = false;
-        window.history.back();
-        return;
-      }
-      pushGuardEntry();
-      setLeaveTo('history');
-    };
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, [mode]);
-  React.useEffect(() => {
-    if (!dirty || mode !== 'page') return;
-    released.current = false;
-    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
-    const onClick = (e: MouseEvent) => {
-      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      const link = e.target instanceof Element ? e.target.closest('a[href]') : null;
-      if (!(link instanceof HTMLAnchorElement) || link.target === '_blank' || link.hasAttribute('download') || link.hasAttribute('data-form-back')) return;
-      const url = new URL(link.href, window.location.href);
-      if (url.origin !== window.location.origin) return;
-      // a link within this page (e.g. Skip to main content, `#main`) does not leave it
-      if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setLeaveTo(url.pathname + url.search + url.hash);
-    };
-    // navigation in code (the global search) asks through the same dialog
-    const release = setNavigationGuard((href) => {
-      setLeaveTo(href);
-      return true;
-    });
-    window.addEventListener('beforeunload', warn);
-    document.addEventListener('click', onClick, true);
-    return () => {
-      release();
-      window.removeEventListener('beforeunload', warn);
-      document.removeEventListener('click', onClick, true);
-    };
-  }, [dirty, mode]);
-  const leave = () => (dirty && mode === 'page' ? setLeaveTo('close') : onClose());
-  const discard = () => {
-    const target = leaveTo;
-    released.current = true;
-    setLeaveTo(null);
-    setDirty(false);
-    // the browser's Back: go to the page the form came from, however many entries (in-page jumps, the guard) lie behind
-    if (target === 'history') router.replace(back.href);
-    else if (target && target !== 'close') router.push(target);
-    else onClose();
-  };
+  // unsaved changes: every way out asks first (D-140, shared with every form page)
+  const guard = useUnsavedGuard({ active: mode === 'page', backHref: back.href, onClose });
+  const { setDirty, leave } = guard;
 
   const form = lockedReason ? (
     <InlineAlert tone="info" title="This record cannot be changed">
@@ -512,28 +430,9 @@ export function MasterEditor<T extends MasterRow>({
       >
         {form}
       </FormPage>
-      <ConfirmDialog
-        open={leaveTo !== null}
-        onOpenChange={(open) => (open ? undefined : setLeaveTo(null))}
-        title="Leave without saving?"
-        description="Your changes on this form are not saved yet. Leaving discards them."
-        confirmLabel="Discard changes"
-        tone="danger"
-        onConfirm={async () => discard()}
-      />
+      {guard.dialog}
     </>
   );
-}
-
-/** Whether the current history entry is a form page's guard entry (kept across reloads in its history state). */
-function onGuardEntry(): boolean {
-  const state: unknown = window.history.state;
-  return typeof state === 'object' && state !== null && (state as { eoraFormGuard?: boolean }).eoraFormGuard === true;
-}
-
-function pushGuardEntry(): void {
-  const state: unknown = window.history.state;
-  window.history.pushState({ ...(typeof state === 'object' && state !== null ? state : {}), eoraFormGuard: true }, '', window.location.href);
 }
 
 function conflictAware(error: unknown) {

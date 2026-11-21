@@ -13,8 +13,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  Drawer,
-  DrawerContent,
   EmptyState,
   ErrorState,
   InlineAlert,
@@ -32,6 +30,8 @@ import {
   type ItemWeightRow,
   type ProfileVersionRow,
 } from './conversion-resources';
+import { FormLayer } from './form-layer';
+import { useFormParam } from './form-url';
 import { MasterGroupScreen, type MasterGroup } from './master-screen';
 import { queryAll, querySource } from './source';
 import { ApprovalPanel, VersionStrip, conflictFailure, dayRange, todayIn, when, type Can, type LifecycleAction } from './version-ui';
@@ -252,7 +252,8 @@ function NewVersionButton({
   withWeight?: boolean;
   create: (v: { effectiveFrom: string; changeReason: string; netWeightKg?: string }) => Promise<void>;
 }) {
-  const [open, setOpen] = React.useState(false);
+  const formUrl = useFormParam();
+  const open = formUrl.form === 'new-version';
   const today = useToday();
   const schema = z.object({
     effectiveFrom: z.string().min(1, 'Choose the day the new version takes effect.'),
@@ -267,7 +268,7 @@ function NewVersionButton({
       variant="primary"
       aria-disabled={reason ? 'true' : undefined}
       aria-label={reason ? `New version. ${reason}` : undefined}
-      onClick={(e) => (reason ? e.preventDefault() : setOpen(true))}
+      onClick={(e) => (reason ? e.preventDefault() : formUrl.open('new-version'))}
     >
       <FilePlus2 aria-hidden="true" className="size-4" />
       New version
@@ -276,52 +277,57 @@ function NewVersionButton({
   return (
     <>
       {reason ? <Tooltip content={reason}>{button}</Tooltip> : button}
-      <Drawer open={open} onOpenChange={setOpen}>
-        <DrawerContent title={title} closeLabel="Close">
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-            <p className="m-0 text-[13.5px] text-ink-2">{note}</p>
-            <EoraForm
-              label={title}
-              schema={schema}
-              defaultValues={{ effectiveFrom: '', changeReason: '', netWeightKg: '' }}
-              submitLabel="Create version"
-              secondary={
-                <Button type="button" onClick={() => setOpen(false)}>
-                  Cancel
-                </Button>
+      <FormLayer
+        open={open && !reason}
+        title={title}
+        description={note}
+        back={{ label: 'Back to the versions', href: formUrl.closeHref }}
+        onClose={formUrl.close}
+      >
+        {(guard) => (
+          <EoraForm
+            label={title}
+            schema={schema}
+            defaultValues={{ effectiveFrom: '', changeReason: '', netWeightKg: '' }}
+            submitLabel="Create version"
+            stickyActions
+            onDirtyChange={guard.setDirty}
+            secondary={
+              <Button type="button" onClick={guard.leave}>
+                Cancel
+              </Button>
+            }
+            onSubmit={async (v) => {
+              try {
+                await create(v);
+                guard.saved();
+                return { ok: true };
+              } catch (e) {
+                return conflictFailure(e, 'No version was created.');
               }
-              onSubmit={async (v) => {
-                try {
-                  await create(v);
-                  setOpen(false);
-                  return { ok: true };
-                } catch (e) {
-                  return conflictFailure(e, 'No version was created.');
-                }
-              }}
-            >
-              <FormDateField
-                name="effectiveFrom"
-                label="Takes effect"
-                required
-                min={today as IsoDate}
-                today={today as IsoDate}
-                hint="Today or later. Past days keep the version they had."
+            }}
+          >
+            <FormDateField
+              name="effectiveFrom"
+              label="Takes effect"
+              required
+              min={today as IsoDate}
+              today={today as IsoDate}
+              hint="Today or later. Past days keep the version they had."
+            />
+            {withWeight ? (
+              <FormTextField
+                name="netWeightKg"
+                label="Net weight (kg per piece)"
+                inputMode="decimal"
+                autoComplete="off"
+                hint="Leave empty to start from the current weight."
               />
-              {withWeight ? (
-                <FormTextField
-                  name="netWeightKg"
-                  label="Net weight (kg per piece)"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  hint="Leave empty to start from the current weight."
-                />
-              ) : null}
-              <FormTextareaField name="changeReason" label="What changes" required maxLength={500} rows={3} />
-            </EoraForm>
-          </div>
-        </DrawerContent>
-      </Drawer>
+            ) : null}
+            <FormTextareaField name="changeReason" label="What changes" required maxLength={500} rows={3} />
+          </EoraForm>
+        )}
+      </FormLayer>
     </>
   );
 }
@@ -334,7 +340,7 @@ function WeightPage({ itemId }: { itemId: string }) {
   const client = useQueryClient();
   const today = useToday();
   const [notice, setNotice] = React.useState<string | null>(null);
-  const [editing, setEditing] = React.useState(false);
+  const formUrl = useFormParam();
   const { versions, list, open, selectedId } = useVersions<ItemWeightRow>('planning.item_weights', { itemId }, can.view);
   const row = list?.find((v) => v.id === selectedId) ?? null;
   const refresh = () => client.invalidateQueries({ queryKey: ['master'] });
@@ -408,7 +414,7 @@ function WeightPage({ itemId }: { itemId: string }) {
         hrefFor={hrefFor}
       />
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <FactsCard title={`Version ${row.versionNo}`} row={row} editable={row.status === 'DRAFT' && can.create} onEdit={() => setEditing(true)}>
+        <FactsCard title={`Version ${row.versionNo}`} row={row} editable={row.status === 'DRAFT' && can.create} onEdit={() => formUrl.open('details')}>
           <dt className="text-ink-2">Net weight</dt>
           <dd className="m-0 text-[15px] font-semibold text-ink max-sm:mb-2">{kgPerPiece(row.netWeightKg)}</dd>
         </FactsCard>
@@ -431,12 +437,13 @@ function WeightPage({ itemId }: { itemId: string }) {
           onDone={done}
         />
       </div>
-      <DetailsDrawer
+      <DetailsForm
         key={`${row.id}:${row.version}`}
         row={row}
         weight={row.netWeightKg ? plain(row.netWeightKg) : ''}
-        open={editing}
-        onOpenChange={setEditing}
+        open={row.status === 'DRAFT' && can.create && formUrl.form === 'details'}
+        back={formUrl.closeHref}
+        onClose={formUrl.close}
         onSaved={() => void refresh()}
         save={(body) =>
           call(() =>
@@ -453,11 +460,12 @@ function WeightPage({ itemId }: { itemId: string }) {
 }
 
 /** Start day and reason of a Draft version (If-Match); a net weight version also edits its weight. */
-function DetailsDrawer({
+function DetailsForm({
   row,
   weight,
   open,
-  onOpenChange,
+  back,
+  onClose,
   onSaved,
   save,
 }: {
@@ -465,7 +473,8 @@ function DetailsDrawer({
   /** Current weight text, or undefined for a version without one (a conversion profile). */
   weight?: string;
   open: boolean;
-  onOpenChange: (o: boolean) => void;
+  back: string;
+  onClose: () => void;
   onSaved: () => void;
   save: (body: { effectiveFrom: string; changeReason: string | null; netWeightKg?: string }) => Promise<unknown>;
 }) {
@@ -480,50 +489,45 @@ function DetailsDrawer({
     changeReason: z.string().trim().max(500, 'Use at most 500 characters.'),
   });
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent title={`Version ${row.versionNo}`} closeLabel="Close">
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-          <EoraForm
-            label={`Version ${row.versionNo}`}
-            schema={schema}
-            defaultValues={{ netWeightKg: weight ?? '', effectiveFrom: row.effectiveFrom, changeReason: row.changeReason ?? '' }}
-            submitLabel="Save changes"
-            secondary={
-              <Button type="button" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
+    <FormLayer open={open} title={`Version ${row.versionNo}`} back={{ label: `Back to version ${row.versionNo}`, href: back }} onClose={onClose}>
+      {(guard) => (
+        <EoraForm
+          label={`Version ${row.versionNo}`}
+          schema={schema}
+          defaultValues={{ netWeightKg: weight ?? '', effectiveFrom: row.effectiveFrom, changeReason: row.changeReason ?? '' }}
+          submitLabel="Save changes"
+          stickyActions
+          onDirtyChange={guard.setDirty}
+          secondary={
+            <Button type="button" onClick={guard.leave}>
+              Cancel
+            </Button>
+          }
+          onSubmit={async (v) => {
+            try {
+              await save({
+                effectiveFrom: v.effectiveFrom,
+                changeReason: v.changeReason || null,
+                ...(weight === undefined ? {} : { netWeightKg: v.netWeightKg }),
+              });
+              guard.saved();
+              onClose();
+              onSaved();
+              return { ok: true };
+            } catch (e) {
+              if ((e as { status?: number } | null)?.status === 412) onSaved();
+              return conflictFailure(e, 'Nothing was saved.');
             }
-            onSubmit={async (v) => {
-              try {
-                await save({
-                  effectiveFrom: v.effectiveFrom,
-                  changeReason: v.changeReason || null,
-                  ...(weight === undefined ? {} : { netWeightKg: v.netWeightKg }),
-                });
-                onOpenChange(false);
-                onSaved();
-                return { ok: true };
-              } catch (e) {
-                if ((e as { status?: number } | null)?.status === 412) onSaved();
-                return conflictFailure(e, 'Nothing was saved.');
-              }
-            }}
-          >
-            {weight === undefined ? null : (
-              <FormTextField
-                name="netWeightKg"
-                label="Net weight (kg per piece)"
-                inputMode="decimal"
-                autoComplete="off"
-                hint="Up to 6 decimals, e.g. 0.2905."
-              />
-            )}
-            <FormDateField name="effectiveFrom" label="Takes effect" required min={today as IsoDate} today={today as IsoDate} hint="Today or later." />
-            <FormTextareaField name="changeReason" label="What changes" maxLength={500} rows={3} />
-          </EoraForm>
-        </div>
-      </DrawerContent>
-    </Drawer>
+          }}
+        >
+          {weight === undefined ? null : (
+            <FormTextField name="netWeightKg" label="Net weight (kg per piece)" inputMode="decimal" autoComplete="off" hint="Up to 6 decimals, e.g. 0.2905." />
+          )}
+          <FormDateField name="effectiveFrom" label="Takes effect" required min={today as IsoDate} today={today as IsoDate} hint="Today or later." />
+          <FormTextareaField name="changeReason" label="What changes" maxLength={500} rows={3} />
+        </EoraForm>
+      )}
+    </FormLayer>
   );
 }
 
@@ -535,8 +539,7 @@ function ProfilePage({ profileId }: { profileId: string }) {
   const client = useQueryClient();
   const today = useToday();
   const [notice, setNotice] = React.useState<string | null>(null);
-  const [editing, setEditing] = React.useState(false);
-  const [detailsOpen, setDetailsOpen] = React.useState(false);
+  const formUrl = useFormParam();
   const [statusError, setStatusError] = React.useState<string | null>(null);
   const profile = useQuery({
     queryKey: ['master', 'planning.conversion_profiles', 'one', profileId],
@@ -673,7 +676,7 @@ function ProfilePage({ profileId }: { profileId: string }) {
               title={`Version ${detail.data.versionNo}`}
               row={detail.data}
               editable={detail.data.status === 'DRAFT' && can.create}
-              onEdit={() => setDetailsOpen(true)}
+              onEdit={() => formUrl.open('details')}
             >
               <dt className="text-ink-2">Formula</dt>
               <dd className="m-0 text-ink max-sm:mb-2">
@@ -710,19 +713,21 @@ function ProfilePage({ profileId }: { profileId: string }) {
               onDone={done}
             />
           </div>
-          <InputsSection version={detail.data} editable={detail.data.status === 'DRAFT' && can.create} onEdit={() => setEditing(true)} />
-          <InputsDrawer
+          <InputsSection version={detail.data} editable={detail.data.status === 'DRAFT' && can.create} onEdit={() => formUrl.open('inputs')} />
+          <InputsForm
             key={`${detail.data.id}:${detail.data.version}`}
             version={detail.data}
-            open={editing}
-            onOpenChange={setEditing}
+            open={detail.data.status === 'DRAFT' && can.create && formUrl.form === 'inputs'}
+            back={formUrl.closeHref}
+            onClose={formUrl.close}
             onSaved={() => void refresh()}
           />
-          <DetailsDrawer
+          <DetailsForm
             key={`details:${detail.data.id}:${detail.data.version}`}
             row={detail.data}
-            open={detailsOpen}
-            onOpenChange={setDetailsOpen}
+            open={detail.data.status === 'DRAFT' && can.create && formUrl.form === 'details'}
+            back={formUrl.closeHref}
+            onClose={formUrl.close}
             onSaved={() => void refresh()}
             save={(body) =>
               call(() =>
@@ -791,15 +796,17 @@ function InputsSection({ version, editable, onEdit }: { version: ProfileVersion;
   );
 }
 
-function InputsDrawer({
+function InputsForm({
   version,
   open,
-  onOpenChange,
+  back,
+  onClose,
   onSaved,
 }: {
   version: ProfileVersion;
   open: boolean;
-  onOpenChange: (o: boolean) => void;
+  back: string;
+  onClose: () => void;
   onSaved: () => void;
 }) {
   const number = z
@@ -809,48 +816,54 @@ function InputsDrawer({
   const schema = z.object(Object.fromEntries(version.inputs.map((i) => [i.key, number])));
   const title = `Inputs of version ${version.versionNo}`;
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent title={title} closeLabel="Close">
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-          <p className="m-0 text-[13.5px] text-ink-2">Enter each value in the unit shown. You can save an incomplete set and finish it later.</p>
-          <EoraForm
-            label={title}
-            schema={schema}
-            defaultValues={Object.fromEntries(version.inputs.map((i) => [i.key, i.value === null ? '' : plain(i.value)]))}
-            submitLabel="Save inputs"
-            secondary={
-              <Button type="button" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
+    <FormLayer
+      open={open}
+      title={title}
+      description="Enter each value in the unit shown. You can save an incomplete set and finish it later."
+      back={{ label: `Back to version ${version.versionNo}`, href: back }}
+      onClose={onClose}
+    >
+      {(guard) => (
+        <EoraForm
+          label={title}
+          schema={schema}
+          defaultValues={Object.fromEntries(version.inputs.map((i) => [i.key, i.value === null ? '' : plain(i.value)]))}
+          submitLabel="Save inputs"
+          stickyActions
+          onDirtyChange={guard.setDirty}
+          secondary={
+            <Button type="button" onClick={guard.leave}>
+              Cancel
+            </Button>
+          }
+          onSubmit={async (v: Record<string, string>) => {
+            const inputs = Object.fromEntries(version.inputs.filter((i) => (v[i.key] ?? '') !== '').map((i) => [i.key, { value: v[i.key]!, unit: i.unit }]));
+            try {
+              await call(() =>
+                api.PATCH('/planning/conversion-profile-versions/{version}', {
+                  params: { path: { version: version.id } },
+                  headers: ifMatch(version.version),
+                  body: { inputs } as never,
+                }),
+              );
+              guard.saved();
+              onClose();
+              onSaved();
+              return { ok: true };
+            } catch (e) {
+              if ((e as { status?: number } | null)?.status === 412) onSaved();
+              // the server names fields `inputs.<key>`; the form names them `<key>`
+              const failure = conflictFailure(e, 'The inputs were not saved.');
+              if (failure.ok || !('fieldErrors' in failure) || !failure.fieldErrors) return failure;
+              return { ...failure, fieldErrors: Object.fromEntries(Object.entries(failure.fieldErrors).map(([k, m]) => [k.replace(/^inputs\./, ''), m])) };
             }
-            onSubmit={async (v: Record<string, string>) => {
-              const inputs = Object.fromEntries(version.inputs.filter((i) => (v[i.key] ?? '') !== '').map((i) => [i.key, { value: v[i.key]!, unit: i.unit }]));
-              try {
-                await call(() =>
-                  api.PATCH('/planning/conversion-profile-versions/{version}', {
-                    params: { path: { version: version.id } },
-                    headers: ifMatch(version.version),
-                    body: { inputs } as never,
-                  }),
-                );
-                onOpenChange(false);
-                onSaved();
-                return { ok: true };
-              } catch (e) {
-                if ((e as { status?: number } | null)?.status === 412) onSaved();
-                // the server names fields `inputs.<key>`; the form names them `<key>`
-                const failure = conflictFailure(e, 'The inputs were not saved.');
-                if (failure.ok || !('fieldErrors' in failure) || !failure.fieldErrors) return failure;
-                return { ...failure, fieldErrors: Object.fromEntries(Object.entries(failure.fieldErrors).map(([k, m]) => [k.replace(/^inputs\./, ''), m])) };
-              }
-            }}
-          >
-            {version.inputs.map((i) => (
-              <FormTextField key={i.key} name={i.key} label={`${i.label} (${i.unit})`} inputMode="decimal" autoComplete="off" />
-            ))}
-          </EoraForm>
-        </div>
-      </DrawerContent>
-    </Drawer>
+          }}
+        >
+          {version.inputs.map((i) => (
+            <FormTextField key={i.key} name={i.key} label={`${i.label} (${i.unit})`} inputMode="decimal" autoComplete="off" />
+          ))}
+        </EoraForm>
+      )}
+    </FormLayer>
   );
 }

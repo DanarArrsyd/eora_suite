@@ -26,8 +26,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  Drawer,
-  DrawerContent,
   EmptyState,
   ErrorState,
   InlineAlert,
@@ -38,6 +36,8 @@ import {
   type IsoDate,
 } from '@eora/ui';
 import { BOMS, MADE_ITEM_TYPES, type BomVersionRow } from './engineering-resources';
+import { FormLayer } from './form-layer';
+import { useFormParam } from './form-url';
 import { MasterScreen } from './master-screen';
 import { queryAll, queryOptions, querySource } from './source';
 import {
@@ -323,7 +323,8 @@ function NewVersionButton({
   copyFrom: number | null;
   onCreated: (id: string) => void;
 }) {
-  const [open, setOpen] = React.useState(false);
+  const formUrl = useFormParam();
+  const open = formUrl.form === 'new-version';
   const today = useToday();
   const schema = z.object({
     effectiveFrom: z.string().min(1, 'Choose the day the new version takes effect.'),
@@ -334,7 +335,7 @@ function NewVersionButton({
       variant="primary"
       aria-disabled={reason ? 'true' : undefined}
       aria-label={reason ? `New version. ${reason}` : undefined}
-      onClick={(e) => (reason ? e.preventDefault() : setOpen(true))}
+      onClick={(e) => (reason ? e.preventDefault() : formUrl.open('new-version'))}
     >
       <FilePlus2 aria-hidden="true" className="size-4" />
       New version
@@ -343,58 +344,63 @@ function NewVersionButton({
   return (
     <>
       {reason ? <Tooltip content={reason}>{button}</Tooltip> : button}
-      <Drawer open={open} onOpenChange={setOpen}>
-        <DrawerContent title={`New BOM version of ${itemCode}`} closeLabel="Close">
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-            <p className="m-0 text-[13.5px] text-ink-2">
-              {copyFrom
-                ? `Starts as a Draft with the lines of version ${copyFrom}. Version ${copyFrom} stays in use until the new version is approved and takes effect.`
-                : 'Starts as a Draft. Add its lines, then submit it for approval.'}
-            </p>
-            <EoraForm
-              label={`New BOM version of ${itemCode}`}
-              schema={schema}
-              defaultValues={{ effectiveFrom: '', changeReason: '' }}
-              submitLabel="Create version"
-              secondary={
-                <Button type="button" onClick={() => setOpen(false)}>
-                  Cancel
-                </Button>
+      <FormLayer
+        open={open && !reason}
+        title={`New BOM version of ${itemCode}`}
+        description={
+          copyFrom
+            ? `Starts as a Draft with the lines of version ${copyFrom}. Version ${copyFrom} stays in use until the new version is approved and takes effect.`
+            : 'Starts as a Draft. Add its lines, then submit it for approval.'
+        }
+        back={{ label: `Back to the ${itemCode} BOM`, href: formUrl.closeHref }}
+        onClose={formUrl.close}
+      >
+        {(guard) => (
+          <EoraForm
+            label={`New BOM version of ${itemCode}`}
+            schema={schema}
+            defaultValues={{ effectiveFrom: '', changeReason: '' }}
+            submitLabel="Create version"
+            stickyActions
+            onDirtyChange={guard.setDirty}
+            secondary={
+              <Button type="button" onClick={guard.leave}>
+                Cancel
+              </Button>
+            }
+            onSubmit={async (v) => {
+              try {
+                const res = (await call(() =>
+                  api.POST('/planning/bom-versions', { body: { itemId, effectiveFrom: v.effectiveFrom, changeReason: v.changeReason } }),
+                )) as { data: { id: string } };
+                guard.saved();
+                onCreated(res.data.id);
+                return { ok: true };
+              } catch (e) {
+                return conflictFailure(e, 'No version was created.');
               }
-              onSubmit={async (v) => {
-                try {
-                  const res = (await call(() =>
-                    api.POST('/planning/bom-versions', { body: { itemId, effectiveFrom: v.effectiveFrom, changeReason: v.changeReason } }),
-                  )) as { data: { id: string } };
-                  setOpen(false);
-                  onCreated(res.data.id);
-                  return { ok: true };
-                } catch (e) {
-                  return conflictFailure(e, 'No version was created.');
-                }
-              }}
-            >
-              <FormDateField
-                name="effectiveFrom"
-                label="Takes effect"
-                required
-                min={today as IsoDate}
-                today={today as IsoDate}
-                hint="Today or later. Past days keep the version they had."
-              />
-              <FormTextareaField name="changeReason" label="What changes" required maxLength={500} rows={3} />
-            </EoraForm>
-          </div>
-        </DrawerContent>
-      </Drawer>
+            }}
+          >
+            <FormDateField
+              name="effectiveFrom"
+              label="Takes effect"
+              required
+              min={today as IsoDate}
+              today={today as IsoDate}
+              hint="Today or later. Past days keep the version they had."
+            />
+            <FormTextareaField name="changeReason" label="What changes" required maxLength={500} rows={3} />
+          </EoraForm>
+        )}
+      </FormLayer>
     </>
   );
 }
 
 function VersionBody({ version, can, onChanged, onNotice }: { version: BomDetail; can: Can; onChanged: () => void; onNotice: (m: string) => void }) {
   const editable = version.status === 'DRAFT' && can.create;
-  const [detailsOpen, setDetailsOpen] = React.useState(false);
-  const [editing, setEditing] = React.useState<{ open: boolean; line: BomLine | null }>({ open: false, line: null });
+  const formUrl = useFormParam(['line']);
+  const editingLine = formUrl.form === 'line' ? (version.lines.find((l) => l.id === formUrl.get('line')) ?? null) : null;
   const [error, setError] = React.useState<string | null>(null);
 
   const save = async (lines: LineInput[]) => {
@@ -439,7 +445,7 @@ function VersionBody({ version, can, onChanged, onNotice }: { version: BomDetail
               {version.inUse ? <span className="text-[13px] text-ink-2">In use today</span> : null}
             </div>
             {editable ? (
-              <Button size="sm" onClick={() => setDetailsOpen(true)}>
+              <Button size="sm" onClick={() => formUrl.open('details')}>
                 <Pencil aria-hidden="true" className="size-4" />
                 Edit details
               </Button>
@@ -490,7 +496,7 @@ function VersionBody({ version, can, onChanged, onNotice }: { version: BomDetail
             Lines
           </h2>
           {editable ? (
-            <Button size="sm" onClick={() => setEditing({ open: true, line: null })}>
+            <Button size="sm" onClick={() => formUrl.open('line')}>
               <Plus aria-hidden="true" className="size-4" />
               Add line
             </Button>
@@ -523,7 +529,7 @@ function VersionBody({ version, can, onChanged, onNotice }: { version: BomDetail
           rowActions={
             editable
               ? {
-                  primary: (l) => ({ id: 'edit', label: 'Edit', icon: Pencil, onSelect: () => setEditing({ open: true, line: l }) }),
+                  primary: (l) => ({ id: 'edit', label: 'Edit', icon: Pencil, onSelect: () => formUrl.open('line', { line: l.id }) }),
                   menu: (l) => [{ id: 'remove', label: 'Remove', icon: Trash2, onSelect: () => void remove(l) }],
                 }
               : undefined
@@ -533,13 +539,14 @@ function VersionBody({ version, can, onChanged, onNotice }: { version: BomDetail
 
       <MapsSection version={version} can={can} onNotice={onNotice} />
 
-      <DetailsDrawer version={version} open={detailsOpen} onOpenChange={setDetailsOpen} onSaved={onChanged} />
-      <LineDrawer
-        key={editing.line?.id ?? 'new'}
+      <DetailsForm version={version} open={editable && formUrl.form === 'details'} back={formUrl.closeHref} onClose={formUrl.close} onSaved={onChanged} />
+      <LineForm
+        key={editingLine?.id ?? 'new'}
         version={version}
-        line={editing.line}
-        open={editing.open}
-        onOpenChange={(o) => setEditing((e) => ({ ...e, open: o }))}
+        line={editingLine}
+        open={editable && formUrl.form === 'line' && (formUrl.get('line') === null || editingLine !== null)}
+        back={formUrl.closeHref}
+        onClose={formUrl.close}
         save={save}
       />
     </div>
@@ -572,61 +579,57 @@ function mapAction(map: string, action: LifecycleAction) {
   );
 }
 
-function DetailsDrawer({
-  version,
-  open,
-  onOpenChange,
-  onSaved,
-}: {
-  version: BomDetail;
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  onSaved: () => void;
-}) {
+function DetailsForm({ version, open, back, onClose, onSaved }: { version: BomDetail; open: boolean; back: string; onClose: () => void; onSaved: () => void }) {
   const today = useToday();
   const schema = z.object({
     effectiveFrom: z.string().min(1, 'Choose the day this version takes effect.'),
     changeReason: z.string().trim().max(500, 'Use at most 500 characters.'),
   });
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent title={`Version ${version.versionNo} details`} closeLabel="Close">
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-          <EoraForm
-            key={`${version.id}:${version.version}`}
-            label={`Version ${version.versionNo} details`}
-            schema={schema}
-            defaultValues={{ effectiveFrom: version.effectiveFrom, changeReason: version.changeReason ?? '' }}
-            submitLabel="Save changes"
-            secondary={
-              <Button type="button" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
+    <FormLayer
+      open={open}
+      title={`Version ${version.versionNo} details`}
+      back={{ label: `Back to the ${version.itemCode} BOM version ${version.versionNo}`, href: back }}
+      onClose={onClose}
+    >
+      {(guard) => (
+        <EoraForm
+          key={`${version.id}:${version.version}`}
+          label={`Version ${version.versionNo} details`}
+          schema={schema}
+          defaultValues={{ effectiveFrom: version.effectiveFrom, changeReason: version.changeReason ?? '' }}
+          submitLabel="Save changes"
+          stickyActions
+          onDirtyChange={guard.setDirty}
+          secondary={
+            <Button type="button" onClick={guard.leave}>
+              Cancel
+            </Button>
+          }
+          onSubmit={async (v) => {
+            try {
+              await call(() =>
+                api.PATCH('/planning/bom-versions/{version}', {
+                  params: { path: { version: version.id } },
+                  headers: ifMatch(version.version),
+                  body: { effectiveFrom: v.effectiveFrom, changeReason: v.changeReason || null },
+                }),
+              );
+              guard.saved();
+              onClose();
+              onSaved();
+              return { ok: true };
+            } catch (e) {
+              if ((e as { status?: number } | null)?.status === 412) onSaved();
+              return conflictFailure(e, 'Nothing was saved.');
             }
-            onSubmit={async (v) => {
-              try {
-                await call(() =>
-                  api.PATCH('/planning/bom-versions/{version}', {
-                    params: { path: { version: version.id } },
-                    headers: ifMatch(version.version),
-                    body: { effectiveFrom: v.effectiveFrom, changeReason: v.changeReason || null },
-                  }),
-                );
-                onOpenChange(false);
-                onSaved();
-                return { ok: true };
-              } catch (e) {
-                if ((e as { status?: number } | null)?.status === 412) onSaved();
-                return conflictFailure(e, 'Nothing was saved.');
-              }
-            }}
-          >
-            <FormDateField name="effectiveFrom" label="Takes effect" required min={today as IsoDate} today={today as IsoDate} hint="Today or later." />
-            <FormTextareaField name="changeReason" label="What changes" maxLength={500} rows={3} />
-          </EoraForm>
-        </div>
-      </DrawerContent>
-    </Drawer>
+          }}
+        >
+          <FormDateField name="effectiveFrom" label="Takes effect" required min={today as IsoDate} today={today as IsoDate} hint="Today or later." />
+          <FormTextareaField name="changeReason" label="What changes" maxLength={500} rows={3} />
+        </EoraForm>
+      )}
+    </FormLayer>
   );
 }
 
@@ -651,17 +654,19 @@ const LINE_SCHEMA = z.object({
   conversionProfileId: z.string(),
 });
 
-function LineDrawer({
+function LineForm({
   version,
   line,
   open,
-  onOpenChange,
+  back,
+  onClose,
   save,
 }: {
   version: BomDetail;
   line: BomLine | null;
   open: boolean;
-  onOpenChange: (o: boolean) => void;
+  back: string;
+  onClose: () => void;
   save: (lines: LineInput[]) => Promise<void>;
 }) {
   const next = version.lines.length ? Math.ceil((Math.max(...version.lines.map((l) => l.lineNo)) + 1) / 10) * 10 : 10;
@@ -683,119 +688,129 @@ function LineDrawer({
   const title = line ? `Line ${line.lineNo}` : 'Add line';
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent title={title} closeLabel="Close">
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-          <EoraForm
-            label={title}
-            schema={LINE_SCHEMA}
-            defaultValues={
-              line
-                ? {
-                    lineNo: String(line.lineNo),
-                    componentItemId: line.componentItemId,
-                    grossQtyPer: String(Number(line.grossQtyPer)),
-                    uomId: line.uomId,
-                    scrapAllowance: Number(line.scrapAllowance) > 0 ? String(Number((Number(line.scrapAllowance) * 100).toFixed(3))) : '',
-                    linePurpose: line.linePurpose ?? '',
-                    conversionProfileId: line.conversionProfileId ?? '',
-                  }
-                : {
-                    lineNo: String(next),
-                    componentItemId: '',
-                    grossQtyPer: '',
-                    uomId: '',
-                    scrapAllowance: '',
-                    linePurpose: '',
-                    conversionProfileId: '',
-                  }
+    <FormLayer
+      open={open}
+      title={title}
+      back={{ label: `Back to the ${version.itemCode} BOM version ${version.versionNo}`, href: back }}
+      facts={[
+        { label: 'BOM', value: version.itemCode },
+        { label: 'Version', value: `${version.versionNo} · Draft` },
+      ]}
+      onClose={onClose}
+    >
+      {(guard) => (
+        <EoraForm
+          label={title}
+          schema={LINE_SCHEMA}
+          defaultValues={
+            line
+              ? {
+                  lineNo: String(line.lineNo),
+                  componentItemId: line.componentItemId,
+                  grossQtyPer: String(Number(line.grossQtyPer)),
+                  uomId: line.uomId,
+                  scrapAllowance: Number(line.scrapAllowance) > 0 ? String(Number((Number(line.scrapAllowance) * 100).toFixed(3))) : '',
+                  linePurpose: line.linePurpose ?? '',
+                  conversionProfileId: line.conversionProfileId ?? '',
+                }
+              : {
+                  lineNo: String(next),
+                  componentItemId: '',
+                  grossQtyPer: '',
+                  uomId: '',
+                  scrapAllowance: '',
+                  linePurpose: '',
+                  conversionProfileId: '',
+                }
+          }
+          submitLabel={line ? 'Save line' : 'Add line'}
+          stickyActions
+          onDirtyChange={guard.setDirty}
+          secondary={
+            <Button type="button" onClick={guard.leave}>
+              Cancel
+            </Button>
+          }
+          onSubmit={async (v) => {
+            const no = Number(v.lineNo);
+            if (version.lines.some((l) => l.lineNo === no && l.id !== line?.id)) {
+              return { ok: false, message: 'Check the highlighted fields.', fieldErrors: { lineNo: `Line ${no} is already used in this version.` } };
             }
-            submitLabel={line ? 'Save line' : 'Add line'}
-            secondary={
-              <Button type="button" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
+            const input: LineInput = {
+              lineNo: no,
+              componentItemId: v.componentItemId,
+              grossQtyPer: Number(v.grossQtyPer),
+              uomId: v.uomId,
+              scrapAllowance: v.scrapAllowance === '' ? 0 : Number((Number(v.scrapAllowance) / 100).toFixed(5)),
+              linePurpose: v.linePurpose || null,
+              conversionProfileId: v.conversionProfileId || null,
+            };
+            const lines = [...version.lines.filter((l) => l.id !== line?.id).map(toInput), input].sort((a, b) => a.lineNo - b.lineNo);
+            try {
+              await save(lines);
+              guard.saved();
+              onClose();
+              return { ok: true };
+            } catch (e) {
+              // the list is validated line by line: the errors of this line go back onto its fields
+              const failure = conflictFailure(e, 'The line was not saved.');
+              if (failure.ok || !('fieldErrors' in failure) || !failure.fieldErrors) return failure;
+              const at = lines.indexOf(input);
+              const own = Object.fromEntries(
+                Object.entries(failure.fieldErrors)
+                  .filter(([k]) => k.startsWith(`lines.${at}.`))
+                  .map(([k, m]) => [k.slice(`lines.${at}.`.length), m]),
+              );
+              return Object.keys(own).length
+                ? { ok: false, message: 'Check the highlighted fields.', fieldErrors: own }
+                : { ok: false, message: Object.values(failure.fieldErrors)[0] ?? failure.message };
             }
-            onSubmit={async (v) => {
-              const no = Number(v.lineNo);
-              if (version.lines.some((l) => l.lineNo === no && l.id !== line?.id)) {
-                return { ok: false, message: 'Check the highlighted fields.', fieldErrors: { lineNo: `Line ${no} is already used in this version.` } };
-              }
-              const input: LineInput = {
-                lineNo: no,
-                componentItemId: v.componentItemId,
-                grossQtyPer: Number(v.grossQtyPer),
-                uomId: v.uomId,
-                scrapAllowance: v.scrapAllowance === '' ? 0 : Number((Number(v.scrapAllowance) / 100).toFixed(5)),
-                linePurpose: v.linePurpose || null,
-                conversionProfileId: v.conversionProfileId || null,
-              };
-              const lines = [...version.lines.filter((l) => l.id !== line?.id).map(toInput), input].sort((a, b) => a.lineNo - b.lineNo);
-              try {
-                await save(lines);
-                onOpenChange(false);
-                return { ok: true };
-              } catch (e) {
-                // the list is validated line by line: the errors of this line go back onto its fields
-                const failure = conflictFailure(e, 'The line was not saved.');
-                if (failure.ok || !('fieldErrors' in failure) || !failure.fieldErrors) return failure;
-                const at = lines.indexOf(input);
-                const own = Object.fromEntries(
-                  Object.entries(failure.fieldErrors)
-                    .filter(([k]) => k.startsWith(`lines.${at}.`))
-                    .map(([k, m]) => [k.slice(`lines.${at}.`.length), m]),
-                );
-                return Object.keys(own).length
-                  ? { ok: false, message: 'Check the highlighted fields.', fieldErrors: own }
-                  : { ok: false, message: Object.values(failure.fieldErrors)[0] ?? failure.message };
-              }
-            }}
-          >
-            <FormTextField name="lineNo" label="Line" required inputMode="numeric" autoComplete="off" hint="e.g. 10, 20, 30 — gaps leave room to insert." />
-            <FormSelectField
-              name="componentItemId"
-              label="Component"
-              required
-              options={components.data ?? []}
-              placeholder={components.isPending ? 'Loading…' : undefined}
-            />
-            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
-              <FormTextField
-                name="grossQtyPer"
-                label="Quantity per piece"
-                required
-                inputMode="decimal"
-                autoComplete="off"
-                hint="Gross, before scrap allowance."
-              />
-              <FormSelectField
-                name="uomId"
-                label="Unit"
-                required
-                options={units.data ?? []}
-                placeholder={units.isPending ? 'Loading…' : undefined}
-                hint="The component's base unit, or a unit it has a conversion for."
-              />
-            </div>
+          }}
+        >
+          <FormTextField name="lineNo" label="Line" required inputMode="numeric" autoComplete="off" hint="e.g. 10, 20, 30 — gaps leave room to insert." />
+          <FormSelectField
+            name="componentItemId"
+            label="Component"
+            required
+            options={components.data ?? []}
+            placeholder={components.isPending ? 'Loading…' : undefined}
+          />
+          <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
             <FormTextField
-              name="scrapAllowance"
-              label="Scrap allowance (%)"
+              name="grossQtyPer"
+              label="Quantity per piece"
+              required
               inputMode="decimal"
               autoComplete="off"
-              hint="Applied once on top of the quantity, e.g. 2.5. Leave empty for none."
+              hint="Gross, before scrap allowance."
             />
-            <FormTextField
-              name="linePurpose"
-              label="Purpose"
-              maxLength={200}
-              autoComplete="off"
-              hint='Needed when the same component is on several lines, e.g. "bracket side".'
+            <FormSelectField
+              name="uomId"
+              label="Unit"
+              required
+              options={units.data ?? []}
+              placeholder={units.isPending ? 'Loading…' : undefined}
+              hint="The component's base unit, or a unit it has a conversion for."
             />
-            <ProfileField itemId={version.itemId} enabled={open} />
-          </EoraForm>
-        </div>
-      </DrawerContent>
-    </Drawer>
+          </div>
+          <FormTextField
+            name="scrapAllowance"
+            label="Scrap allowance (%)"
+            inputMode="decimal"
+            autoComplete="off"
+            hint="Applied once on top of the quantity, e.g. 2.5. Leave empty for none."
+          />
+          <FormTextField
+            name="linePurpose"
+            label="Purpose"
+            maxLength={200}
+            autoComplete="off"
+            hint='Needed when the same component is on several lines, e.g. "bracket side".'
+          />
+          <ProfileField itemId={version.itemId} enabled={open} />
+        </EoraForm>
+      )}
+    </FormLayer>
   );
 }
 
@@ -851,7 +866,7 @@ function MapsSection({ version, can, onNotice }: { version: BomDetail; can: Can;
   const params = useSearchParams();
   const router = useRouter();
   const client = useQueryClient();
-  const [creating, setCreating] = React.useState(false);
+  const formUrl = useFormParam();
   const maps = useQuery({
     queryKey: ['master', 'planning.bom_routing_maps', 'of', version.id],
     queryFn: async ({ signal }) =>
@@ -873,12 +888,15 @@ function MapsSection({ version, can, onNotice }: { version: BomDetail; can: Can;
       ).rows,
   });
   const openMap = params?.get('map') ?? null;
-  const setMap = (id: string | null) => {
+  const mapHref = (id: string | null) => {
     const q = new URLSearchParams(params?.toString() ?? '');
+    q.delete('form');
     if (id) q.set('map', id);
     else q.delete('map');
-    router.replace(`/master/boms?${q.toString()}`);
+    return `/master/boms?${q.toString()}`;
   };
+  // opening a map is a step the browser's Back undoes; moving to another revision replaces it
+  const setMap = (id: string | null, how: 'push' | 'replace' = 'push') => (how === 'push' ? router.push(mapHref(id)) : router.replace(mapHref(id)));
   const locked = LOCKED.includes(version.status);
   const createReason = !can.create
     ? 'Your roles do not allow changes to BOMs.'
@@ -928,7 +946,7 @@ function MapsSection({ version, can, onNotice }: { version: BomDetail; can: Can;
             </Button>
           </Tooltip>
         ) : (
-          <Button size="sm" onClick={() => setCreating(true)}>
+          <Button size="sm" onClick={() => formUrl.open('new-map')}>
             <Plus aria-hidden="true" className="size-4" />
             New map
           </Button>
@@ -949,24 +967,25 @@ function MapsSection({ version, can, onNotice }: { version: BomDetail; can: Can;
         empty={<EmptyState title="No routing maps yet" description={createReason ?? 'Create a map for each routing this BOM is used with.'} />}
         rowActions={{ primary: (m) => ({ id: 'open', label: 'Open', icon: FolderOpen, onSelect: () => setMap(m.id) }) }}
       />
-      <NewMapDrawer
+      <NewMapForm
         version={version}
-        open={creating}
-        onOpenChange={setCreating}
+        open={!createReason && formUrl.form === 'new-map'}
+        back={formUrl.closeHref}
+        onClose={formUrl.close}
         onCreated={(id) => {
-          setCreating(false);
           void client.invalidateQueries({ queryKey: ['master'] });
-          setMap(id);
+          setMap(id, 'replace');
         }}
       />
       {openMap ? (
-        <MapDrawer
+        <MapPage
           key={openMap}
           mapId={openMap}
           bomVersionId={version.id}
           can={can}
+          back={mapHref(null)}
           onClose={() => setMap(null)}
-          onOpenRevision={setMap}
+          onOpenRevision={(id) => setMap(id, 'replace')}
           onNotice={(m) => {
             onNotice(m);
             void client.invalidateQueries({ queryKey: ['master'] });
@@ -977,15 +996,17 @@ function MapsSection({ version, can, onNotice }: { version: BomDetail; can: Can;
   );
 }
 
-function NewMapDrawer({
+function NewMapForm({
   version,
   open,
-  onOpenChange,
+  back,
+  onClose,
   onCreated,
 }: {
   version: BomDetail;
   open: boolean;
-  onOpenChange: (o: boolean) => void;
+  back: string;
+  onClose: () => void;
   onCreated: (id: string) => void;
 }) {
   const candidates = useQuery({
@@ -1018,58 +1039,62 @@ function NewMapDrawer({
     changeReason: z.string().trim().max(500, 'Use at most 500 characters.'),
   });
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent title="New routing map" closeLabel="Close">
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-          <p className="m-0 text-[13.5px] text-ink-2">
-            For version {version.versionNo} of the {version.itemCode} BOM. Routing versions that are submitted or approved can be mapped; a draft routing must
-            be submitted first.
-          </p>
-          <EoraForm
-            label="New routing map"
-            schema={schema}
-            defaultValues={{ routingVersionId: '', changeReason: '' }}
-            submitLabel="Create map"
-            secondary={
-              <Button type="button" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
+    <FormLayer
+      open={open}
+      title="New routing map"
+      description={`For version ${version.versionNo} of the ${version.itemCode} BOM. Routing versions that are submitted or approved can be mapped; a draft routing must be submitted first.`}
+      back={{ label: `Back to the ${version.itemCode} BOM version ${version.versionNo}`, href: back }}
+      onClose={onClose}
+    >
+      {(guard) => (
+        <EoraForm
+          label="New routing map"
+          schema={schema}
+          defaultValues={{ routingVersionId: '', changeReason: '' }}
+          submitLabel="Create map"
+          stickyActions
+          onDirtyChange={guard.setDirty}
+          secondary={
+            <Button type="button" onClick={guard.leave}>
+              Cancel
+            </Button>
+          }
+          onSubmit={async (v) => {
+            try {
+              const res = (await call(() =>
+                api.POST('/planning/bom-routing-maps', {
+                  body: { bomVersionId: version.id, routingVersionId: v.routingVersionId, changeReason: v.changeReason || null },
+                }),
+              )) as { data: { id: string } };
+              guard.saved();
+              onCreated(res.data.id);
+              return { ok: true };
+            } catch (e) {
+              return conflictFailure(e, 'No map was created.');
             }
-            onSubmit={async (v) => {
-              try {
-                const res = (await call(() =>
-                  api.POST('/planning/bom-routing-maps', {
-                    body: { bomVersionId: version.id, routingVersionId: v.routingVersionId, changeReason: v.changeReason || null },
-                  }),
-                )) as { data: { id: string } };
-                onCreated(res.data.id);
-                return { ok: true };
-              } catch (e) {
-                return conflictFailure(e, 'No map was created.');
-              }
-            }}
-          >
-            <FormSelectField
-              name="routingVersionId"
-              label="Routing version"
-              required
-              options={candidates.data ?? []}
-              placeholder={candidates.isPending ? 'Loading…' : undefined}
-              hint={candidates.data?.length === 0 ? `No submitted or approved routing version of ${version.itemCode} yet.` : undefined}
-            />
-            <FormTextareaField name="changeReason" label="Reason" maxLength={500} rows={2} />
-          </EoraForm>
-        </div>
-      </DrawerContent>
-    </Drawer>
+          }}
+        >
+          <FormSelectField
+            name="routingVersionId"
+            label="Routing version"
+            required
+            options={candidates.data ?? []}
+            placeholder={candidates.isPending ? 'Loading…' : undefined}
+            hint={candidates.data?.length === 0 ? `No submitted or approved routing version of ${version.itemCode} yet.` : undefined}
+          />
+          <FormTextareaField name="changeReason" label="Reason" maxLength={500} rows={2} />
+        </EoraForm>
+      )}
+    </FormLayer>
   );
 }
 
 /** One map revision: each BOM line with the operation that consumes it, saved as one list; its own approval. */
-function MapDrawer({
+function MapPage({
   mapId,
   bomVersionId,
   can,
+  back,
   onClose,
   onNotice,
   onOpenRevision,
@@ -1077,6 +1102,7 @@ function MapDrawer({
   mapId: string;
   bomVersionId: string;
   can: Can;
+  back: string;
   onClose: () => void;
   onNotice: (m: string) => void;
   onOpenRevision: (id: string) => void;
@@ -1145,9 +1171,10 @@ function MapDrawer({
 
   const title = m ? `Map ${m.routingCode} revision ${m.mapRevision}` : 'Routing map';
   return (
-    <Drawer open onOpenChange={(o) => (o ? undefined : onClose())}>
-      <DrawerContent title={title} closeLabel="Close">
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
+    <FormLayer open title={title} back={{ label: 'Back to the BOM version', href: back }} onClose={onClose}>
+      {(guard) => (
+        <div className="flex flex-col gap-4">
+          <SyncDirty dirty={dirty} setDirty={guard.setDirty} />
           {map.isPending ? (
             <LoadingState title="Loading map" />
           ) : map.isError || !m ? (
@@ -1232,7 +1259,13 @@ function MapDrawer({
             </>
           )}
         </div>
-      </DrawerContent>
-    </Drawer>
+      )}
+    </FormLayer>
   );
+}
+
+/** Tells the page's unsaved guard about changes kept outside an EoraForm (the map's chosen operations). */
+function SyncDirty({ dirty, setDirty }: { dirty: boolean; setDirty: (d: boolean) => void }) {
+  React.useEffect(() => setDirty(dirty), [dirty, setDirty]);
+  return null;
 }

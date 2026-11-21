@@ -27,8 +27,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  Drawer,
-  DrawerContent,
   EmptyState,
   ErrorState,
   InlineAlert,
@@ -38,6 +36,8 @@ import {
   type IsoDate,
 } from '@eora/ui';
 import { formFailure } from '@/modules/admin/errors';
+import { FormLayer } from './form-layer';
+import { useFormParam } from './form-url';
 import { ROUTING_KINDS, ROUTINGS, yieldPercent, type RoutingRow } from './engineering-resources';
 import { MasterScreen } from './master-screen';
 import { queryAll, queryOptions, querySource } from './source';
@@ -381,7 +381,8 @@ function RoutingPage({ id }: { id: string }) {
 }
 
 function NewVersionButton({ routing, reason, onCreated }: { routing: RoutingRow; reason: string | undefined; onCreated: (versionId: string) => void }) {
-  const [open, setOpen] = React.useState(false);
+  const formUrl = useFormParam();
+  const open = formUrl.form === 'new-version';
   const me = useMe();
   const zone = me.data?.tenants.find((t) => t.id === me.data?.activeTenantId)?.timezone ?? 'Asia/Jakarta';
   const today = todayIn(zone);
@@ -394,7 +395,7 @@ function NewVersionButton({ routing, reason, onCreated }: { routing: RoutingRow;
       variant="primary"
       aria-disabled={reason ? 'true' : undefined}
       aria-label={reason ? `New version. ${reason}` : undefined}
-      onClick={(e) => (reason ? e.preventDefault() : setOpen(true))}
+      onClick={(e) => (reason ? e.preventDefault() : formUrl.open('new-version'))}
     >
       <FilePlus2 aria-hidden="true" className="size-4" />
       New version
@@ -403,53 +404,58 @@ function NewVersionButton({ routing, reason, onCreated }: { routing: RoutingRow;
   return (
     <>
       {reason ? <Tooltip content={reason}>{button}</Tooltip> : button}
-      <Drawer open={open} onOpenChange={setOpen}>
-        <DrawerContent title={`New version of ${routing.code}`} closeLabel="Close">
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-            <p className="m-0 text-[13.5px] text-ink-2">
-              {routing.currentVersionNo
-                ? `Starts as a Draft with the operations of version ${routing.currentVersionNo}. Version ${routing.currentVersionNo} stays in use until the new version is approved and takes effect.`
-                : 'Starts as a Draft. Add its operations, then submit it for approval.'}
-            </p>
-            <EoraForm
-              label={`New version of ${routing.code}`}
-              schema={schema}
-              defaultValues={{ effectiveFrom: '', changeReason: '' }}
-              submitLabel="Create version"
-              secondary={
-                <Button type="button" onClick={() => setOpen(false)}>
-                  Cancel
-                </Button>
+      <FormLayer
+        open={open && !reason}
+        title={`New version of ${routing.code}`}
+        description={
+          routing.currentVersionNo
+            ? `Starts as a Draft with the operations of version ${routing.currentVersionNo}. Version ${routing.currentVersionNo} stays in use until the new version is approved and takes effect.`
+            : 'Starts as a Draft. Add its operations, then submit it for approval.'
+        }
+        back={{ label: `Back to routing ${routing.code}`, href: formUrl.closeHref }}
+        onClose={formUrl.close}
+      >
+        {(guard) => (
+          <EoraForm
+            label={`New version of ${routing.code}`}
+            schema={schema}
+            defaultValues={{ effectiveFrom: '', changeReason: '' }}
+            submitLabel="Create version"
+            stickyActions
+            onDirtyChange={guard.setDirty}
+            secondary={
+              <Button type="button" onClick={guard.leave}>
+                Cancel
+              </Button>
+            }
+            onSubmit={async (v) => {
+              try {
+                const res = (await call(() =>
+                  api.POST('/planning/routings/{routing}/versions', {
+                    params: { path: { routing: routing.id } },
+                    body: { effectiveFrom: v.effectiveFrom, changeReason: v.changeReason },
+                  }),
+                )) as { data: { id: string } };
+                guard.saved();
+                onCreated(res.data.id);
+                return { ok: true };
+              } catch (e) {
+                return formFailure(e, 'No version was created.');
               }
-              onSubmit={async (v) => {
-                try {
-                  const res = (await call(() =>
-                    api.POST('/planning/routings/{routing}/versions', {
-                      params: { path: { routing: routing.id } },
-                      body: { effectiveFrom: v.effectiveFrom, changeReason: v.changeReason },
-                    }),
-                  )) as { data: { id: string } };
-                  setOpen(false);
-                  onCreated(res.data.id);
-                  return { ok: true };
-                } catch (e) {
-                  return formFailure(e, 'No version was created.');
-                }
-              }}
-            >
-              <FormDateField
-                name="effectiveFrom"
-                label="Takes effect"
-                required
-                min={today as IsoDate}
-                today={today as IsoDate}
-                hint="Today or later. Past days keep the version they had."
-              />
-              <FormTextareaField name="changeReason" label="What changes" required maxLength={500} rows={3} />
-            </EoraForm>
-          </div>
-        </DrawerContent>
-      </Drawer>
+            }}
+          >
+            <FormDateField
+              name="effectiveFrom"
+              label="Takes effect"
+              required
+              min={today as IsoDate}
+              today={today as IsoDate}
+              hint="Today or later. Past days keep the version they had."
+            />
+            <FormTextareaField name="changeReason" label="What changes" required maxLength={500} rows={3} />
+          </EoraForm>
+        )}
+      </FormLayer>
     </>
   );
 }
@@ -469,8 +475,8 @@ function VersionBody({
 }) {
   const draft = version.status === 'DRAFT';
   const editable = draft && canEdit;
-  const [detailsOpen, setDetailsOpen] = React.useState(false);
-  const [editing, setEditing] = React.useState<{ open: boolean; op: Operation | null }>({ open: false, op: null });
+  const formUrl = useFormParam(['op']);
+  const editingOp = formUrl.form === 'operation' ? (version.operations.find((o) => o.id === formUrl.get('op')) ?? null) : null;
   const [error, setError] = React.useState<string | null>(null);
 
   const save = async (operations: OperationInput[]) => {
@@ -561,7 +567,7 @@ function VersionBody({
               {version.id === routing.currentVersionId ? <span className="text-[13px] text-ink-2">In use today</span> : null}
             </div>
             {editable ? (
-              <Button size="sm" onClick={() => setDetailsOpen(true)}>
+              <Button size="sm" onClick={() => formUrl.open('details')}>
                 <Pencil aria-hidden="true" className="size-4" />
                 Edit details
               </Button>
@@ -610,7 +616,7 @@ function VersionBody({
             Operations
           </h2>
           {editable ? (
-            <Button size="sm" onClick={() => setEditing({ open: true, op: null })}>
+            <Button size="sm" onClick={() => formUrl.open('operation')}>
               <Plus aria-hidden="true" className="size-4" />
               Add operation
             </Button>
@@ -641,7 +647,7 @@ function VersionBody({
           rowActions={
             editable
               ? {
-                  primary: (o) => ({ id: 'edit', label: 'Edit', icon: Pencil, onSelect: () => setEditing({ open: true, op: o }) }),
+                  primary: (o) => ({ id: 'edit', label: 'Edit', icon: Pencil, onSelect: () => formUrl.open('operation', { op: o.id }) }),
                   menu: (o) => [{ id: 'remove', label: 'Remove', icon: Trash2, onSelect: () => void remove(o) }],
                 }
               : undefined
@@ -649,31 +655,41 @@ function VersionBody({
         />
       </section>
 
-      <VersionDetailsDrawer routing={routing} version={version} open={detailsOpen} onOpenChange={setDetailsOpen} onSaved={onChanged} />
-      <OperationDrawer
-        key={editing.op?.id ?? 'new'}
+      <VersionDetailsForm
         routing={routing}
         version={version}
-        op={editing.op}
-        open={editing.open}
-        onOpenChange={(open) => setEditing((e) => ({ ...e, open }))}
+        open={editable && formUrl.form === 'details'}
+        back={formUrl.closeHref}
+        onClose={formUrl.close}
+        onSaved={onChanged}
+      />
+      <OperationForm
+        key={editingOp?.id ?? 'new'}
+        routing={routing}
+        version={version}
+        op={editingOp}
+        open={editable && formUrl.form === 'operation' && (formUrl.get('op') === null || editingOp !== null)}
+        back={formUrl.closeHref}
+        onClose={formUrl.close}
         save={save}
       />
     </div>
   );
 }
 
-function VersionDetailsDrawer({
+function VersionDetailsForm({
   routing,
   version,
   open,
-  onOpenChange,
+  back,
+  onClose,
   onSaved,
 }: {
   routing: RoutingRow;
   version: VersionDetail;
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  back: string;
+  onClose: () => void;
   onSaved: () => void;
 }) {
   const me = useMe();
@@ -709,86 +725,92 @@ function VersionDetailsDrawer({
       }
     });
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent title={`Version ${version.versionNo} details`} closeLabel="Close">
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-          <EoraForm
-            key={`${version.id}:${version.version}`}
-            label={`Version ${version.versionNo} details`}
-            schema={schema}
-            defaultValues={{
-              effectiveFrom: version.effectiveFrom,
-              standardYield: version.standardYield ? String(Number((Number(version.standardYield) * 100).toFixed(3))) : '',
-              pairedItemId: version.pairedOutput?.itemId ?? 'NONE',
-              pairsPerSheet: version.pairedOutput ? String(version.pairedOutput.pairsPerSheet) : '',
-              changeReason: version.changeReason ?? '',
-            }}
-            submitLabel="Save changes"
-            secondary={
-              <Button type="button" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
+    <FormLayer
+      open={open}
+      title={`Version ${version.versionNo} details`}
+      back={{ label: `Back to routing ${routing.code} version ${version.versionNo}`, href: back }}
+      onClose={onClose}
+    >
+      {(guard) => (
+        <EoraForm
+          key={`${version.id}:${version.version}`}
+          label={`Version ${version.versionNo} details`}
+          schema={schema}
+          defaultValues={{
+            effectiveFrom: version.effectiveFrom,
+            standardYield: version.standardYield ? String(Number((Number(version.standardYield) * 100).toFixed(3))) : '',
+            pairedItemId: version.pairedOutput?.itemId ?? 'NONE',
+            pairsPerSheet: version.pairedOutput ? String(version.pairedOutput.pairsPerSheet) : '',
+            changeReason: version.changeReason ?? '',
+          }}
+          submitLabel="Save changes"
+          stickyActions
+          onDirtyChange={guard.setDirty}
+          secondary={
+            <Button type="button" onClick={guard.leave}>
+              Cancel
+            </Button>
+          }
+          onSubmit={async (v) => {
+            try {
+              await call(() =>
+                api.PATCH('/planning/routing-versions/{version}', {
+                  params: { path: { version: version.id } },
+                  headers: ifMatch(version.version),
+                  body: {
+                    effectiveFrom: v.effectiveFrom,
+                    standardYield: v.standardYield === '' ? null : Number((Number(v.standardYield) / 100).toFixed(5)),
+                    ...(showPair
+                      ? {
+                          pairedItemId: v.pairedItemId === 'NONE' ? null : v.pairedItemId,
+                          pairsPerSheet: v.pairedItemId === 'NONE' ? null : Number(v.pairsPerSheet),
+                        }
+                      : {}),
+                    changeReason: v.changeReason || null,
+                  },
+                }),
+              );
+              guard.saved();
+              onClose();
+              onSaved();
+              return { ok: true };
+            } catch (e) {
+              if ((e as { status?: number } | null)?.status === 412) onSaved();
+              return conflictFailure(e, 'Nothing was saved.');
             }
-            onSubmit={async (v) => {
-              try {
-                await call(() =>
-                  api.PATCH('/planning/routing-versions/{version}', {
-                    params: { path: { version: version.id } },
-                    headers: ifMatch(version.version),
-                    body: {
-                      effectiveFrom: v.effectiveFrom,
-                      standardYield: v.standardYield === '' ? null : Number((Number(v.standardYield) / 100).toFixed(5)),
-                      ...(showPair
-                        ? {
-                            pairedItemId: v.pairedItemId === 'NONE' ? null : v.pairedItemId,
-                            pairsPerSheet: v.pairedItemId === 'NONE' ? null : Number(v.pairsPerSheet),
-                          }
-                        : {}),
-                      changeReason: v.changeReason || null,
-                    },
-                  }),
-                );
-                onOpenChange(false);
-                onSaved();
-                return { ok: true };
-              } catch (e) {
-                if ((e as { status?: number } | null)?.status === 412) onSaved();
-                return conflictFailure(e, 'Nothing was saved.');
-              }
-            }}
-          >
-            <FormDateField name="effectiveFrom" label="Takes effect" required min={today as IsoDate} today={today as IsoDate} hint="Today or later." />
-            <FormTextField
-              name="standardYield"
-              label="Standard yield (%)"
-              inputMode="decimal"
-              autoComplete="off"
-              hint="Good pieces expected from the material put in, already counting normal process loss, e.g. 98.5. Needed before submitting."
-            />
-            {showPair ? (
-              <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
-                <FormSelectField
-                  name="pairedItemId"
-                  label="Second output"
-                  options={[
-                    { value: 'NONE', label: 'One output' },
-                    ...pieceItems.filter((item) => item.id !== routing.itemId).map((item) => ({ value: item.id, label: `${item.code} · ${item.name}` })),
-                  ]}
-                />
-                <FormTextField
-                  name="pairsPerSheet"
-                  label="Pieces per side per sheet"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  hint="Uses one combined good-output rate in the blanking operation."
-                />
-              </div>
-            ) : null}
-            <FormTextareaField name="changeReason" label="What changes" maxLength={500} rows={3} />
-          </EoraForm>
-        </div>
-      </DrawerContent>
-    </Drawer>
+          }}
+        >
+          <FormDateField name="effectiveFrom" label="Takes effect" required min={today as IsoDate} today={today as IsoDate} hint="Today or later." />
+          <FormTextField
+            name="standardYield"
+            label="Standard yield (%)"
+            inputMode="decimal"
+            autoComplete="off"
+            hint="Good pieces expected from the material put in, already counting normal process loss, e.g. 98.5. Needed before submitting."
+          />
+          {showPair ? (
+            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+              <FormSelectField
+                name="pairedItemId"
+                label="Second output"
+                options={[
+                  { value: 'NONE', label: 'One output' },
+                  ...pieceItems.filter((item) => item.id !== routing.itemId).map((item) => ({ value: item.id, label: `${item.code} · ${item.name}` })),
+                ]}
+              />
+              <FormTextField
+                name="pairsPerSheet"
+                label="Pieces per side per sheet"
+                inputMode="numeric"
+                autoComplete="off"
+                hint="Uses one combined good-output rate in the blanking operation."
+              />
+            </div>
+          ) : null}
+          <FormTextareaField name="changeReason" label="What changes" maxLength={500} rows={3} />
+        </EoraForm>
+      )}
+    </FormLayer>
   );
 }
 
@@ -844,19 +866,21 @@ const OPERATION_SCHEMA = z
   });
 type OperationForm = z.infer<typeof OPERATION_SCHEMA>;
 
-function OperationDrawer({
+function OperationForm({
   routing,
   version,
   op,
   open,
-  onOpenChange,
+  back,
+  onClose,
   save,
 }: {
   routing: RoutingRow;
   version: VersionDetail;
   op: Operation | null;
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  back: string;
+  onClose: () => void;
   save: (operations: OperationInput[]) => Promise<void>;
 }) {
   const nextSeq = version.operations.length ? Math.ceil((Math.max(...version.operations.map((o) => o.opSeq)) + 1) / 10) * 10 : 10;
@@ -917,135 +941,137 @@ function OperationDrawer({
   const title = op ? `Operation ${op.opSeq}` : 'Add operation';
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent title={title} closeLabel="Close">
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-          <EoraForm
-            label={title}
-            schema={OPERATION_SCHEMA}
-            defaultValues={defaults}
-            submitLabel={op ? 'Save operation' : 'Add operation'}
-            stickyActions
-            secondary={
-              <Button type="button" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
+    <FormLayer
+      open={open}
+      title={title}
+      back={{ label: `Back to routing ${routing.code} version ${version.versionNo}`, href: back }}
+      facts={[
+        { label: 'Routing', value: routing.code },
+        { label: 'Version', value: `${version.versionNo} · Draft` },
+      ]}
+      onClose={onClose}
+    >
+      {(guard) => (
+        <EoraForm
+          label={title}
+          schema={OPERATION_SCHEMA}
+          defaultValues={defaults}
+          submitLabel={op ? 'Save operation' : 'Add operation'}
+          stickyActions
+          onDirtyChange={guard.setDirty}
+          secondary={
+            <Button type="button" onClick={guard.leave}>
+              Cancel
+            </Button>
+          }
+          onSubmit={async (v) => {
+            const seq = Number(v.opSeq);
+            if (version.operations.some((o) => o.opSeq === seq && o.id !== op?.id)) {
+              return { ok: false, message: 'Check the highlighted fields.', fieldErrors: { opSeq: `Sequence ${seq} is already used in this version.` } };
             }
-            onSubmit={async (v) => {
-              const seq = Number(v.opSeq);
-              if (version.operations.some((o) => o.opSeq === seq && o.id !== op?.id)) {
-                return { ok: false, message: 'Check the highlighted fields.', fieldErrors: { opSeq: `Sequence ${seq} is already used in this version.` } };
-              }
-              const input: OperationInput = {
-                opSeq: seq,
-                stepKey: v.stepKey || null,
-                processTypeId: v.processTypeId,
-                workCenterId: v.workCenterId,
-                description: v.description || null,
-                stdSetupMinutes: v.stdSetupMinutes === '' ? 0 : Number(v.stdSetupMinutes),
-                stdCycleSeconds: v.capacityBasis === 'CYCLE_TIME' ? Number(v.stdCycleSeconds) : null,
-                stdGoodOutputPerHour: v.capacityBasis === 'GOOD_OUTPUT' ? Number(v.stdGoodOutputPerHour) : null,
-                cycleBasis: v.cycleBasis as OperationInput['cycleBasis'],
-                partsPerCycle: Number(v.partsPerCycle),
-                isCountPoint: v.isCountPoint === 'true',
-                inspectionRequired: v.inspectionRequired === 'true',
-                requiresTooling: v.requiresTooling === 'true',
-                // attributes the drawer does not show (cycle overrides, die quantity, cavities) keep their stored values
-                machines: v.machines.map((m) => {
-                  const kept = op?.machines.find((x) => x.machineId === m);
-                  return {
-                    machineId: m,
-                    isPreferred: m === v.preferredMachine,
-                    cycleSecondsOverride: kept?.cycleSecondsOverride == null ? null : Number(kept.cycleSecondsOverride),
+            const input: OperationInput = {
+              opSeq: seq,
+              stepKey: v.stepKey || null,
+              processTypeId: v.processTypeId,
+              workCenterId: v.workCenterId,
+              description: v.description || null,
+              stdSetupMinutes: v.stdSetupMinutes === '' ? 0 : Number(v.stdSetupMinutes),
+              stdCycleSeconds: v.capacityBasis === 'CYCLE_TIME' ? Number(v.stdCycleSeconds) : null,
+              stdGoodOutputPerHour: v.capacityBasis === 'GOOD_OUTPUT' ? Number(v.stdGoodOutputPerHour) : null,
+              cycleBasis: v.cycleBasis as OperationInput['cycleBasis'],
+              partsPerCycle: Number(v.partsPerCycle),
+              isCountPoint: v.isCountPoint === 'true',
+              inspectionRequired: v.inspectionRequired === 'true',
+              requiresTooling: v.requiresTooling === 'true',
+              // attributes the drawer does not show (cycle overrides, die quantity, cavities) keep their stored values
+              machines: v.machines.map((m) => {
+                const kept = op?.machines.find((x) => x.machineId === m);
+                return {
+                  machineId: m,
+                  isPreferred: m === v.preferredMachine,
+                  cycleSecondsOverride: kept?.cycleSecondsOverride == null ? null : Number(kept.cycleSecondsOverride),
+                };
+              }),
+              tools: v.tools.map((d) => {
+                const kept = op?.tools.find((x) => x.dieId === d);
+                return { dieId: d, quantity: kept?.quantity ?? 1, cavitiesUsed: kept?.cavitiesUsed ?? null };
+              }),
+              inspections: v.inspections
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .map((line) => {
+                  const at = line.indexOf(':');
+                  return at > 0
+                    ? { characteristic: line.slice(0, at).trim(), samplingNote: line.slice(at + 1).trim() || null }
+                    : { characteristic: line, samplingNote: null };
+                }),
+            };
+            const others = version.operations.filter((o) => o.id !== op?.id).map(toInput);
+            try {
+              await save([...others, input].sort((a, b) => a.opSeq - b.opSeq));
+              guard.saved();
+              onClose();
+              return { ok: true };
+            } catch (e) {
+              const failure = conflictFailure(e, 'The operation was not saved.');
+              // the whole list is validated by index: point the message at this form instead
+              return failure.ok
+                ? failure
+                : {
+                    ok: false,
+                    message: failure.message.startsWith('Check the highlighted')
+                      ? 'The server refused this operation. Check the machines, dies and numbers.'
+                      : failure.message,
                   };
-                }),
-                tools: v.tools.map((d) => {
-                  const kept = op?.tools.find((x) => x.dieId === d);
-                  return { dieId: d, quantity: kept?.quantity ?? 1, cavitiesUsed: kept?.cavitiesUsed ?? null };
-                }),
-                inspections: v.inspections
-                  .split('\n')
-                  .map((line) => line.trim())
-                  .filter(Boolean)
-                  .map((line) => {
-                    const at = line.indexOf(':');
-                    return at > 0
-                      ? { characteristic: line.slice(0, at).trim(), samplingNote: line.slice(at + 1).trim() || null }
-                      : { characteristic: line, samplingNote: null };
-                  }),
-              };
-              const others = version.operations.filter((o) => o.id !== op?.id).map(toInput);
-              try {
-                await save([...others, input].sort((a, b) => a.opSeq - b.opSeq));
-                onOpenChange(false);
-                return { ok: true };
-              } catch (e) {
-                const failure = conflictFailure(e, 'The operation was not saved.');
-                // the whole list is validated by index: point the message at this form instead
-                return failure.ok
-                  ? failure
-                  : {
-                      ok: false,
-                      message: failure.message.startsWith('Check the highlighted')
-                        ? 'The server refused this operation. Check the machines, dies and numbers.'
-                        : failure.message,
-                    };
-              }
-            }}
-          >
-            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
-              <FormTextField
-                name="opSeq"
-                label="Sequence"
-                required
-                inputMode="numeric"
-                autoComplete="off"
-                hint="e.g. 10, 20, 30 — gaps leave room to insert."
-              />
-              <FormTextField
-                name="stepKey"
-                label="Step key"
-                autoComplete="off"
-                spellCheck={false}
-                className="[&_input]:font-mono [&_input]:uppercase"
-                hint="Optional, links BOM lines later."
-              />
-            </div>
-            <FormSelectField
-              name="processTypeId"
-              label="Process"
-              required
-              options={processTypes.data ?? []}
-              placeholder={processTypes.isPending ? 'Loading…' : undefined}
-              hint={processTypes.data?.length === 0 ? 'Create a process type first under Engineering → Process Types.' : undefined}
+            }
+          }}
+        >
+          <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+            <FormTextField name="opSeq" label="Sequence" required inputMode="numeric" autoComplete="off" hint="e.g. 10, 20, 30 — gaps leave room to insert." />
+            <FormTextField
+              name="stepKey"
+              label="Step key"
+              autoComplete="off"
+              spellCheck={false}
+              className="[&_input]:font-mono [&_input]:uppercase"
+              hint="Optional, links BOM lines later."
             />
-            <FormSelectField
-              name="workCenterId"
-              label="Work center"
-              required
-              options={workCenters.data ?? []}
-              placeholder={workCenters.isPending ? 'Loading…' : undefined}
-              hint={`Active work centers of plant ${routing.plantCode}.`}
-            />
-            <FormTextField name="description" label="Description" maxLength={500} autoComplete="off" />
-            <OperationCapacityFields />
-            <div className="grid grid-cols-3 gap-4 max-sm:grid-cols-1">
-              <FormSelectField name="isCountPoint" label="Reports quantity" required options={YES_NO} />
-              <FormSelectField name="inspectionRequired" label="Inspection" required options={YES_NO} />
-              <FormSelectField name="requiresTooling" label="Needs a die" required options={YES_NO} />
-            </div>
-            <MachineFields />
-            <ToolField routing={routing} />
-            <FormTextareaField
-              name="inspections"
-              label="What to inspect"
-              rows={3}
-              hint='One characteristic per line; add the sampling after a colon, e.g. "Hole position: 1 of 50".'
-            />
-          </EoraForm>
-        </div>
-      </DrawerContent>
-    </Drawer>
+          </div>
+          <FormSelectField
+            name="processTypeId"
+            label="Process"
+            required
+            options={processTypes.data ?? []}
+            placeholder={processTypes.isPending ? 'Loading…' : undefined}
+            hint={processTypes.data?.length === 0 ? 'Create a process type first under Engineering → Process Types.' : undefined}
+          />
+          <FormSelectField
+            name="workCenterId"
+            label="Work center"
+            required
+            options={workCenters.data ?? []}
+            placeholder={workCenters.isPending ? 'Loading…' : undefined}
+            hint={`Active work centers of plant ${routing.plantCode}.`}
+          />
+          <FormTextField name="description" label="Description" maxLength={500} autoComplete="off" />
+          <OperationCapacityFields />
+          <div className="grid grid-cols-3 gap-4 max-sm:grid-cols-1">
+            <FormSelectField name="isCountPoint" label="Reports quantity" required options={YES_NO} />
+            <FormSelectField name="inspectionRequired" label="Inspection" required options={YES_NO} />
+            <FormSelectField name="requiresTooling" label="Needs a die" required options={YES_NO} />
+          </div>
+          <MachineFields />
+          <ToolField routing={routing} />
+          <FormTextareaField
+            name="inspections"
+            label="What to inspect"
+            rows={3}
+            hint='One characteristic per line; add the sampling after a colon, e.g. "Hole position: 1 of 50".'
+          />
+        </EoraForm>
+      )}
+    </FormLayer>
   );
 }
 

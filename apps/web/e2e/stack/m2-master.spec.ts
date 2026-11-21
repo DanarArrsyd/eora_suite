@@ -91,7 +91,7 @@ test('M2 master data end to end on the real stack', async ({ browser }) => {
     await expect(planner.getByRole('heading', { level: 1, name: `${ITEM} routing R1` })).toBeVisible();
 
     await planner.getByRole('button', { name: 'Add operation' }).click();
-    const op = planner.getByRole('dialog', { name: 'Add operation' });
+    const op = planner.getByRole('form', { name: 'Add operation' });
     await choose(planner, op.getByRole('combobox', { name: 'Process' }), 'BLANK · Blanking');
     await choose(planner, op.getByRole('combobox', { name: 'Work center' }), /^PRS-200 · /);
     await expect(op.getByRole('combobox', { name: 'Capacity basis' })).toContainText('Standard good output');
@@ -101,7 +101,7 @@ test('M2 master data end to end on the real stack', async ({ browser }) => {
 
     // a version is submitted with its standard yield
     await planner.getByRole('button', { name: 'Edit details' }).click();
-    const details = planner.getByRole('dialog', { name: 'Version 1 details' });
+    const details = planner.getByRole('form', { name: 'Version 1 details' });
     await details.getByRole('textbox', { name: 'Standard yield (%)' }).fill('98.5');
     await details.getByRole('button', { name: 'Save changes' }).click();
     await expect(details).toBeHidden();
