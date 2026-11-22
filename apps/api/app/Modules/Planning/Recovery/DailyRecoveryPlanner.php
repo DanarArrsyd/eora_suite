@@ -197,7 +197,8 @@ final class DailyRecoveryPlanner
             $remaining = bcsub(bcsub(bcadd($required, $ownBuffer, 6), $protected, 6), $own, 6);
             $customer = (string) $part->customer_id;
             $pool[$part->item_id] ??= [];
-            $allocated = RecoveryAllocation::allocate($pool[$part->item_id], $customer, $remaining, $floorExtra, $allocated);
+            $floorShort = '0';
+            $allocated = RecoveryAllocation::allocate($pool[$part->item_id], $customer, $remaining, $floorExtra, $allocated, $floorShort);
             $planQty = bcadd(bcadd(MpsItemInput::num($p->shift_1_qty ?? 0), MpsItemInput::num($p->shift_2_qty ?? 0), 0), MpsItemInput::num($p->shift_3_qty ?? 0), 0);
             $supply = array_reduce($allocated, static fn (string $total, string $qty): string => bcadd(MpsItemInput::num($total), MpsItemInput::num($qty), 6), '0');
             $calc = RecoveryCalculation::calculate($required, $supply, $buffer, (string) ($p->minimum_qty ?? 500),
@@ -206,13 +207,26 @@ final class DailyRecoveryPlanner
             $calc['planQty'] = $planQty;
             // Generate releases its WOs today, so it checks material against the BOM and conversions in force today (the snapshot)
             $materialDate = $safetyStock === null ? $target : $releaseDay;
-            $capacity = $this->materials->estimate($db, $plant, (string) $part->item_id, $materialDate, $materialPool, $customer);
+            // safety stock company stock does not cover is made from company material only, so it stays company stock (D-5);
+            // the rest of the need may use the customer's own material first
+            $floorRun = RecoveryCalculation::ceil($floorShort);
+            $floorCapacity = '0';
+            $afterFloor = $materialPool;
+            if (bccomp($floorRun, '0', 0) > 0) {
+                $floorCapacity = $this->materials->estimate($db, $plant, (string) $part->item_id, $materialDate, $materialPool) ?? '0';
+                $floorCapacity = bccomp($floorCapacity, $floorRun, 0) < 0 ? $floorCapacity : $floorRun;
+                $this->materials->consume($db, $plant, (string) $part->item_id, $floorCapacity, $materialDate, $afterFloor, []);
+            }
+            $demandCapacity = $this->materials->estimate($db, $plant, (string) $part->item_id, $materialDate, $afterFloor, $customer);
+            $capacity = $demandCapacity === null ? null : bcadd($demandCapacity, $floorCapacity, 0);
             // a linked plan's shifts are history; in Generate mode its residual need is still made, so it reserves material too
             $reserve = $p?->work_order_id === null && bccomp($planQty, '0', 0) > 0 ? $planQty
                 : ($calc['proposedQty'] ?? ($safetyStock === null ? '0' : RecoveryCalculation::ceil($calc['netQty'])));
             if ($capacity !== null && ($p?->work_order_id === null || $safetyStock !== null) && ! isset($unmade[$key]) && bccomp($reserve, '0', 0) > 0) {
                 $reserve = bccomp($reserve, $capacity, 0) < 0 ? $reserve : $capacity;
-                $this->materials->consume($db, $plant, (string) $part->item_id, $reserve, $materialDate, $materialPool, [], false, $customer);
+                $fromCompany = bccomp($reserve, $floorCapacity, 0) < 0 ? $reserve : $floorCapacity;
+                $this->materials->consume($db, $plant, (string) $part->item_id, $fromCompany, $materialDate, $materialPool, []);
+                $this->materials->consume($db, $plant, (string) $part->item_id, bcsub($reserve, $fromCompany, 0), $materialDate, $materialPool, [], false, $customer);
             }
             // the part sees its own and company stock, never another customer's
             $stockRows = array_values(array_filter($stocks, static fn (stdClass $s): bool => $s->item_id === $part->item_id

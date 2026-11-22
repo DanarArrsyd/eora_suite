@@ -43,3 +43,10 @@ it('never lets a customer\'s protected or bound surplus stand in for company saf
     $got = RecoveryAllocation::allocate($pool, DPM, '-5', '30', ZERO);
     expect($got['fg'])->toBe('30.000000');
 });
+
+it('reports the safety stock company stock does not cover, to be made from company material', function () {
+    $pool = [DPM => ['fg' => '100', 'accepted' => '0', 'beforeCheck' => '0'], 'COMPANY' => ['fg' => '12', 'accepted' => '0', 'beforeCheck' => '0', 'wo' => '0']];
+    $short = null;
+    RecoveryAllocation::allocate($pool, DPM, '0', '30', ZERO, $short);
+    expect($short)->toBe('18.000000');
+});

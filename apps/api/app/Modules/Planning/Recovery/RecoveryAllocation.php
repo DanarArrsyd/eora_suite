@@ -21,16 +21,18 @@ final class RecoveryAllocation
      * @param  numeric-string  $need  required + the part's buffer − protected − bound WO output (negative: nothing to take)
      * @param  numeric-string  $floorExtra  safety stock above the part's buffer
      * @param  array<string,numeric-string>  $allocated  per stage, added to
+     * @param-out numeric-string  $floorShort  set to the safety stock company stock does not cover (made from company material only)
      * @return array<string,numeric-string>
      */
-    public static function allocate(array &$pool, string $customer, string $need, string $floorExtra, array $allocated): array
+    public static function allocate(array &$pool, string $customer, string $need, string $floorExtra, array $allocated, ?string &$floorShort = null): array
     {
         $own = array_map(static fn (string $stage) => [$customer, $stage], self::STAGES);
         $company = [...array_map(static fn (string $stage) => [MaterialCapacity::COMPANY, $stage], self::STAGES), [MaterialCapacity::COMPANY, 'wo']];
         self::take($pool, [...$own, ...$company], $need, $allocated);
         // protected stock and output bound to this customer belong to its delivery: a surplus of it never stands in for
         // the company's safety stock (D-5)
-        self::take($pool, $company, $floorExtra, $allocated);
+        $short = self::take($pool, $company, $floorExtra, $allocated);
+        $floorShort = bccomp($short, '0', 6) > 0 ? $short : '0';
 
         return $allocated;
     }
