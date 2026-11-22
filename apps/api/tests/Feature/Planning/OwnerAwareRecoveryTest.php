@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Planning\Recovery\MaterialCapacity;
 use App\Platform\Database\EoraPostgresConnection;
 use Tests\Support\AccessFixtures;
 use Tests\Support\TenantFixtures;
@@ -71,3 +72,16 @@ it('plans a customer part from its own material first and tops it up with compan
     expect($rows['OEM-W']['materialCapacityQty'])->toBe('100')->and($rows['SJM']['materialCapacityQty'])->toBe('60');
     expect($rows['OEM-W']['inputsChanged'])->toBeTrue();
 })->group('integration', 'planning');
+
+it('reserves what a released work order still needs as one-owner runs, never a mixed one', function () {
+    $capacity = app(MaterialCapacity::class);
+    // customer C owns coil but no nuts: its WO cannot mix C's coil with company nuts, so the whole run is company material
+    $pool = ['customer-c|coil' => '10', 'COMPANY|coil' => '10', 'COMPANY|nut' => '20'];
+    $capacity->reserveRun($pool, 'customer-c', ['coil' => '10', 'nut' => '10']);
+    $plain = fn (array $pool) => array_map(static fn (string $q) => (float) $q, $pool);
+    expect($plain($pool))->toBe(['customer-c|coil' => 10.0, 'COMPANY|coil' => 0.0, 'COMPANY|nut' => 10.0]);
+    // with half of the nuts of its own, half of the run is C's own and half the company's
+    $pool = ['customer-c|coil' => '10', 'customer-c|nut' => '5', 'COMPANY|coil' => '10', 'COMPANY|nut' => '20'];
+    $capacity->reserveRun($pool, 'customer-c', ['coil' => '10', 'nut' => '10']);
+    expect($plain($pool))->toBe(['customer-c|coil' => 5.0, 'customer-c|nut' => 0.0, 'COMPANY|coil' => 5.0, 'COMPANY|nut' => 15.0]);
+});

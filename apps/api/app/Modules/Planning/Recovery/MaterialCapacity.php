@@ -60,6 +60,38 @@ final class MaterialCapacity
         return $customer === null || ! isset($this->supplied[$customer][$item]) || ($this->topUp[$customer] ?? false);
     }
 
+    /**
+     * Reserves what one released work order still needs, as it can really be posted: one owner per run (D-135). The
+     * customer's own material covers the largest share it can for every component at once; the rest is a company run,
+     * from company material where it may serve that customer (D-3).
+     *
+     * @param  array<string,numeric-string>  $pool
+     * @param  array<string,numeric-string>  $needs  component item => quantity still to issue
+     */
+    public function reserveRun(array &$pool, ?string $customer, array $needs): void
+    {
+        $needs = array_filter($needs, static fn (string $qty): bool => bccomp($qty, '0', 6) > 0);
+        $share = '0';
+        if ($customer !== null && $needs !== []) {
+            $share = '1';
+            foreach ($needs as $item => $qty) {
+                $ratio = bcdiv(MpsItemInput::num($pool[$customer.'|'.$item] ?? '0'), $qty, 6);
+                $share = bccomp($ratio, $share, 6) < 0 ? $ratio : $share;
+            }
+        }
+        foreach ($needs as $item => $qty) {
+            $own = bcmul($qty, $share, 6);
+            if (bccomp($own, '0', 6) > 0) {
+                $pool[$customer.'|'.$item] = bcsub(MpsItemInput::num($pool[$customer.'|'.$item] ?? '0'), $own, 6);
+            }
+            $rest = bcsub($qty, $own, 6);
+            if (bccomp($rest, '0', 6) > 0 && $this->companyServes($customer, (string) $item)) {
+                $available = MpsItemInput::num($pool[self::COMPANY.'|'.$item] ?? '0');
+                $pool[self::COMPANY.'|'.$item] = bccomp($available, $rest, 6) > 0 ? bcsub($available, $rest, 6) : '0';
+            }
+        }
+    }
+
     /** Takes up to `$need` of the item for the customer: its own material first, then company material where allowed.
      * @param  array<string,numeric-string>  $pool
      * @param  numeric-string  $need

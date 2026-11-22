@@ -91,7 +91,7 @@ final class DailyRecoveryPlanner
             left join lots lt on lt.id = m.lot_id left join shifts sh on sh.id = d.shift_id
             where m.plant_id = ? and d.production_date = ?::date and m.movement_code = 'OUTPUT_GOOD' and m.qty_signed > 0
             order by d.posted_at,m.id", [$plant, $today]);
-        $commitments = $db->select("select wm.component_item_id as item_id, w.production_customer_id as customer_id,
+        $commitments = $db->select("select w.id as work_order_id, wm.component_item_id as item_id, w.production_customer_id as customer_id,
               greatest(0,wm.required_qty - coalesce(issued.qty,0))::text as qty
             from work_order_materials wm join work_orders w on w.id = wm.work_order_id
             left join lateral (select sum(m.qty_signed) as qty from inventory_movements m join locations l on l.id = m.location_id
@@ -116,10 +116,17 @@ final class DailyRecoveryPlanner
                 $materialPool[$owner.'|'.$item] = bcadd($materialPool[$owner.'|'.$item] ?? '0', bcsub(MpsItemInput::num($stock->qty), MpsItemInput::num($stock->allocated), 6), 6);
             }
         }
-        // what released work orders still need is taken as they will issue it: their customer's own material first
+        // what released work orders still need is reserved per work order as one-owner runs: their customer's own first
+        $owners = [];
+        $needs = [];
         foreach ($commitments as $commitment) {
-            $this->materials->take($materialPool, $commitment->customer_id === null ? null : (string) $commitment->customer_id,
-                (string) $commitment->item_id, MpsItemInput::num($commitment->qty));
+            $wo = (string) $commitment->work_order_id;
+            $item = (string) $commitment->item_id;
+            $owners[$wo] = $commitment->customer_id === null ? null : (string) $commitment->customer_id;
+            $needs[$wo][$item] = bcadd(MpsItemInput::num($needs[$wo][$item] ?? '0'), MpsItemInput::num($commitment->qty), 6);
+        }
+        foreach ($needs as $wo => $components) {
+            $this->materials->reserveRun($materialPool, $owners[$wo] ?? null, $components);
         }
         // Finished draft WOs already cover demand. Keep their component forecast committed across plan dates, too.
         // Explode finished roots only: their intermediate MRP drafts represent the same material demand.
@@ -182,12 +189,12 @@ final class DailyRecoveryPlanner
             if ($floor !== null && bccomp($floor, $buffer, 6) > 0) {
                 $buffer = $floor;
             }
-            // the part's plan buffer is its own; what safety stock adds above it is held in company stock only (D-5)
-            $planBuffer = MpsItemInput::num($p->buffer_qty ?? 0);
-            $floorExtra = bccomp($buffer, $planBuffer, 6) > 0 ? bcsub($buffer, $planBuffer, 6) : '0';
+            // the item's safety stock is held in company stock only, all of it (D-5); only the part's buffer above it is its own
+            $floorExtra = $floor ?? '0';
+            $ownBuffer = bcsub($buffer, $floorExtra, 6);
             $own = $boundWo[$key] ?? '0';
             $allocated = ['fg' => $protected, 'beforeCheck' => '0', 'accepted' => '0', 'wo' => $own];
-            $remaining = bcsub(bcsub(bcadd($required, $planBuffer, 6), $protected, 6), $own, 6);
+            $remaining = bcsub(bcsub(bcadd($required, $ownBuffer, 6), $protected, 6), $own, 6);
             $customer = (string) $part->customer_id;
             $pool[$part->item_id] ??= [];
             $allocated = RecoveryAllocation::allocate($pool[$part->item_id], $customer, $remaining, $floorExtra, $allocated);
