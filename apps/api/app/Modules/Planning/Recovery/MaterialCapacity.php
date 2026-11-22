@@ -175,8 +175,23 @@ final class MaterialCapacity
             $this->consumeAs($db, $plant, $item, (string) $low, $date, $pool, $path, false, $customer, $customer);
         }
         $rest = bcsub($qty, (string) $low, 6);
+        if (bccomp($rest, '0', 6) <= 0) {
+            return true;
+        }
+        if (! $reserveShortages) {
+            return $this->consumeAs($db, $plant, $item, $rest, $date, $pool, $path, false, self::COMPANY, $customer);
+        }
+        // a draft keeps what it needs committed even when short: a company run when one can make the rest; otherwise the
+        // rest stays the customer's run and holds whatever of the customer's own material is left for it
+        $copy = $pool;
+        if ($this->consumeAs($db, $plant, $item, $rest, $date, $copy, $path, false, self::COMPANY, $customer)) {
+            $pool = $copy;
 
-        return bccomp($rest, '0', 6) <= 0 || $this->consumeAs($db, $plant, $item, $rest, $date, $pool, $path, $reserveShortages, self::COMPANY, $customer);
+            return true;
+        }
+        $this->consumeAs($db, $plant, $item, $rest, $date, $pool, $path, true, $customer, $customer);
+
+        return false;
     }
 
     /**

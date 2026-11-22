@@ -85,3 +85,19 @@ it('reserves what a released work order still needs as one-owner runs, never a m
     $capacity->reserveRun($pool, 'customer-c', ['coil' => '10', 'nut' => '10']);
     expect($plain($pool))->toBe(['customer-c|coil' => 5.0, 'customer-c|nut' => 0.0, 'COMPANY|coil' => 5.0, 'COMPANY|nut' => 15.0]);
 });
+
+it('keeps a short draft\'s customer material committed instead of freeing it for later plans', function () {
+    $t = TenantFixtures::provision(2);
+    AccessFixtures::roles($t);
+    $f = woFixture($this, $t);
+    AccessFixtures::run($t, function (EoraPostgresConnection $db) use ($f) {
+        $capacity = app(MaterialCapacity::class);
+        $coil = $f['coil']['id'];
+        $nut = $f['nut']['id'];
+        // the draft needs 100 pcs = 50 kg coil + 200 nuts; customer C holds 50 kg of coil and only 20 nuts, no top-up allowed
+        $pool = ["customer-c|{$coil}" => '50', "customer-c|{$nut}" => '20'];
+        expect($capacity->consume($db, $f['plant'], $f['item']['id'], '100', $f['today'], $pool, [], true, 'customer-c'))->toBeFalse();
+        // all of C's coil stays committed to the draft, none is left for a later plan of the same customer
+        expect((float) $pool["customer-c|{$coil}"])->toBe(0.0)->and((float) $pool["customer-c|{$nut}"])->toBe(0.0);
+    });
+})->group('integration', 'planning');
