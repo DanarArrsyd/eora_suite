@@ -162,7 +162,9 @@ final class DailyRecoveryPlanner
         $paired = $db->select("select r.item_id,v.paired_item_id,v.pairs_per_sheet,v.id from routings r join routing_versions v on v.routing_id = r.id
             where r.plant_id = ? and r.status = 'ACTIVE' and r.routing_kind = 'PRIMARY' and v.paired_item_id is not null
              and v.status in ('APPROVED','SUPERSEDED') and v.effective_from <= ?::date and (v.effective_to is null or v.effective_to >= ?::date) order by v.id", [$plant, $target, $target]);
-        $fingerprint = hash('sha256', json_encode([$plant, $today, $target, $requirements, $stocks, $workOrders, $production, $commitments, $parameterFingerprint, $bomInputs, $conversions, $paired], JSON_THROW_ON_ERROR));
+        $fingerprint = hash('sha256', json_encode([$plant, $today, $target, $requirements, $stocks, $workOrders, $production, $commitments, $parameterFingerprint, $bomInputs, $conversions, $paired,
+            // who supplies which material and who may be topped up change the material capacity too (D-141 D-3)
+            $this->materials->ownerInputs()], JSON_THROW_ON_ERROR));
         $rows = [];
         $floorTaken = [];
         // the day a work order release snapshots its masters (WorkOrderController::today)

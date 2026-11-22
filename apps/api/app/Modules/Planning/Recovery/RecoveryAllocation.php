@@ -18,7 +18,7 @@ final class RecoveryAllocation
 
     /**
      * @param  array<string,array<string,numeric-string>>  $pool  the item's pools, reduced by what is taken
-     * @param  numeric-string  $need  required + the part's buffer − protected − bound WO output (may be negative)
+     * @param  numeric-string  $need  required + the part's buffer − protected − bound WO output (negative: nothing to take)
      * @param  numeric-string  $floorExtra  safety stock above the part's buffer
      * @param  array<string,numeric-string>  $allocated  per stage, added to
      * @return array<string,numeric-string>
@@ -27,9 +27,10 @@ final class RecoveryAllocation
     {
         $own = array_map(static fn (string $stage) => [$customer, $stage], self::STAGES);
         $company = [...array_map(static fn (string $stage) => [MaterialCapacity::COMPANY, $stage], self::STAGES), [MaterialCapacity::COMPANY, 'wo']];
-        // more protected or bound than required: the surplus still counts toward the safety stock
-        $left = self::take($pool, [...$own, ...$company], $need, $allocated);
-        self::take($pool, $company, bccomp($left, '0', 6) < 0 ? bcadd($floorExtra, $left, 6) : $floorExtra, $allocated);
+        self::take($pool, [...$own, ...$company], $need, $allocated);
+        // protected stock and output bound to this customer belong to its delivery: a surplus of it never stands in for
+        // the company's safety stock (D-5)
+        self::take($pool, $company, $floorExtra, $allocated);
 
         return $allocated;
     }
@@ -39,7 +40,7 @@ final class RecoveryAllocation
      * @param  list<array{0:string,1:string}>  $sequence
      * @param  numeric-string  $left
      * @param  array<string,numeric-string>  $allocated
-     * @return numeric-string what is still uncovered (negative: more was there already)
+     * @return numeric-string what is still uncovered
      */
     private static function take(array &$pool, array $sequence, string $left, array &$allocated): string
     {

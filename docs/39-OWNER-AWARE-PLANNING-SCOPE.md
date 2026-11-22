@@ -76,7 +76,7 @@ Mixed-owner postings, ownership transfer, cross-customer exceptions (deferred by
 
 Each slice: migration + rollback where needed, RLS tests as the runtime role, OpenAPI without drift, mocked e2e + stack e2e, CI green + Codex clean before merge.
 
-**Progress:** Slices 1–2 (PR `feat/owner-planning-1`, 2026-11-22): owner pools in `MaterialCapacity` (`owner|item`) and `RecoveryAllocation` (FG per owner); Daily Recovery and Generate SPK owner-aware and no longer gated; customer master field *Company material may top up* (migration `2026_11_22_005400`); a material counts as customer-supplied once the customer owns a lot of it (D-4 inbound owner follows with MRP, slice 4). MPS and MRP keep the 409 until slices 3–4.
+**Progress:** Slices 1–2 (PR `feat/owner-planning-1`, 2026-11-22): owner pools in `MaterialCapacity` (`owner|item`) and `RecoveryAllocation` (FG per owner); Daily Recovery and Generate SPK owner-aware and no longer gated; customer master field *Company material may top up* (migration `2026_11_22_005400`); material capacity counts whole one-owner runs (D-135: one posting = one owner) — the customer's own run first, then a company run only where company material may serve every component; customer-bound surplus never stands in for company safety stock; the owner rules are part of the plan fingerprint; a material counts as customer-supplied once the customer owns a lot of it (D-4 inbound owner follows with MRP, slice 4). MPS and MRP keep the 409 until slices 3–4.
 
 ## 7. Acceptance
 1. Two customers, one company RM pool: each gets company stock by D-2 order; neither sees the other's customer stock; totals counted once.

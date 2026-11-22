@@ -37,9 +37,9 @@ it('holds safety stock above the part buffer in company stock only (D-5)', funct
     expect($got['fg'])->toBe('22.000000')->and($pool[DPM]['fg'])->toBe('90.000000')->and($pool['COMPANY']['fg'])->toBe('0.000000');
 });
 
-it('lets protected surplus count toward safety stock as before', function () {
+it('never lets a customer\'s protected or bound surplus stand in for company safety stock (D-5)', function () {
     $pool = ['COMPANY' => ['fg' => '100', 'accepted' => '0', 'beforeCheck' => '0', 'wo' => '0']];
-    // 5 more already protected than required: only 25 of the 30 safety stock is still taken
+    // 5 more already protected or bound for this customer than it needs: the 30 safety stock is still taken in full
     $got = RecoveryAllocation::allocate($pool, DPM, '-5', '30', ZERO);
-    expect($got['fg'])->toBe('25.000000');
+    expect($got['fg'])->toBe('30.000000');
 });

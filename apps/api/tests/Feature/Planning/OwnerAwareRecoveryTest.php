@@ -17,7 +17,7 @@ it('plans a customer part from its own material first and tops it up with compan
     AccessFixtures::grant($t, $ppc['id'], 'MAT');
     $target = rtDayFrom($f['today'], 1);
     [$other, $otherPart, $rm, $supplier] = AccessFixtures::run($t, function (EoraPostgresConnection $db) use ($t, $f) {
-        $db->update('update items set lot_controlled = true where id = ?', [$f['coil']['id']]);
+        $db->update('update items set lot_controlled = true where id in (?, ?)', [$f['coil']['id'], $f['nut']['id']]);
         $customer = (string) $db->selectOne("insert into customers(tenant_id,code,name) values(?,'SJM','Customer SJM') returning id", [$t['tenant']])->id;
         $part = (string) $db->selectOne("insert into customer_items(tenant_id,customer_id,item_id,customer_part_no,effective_from) values(?,?,?,'SJM-100','2026-01-01') returning id",
             [$t['tenant'], $customer, $f['item']['id']])->id;
@@ -40,16 +40,27 @@ it('plans a customer part from its own material first and tops it up with compan
         'plantId' => $f['plant'], 'itemId' => $item, 'locationId' => $rm, 'supplierId' => $supplier, 'qty' => $qty] + $extra, ['Idempotency-Key' => $key])->assertCreated();
     $receive($f['coil']['id'], '20', ['ownerCustomerId' => $f['customer'], 'supplierLotNo' => 'OEM-COIL'], 'owner-plan-coil-oem');
     $receive($f['coil']['id'], '30', ['supplierLotNo' => 'KMI-COIL'], 'owner-plan-coil-company');
-    $receive($f['nut']['id'], '1000', [], 'owner-plan-nuts');
+    $receive($f['nut']['id'], '1000', ['supplierLotNo' => 'KMI-NUT'], 'owner-plan-nuts');
     $read = fn () => collect(spa($this)->getJson('/api/v1/planning/daily-recovery?'.http_build_query(['plantId' => $f['plant'], 'targetDate' => $target]))
         ->assertOk()->json('data'))->keyBy('customerCode');
 
-    // D-3 off: OEM-W makes 40 pcs from its own 20 kg only; SJM makes 60 from the company's 30 kg, never from OEM-W's coil
+    // one posting = one owner (D-135): OEM-W's coil needs OEM-W's nuts too, and company coil may not top it up (D-3 off)
+    $rows = $read();
+    expect($rows['OEM-W']['materialCapacityQty'])->toBe('0')->and($rows['SJM']['materialCapacityQty'])->toBe('60');
+    // with its own nuts, OEM-W makes 40 pcs from its own 20 kg only; SJM makes 60 from the company's 30 kg, never from OEM-W's
+    $receive($f['nut']['id'], '100', ['ownerCustomerId' => $f['customer'], 'supplierLotNo' => 'OEM-NUT'], 'owner-plan-nuts-oem');
     $rows = $read();
     expect($rows['OEM-W']['materialCapacityQty'])->toBe('40')->and($rows['SJM']['materialCapacityQty'])->toBe('60');
     expect(collect($rows['SJM']['lots'])->pluck('owner_code')->filter()->all())->toBe([]);
 
-    // D-3 on (through the customer master, kept by the Supervisor, D-128): company coil tops up OEM-W's own
+    // a plan saved now is flagged for review once the top-up rule changes its material capacity
+    $saved = spa($this)->putJson('/api/v1/planning/daily-recovery', [
+        'plantId' => $f['plant'], 'targetDate' => $target, 'customerId' => $f['customer'], 'itemId' => $f['item']['id'],
+        'minimumQty' => 0, 'batchQty' => 1, 'bufferQty' => 0, 'shift1Qty' => 40, 'shift2Qty' => 0, 'shift3Qty' => 0,
+        'reason' => 'Make what OEM-W material allows',
+    ], ['If-Match' => '"0"'])->assertOk()->json('data');
+    expect($saved['inputsChanged'])->toBeFalse();
+    // D-3 on (through the customer master, kept by the Supervisor, D-128): a company run tops up OEM-W's own run
     rtSwitch($this, $t, 'SUP');
     $customer = spa($this)->getJson('/api/v1/query/core.customers?filter[id]='.$f['customer'])->assertOk()->json('data.0');
     expect($customer['companyMaterialTopUp'])->toBeFalse();
@@ -58,4 +69,5 @@ it('plans a customer part from its own material first and tops it up with compan
     mpsAs($this, $t, $ppc);
     $rows = $read();
     expect($rows['OEM-W']['materialCapacityQty'])->toBe('100')->and($rows['SJM']['materialCapacityQty'])->toBe('60');
+    expect($rows['OEM-W']['inputsChanged'])->toBeTrue();
 })->group('integration', 'planning');
