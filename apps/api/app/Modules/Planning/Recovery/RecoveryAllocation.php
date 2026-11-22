@@ -21,7 +21,9 @@ final class RecoveryAllocation
      * @param  numeric-string  $need  required + the part's buffer − protected − bound WO output (negative: nothing to take)
      * @param  numeric-string  $floorExtra  safety stock above the part's buffer
      * @param  array<string,numeric-string>  $allocated  per stage, added to
+     *
      * @param-out numeric-string  $floorShort  set to the safety stock company stock does not cover (made from company material only)
+     *
      * @return array<string,numeric-string>
      */
     public static function allocate(array &$pool, string $customer, string $need, string $floorExtra, array $allocated, ?string &$floorShort = null): array
