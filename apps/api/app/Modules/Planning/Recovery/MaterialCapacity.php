@@ -79,16 +79,30 @@ final class MaterialCapacity
                 $share = bccomp($ratio, $share, 6) < 0 ? $ratio : $share;
             }
         }
+        $rests = [];
         foreach ($needs as $item => $qty) {
             $own = bcmul($qty, $share, 6);
             if (bccomp($own, '0', 6) > 0) {
                 $pool[$customer.'|'.$item] = bcsub(MpsItemInput::num($pool[$customer.'|'.$item] ?? '0'), $own, 6);
             }
             $rest = bcsub($qty, $own, 6);
-            if (bccomp($rest, '0', 6) > 0 && $this->companyServes($customer, (string) $item)) {
-                $available = MpsItemInput::num($pool[self::COMPANY.'|'.$item] ?? '0');
-                $pool[self::COMPANY.'|'.$item] = bccomp($available, $rest, 6) > 0 ? bcsub($available, $rest, 6) : '0';
+            if (bccomp($rest, '0', 6) > 0) {
+                $rests[(string) $item] = $rest;
             }
+        }
+        // the rest is a company run when company material can make all of it; otherwise it stays the customer's run and
+        // keeps whatever of the customer's own material is left committed to it
+        $company = $rests !== [];
+        foreach ($rests as $item => $rest) {
+            $company = $company && $this->companyServes($customer, $item) && bccomp(MpsItemInput::num($pool[self::COMPANY.'|'.$item] ?? '0'), $rest, 6) >= 0;
+        }
+        $owner = $company || $customer === null ? self::COMPANY : $customer;
+        foreach ($rests as $item => $rest) {
+            if ($owner === self::COMPANY && ! $this->companyServes($customer, $item)) {
+                continue;
+            }
+            $available = MpsItemInput::num($pool[$owner.'|'.$item] ?? '0');
+            $pool[$owner.'|'.$item] = bccomp($available, $rest, 6) > 0 ? bcsub($available, $rest, 6) : '0';
         }
     }
 

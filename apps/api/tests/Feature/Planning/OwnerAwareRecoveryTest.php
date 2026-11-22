@@ -84,6 +84,12 @@ it('reserves what a released work order still needs as one-owner runs, never a m
     $pool = ['customer-c|coil' => '10', 'customer-c|nut' => '5', 'COMPANY|coil' => '10', 'COMPANY|nut' => '20'];
     $capacity->reserveRun($pool, 'customer-c', ['coil' => '10', 'nut' => '10']);
     expect($plain($pool))->toBe(['customer-c|coil' => 5.0, 'customer-c|nut' => 0.0, 'COMPANY|coil' => 5.0, 'COMPANY|nut' => 15.0]);
+    // short of its own nuts and no company run can make the rest (C supplies coil, no top-up): C's coil stays committed
+    $pool = ['customer-c|coil' => '100', 'customer-c|nut' => '10', 'COMPANY|nut' => '50'];
+    $supplied = new ReflectionProperty($capacity, 'supplied');
+    $supplied->setValue($capacity, ['customer-c' => ['coil' => true]]);
+    $capacity->reserveRun($pool, 'customer-c', ['coil' => '100', 'nut' => '100']);
+    expect($plain($pool))->toBe(['customer-c|coil' => 0.0, 'customer-c|nut' => 0.0, 'COMPANY|nut' => 50.0]);
 });
 
 it('keeps a short draft\'s customer material committed instead of freeing it for later plans', function () {
