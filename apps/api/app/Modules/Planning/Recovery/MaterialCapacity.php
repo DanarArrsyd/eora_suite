@@ -90,11 +90,11 @@ final class MaterialCapacity
                 $rests[(string) $item] = $rest;
             }
         }
-        // the rest is a company run when company material can make all of it; otherwise it stays the customer's run and
-        // keeps whatever of the customer's own material is left committed to it
-        $company = $rests !== [];
-        foreach ($rests as $item => $rest) {
-            $company = $company && $this->companyServes($customer, $item) && bccomp(MpsItemInput::num($pool[self::COMPANY.'|'.$item] ?? '0'), $rest, 6) >= 0;
+        // the rest is a company run when company material may serve every remaining component (even if short: it keeps what
+        // there is committed); otherwise it stays the customer's run and keeps the customer's leftover material committed
+        $company = true;
+        foreach (array_keys($rests) as $item) {
+            $company = $company && $this->companyServes($customer, (string) $item);
         }
         $owner = $company || $customer === null ? self::COMPANY : $customer;
         foreach ($rests as $item => $rest) {
@@ -195,17 +195,16 @@ final class MaterialCapacity
         if (! $reserveShortages) {
             return $this->consumeAs($db, $plant, $item, $rest, $date, $pool, $path, false, self::COMPANY, $customer);
         }
-        // a draft keeps what it needs committed even when short: a company run when one can make the rest; otherwise the
-        // rest stays the customer's run and holds whatever of the customer's own material is left for it
-        $copy = $pool;
-        if ($this->consumeAs($db, $plant, $item, $rest, $date, $copy, $path, false, self::COMPANY, $customer)) {
-            $pool = $copy;
-
-            return true;
+        // a draft keeps what it needs committed even when short: a company run where company material may serve every
+        // component, holding what company stock there is; otherwise the rest stays the customer's run and holds whatever
+        // of the customer's own material is left for it
+        $recipe = $this->recipe($db, $plant, $item, $date) ?? [];
+        $company = true;
+        foreach ($recipe as $line) {
+            $company = $company && $this->companyServes($customer, $line['item']);
         }
-        $this->consumeAs($db, $plant, $item, $rest, $date, $pool, $path, true, $customer, $customer);
 
-        return false;
+        return $this->consumeAs($db, $plant, $item, $rest, $date, $pool, $path, true, $company ? self::COMPANY : $customer, $customer);
     }
 
     /**

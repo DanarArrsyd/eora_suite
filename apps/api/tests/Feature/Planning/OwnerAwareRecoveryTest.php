@@ -90,6 +90,11 @@ it('reserves what a released work order still needs as one-owner runs, never a m
     $supplied->setValue($capacity, ['customer-c' => ['coil' => true]]);
     $capacity->reserveRun($pool, 'customer-c', ['coil' => '100', 'nut' => '100']);
     expect($plain($pool))->toBe(['customer-c|coil' => 0.0, 'customer-c|nut' => 0.0, 'COMPANY|nut' => 50.0]);
+    // a customer that supplies nothing: a short run is still a company run and keeps the company stock it needs committed
+    $supplied->setValue($capacity, []);
+    $pool = ['COMPANY|coil' => '100', 'COMPANY|nut' => '10'];
+    $capacity->reserveRun($pool, 'customer-d', ['coil' => '100', 'nut' => '100']);
+    expect($plain($pool))->toBe(['COMPANY|coil' => 0.0, 'COMPANY|nut' => 0.0]);
 });
 
 it('keeps a short draft\'s customer material committed instead of freeing it for later plans', function () {
@@ -100,7 +105,8 @@ it('keeps a short draft\'s customer material committed instead of freeing it for
         $capacity = app(MaterialCapacity::class);
         $coil = $f['coil']['id'];
         $nut = $f['nut']['id'];
-        // the draft needs 100 pcs = 50 kg coil + 200 nuts; customer C holds 50 kg of coil and only 20 nuts, no top-up allowed
+        // the draft needs 100 pcs = 50 kg coil + 200 nuts; customer C supplies both, holds 50 kg of coil and only 20 nuts, no top-up
+        (new ReflectionProperty($capacity, 'supplied'))->setValue($capacity, ['customer-c' => [$coil => true, $nut => true]]);
         $pool = ["customer-c|{$coil}" => '50', "customer-c|{$nut}" => '20'];
         expect($capacity->consume($db, $f['plant'], $f['item']['id'], '100', $f['today'], $pool, [], true, 'customer-c'))->toBeFalse();
         // all of C's coil stays committed to the draft, none is left for a later plan of the same customer
