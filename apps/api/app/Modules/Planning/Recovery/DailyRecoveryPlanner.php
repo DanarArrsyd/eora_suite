@@ -91,9 +91,12 @@ final class DailyRecoveryPlanner
             left join lots lt on lt.id = m.lot_id left join shifts sh on sh.id = d.shift_id
             where m.plant_id = ? and d.production_date = ?::date and m.movement_code = 'OUTPUT_GOOD' and m.qty_signed > 0
             order by d.posted_at,m.id", [$plant, $today]);
-        $commitments = $db->select("select w.id as work_order_id, wm.component_item_id as item_id, w.production_customer_id as customer_id,
+        // the WO's customer as the issue guard reads it: its production customer, else the customer of its delivery
+        $commitments = $db->select("select w.id as work_order_id, wm.component_item_id as item_id, coalesce(w.production_customer_id,h.customer_id) as customer_id,
               greatest(0,wm.required_qty - coalesce(issued.qty,0))::text as qty
             from work_order_materials wm join work_orders w on w.id = wm.work_order_id
+            left join delivery_schedule_lines s on s.id = w.schedule_line_id left join sales_order_lines ol on ol.id = s.so_line_id
+            left join sales_order_headers h on h.id = ol.sales_order_id
             left join lateral (select sum(m.qty_signed) as qty from inventory_movements m join locations l on l.id = m.location_id
                 where m.wo_id = w.id and m.item_id = wm.component_item_id and l.location_type = 'MAT_AT_PROD'
                   and m.movement_code in ('ISSUE_TO_PROD','RETURN_FROM_PROD')) issued on true
