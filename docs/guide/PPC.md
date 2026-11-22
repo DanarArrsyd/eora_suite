@@ -67,7 +67,9 @@ Catatan:
 - Bila stok, QC, demand atau parameter berubah, muncul **Position changed since the plan was saved**: periksa dan simpan ulang dulu.
 - Menekan ulang **Create draft work order** membuka WO yang sama. Rencana tambahan setelah WO dibuat menjadi revisi baru; revisi lama tetap tersimpan.
 - Tanpa BOM yang berlaku atau konversi batch, **Material capacity** tidak terhitung.
-- Bila plant menyimpan bahan milik customer, MPS, MRP dan Daily Recovery ditolak dengan pesan **Customer material in stock**. Untuk sementara, buat work order manual dengan **Production customer** yang sesuai.
+- Stok milik customer dihitung per pemilik (D-141): stok dan bahan milik customer hanya menutup part customer itu sendiri dan dipakai lebih dulu; stok perusahaan dipakai bersama, sekali, mulai due date paling awal. Di **Lots and positions** tiap lot tertulis **Owner <kode customer>** atau **Company stock**. Safety stock hanya dijaga dari stok perusahaan.
+- Bahan yang biasa dikirim customer tidak ditambal bahan perusahaan, kecuali customer itu ditandai **Company material may top up** = Yes (Master Data → Customers, diubah Supervisor).
+- MPS dan MRP masih ditolak dengan pesan **Customer material in stock** selama plant menyimpan bahan milik customer; keduanya menyusul di langkah berikutnya (doc 39).
 
 ## SPK Line (D-138)
 
@@ -87,6 +89,6 @@ Catatan:
 6. Buka tiap draft SPK dari link hasil generate, cek dan ubah seperlunya, lalu **Release to production** seperti biasa. Generate ulang di tanggal yang sama hanya menambah yang belum direncanakan.
 7. Baris WO hasil generate dihapus dari semua SPK (atau draft-nya dibatalkan)? WO itu otomatis dibatalkan selama belum ada issue material atau production run.
 
-Selama ada stok milik customer di plant, Generate ikut tertahan seperti Daily Recovery sampai perencanaan per pemilik tersedia.
+Generate memakai hasil Daily Recovery per pemilik; WO yang dibuat selalu membawa **Production customer** dari baris rencananya, jadi bahan milik customer itu bisa di-issue ke WO tersebut.
 
 SPK tidak memindahkan stok: WO manual tetap dirilis orang kedua seperti biasa, dan hasil produksi tetap dicatat lewat Production Runs.

@@ -175,3 +175,26 @@ test('items: when the item saves but its specification fails, the screen says ex
   await expect(page.getByText('Saved in part')).toBeVisible();
   await expect(page.getByText('Item COIL-X was created, but its material specification was not saved: The database was busy.', { exact: false })).toBeVisible();
 });
+
+test('customers: the Supervisor marks whether company material may top up material the customer supplies (D-141)', async ({ page }) => {
+  await setup(page);
+  const customer = { id: '00000000-0000-7000-8000-0000000000f6', code: 'DPM', name: 'Customer DPM', status: 'ACTIVE', companyMaterialTopUp: false, version: 3 };
+  await mockApi(page, '/query/core.customers?*', page1([customer]));
+  const calls: { body: unknown; ifMatch?: string }[] = [];
+  await page.route(`**/api/v1/core/customers/${customer.id}`, (route) => {
+    calls.push({ body: route.request().postDataJSON(), ifMatch: route.request().headers()['if-match'] });
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { ...customer, companyMaterialTopUp: true, version: 4 } }),
+    });
+  });
+  await page.goto('/master/customers');
+  await page.getByRole('button', { name: /Edit DPM/ }).click();
+  const form = page.getByRole('form', { name: 'DPM' });
+  await expect(form.getByRole('combobox', { name: 'Company material may top up' })).toContainText('No');
+  await choose(page, form.getByRole('combobox', { name: 'Company material may top up' }), 'Yes');
+  await form.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByText('DPM saved')).toBeVisible();
+  expect(calls).toEqual([{ body: { companyMaterialTopUp: true }, ifMatch: '"3"' }]);
+});

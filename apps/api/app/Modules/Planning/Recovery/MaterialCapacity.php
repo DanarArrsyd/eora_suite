@@ -8,9 +8,22 @@ use App\Modules\Planning\Mps\MpsItemInput;
 use App\Modules\Planning\Mrp\MrpPlanner;
 use App\Platform\Database\EoraPostgresConnection;
 
-/** Estimates whole FG PCS from approved BOMs and one shared, uncommitted component-stock pool. */
+/**
+ * Estimates whole FG PCS from approved BOMs and the uncommitted component stock, kept per owner (D-141, doc 39): the pool is
+ * keyed `owner|item`, owner `COMPANY` or a customer id. A customer's part uses that customer's own material first (D-1);
+ * company material serves it when the customer never supplied that material or is marked *company may top up* (D-3).
+ * Customer material never serves anyone else.
+ */
 final class MaterialCapacity
 {
+    public const string COMPANY = 'COMPANY';
+
+    /** @var array<string,array<string,true>> customer => materials it supplies (owns a lot of) */
+    private array $supplied = [];
+
+    /** @var array<string,bool> customer => company may top up */
+    private array $topUp = [];
+
     /** @var array<string,?array<int,array{item:string,type:string,per:string,denominator:?string,decimals:int}>> */
     private array $recipes = [];
 
@@ -22,11 +35,111 @@ final class MaterialCapacity
 
     public function __construct(private readonly MrpPlanner $conversions) {}
 
+    /** Who supplies which material and who may be topped up, read once per calculation. */
+    public function loadOwners(EoraPostgresConnection $db): void
+    {
+        $this->supplied = [];
+        foreach ($db->select('select distinct owner_customer_id, item_id from lots where owner_customer_id is not null order by 1, 2') as $row) {
+            $this->supplied[(string) $row->owner_customer_id][(string) $row->item_id] = true;
+        }
+        $this->topUp = [];
+        foreach ($db->select('select id, company_material_topup from customers where company_material_topup order by id') as $row) {
+            $this->topUp[(string) $row->id] = true;
+        }
+    }
+
+    /** @return array{supplied: array<string,array<string,true>>, topUp: array<string,bool>} what the owner rules were read from (fingerprinted) */
+    public function ownerInputs(): array
+    {
+        return ['supplied' => $this->supplied, 'topUp' => $this->topUp];
+    }
+
+    /** Whether company material may serve this customer's need of the item (an unattributed need: always). */
+    public function companyServes(?string $customer, string $item): bool
+    {
+        return $customer === null || ! isset($this->supplied[$customer][$item]) || ($this->topUp[$customer] ?? false);
+    }
+
+    /**
+     * Reserves what one released work order still needs, as it can really be posted: one owner per run (D-135). The
+     * customer's own material covers the largest share it can for every component at once; the rest is a company run,
+     * from company material where it may serve that customer (D-3).
+     *
+     * @param  array<string,numeric-string>  $pool
+     * @param  array<string,numeric-string>  $needs  component item => quantity still to issue
+     */
+    public function reserveRun(array &$pool, ?string $customer, array $needs): void
+    {
+        $needs = array_filter($needs, static fn (string $qty): bool => bccomp($qty, '0', 6) > 0);
+        $share = '0';
+        if ($customer !== null && $needs !== []) {
+            $share = '1';
+            foreach ($needs as $item => $qty) {
+                $ratio = bcdiv(MpsItemInput::num($pool[$customer.'|'.$item] ?? '0'), $qty, 6);
+                $share = bccomp($ratio, $share, 6) < 0 ? $ratio : $share;
+            }
+        }
+        $rests = [];
+        foreach ($needs as $item => $qty) {
+            $own = bcmul($qty, $share, 6);
+            if (bccomp($own, '0', 6) > 0) {
+                $pool[$customer.'|'.$item] = bcsub(MpsItemInput::num($pool[$customer.'|'.$item] ?? '0'), $own, 6);
+            }
+            $rest = bcsub($qty, $own, 6);
+            if (bccomp($rest, '0', 6) > 0) {
+                $rests[(string) $item] = $rest;
+            }
+        }
+        // the rest is a company run when company material may serve every remaining component (even if short: it keeps what
+        // there is committed); otherwise it stays the customer's run and keeps the customer's leftover material committed
+        $company = true;
+        foreach (array_keys($rests) as $item) {
+            $company = $company && $this->companyServes($customer, (string) $item);
+        }
+        $owner = $company || $customer === null ? self::COMPANY : $customer;
+        foreach ($rests as $item => $rest) {
+            if ($owner === self::COMPANY && ! $this->companyServes($customer, $item)) {
+                continue;
+            }
+            $available = MpsItemInput::num($pool[$owner.'|'.$item] ?? '0');
+            $pool[$owner.'|'.$item] = bccomp($available, $rest, 6) > 0 ? bcsub($available, $rest, 6) : '0';
+        }
+    }
+
+    /** Takes up to `$need` of the item for the customer: its own material first, then company material where allowed.
+     * @param  array<string,numeric-string>  $pool
+     * @param  numeric-string  $need
+     * @return array{taken: numeric-string, own: bool}
+     */
+    public function take(array &$pool, ?string $customer, string $item, string $need): array
+    {
+        $taken = '0';
+        $own = false;
+        foreach ($customer === null ? [self::COMPANY] : [$customer, self::COMPANY] as $owner) {
+            if ($owner === self::COMPANY && ! $this->companyServes($customer, $item)) {
+                break;
+            }
+            $left = bcsub($need, $taken, 6);
+            if (bccomp($left, '0', 6) <= 0) {
+                break;
+            }
+            $available = $pool[$owner.'|'.$item] ?? '0';
+            $part = bccomp($left, $available, 6) < 0 ? $left : $available;
+            if (bccomp($part, '0', 6) > 0) {
+                $pool[$owner.'|'.$item] = bcsub($available, $part, 6);
+                $taken = bcadd($taken, $part, 6);
+                $own = $own || $owner !== self::COMPANY;
+            }
+        }
+
+        return ['taken' => $taken, 'own' => $own];
+    }
+
     /**
      * @param  array<string,numeric-string>  $pool
      * @return ?numeric-string
      */
-    public function estimate(EoraPostgresConnection $db, string $plant, string $item, string $date, array $pool): ?string
+    public function estimate(EoraPostgresConnection $db, string $plant, string $item, string $date, array $pool, ?string $customer = null): ?string
     {
         $this->warnings = [];
         if ($this->recipe($db, $plant, $item, $date) === null) {
@@ -37,7 +150,7 @@ final class MaterialCapacity
         while ($low < $high) {
             $middle = intdiv($low + $high + 1, 2);
             $copy = $pool;
-            if ($this->consume($db, $plant, $item, (string) $middle, $date, $copy, [])) {
+            if ($this->consume($db, $plant, $item, (string) $middle, $date, $copy, [], false, $customer)) {
                 $low = $middle;
             } else {
                 $high = $middle - 1;
@@ -48,12 +161,61 @@ final class MaterialCapacity
     }
 
     /**
+     * Makes `$qty` of the item from the pool. One production posting uses one material owner (D-135), so a customer's part
+     * is made in whole runs: as much as the customer's own material makes on its own first (D-1), the rest from company
+     * material only — where company material may serve that customer for every component (D-3).
+     *
      * @param  array<string,numeric-string>  $pool
      * @param  list<string>  $path
      */
-    public function consume(EoraPostgresConnection $db, string $plant, string $item, string $qty, string $date, array &$pool, array $path, bool $reserveShortages = false): bool
+    public function consume(EoraPostgresConnection $db, string $plant, string $item, string $qty, string $date, array &$pool, array $path, bool $reserveShortages = false, ?string $customer = null): bool
     {
         $qty = MpsItemInput::num($qty);
+        if ($customer === null) {
+            return $this->consumeAs($db, $plant, $item, $qty, $date, $pool, $path, $reserveShortages, self::COMPANY, null);
+        }
+        $low = 0;
+        $high = (int) bcdiv($qty, '1', 0);
+        while ($low < $high) {
+            $middle = intdiv($low + $high + 1, 2);
+            $copy = $pool;
+            if ($this->consumeAs($db, $plant, $item, (string) $middle, $date, $copy, $path, false, $customer, $customer)) {
+                $low = $middle;
+            } else {
+                $high = $middle - 1;
+            }
+        }
+        if ($low > 0) {
+            $this->consumeAs($db, $plant, $item, (string) $low, $date, $pool, $path, false, $customer, $customer);
+        }
+        $rest = bcsub($qty, (string) $low, 6);
+        if (bccomp($rest, '0', 6) <= 0) {
+            return true;
+        }
+        if (! $reserveShortages) {
+            return $this->consumeAs($db, $plant, $item, $rest, $date, $pool, $path, false, self::COMPANY, $customer);
+        }
+        // a draft keeps what it needs committed even when short: a company run where company material may serve every
+        // component, holding what company stock there is; otherwise the rest stays the customer's run and holds whatever
+        // of the customer's own material is left for it
+        $recipe = $this->recipe($db, $plant, $item, $date) ?? [];
+        $company = true;
+        foreach ($recipe as $line) {
+            $company = $company && $this->companyServes($customer, $line['item']);
+        }
+
+        return $this->consumeAs($db, $plant, $item, $rest, $date, $pool, $path, true, $company ? self::COMPANY : $customer, $customer);
+    }
+
+    /**
+     * One owner's run: every component (and Semi-Finished made on the way) from that owner's material only.
+     *
+     * @param  array<string,numeric-string>  $pool
+     * @param  list<string>  $path
+     * @param  numeric-string  $qty
+     */
+    private function consumeAs(EoraPostgresConnection $db, string $plant, string $item, string $qty, string $date, array &$pool, array $path, bool $reserveShortages, string $owner, ?string $customer): bool
+    {
         if (in_array($item, $path, true) || count($path) >= 20) {
             $this->warnings['BOM_CYCLE_OR_DEPTH'] = true;
 
@@ -73,12 +235,16 @@ final class MaterialCapacity
                 $rounded = bcadd($rounded, '1', 0);
             }
             $need = bcdiv($rounded, $scale, 6);
-            $available = $pool[$line['item']] ?? '0';
+            // company material serves a customer's run only where it may (D-3)
+            $key = $owner.'|'.$line['item'];
+            $available = $owner === self::COMPANY && ! $this->companyServes($customer, $line['item']) ? '0' : MpsItemInput::num($pool[$key] ?? '0');
             $take = bccomp($need, $available, 6) < 0 ? $need : $available;
-            $pool[$line['item']] = bcsub($available, $take, 6);
+            if (bccomp($take, '0', 6) > 0) {
+                $pool[$key] = bcsub($available, $take, 6);
+            }
             $remaining = bcsub($need, $take, 6);
             if (bccomp($remaining, '0', 6) > 0 && ($line['type'] !== 'SEMI_FINISHED'
-                || ! $this->consume($db, $plant, $line['item'], $remaining, $date, $pool, [...$path, $item], $reserveShortages))) {
+                || ! $this->consumeAs($db, $plant, $line['item'], $remaining, $date, $pool, [...$path, $item], $reserveShortages, $owner, $customer))) {
                 if (! $reserveShortages) {
                     return false;
                 }
@@ -97,8 +263,9 @@ final class MaterialCapacity
                 $sheets = bcadd($sheets, '1', 0);
             }
             $produced = bcmul($sheets, $pair['yield'], 0);
-            $pool[$item] = bcadd($pool[$item] ?? '0', bcsub($produced, $qty, 6), 6);
-            $pool[$pair['other']] = bcadd($pool[$pair['other']] ?? '0', $produced, 6);
+            // the run's owner owns its output, paired surplus included
+            $pool[$owner.'|'.$item] = bcadd($pool[$owner.'|'.$item] ?? '0', bcsub($produced, $qty, 6), 6);
+            $pool[$owner.'|'.$pair['other']] = bcadd($pool[$owner.'|'.$pair['other']] ?? '0', $produced, 6);
         }
 
         return true;

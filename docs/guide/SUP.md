@@ -64,7 +64,7 @@ Akun pemilik / kepala operasional. Melihat semua menu yang sudah jalan dan bisa 
 - **Work Centers** — Lini / cell produksi, mesin, dies.
 - **Items** — Part dan material.
 - **Units & Conversions** — Satuan dan konversi satuan per item.
-- **Customers** — Data customer.
+- **Customers** — Data customer. **Company material may top up**: Yes bila bahan perusahaan boleh menambal kekurangan bahan yang biasanya dikirim customer itu (D-141).
 - **Customer Part Mapping** — Nomor part customer → item internal.
 - **Suppliers** — Data supplier.
 - **Process Types** — Jenis proses operasi (blanking, bending, inspeksi, …).
