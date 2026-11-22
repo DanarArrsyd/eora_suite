@@ -118,6 +118,15 @@ it('enforces the WO customer, rejects mixed production and preserves the owner t
         $order = spa($this)->postJson("/api/v1/demand/sales-orders/{$order['id']}/actions/confirm", [], ['If-Match' => '"'.$order['version'].'"'])->assertOk()->json('data');
         $schedules[] = $order['lines'][0]['schedules'][0]['id'];
     }
+    // D-141: Daily Recovery runs with customer stock in the plant; the customer's own FG covers only its own delivery
+    $use($f['prl']);
+    $recovery = collect(spa($this)->getJson('/api/v1/planning/daily-recovery?'.http_build_query(['plantId' => $f['plant'], 'targetDate' => $f['today']]))
+        ->assertOk()->json('data'))->keyBy('customerCode');
+    expect($recovery['OEM-W']['allocated']['fg'])->toBe('10')->and($recovery['OEM-W']['netQty'])->toBe('0')
+        ->and($recovery['SJM']['allocated']['fg'])->toBe('0')->and($recovery['SJM']['netQty'])->toBe('10')
+        ->and(array_column($recovery['SJM']['lots'], 'lot_id'))->not->toContain($fg['lotId'])
+        ->and(collect($recovery['OEM-W']['lots'])->firstWhere('lot_id', $fg['lotId'])['owner_code'])->toBe('OEM-W');
+    $use($dlv);
     spa($this)->getJson("/api/v1/delivery/schedule-lines/{$schedules[1]}/proposal")->assertOk()->assertJsonCount(0, 'data.lines');
     spa($this)->postJson('/api/v1/delivery/allocations', ['scheduleLineId' => $schedules[1], 'lines' => [['stockLineId' => $fgBalance, 'qty' => '1']]], ['Idempotency-Key' => 'owner-wrong-allocate'])->assertUnprocessable()->assertJsonValidationErrors('lines.0.stockLineId');
     // Bypass the API and allocation service as the real runtime role: the database refuses the same mismatch.

@@ -50,12 +50,13 @@ final class PartnerController
         return $this->storePartner($data, 'customers', 'customer', new CustomersQuery);
     }
 
-    /** Rename a customer or change its status (If-Match). */
+    /** Rename a customer, change its status or whether company material may top up its own (D-141 D-3) (If-Match). */
     public function updateCustomer(Request $request, string $customer): JsonResponse
     {
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'min:1', 'max:200'],
             'status' => ['sometimes', Rule::in(['ACTIVE', 'INACTIVE'])],
+            'companyMaterialTopUp' => ['sometimes', 'boolean'],
         ]);
 
         return $this->updatePartner($request, $data, 'customers', 'customer', $customer, new CustomersQuery);
@@ -185,6 +186,9 @@ final class PartnerController
         $id = $this->existing($db, $table, $raw);
 
         $changes = array_filter(['name' => $data['name'] ?? null, 'status' => $data['status'] ?? null], static fn ($v) => $v !== null);
+        if (array_key_exists('companyMaterialTopUp', $data)) {
+            $changes['company_material_topup'] = $data['companyMaterialTopUp'] ? 'true' : 'false';
+        }
         $this->update($db, $table, $entity, $id, $version, $changes, "{$entity}.updated");
 
         return $this->respond($db, $query, $id);

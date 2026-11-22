@@ -45,7 +45,7 @@ export type ConversionRow = MasterRow & {
   effectiveTo: string | null;
   current: boolean;
 };
-export type PartnerRow = MasterRow & { name: string; status: Status };
+export type PartnerRow = MasterRow & { name: string; status: Status; companyMaterialTopUp?: boolean };
 export type CustomerItemRow = MasterRow & {
   customerId: string;
   customerCode: string;
@@ -463,17 +463,37 @@ function partner(kind: 'customers' | 'suppliers'): MasterResource<PartnerRow> {
       },
       { key: 'name', label: 'Name', kind: 'text', required: true, maxLength: 200 },
       { key: 'status', label: 'Status', kind: 'select', required: true, options: STATUS_OPTIONS, editOnly: true },
+      ...(kind === 'customers'
+        ? [
+            {
+              key: 'companyMaterialTopUp',
+              label: 'Company material may top up',
+              kind: 'select' as const,
+              required: true,
+              options: YES_NO,
+              editOnly: true,
+              hint: 'For material this customer supplies: when its own stock is short, planning may use company material (D-141).',
+            },
+          ]
+        : []),
     ],
-    blank: { code: '', name: '', status: 'ACTIVE' },
-    toForm: (r) => ({ code: r.code, name: r.name, status: r.status }),
+    blank: { code: '', name: '', status: 'ACTIVE', companyMaterialTopUp: 'false' },
+    toForm: (r) => ({ code: r.code, name: r.name, status: r.status, companyMaterialTopUp: String(r.companyMaterialTopUp ?? false) }),
     create: (v) =>
       kind === 'customers'
         ? call(() => api.POST('/core/customers', { body: { code: v.code!, name: v.name! } }))
         : call(() => api.POST('/core/suppliers', { body: { code: v.code!, name: v.name! } })),
     update: (r, v) => {
       const body = changed(config.toForm(r), v, ['name', 'status']) as { name?: string; status?: Status };
+      const topUp = changed(config.toForm(r), v, ['companyMaterialTopUp']) as { companyMaterialTopUp?: string };
       return kind === 'customers'
-        ? call(() => api.PATCH('/core/customers/{customer}', { params: { path: { customer: r.id } }, headers: ifMatch(r.version), body }))
+        ? call(() =>
+            api.PATCH('/core/customers/{customer}', {
+              params: { path: { customer: r.id } },
+              headers: ifMatch(r.version),
+              body: { ...body, ...('companyMaterialTopUp' in topUp ? { companyMaterialTopUp: yes(topUp.companyMaterialTopUp) } : {}) },
+            }),
+          )
         : call(() => api.PATCH('/core/suppliers/{supplier}', { params: { path: { supplier: r.id } }, headers: ifMatch(r.version), body }));
     },
   };

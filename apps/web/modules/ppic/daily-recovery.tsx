@@ -43,6 +43,8 @@ type Lot = {
   allocated: string;
   location_code: string;
   uom: string;
+  /** customer that owns the lot (D-135); none: company stock */
+  owner_code?: string | null;
 };
 type SourceWo = { id: string; wo_no: string; status: string; due: string; remaining: string };
 type Production = { wo_no: string; work_order_id: string; lot_no: string | null; shift_code: string | null; qty: string; doc_no: string };
@@ -644,7 +646,7 @@ function RecoveryDetail({
                   <td className="p-2">
                     {lot.lot_no ?? 'No lot'}
                     <br />
-                    {lot.location_code}
+                    {lot.location_code} · {lot.owner_code ? `Owner ${lot.owner_code}` : 'Company stock'}
                   </td>
                   <td className="p-2">
                     {lot.stock_status === 'PENDING_QC' ? 'Pending QC (Before Check)' : statusEntry('stock', lot.stock_status as StatusOf<'stock'>).label}

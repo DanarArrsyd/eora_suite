@@ -48,7 +48,17 @@ const row = {
   status: 'PLAN_REQUIRED',
   inputsChanged: false,
   lots: [
-    { id: ID(3), lot_id: ID(4), lot_no: 'FG-DPM-181126-0001', stock_status: 'PENDING_QC', qty: '380', allocated: '0', location_code: 'QC-01', uom: 'PCS' },
+    {
+      id: ID(3),
+      lot_id: ID(4),
+      lot_no: 'FG-DPM-181126-0001',
+      stock_status: 'PENDING_QC',
+      qty: '380',
+      allocated: '0',
+      location_code: 'QC-01',
+      uom: 'PCS',
+      owner_code: 'DPM',
+    },
   ],
   demands: [{ id: ID(5), due: '2026-11-19', outstanding: '500', protected_qty: '0' }],
   workOrders: [],
@@ -87,6 +97,7 @@ test('daily recovery persists batch and shift edits, exposes lot sources and cre
   await expect(page.getByRole('heading', { name: 'Daily Recovery Planner' })).toBeVisible();
   await page.getByRole('button', { name: 'Bracket Inner', exact: true }).click();
   await expect(page.getByText('FG-DPM-181126-0001').first()).toBeVisible();
+  await expect(page.getByText('QC-01 · Owner DPM')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create draft work order' })).toBeDisabled();
   await page.getByLabel('Shift I plan (pcs)', { exact: true }).fill('506');
   await page.getByLabel('Reason').fill('One full material batch');

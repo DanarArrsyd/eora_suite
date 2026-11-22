@@ -2273,7 +2273,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Rename a customer or change its status (If-Match) */
+        /** Rename a customer, change its status or whether company material may top up its own (D-141 D-3) (If-Match) */
         patch: operations["v1.core.customers.update"];
         trace?: never;
     };
@@ -10661,28 +10661,6 @@ export interface operations {
                     };
                 };
             };
-            /** @description OWNER_PEGGING_REQUIRED */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Format: uri */
-                        type: string;
-                        title: string;
-                        /** @enum {integer} */
-                        status: 409;
-                        /** @enum {string} */
-                        code: "OWNER_PEGGING_REQUIRED";
-                        /** @description Safe to show; never names permissions, scopes or other tenants. */
-                        detail?: string;
-                        correlationId?: string;
-                        /** @description Short support reference derived from the correlation id. */
-                        reference?: string;
-                    };
-                };
-            };
             /** @description VALIDATION_FAILED */
             422: {
                 headers: {
@@ -10820,7 +10798,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION */
+            /** @description INVALID_STATE_TRANSITION */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10833,7 +10811,7 @@ export interface operations {
                         /** @enum {integer} */
                         status: 409;
                         /** @enum {string} */
-                        code: "OWNER_PEGGING_REQUIRED" | "INVALID_STATE_TRANSITION";
+                        code: "INVALID_STATE_TRANSITION";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;
@@ -11063,7 +11041,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description OWNER_PEGGING_REQUIRED, INVALID_STATE_TRANSITION, RECOVERY_INPUTS_CHANGED */
+            /** @description INVALID_STATE_TRANSITION, RECOVERY_INPUTS_CHANGED */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11076,7 +11054,7 @@ export interface operations {
                         /** @enum {integer} */
                         status: 409;
                         /** @enum {string} */
-                        code: "OWNER_PEGGING_REQUIRED" | "INVALID_STATE_TRANSITION" | "RECOVERY_INPUTS_CHANGED";
+                        code: "INVALID_STATE_TRANSITION" | "RECOVERY_INPUTS_CHANGED";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;
@@ -25331,6 +25309,7 @@ export interface operations {
                     name?: string;
                     /** @enum {string} */
                     status?: "ACTIVE" | "INACTIVE";
+                    companyMaterialTopUp?: boolean;
                 };
             };
         };
@@ -36803,28 +36782,6 @@ export interface operations {
                         status: 403;
                         /** @enum {string} */
                         code: "FORBIDDEN" | "SCOPE_FORBIDDEN";
-                        /** @description Safe to show; never names permissions, scopes or other tenants. */
-                        detail?: string;
-                        correlationId?: string;
-                        /** @description Short support reference derived from the correlation id. */
-                        reference?: string;
-                    };
-                };
-            };
-            /** @description OWNER_PEGGING_REQUIRED */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": {
-                        /** Format: uri */
-                        type: string;
-                        title: string;
-                        /** @enum {integer} */
-                        status: 409;
-                        /** @enum {string} */
-                        code: "OWNER_PEGGING_REQUIRED";
                         /** @description Safe to show; never names permissions, scopes or other tenants. */
                         detail?: string;
                         correlationId?: string;

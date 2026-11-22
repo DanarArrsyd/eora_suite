@@ -175,8 +175,10 @@ it('keeps the material demand of a Daily Recovery draft WO in MRP after its fini
         ->assertOk()->assertJsonPath('data.0.materialCapacityQty', '100');
     // Even a shortage of the first component must keep the draft's other components committed.
     AccessFixtures::run($t, function (EoraPostgresConnection $db) use ($f) {
-        $pool = [$f['coil']['id'] => '100', $f['nut']['id'] => '400'];
+        $coil = MaterialCapacity::COMPANY.'|'.$f['coil']['id'];
+        $nut = MaterialCapacity::COMPANY.'|'.$f['nut']['id'];
+        $pool = [$coil => '100', $nut => '400'];
         expect(app(MaterialCapacity::class)->consume($db, $f['plant'], $f['item']['id'], '300', $f['today'], $pool, [], true))->toBeFalse();
-        expect(bccomp($pool[$f['coil']['id']], '0', 6))->toBe(0)->and(bccomp($pool[$f['nut']['id']], '0', 6))->toBe(0);
+        expect(bccomp($pool[$coil], '0', 6))->toBe(0)->and(bccomp($pool[$nut], '0', 6))->toBe(0);
     });
 })->group('integration', 'planning');

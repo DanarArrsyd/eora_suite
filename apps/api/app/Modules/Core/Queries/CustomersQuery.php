@@ -39,6 +39,7 @@ final class CustomersQuery extends QueryDefinition
             new Field('code', 'c.code', sortable: true, filterable: true, search: 'prefix'),
             new Field('name', 'c.name', sortable: true, search: 'contains'),
             new Field('status', 'c.status', Field::ENUM, sortable: true, filterable: true, options: ['ACTIVE', 'INACTIVE']),
+            new Field('companyMaterialTopUp', 'c.company_material_topup', Field::BOOLEAN, filterable: true),
             new Field('updatedAt', 'c.updated_at', Field::INSTANT, sortable: true),
             new Field('version', 'c.version', Field::INTEGER),
         ];

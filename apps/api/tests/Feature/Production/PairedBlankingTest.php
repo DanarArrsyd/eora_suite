@@ -61,12 +61,22 @@ it('plans whole sheets once and traces separately counted Plate Grip sides into 
     $use($f['prl']);
     AccessFixtures::run($tenant, function (EoraPostgresConnection $db) use ($items, $f) {
         $capacity = app(MaterialCapacity::class);
-        $pool = [$items['SHEET']['id'] => '20'];
+        $key = fn (string $owner, string $code): string => $owner.'|'.$items[$code]['id'];
+        $pool = [$key(MaterialCapacity::COMPANY, 'SHEET') => '20'];
         expect($capacity->consume($db, $f['plant'], $items['RH']['id'], '300', $f['today'], $pool, []))->toBeTrue();
         expect($capacity->consume($db, $f['plant'], $items['LH']['id'], '350', $f['today'], $pool, []))->toBeTrue();
-        expect(bccomp($pool[$items['SHEET']['id']], '0', 6))->toBe(0)
-            ->and(bccomp($pool[$items['BLANK-RH']['id']], '60', 6))->toBe(0)
-            ->and(bccomp($pool[$items['BLANK-LH']['id']], '10', 6))->toBe(0);
+        expect(bccomp($pool[$key(MaterialCapacity::COMPANY, 'SHEET')], '0', 6))->toBe(0)
+            ->and(bccomp($pool[$key(MaterialCapacity::COMPANY, 'BLANK-RH')], '60', 6))->toBe(0)
+            ->and(bccomp($pool[$key(MaterialCapacity::COMPANY, 'BLANK-LH')], '10', 6))->toBe(0);
+        // D-141: a customer's sheets make that customer's blanks, surplus included; another customer never uses them
+        $dpm = '00000000-0000-7000-8000-00000000d001';
+        $sjm = '00000000-0000-7000-8000-00000000d002';
+        $pool = [$key($dpm, 'SHEET') => '20'];
+        expect($capacity->consume($db, $f['plant'], $items['LH']['id'], '350', $f['today'], $pool, [], false, $dpm))->toBeTrue();
+        expect(bccomp($pool[$key($dpm, 'BLANK-RH')], '360', 6))->toBe(0)
+            ->and(bccomp($pool[$key($dpm, 'BLANK-LH')], '10', 6))->toBe(0)
+            ->and($capacity->estimate($db, $f['plant'], $items['RH']['id'], $f['today'], $pool, $sjm))->toBe('0')
+            ->and($capacity->estimate($db, $f['plant'], $items['RH']['id'], $f['today'], $pool, $dpm))->toBe('360');
     });
     foreach (['RH' => '300', 'LH' => '350'] as $side => $quantity) {
         spa($this)->postJson('/api/v1/planning/plan-parameters', ['plantId' => $f['plant'], 'itemId' => $items[$side]['id'], 'safetyStock' => $quantity])->assertCreated();

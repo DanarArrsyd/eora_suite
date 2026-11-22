@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\Planning\Recovery;
 
-use App\Modules\Inventory\Application\MaterialOwnership;
 use App\Modules\Planning\Mps\MpsItemInput;
 use App\Platform\Calendar\BusinessCalendar;
 use App\Platform\Database\EoraPostgresConnection;
 use DateTimeImmutable;
 use stdClass;
 
-/** Live daily recovery. Allocate across the entire plant before customer/search filters and paging. */
+/**
+ * Live daily recovery. Allocate across the entire plant before customer/search filters and paging. Supply is kept per owner
+ * (D-141, doc 39): a customer's own stock and material cover only that customer's parts, first (D-1); company stock is
+ * shared, counted once, earliest due date first then customer code (D-2); company material tops up a customer's own only
+ * when allowed (D-3); the item's safety stock is held in company stock only (D-5).
+ */
 final class DailyRecoveryPlanner
 {
     public function __construct(private readonly BusinessCalendar $calendar, private readonly MaterialCapacity $materials) {}
@@ -25,7 +29,7 @@ final class DailyRecoveryPlanner
      */
     public function read(EoraPostgresConnection $db, string $plant, string $target, ?array $safetyStock = null, array $unmade = []): array
     {
-        MaterialOwnership::requireAggregatePlanning($db, $plant);
+        $this->materials->loadOwners($db);
         $today = $this->calendar->resolve($db, $plant, new DateTimeImmutable)->productionDate;
         $parts = $db->select("select c.id as customer_id, c.code as customer_code, c.name as customer_name,
               i.id as item_id, i.code as item_code, i.name as item_name, min(ci.customer_part_no) as part_no
@@ -62,14 +66,14 @@ final class DailyRecoveryPlanner
             order by s.requirement_date,s.id", [$today, $plant, $target]);
         $stocks = $db->select("select b.id, b.item_id, i.code as item_code, i.name as item_name, i.item_type,
               b.lot_id, lt.lot_no, b.stock_status, b.qty::text as qty, l.code as location_code, l.location_type,
-              u.code as uom, coalesce(a.qty,0)::text as allocated
+              u.code as uom, coalesce(a.qty,0)::text as allocated, lt.owner_customer_id as owner_customer_id, oc.code as owner_code
             from stock_balances b join locations l on l.id = b.location_id join items i on i.id = b.item_id
-            join uoms u on u.id = b.uom_id left join lots lt on lt.id = b.lot_id
+            join uoms u on u.id = b.uom_id left join lots lt on lt.id = b.lot_id left join customers oc on oc.id = lt.owner_customer_id
             left join lateral (select sum(qty) as qty from stock_allocations where balance_id = b.id and status = 'ACTIVE') a on true
             where b.plant_id = ? and b.qty > 0 and l.location_type not like 'V\\_%'
             order by b.item_id,b.id", [$plant]);
         $workOrders = $db->select("select w.id, w.wo_no, w.item_id, i.item_type, w.status, w.due_date::text as due,
-               greatest(0,w.qty - coalesce(g.qty,0))::text as remaining, coalesce(h.customer_id,p.customer_id) as customer_id
+               greatest(0,w.qty - coalesce(g.qty,0))::text as remaining, coalesce(w.production_customer_id,h.customer_id,p.customer_id) as customer_id
             from work_orders w join items i on i.id = w.item_id left join delivery_schedule_lines s on s.id = w.schedule_line_id
             left join sales_order_lines ol on ol.id = s.so_line_id left join sales_order_headers h on h.id = ol.sales_order_id
             left join daily_recovery_plans p on p.work_order_id = w.id
@@ -87,39 +91,42 @@ final class DailyRecoveryPlanner
             left join lots lt on lt.id = m.lot_id left join shifts sh on sh.id = d.shift_id
             where m.plant_id = ? and d.production_date = ?::date and m.movement_code = 'OUTPUT_GOOD' and m.qty_signed > 0
             order by d.posted_at,m.id", [$plant, $today]);
-        $commitments = $db->select("select wm.component_item_id as item_id,
+        $commitments = $db->select("select wm.component_item_id as item_id, w.production_customer_id as customer_id,
               greatest(0,wm.required_qty - coalesce(issued.qty,0))::text as qty
             from work_order_materials wm join work_orders w on w.id = wm.work_order_id
             left join lateral (select sum(m.qty_signed) as qty from inventory_movements m join locations l on l.id = m.location_id
                 where m.wo_id = w.id and m.item_id = wm.component_item_id and l.location_type = 'MAT_AT_PROD'
                   and m.movement_code in ('ISSUE_TO_PROD','RETURN_FROM_PROD')) issued on true
             where w.plant_id = ? and w.status in ('RELEASED','IN_PROGRESS','ON_HOLD') order by wm.id", [$plant]);
+        // FG supply per item and owner (`COMPANY` or a customer id); material per `owner|item` (MaterialCapacity)
         $pool = [];
         $materialPool = [];
         foreach ($stocks as $stock) {
             $item = (string) $stock->item_id;
-            $pool[$item] ??= ['fg' => '0', 'beforeCheck' => '0', 'accepted' => '0', 'wo' => '0'];
+            $owner = $stock->owner_customer_id === null ? MaterialCapacity::COMPANY : (string) $stock->owner_customer_id;
+            $pool[$item][$owner] ??= ['fg' => '0', 'beforeCheck' => '0', 'accepted' => '0', 'wo' => '0'];
             if ($stock->stock_status === 'UNRESTRICTED' && $stock->location_type === 'FG_WAREHOUSE') {
-                $pool[$item]['fg'] = bcadd($pool[$item]['fg'], bcsub(MpsItemInput::num($stock->qty), MpsItemInput::num($stock->allocated), 6), 6);
+                $pool[$item][$owner]['fg'] = bcadd($pool[$item][$owner]['fg'], bcsub(MpsItemInput::num($stock->qty), MpsItemInput::num($stock->allocated), 6), 6);
             } elseif ($stock->stock_status === 'PENDING_QC') {
-                $pool[$item]['beforeCheck'] = bcadd($pool[$item]['beforeCheck'], MpsItemInput::num($stock->qty), 6);
+                $pool[$item][$owner]['beforeCheck'] = bcadd($pool[$item][$owner]['beforeCheck'], MpsItemInput::num($stock->qty), 6);
             } elseif ($stock->stock_status === 'QC_RELEASED') {
-                $pool[$item]['accepted'] = bcadd($pool[$item]['accepted'], MpsItemInput::num($stock->qty), 6);
+                $pool[$item][$owner]['accepted'] = bcadd($pool[$item][$owner]['accepted'], MpsItemInput::num($stock->qty), 6);
             }
             if ($stock->location_type === 'RM_WAREHOUSE' && $stock->stock_status === 'UNRESTRICTED') {
-                $materialPool[$item] = bcadd($materialPool[$item] ?? '0', bcsub(MpsItemInput::num($stock->qty), MpsItemInput::num($stock->allocated), 6), 6);
+                $materialPool[$owner.'|'.$item] = bcadd($materialPool[$owner.'|'.$item] ?? '0', bcsub(MpsItemInput::num($stock->qty), MpsItemInput::num($stock->allocated), 6), 6);
             }
         }
+        // what released work orders still need is taken as they will issue it: their customer's own material first
         foreach ($commitments as $commitment) {
-            $item = (string) $commitment->item_id;
-            $remaining = bcsub($materialPool[$item] ?? '0', MpsItemInput::num($commitment->qty), 6);
-            $materialPool[$item] = bccomp($remaining, '0', 6) > 0 ? $remaining : '0';
+            $this->materials->take($materialPool, $commitment->customer_id === null ? null : (string) $commitment->customer_id,
+                (string) $commitment->item_id, MpsItemInput::num($commitment->qty));
         }
         // Finished draft WOs already cover demand. Keep their component forecast committed across plan dates, too.
         // Explode finished roots only: their intermediate MRP drafts represent the same material demand.
         foreach ($workOrders as $order) {
             if ($order->item_type === 'FINISHED' && in_array($order->status, ['DRAFT', 'SUBMITTED'], true)) {
-                $this->materials->consume($db, $plant, (string) $order->item_id, (string) $order->remaining, $target, $materialPool, [], true);
+                $this->materials->consume($db, $plant, (string) $order->item_id, (string) $order->remaining, $target, $materialPool, [], true,
+                    $order->customer_id === null ? null : (string) $order->customer_id);
             }
         }
         $boundWo = [];
@@ -132,8 +139,8 @@ final class DailyRecoveryPlanner
                 $boundWo[$key] = bcadd($boundWo[$key] ?? '0', MpsItemInput::num($order->remaining), 6);
             } else {
                 $item = (string) $order->item_id;
-                $pool[$item] ??= ['fg' => '0', 'beforeCheck' => '0', 'accepted' => '0', 'wo' => '0'];
-                $pool[$item]['wo'] = bcadd($pool[$item]['wo'], MpsItemInput::num($order->remaining), 6);
+                $pool[$item][MaterialCapacity::COMPANY] ??= ['fg' => '0', 'beforeCheck' => '0', 'accepted' => '0', 'wo' => '0'];
+                $pool[$item][MaterialCapacity::COMPANY]['wo'] = bcadd($pool[$item][MaterialCapacity::COMPANY]['wo'], MpsItemInput::num($order->remaining), 6);
             }
         }
         $byPart = [];
@@ -173,17 +180,15 @@ final class DailyRecoveryPlanner
             if ($floor !== null && bccomp($floor, $buffer, 6) > 0) {
                 $buffer = $floor;
             }
-            $remaining = bcadd($required, $buffer, 6);
+            // the part's plan buffer is its own; what safety stock adds above it is held in company stock only (D-5)
+            $planBuffer = MpsItemInput::num($p->buffer_qty ?? 0);
+            $floorExtra = bccomp($buffer, $planBuffer, 6) > 0 ? bcsub($buffer, $planBuffer, 6) : '0';
             $own = $boundWo[$key] ?? '0';
             $allocated = ['fg' => $protected, 'beforeCheck' => '0', 'accepted' => '0', 'wo' => $own];
-            $remaining = bcsub(bcsub($remaining, $protected, 6), $own, 6);
-            foreach (['fg', 'accepted', 'beforeCheck', 'wo'] as $stage) {
-                $available = $pool[$part->item_id][$stage] ?? '0';
-                $take = bccomp($remaining, '0', 6) <= 0 ? '0' : (bccomp($available, $remaining, 6) < 0 ? $available : $remaining);
-                $allocated[$stage] = bcadd($allocated[$stage], $take, 6);
-                $pool[$part->item_id][$stage] = bcsub($available, $take, 6);
-                $remaining = bcsub($remaining, $take, 6);
-            }
+            $remaining = bcsub(bcsub(bcadd($required, $planBuffer, 6), $protected, 6), $own, 6);
+            $customer = (string) $part->customer_id;
+            $pool[$part->item_id] ??= [];
+            $allocated = RecoveryAllocation::allocate($pool[$part->item_id], $customer, $remaining, $floorExtra, $allocated);
             $planQty = bcadd(bcadd(MpsItemInput::num($p->shift_1_qty ?? 0), MpsItemInput::num($p->shift_2_qty ?? 0), 0), MpsItemInput::num($p->shift_3_qty ?? 0), 0);
             $supply = array_reduce($allocated, static fn (string $total, string $qty): string => bcadd(MpsItemInput::num($total), MpsItemInput::num($qty), 6), '0');
             $calc = RecoveryCalculation::calculate($required, $supply, $buffer, (string) ($p->minimum_qty ?? 500),
@@ -192,15 +197,17 @@ final class DailyRecoveryPlanner
             $calc['planQty'] = $planQty;
             // Generate releases its WOs today, so it checks material against the BOM and conversions in force today (the snapshot)
             $materialDate = $safetyStock === null ? $target : $releaseDay;
-            $capacity = $this->materials->estimate($db, $plant, (string) $part->item_id, $materialDate, $materialPool);
+            $capacity = $this->materials->estimate($db, $plant, (string) $part->item_id, $materialDate, $materialPool, $customer);
             // a linked plan's shifts are history; in Generate mode its residual need is still made, so it reserves material too
             $reserve = $p?->work_order_id === null && bccomp($planQty, '0', 0) > 0 ? $planQty
                 : ($calc['proposedQty'] ?? ($safetyStock === null ? '0' : RecoveryCalculation::ceil($calc['netQty'])));
             if ($capacity !== null && ($p?->work_order_id === null || $safetyStock !== null) && ! isset($unmade[$key]) && bccomp($reserve, '0', 0) > 0) {
                 $reserve = bccomp($reserve, $capacity, 0) < 0 ? $reserve : $capacity;
-                $this->materials->consume($db, $plant, (string) $part->item_id, $reserve, $materialDate, $materialPool, []);
+                $this->materials->consume($db, $plant, (string) $part->item_id, $reserve, $materialDate, $materialPool, [], false, $customer);
             }
-            $stockRows = array_values(array_filter($stocks, static fn (stdClass $s): bool => $s->item_id === $part->item_id));
+            // the part sees its own and company stock, never another customer's
+            $stockRows = array_values(array_filter($stocks, static fn (stdClass $s): bool => $s->item_id === $part->item_id
+                && ($s->owner_customer_id === null || $s->owner_customer_id === $part->customer_id)));
             $before = $this->sum(array_filter($stockRows, static fn (stdClass $s): bool => $s->stock_status === 'PENDING_QC'), 'qty');
             $accepted = $this->sum(array_filter($stockRows, static fn (stdClass $s): bool => $s->stock_status === 'QC_RELEASED'), 'qty');
             $fg = $this->sum(array_filter($stockRows, static fn (stdClass $s): bool => $s->location_type === 'FG_WAREHOUSE' && $s->stock_status === 'UNRESTRICTED'), 'qty');
