@@ -40,6 +40,8 @@ export type FieldSpec = {
   hint?: string;
   /** Static options, or a live picker. */
   options?: Option[] | OptionSource;
+  /** Live pickers of long lists: typeahead looked up on the server (a page at a time) instead of loading every row. */
+  search?: boolean;
   /** Live pickers: filters from the record the drawer acts on (e.g. locations of the row's plant and kind). */
   optionFilter?: (row: unknown) => Record<string, string | string[]>;
   /** Live pickers: fixed choices listed before the loaded ones (e.g. "Company" as material owner). */

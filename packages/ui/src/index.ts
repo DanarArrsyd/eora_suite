@@ -4,6 +4,7 @@ export { EoraMark } from './components/brand';
 export { Button, IconButton, buttonVariants, type ButtonProps, type IconButtonProps } from './components/button';
 export { Input, Textarea } from './components/input';
 export { Select, type SelectOption, type SelectProps } from './components/select';
+export { Combobox, type ComboboxProps } from './components/combobox';
 export { Calendar, type CalendarProps, type DateRange } from './components/calendar';
 export { DatePicker, DateRangePicker } from './components/date-picker';
 export * from './lib/dates';

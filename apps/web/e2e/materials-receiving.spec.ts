@@ -215,3 +215,43 @@ test('customer material: select an owner independently from the sender and keep 
   await expect(page.getByText('RCV-P1-2026-0001 posted, lot RM-DPM-181126-0001')).toBeVisible();
   expect(calls[0]!.body).toMatchObject({ supplierId: SUPPLIER.id, ownerCustomerId: ID(40), qty: '100' });
 });
+
+test('receipt item: typing searches the server one page at a time instead of loading every item', async ({ page }) => {
+  await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['materials.receipt.view', 'materials.receipt.post', 'master.part.view'] } });
+  await mockApi(page, '/query/inventory.receipts?*', page1([]));
+  await mockApi(page, '/query/core.plants?*', page1([PLANT]));
+  await mockApi(page, '/query/core.suppliers?*', page1([SUPPLIER]));
+  await mockApi(page, '/query/core.customers?*', page1([]));
+  await mockApi(page, '/query/core.locations?*', page1([RACK]));
+  const SHEET = { ...COIL, id: ID(60), code: 'RM-SPC270D-0.6-300-420', name: 'SPC270D 0.6 x 300 x 420 (sheet)', baseUomCode: 'SHEET' };
+  const searches: URLSearchParams[] = [];
+  await page.route('**/api/v1/query/core.items?*', (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    searches.push(params);
+    const q = (params.get('q') ?? '').toUpperCase();
+    const rows = [COIL, SHEET].filter((r) => !q || r.code.startsWith(q) || r.name.toUpperCase().includes(q));
+    // the server knows 45 more items than this page holds when nothing is typed
+    return route.fulfill({ json: { data: rows, meta: { ...META, total: q ? rows.length : 47 } } });
+  });
+  await page.goto('/materials/rm-receipts?new=1');
+  const form = page.getByRole('form', { name: 'New receipt' });
+  await form.getByRole('combobox', { name: 'Item' }).click();
+  const search = page.getByRole('combobox', { name: 'Search Item' });
+  await expect(search).toBeFocused();
+  await expect(page.getByText('More match. Type more of the code or name to narrow the list.')).toBeVisible();
+  await search.fill('spc270');
+  await expect(page.getByRole('option')).toHaveCount(1);
+  const last = searches.at(-1)!;
+  expect(last.get('q')).toBe('spc270');
+  expect(last.get('page[size]')).toBe('20');
+  expect(last.getAll('filter[itemType][]')).toEqual(['RAW', 'CONSUMABLE']);
+  // keyboard: Enter chooses the highlighted row and the trigger shows it
+  await search.press('Enter');
+  await expect(form.getByRole('combobox', { name: 'Item' })).toContainText('RM-SPC270D-0.6-300-420 · SPC270D 0.6 x 300 x 420 (sheet) (SHEET)');
+  await form.getByRole('combobox', { name: 'Item' }).click();
+  await page.getByRole('combobox', { name: 'Search Item' }).fill('nothing-like-this');
+  await expect(page.getByText('Nothing matches "nothing-like-this".')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(form.getByRole('combobox', { name: 'Item' })).toBeFocused();
+  await axe(page);
+});

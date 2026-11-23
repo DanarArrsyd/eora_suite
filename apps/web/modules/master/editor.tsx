@@ -9,6 +9,7 @@ import {
   FormGrid,
   FormGridWide,
   FormPage,
+  FormSearchField,
   FormSelectField,
   FormTextField,
   STATUS_CATALOGUE,
@@ -17,7 +18,7 @@ import type { Option } from '@eora/features/data';
 import { Button, Drawer, DrawerContent, InlineAlert, Modal, ModalBody, ModalContent, type IsoDate } from '@eora/ui';
 import { formFailure } from '@/modules/admin/errors';
 import { PHYSICAL_LOCATION_TYPES } from './resources';
-import { queryOptions } from './source';
+import { queryOptions, searchOptions } from './source';
 import { PartialSave, type Confirmation, type FieldSpec, type FormValues, type MasterResource, type MasterRow, type OptionSource } from './types';
 import { formatDay, formatQty } from '@/components/format';
 import { useUnsavedGuard } from './unsaved-guard';
@@ -170,7 +171,9 @@ function FieldCell({ field, today, row }: { field: FieldSpec; today: string; row
 }
 
 function FieldControl({ field, today, row }: { field: FieldSpec; today: string; row: unknown }) {
-  const picker = usePicker(typeof field.options === 'string' ? field.options : undefined, row && field.optionFilter ? field.optionFilter(row) : undefined);
+  const extra = row && field.optionFilter ? field.optionFilter(row) : undefined;
+  // a typeahead picker looks rows up as the user types: it never loads the whole list
+  const picker = usePicker(typeof field.options === 'string' && !field.search ? field.options : undefined, extra);
   if (field.kind === 'date') {
     return (
       <FormDateField
@@ -180,6 +183,21 @@ function FieldControl({ field, today, row }: { field: FieldSpec; today: string; 
         required={field.required}
         min={(field.minDate ?? (field.notBeforeToday ? today : undefined)) as IsoDate | undefined}
         today={today as IsoDate}
+      />
+    );
+  }
+  if (field.kind === 'select' && field.search && typeof field.options === 'string') {
+    const p = PICKERS[field.options];
+    const filters = { ...(p.activeOnly ? { status: 'ACTIVE' } : {}), ...(p.filters ?? {}), ...(extra ?? {}) };
+    return (
+      <FormSearchField
+        name={field.key}
+        label={field.label}
+        hint={field.hint}
+        required={field.required}
+        queryKey={['master', 'picker', field.options, filters]}
+        search={(query, signal) => searchOptions(p.resource, p.label, filters, query, signal, p.sortBy)}
+        labelOf={async (id, signal) => (await searchOptions(p.resource, p.label, { id }, '', signal, p.sortBy, 1)).options[0]?.label}
       />
     );
   }

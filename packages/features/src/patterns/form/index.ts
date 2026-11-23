@@ -3,6 +3,8 @@ export {
   FormTextField,
   FormTextareaField,
   FormSelectField,
+  FormSearchField,
+  type SearchPage,
   FormDateField,
   FormQuantityField,
   FormCheckboxListField,
