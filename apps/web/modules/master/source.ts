@@ -61,6 +61,26 @@ export async function queryAll<T = Record<string, unknown>>(
   return rows;
 }
 
+/**
+ * One page of a typeahead picker: rows matching `search` (the resource's own search: code prefix, name), sorted by
+ * `sortBy`, at most `size`; `more` when further rows match. Lists stay fast however long the master list grows.
+ */
+export async function searchOptions(
+  resource: string,
+  label: (row: Record<string, unknown>) => string,
+  filters: Record<string, string | string[]>,
+  search: string,
+  signal?: AbortSignal,
+  sortBy = 'code',
+  size = 20,
+): Promise<{ options: Option[]; more: boolean }> {
+  const page = await fetchPage(resource, queryString({ filters, search, sort: [{ id: sortBy, desc: false }], page: 1, pageSize: size }), signal);
+  return {
+    options: page.data.map((r) => ({ value: String((r as { id: unknown }).id), label: label(r as Record<string, unknown>) })),
+    more: page.meta.total > page.data.length,
+  };
+}
+
 /** Options for a picker from a query resource: every visible row, `value` = its id. */
 export async function queryOptions(
   resource: string,

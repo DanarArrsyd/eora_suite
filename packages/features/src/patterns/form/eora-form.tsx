@@ -14,7 +14,8 @@ import {
 } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
-import { Button, Checkbox, DatePicker, Field, InlineAlert, Input, Select, Textarea, cn, type IsoDate } from '@eora/ui';
+import { Button, Checkbox, Combobox, DatePicker, Field, InlineAlert, Input, Select, Textarea, cn, type IsoDate, type SelectOption } from '@eora/ui';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 export type SubmitContext = {
   /** Stable for this form instance until a submission succeeds — the server deduplicates retries (CLAUDE.md: idempotent writes). */
@@ -210,6 +211,87 @@ export function FormSelectField({
           options={options}
           placeholder={placeholder ?? 'Select…'}
           emptyLabel={required ? undefined : (placeholder ?? 'None')}
+        />
+      )}
+    </Field>
+  );
+}
+
+/** One page of search results for a typeahead field; `more` when further rows match. */
+export type SearchPage = { options: SelectOption[]; more: boolean };
+
+/**
+ * Single choice from a long list, looked up on the server as the user types (EoraCombobox): the search waits until typing
+ * pauses (250 ms), asks for one page only, and keeps each answer for a while, so a long master list never loads at once.
+ * `search` answers a query; `label` names the chosen value when it is not among the results (e.g. an edit form).
+ */
+export function FormSearchField({
+  name,
+  label,
+  hint,
+  required,
+  className,
+  placeholder,
+  queryKey,
+  search,
+  labelOf,
+}: BaseFieldProps & {
+  placeholder?: string;
+  /** Identifies the list in the cache, e.g. `['picker', 'receivedItems']`. */
+  queryKey: readonly unknown[];
+  search: (query: string, signal: AbortSignal) => Promise<SearchPage>;
+  labelOf: (value: string, signal: AbortSignal) => Promise<string | undefined>;
+}) {
+  const { field } = useController({ name });
+  const error = useFieldError(name);
+  const [query, setQuery] = React.useState('');
+  const [debounced, setDebounced] = React.useState('');
+  React.useEffect(() => {
+    const t = window.setTimeout(() => setDebounced(query.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [query]);
+  const results = useQuery({
+    queryKey: [...queryKey, 'search', debounced],
+    queryFn: ({ signal }) => search(debounced, signal),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+  const value = (field.value as string | undefined) ?? '';
+  const [chosen, setChosen] = React.useState<{ value: string; label: string } | null>(null);
+  const known = chosen?.value === value ? chosen.label : results.data?.options.find((o) => o.value === value)?.label;
+  const named = useQuery({
+    queryKey: [...queryKey, 'label', value],
+    queryFn: ({ signal }) => labelOf(value, signal),
+    enabled: value !== '' && known === undefined,
+    staleTime: 60_000,
+  });
+  return (
+    <Field label={label} hint={hint} error={error} required={required} className={className}>
+      {(c) => (
+        <Combobox
+          {...c}
+          aria-label={label}
+          ref={field.ref}
+          name={field.name}
+          value={value}
+          selectedLabel={known ?? named.data ?? undefined}
+          onValueChange={(v) => {
+            const option = results.data?.options.find((o) => o.value === v);
+            setChosen(option ? { value: v, label: option.label } : null);
+            field.onChange(v);
+          }}
+          onBlur={field.onBlur}
+          query={query}
+          onQueryChange={setQuery}
+          // a lookup that failed is asked again when the list opens again, as its message says
+          onOpen={() => (results.isError ? void results.refetch() : undefined)}
+          options={results.data?.options ?? []}
+          loading={results.isFetching || query.trim() !== debounced}
+          more={results.data?.more}
+          error={results.isError ? 'The list could not be loaded. Close and open it again to retry.' : undefined}
+          placeholder={placeholder ?? 'Select…'}
+          searchPlaceholder="Type a code or name…"
+          emptyLabel={required ? undefined : 'None'}
         />
       )}
     </Field>
