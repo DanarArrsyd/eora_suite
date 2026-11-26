@@ -255,3 +255,39 @@ test('receipt item: typing searches the server one page at a time instead of loa
   await expect(form.getByRole('combobox', { name: 'Item' })).toBeFocused();
   await axe(page);
 });
+
+test('receipt item: rows of an earlier search cannot be chosen, and reopening retries a failed lookup', async ({ page }) => {
+  await mockApi(page, '/auth/me', { status: 200, json: { ...SESSION, permissions: ['materials.receipt.view', 'materials.receipt.post', 'master.part.view'] } });
+  await mockApi(page, '/query/inventory.receipts?*', page1([]));
+  await mockApi(page, '/query/core.plants?*', page1([PLANT]));
+  await mockApi(page, '/query/core.suppliers?*', page1([SUPPLIER]));
+  await mockApi(page, '/query/core.customers?*', page1([]));
+  await mockApi(page, '/query/core.locations?*', page1([RACK]));
+  const SHEET = { ...COIL, id: ID(61), code: 'SHEET-SPCC-16', name: 'SPCC sheet 1.6 mm', baseUomCode: 'SHEET' };
+  let down = true;
+  await page.route('**/api/v1/query/core.items?*', async (route) => {
+    if (down) return route.fulfill({ status: 503, json: { title: 'Service unavailable', status: 503 } });
+    const q = (new URL(route.request().url()).searchParams.get('q') ?? '').toUpperCase();
+    // the search for SHEET answers slowly: the earlier rows are still on screen meanwhile
+    if (q) await new Promise((resolve) => setTimeout(resolve, 800));
+    const rows = [COIL, SHEET].filter((r) => !q || r.code.startsWith(q));
+    return route.fulfill({ json: { data: rows, meta: { ...META, total: rows.length } } });
+  });
+  await page.goto('/materials/rm-receipts?new=1');
+  const form = page.getByRole('form', { name: 'New receipt' });
+  const item = form.getByRole('combobox', { name: 'Item' });
+  await item.click();
+  await expect(page.getByText('The list could not be loaded. Close and open it again to retry.')).toBeVisible({ timeout: 15_000 });
+  down = false;
+  await page.keyboard.press('Escape');
+  await item.click();
+  await expect(page.getByRole('option')).toHaveCount(2);
+  // typing SHEET while COIL is still the highlighted row of the earlier list: Enter must not pick COIL
+  const search = page.getByRole('combobox', { name: 'Search Item' });
+  await search.fill('SHEET');
+  await search.press('Enter');
+  await expect(item).toContainText('Select…');
+  await expect(page.getByRole('option')).toHaveCount(1);
+  await search.press('Enter');
+  await expect(item).toContainText('SHEET-SPCC-16 · SPCC sheet 1.6 mm (SHEET)');
+});

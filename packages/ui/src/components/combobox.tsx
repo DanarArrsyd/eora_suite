@@ -15,8 +15,10 @@ export type ComboboxProps = {
   query: string;
   onQueryChange: (query: string) => void;
   options: readonly SelectOption[];
-  /** The results for the current query are on their way. */
+  /** The results for the current query are on their way: the rows shown belong to an earlier search and cannot be chosen. */
   loading?: boolean;
+  /** Called each time the list opens (e.g. to retry a lookup that failed). */
+  onOpen?: () => void;
   /** Told under the results when the lookup failed. */
   error?: string;
   /** More rows match than are shown: ask for a more precise search. */
@@ -53,6 +55,7 @@ export function Combobox({
   onQueryChange,
   options,
   loading,
+  onOpen,
   error,
   more,
   placeholder = 'Select…',
@@ -85,6 +88,8 @@ export function Combobox({
   }, [active]);
 
   const choose = (v: string) => {
+    // rows of an earlier search stay on screen while the new one runs; choosing one could pick the wrong record
+    if (loading) return;
     onValueChange(v === NONE ? '' : v);
     setOpen(false);
   };
@@ -107,8 +112,10 @@ export function Combobox({
       onOpenChange={(next) => {
         setOpen(next);
         // each opening starts from the first results, not from an earlier search
-        if (next) onQueryChange('');
-        else onBlur?.();
+        if (next) {
+          onQueryChange('');
+          onOpen?.();
+        } else onBlur?.();
       }}
     >
       <P.Trigger
@@ -173,6 +180,7 @@ export function Combobox({
                   aria-selected={o.value === (value || NONE)}
                   aria-disabled={disabledItem || undefined}
                   data-active={i === active}
+                  data-stale={loading || undefined}
                   onMouseMove={() => setActive(i)}
                   // keep focus in the search box: choosing happens on click, not on the focus change
                   onMouseDown={(e) => e.preventDefault()}
@@ -180,7 +188,7 @@ export function Combobox({
                   // keys reach the list through the search box (aria-activedescendant); this covers assistive tech that focuses an option
                   onKeyDown={(e) => (e.key === 'Enter' && !disabledItem ? choose(o.value) : undefined)}
                   className={cn(
-                    'relative flex min-h-9 cursor-pointer items-center rounded-md py-1.5 pr-3 pl-8 text-[13.5px] text-ink select-none aria-selected:font-semibold data-[active=true]:bg-hover max-md:min-h-11',
+                    'relative flex min-h-9 cursor-pointer items-center rounded-md py-1.5 pr-3 pl-8 text-[13.5px] text-ink select-none aria-selected:font-semibold data-[active=true]:bg-hover data-[stale=true]:cursor-wait data-[stale=true]:opacity-60 max-md:min-h-11',
                     o.value === NONE && 'text-ink-2',
                     disabledItem && 'cursor-not-allowed text-ink-2',
                   )}

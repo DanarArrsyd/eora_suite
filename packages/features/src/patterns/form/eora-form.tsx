@@ -283,6 +283,8 @@ export function FormSearchField({
           onBlur={field.onBlur}
           query={query}
           onQueryChange={setQuery}
+          // a lookup that failed is asked again when the list opens again, as its message says
+          onOpen={() => (results.isError ? void results.refetch() : undefined)}
           options={results.data?.options ?? []}
           loading={results.isFetching || query.trim() !== debounced}
           more={results.data?.more}
