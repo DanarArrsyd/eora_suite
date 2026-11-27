@@ -30,9 +30,11 @@ it('maps the master-data permissions to the templates (M2-D1); approve is sensit
     // D-128: only the Supervisor writes master data; CSA approves
     expect($by['SUP'])->toContain('master.org.create', 'master.part.create', 'master.routing.create', 'master.conversion.create')
         ->and($by['CSA'])->toContain('master.routing.approve', 'master.conversion.approve')->not->toContain('master.org.create', 'master.part.create', 'master.routing.create')
-        ->and($by['PPC'])->toBe(['master.conversion.view', 'master.org.view', 'master.part.view', 'master.routing.view'])
+        // D-142 C-4: calendars are the exception — CSA and PPC manage them, the other roles see them
+        ->and($by['CSA'])->toContain('master.calendar.create')
+        ->and($by['PPC'])->toBe(['master.calendar.create', 'master.calendar.view', 'master.conversion.view', 'master.org.view', 'master.part.view', 'master.routing.view'])
         ->and($by['QCS'])->toContain('master.conversion.approve')->not->toContain('master.conversion.create')
-        ->and($by['AUD'])->toBe(['master.conversion.view', 'master.org.view', 'master.part.view', 'master.routing.view'])
+        ->and($by['AUD'])->toBe(['master.calendar.view', 'master.conversion.view', 'master.org.view', 'master.part.view', 'master.routing.view'])
         ->and($by)->not->toHaveKeys(['TENANT_ADMIN', 'OPR', 'MAD', 'APR']);
 
     $sensitive = array_column(DB::connection('pgsql')->select("select code from permissions where code like 'master.%' and sensitive order by code"), 'code');
