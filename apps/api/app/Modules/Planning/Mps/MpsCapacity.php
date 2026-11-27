@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Planning\Mps;
 
+use App\Platform\Calendar\ShiftCalendar;
 use App\Platform\Database\EoraPostgresConnection;
 use DateTimeImmutable;
 
@@ -12,14 +13,16 @@ use DateTimeImmutable;
  * reschedule. Load of a planned order = per operation of the item's primary routing version in force on its start date:
  * setup + planned good quantity ÷ standard good output per running hour, or for a legacy operation,
  * setup + standard cycle × cycles (PER_PIECE: quantity; PER_STROKE / PER_BATCH: quantity ÷ parts per cycle, rounded up),
- * in the week of its start. Available = hours per shift (work center) × the shifts of each working day of the week (from
- * the plan date), each day from the shift calendar version in force on it. A working day without one, or no hours per
- * shift: NOT_CONFIGURED, no percentage.
+ * in the week of its start. Available = Σ over the working days of the week (from the plan date) of that day's shifts
+ * (shift calendar version in force on it, weekday times), each shift's work hours capped by the work center's hours per
+ * shift (D-142 C-3). A working day without a shift calendar: NOT_CONFIGURED, no percentage.
  * Warnings: NO_ACTIVE_MACHINE (work center without an active machine), DIE_NOT_AVAILABLE (an operation needing tooling
  * without an active die).
  */
 final class MpsCapacity
 {
+    public function __construct(private readonly ShiftCalendar $shifts) {}
+
     /** @return array<string, array{itemCode: string, pairedItemCode: string, qtyPerSide: string, sheets: string, startDate: string, workCenterCode: string, runHours: string, setupMinutes: string}> */
     public static function pairedWorkloads(EoraPostgresConnection $db, string $run): array
     {
@@ -48,16 +51,6 @@ final class MpsCapacity
      */
     public function compute(EoraPostgresConnection $db, string $plant, string $today, string $horizonStart, WorkingDays $days, array $orders): array
     {
-        // shifts per day from the shift calendar version in force on that day (plant override, else tenant default)
-        $versions = $db->select(
-            'select c.id, c.plant_id is not null as override, c.effective_from::text as since, (select count(*) from shifts s where s.shift_calendar_id = c.id) as shifts
-               from shift_calendars c where (c.plant_id = ? or c.plant_id is null) order by c.effective_from desc',
-            [$plant],
-        );
-        $shiftsOf = [];
-        foreach ($versions as $v) {
-            $shiftsOf[(string) $v->id] = (int) $v->shifts;
-        }
         $load = [];
         $warnings = [];
         $noRouting = [];
@@ -112,24 +105,23 @@ final class MpsCapacity
             if (! (bool) $centre->machine) {
                 $warnings[$key]['NO_ACTIVE_MACHINE'] = true;
             }
-            // available = hours per shift × Σ over the week's working days (from the plan date) of that day's shifts;
-            // a working day without a shift calendar in force (or no hours per shift) leaves the week not configured
-            $available = null;
-            if ($centre->h !== null) {
-                $shiftDays = 0;
-                for ($d = new DateTimeImmutable(max($week, $today)), $end = (new DateTimeImmutable($week))->modify('+6 days'); $d <= $end; $d = $d->modify('+1 day')) {
-                    $day = $d->format('Y-m-d');
-                    if (! $days->isWorking($day)) {
-                        continue;
-                    }
-                    $calendar = MpsInputs::inForce($versions, $day);
-                    if ($calendar === null || $shiftsOf[$calendar] === 0) {
-                        $shiftDays = null;
-                        break;
-                    }
-                    $shiftDays += $shiftsOf[$calendar];
+            // available = Σ over the week's working days (from the plan date) of that day's shifts, each shift its work hours
+            // capped by the work center's hours per shift (D-142 C-3); a working day without a shift calendar in force leaves
+            // the week not configured, while a day the calendar in force gives no shift (e.g. a 5-day pattern's Saturday) adds 0
+            $available = '0';
+            for ($d = new DateTimeImmutable(max($week, $today)), $end = (new DateTimeImmutable($week))->modify('+6 days'); $d <= $end; $d = $d->modify('+1 day')) {
+                $day = $d->format('Y-m-d');
+                if (! $days->isWorking($day)) {
+                    continue;
                 }
-                $available = $shiftDays === null ? null : bcmul(MpsItemInput::num($centre->h), (string) $shiftDays, 6);
+                $shifts = $this->shifts->shiftsOn($db, $plant, $day);
+                if ($shifts === [] && $this->shifts->versionOn($db, $plant, $day) === null) {
+                    $available = null;
+                    break;
+                }
+                foreach ($shifts as $shift) {
+                    $available = bcadd($available, ShiftCalendar::capacity($shift['workHours'], $centre->h === null ? null : MpsItemInput::num($centre->h)) ?? '0', 6);
+                }
             }
             $rows[] = [
                 'workCenterId' => $wc, 'weekStart' => $week, 'load' => $hours, 'available' => $available,

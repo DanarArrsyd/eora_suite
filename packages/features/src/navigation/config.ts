@@ -763,6 +763,16 @@ export const NAV_MODULES: readonly NavModule[] = [
             permission: 'master.org.view',
             phase: 'later',
           },
+          {
+            id: 'calendars',
+            live: true,
+            menu: ['master.calendar.create', 'master.calendar.view'],
+            label: 'Calendars',
+            icon: CalendarClock,
+            release: 'R1',
+            permission: 'master.calendar.view',
+            phase: 'later',
+          },
         ],
       },
       {

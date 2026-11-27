@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Core\Http\CalendarController;
 use App\Modules\Core\Http\OrgController;
 use App\Modules\Core\Http\PartController;
 use App\Modules\Core\Http\PartnerController;
@@ -98,6 +99,15 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
         Route::patch('plants/{plant}', [OrgController::class, 'updatePlant'])->name('plants.update');
         Route::post('warehouses', [OrgController::class, 'storeWarehouse'])->name('warehouses.store');
         Route::patch('warehouses/{warehouse}', [OrgController::class, 'updateWarehouse'])->name('warehouses.update');
+        // Master Data → Calendars (doc 40, D-142): business calendar versions, exception days, shift calendar versions
+        Route::get('plants/{plant}/calendars', [CalendarController::class, 'show'])->name('calendars.show');
+        Route::post('plants/{plant}/business-calendars', [CalendarController::class, 'storeBusiness'])->name('business-calendars.store');
+        Route::delete('business-calendars/{calendar}', [CalendarController::class, 'destroyBusiness'])->name('business-calendars.destroy');
+        Route::post('plants/{plant}/calendar-exceptions', [CalendarController::class, 'storeException'])->name('calendar-exceptions.store');
+        Route::patch('calendar-exceptions/{exception}', [CalendarController::class, 'updateException'])->name('calendar-exceptions.update');
+        Route::delete('calendar-exceptions/{exception}', [CalendarController::class, 'destroyException'])->name('calendar-exceptions.destroy');
+        Route::post('plants/{plant}/shift-calendars', [CalendarController::class, 'storeShifts'])->name('shift-calendars.store');
+        Route::delete('shift-calendars/{calendar}', [CalendarController::class, 'destroyShifts'])->name('shift-calendars.destroy');
         Route::post('locations', [OrgController::class, 'storeLocation'])->name('locations.store');
         Route::patch('locations/{location}', [OrgController::class, 'updateLocation'])->name('locations.update');
         Route::post('work-centers', [ResourceController::class, 'storeWorkCenter'])->name('work-centers.store');

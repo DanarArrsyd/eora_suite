@@ -2,6 +2,7 @@
 export const MASTER_IMPLEMENTED = [
   'plants',
   'work-centers',
+  'calendars',
   'items',
   'units',
   'customers',

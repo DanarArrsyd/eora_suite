@@ -86,6 +86,7 @@ Penyetuju utama dan admin perusahaan: menyetujui pekerjaan sensitif dan mengelol
 2. PPIC → Work Orders → WO **Waiting for release** → **Release** (BOM dan routing disalin) atau **Return**.
 3. Inventory → Adjustments / Reversals / Period Close → setujui permintaan yang menunggu.
 4. Master Data → Routings / BOMs / Conversion Data → setujui versi yang disubmit Supervisor.
+5. Master Data → **Calendars** → atur jam shift dan hari kerja plant (D-142, lihat panduan PPC bagian *Calendars*). Ini pengecualian dari aturan di bawah: CSA dan PPC sama-sama boleh mengubah kalender.
 
 Master data diubah oleh **Supervisor** (D-128); CSA menyetujui, tidak menginput master.
 

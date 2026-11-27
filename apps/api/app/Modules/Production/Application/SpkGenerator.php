@@ -9,6 +9,7 @@ use App\Modules\Planning\Recovery\DailyRecoveryPlanner;
 use App\Modules\Planning\Recovery\RecoveryCalculation;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Calendar\BusinessCalendar;
+use App\Platform\Calendar\ShiftCalendar;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
 use DateTimeImmutable;
@@ -40,6 +41,7 @@ final class SpkGenerator
         private readonly WorkOrderController $workOrders,
         private readonly AuditRecorder $audit,
         private readonly BusinessCalendar $calendar,
+        private readonly ShiftCalendar $shifts,
     ) {}
 
     /** @return array<string, list<array<string, mixed>>> spks, workOrders, overtime, materialShort, skipped */
@@ -49,13 +51,14 @@ final class SpkGenerator
         $this->createWorkOrders($db, $plant, $date, $out);
 
         $sheets = [];
-        $calendar = $db->selectOne('select id from shift_calendars where (plant_id = ? or plant_id is null) and effective_from <= ?::date order by (plant_id is null), effective_from desc limit 1', [$plant, $date]);
-        /** @var list<array{id: ?string, code: ?string}> $shifts */
-        $shifts = $calendar === null ? [] : array_values(array_map(static fn (stdClass $s) => ['id' => (string) $s->id, 'code' => (string) $s->code],
-            // in the order they run within the production day: from the business calendar's day start (a shift before it runs last)
-            $db->select('select id, code from shifts where shift_calendar_id = ? order by (starts_at < ?::time), starts_at, code', [$calendar->id, $this->dayStart($db, $plant, $date)])));
+        // the shifts of the day in the order they run (D-142: weekday times), each with its work hours
+        /** @var list<array{id: ?string, code: ?string, hours: ?string}> $shifts */
+        $shifts = array_map(static fn (array $s) => ['id' => $s['id'], 'code' => $s['code'], 'hours' => $s['workHours']], $this->shifts->shiftsOn($db, $plant, $date));
         if ($shifts === []) {
-            $shifts = [['id' => null, 'code' => null]];
+            if ($this->shifts->versionOn($db, $plant, $date) !== null) {
+                return $out; // a day without shifts in the calendar in force: nothing is planned (the controller refuses it first)
+            }
+            $shifts = [['id' => null, 'code' => null, 'hours' => null]]; // no shift calendar at all: one shift without times
         }
         $today = $this->calendar->resolve($db, $plant, new DateTimeImmutable)->productionDate;
         $orders = $db->select(
@@ -253,18 +256,6 @@ final class SpkGenerator
         return true;
     }
 
-    /** The production day's start at the plant on that date (business calendar: plant before tenant, latest version). */
-    private function dayStart(EoraPostgresConnection $db, string $plant, string $date): string
-    {
-        $row = $db->selectOne(
-            'select production_day_starts_at::text as t from business_calendars where (plant_id = ? or plant_id is null) and effective_from <= ?::date
-              order by (plant_id is null), effective_from desc limit 1',
-            [$plant, $date],
-        );
-
-        return $row instanceof stdClass ? (string) $row->t : '00:00';
-    }
-
     /**
      * Pairs per sheet of the item's paired primary routing in force today at the plant (the one its WO release snapshots), or null.
      *
@@ -417,10 +408,11 @@ final class SpkGenerator
             for ($k = $after; $k < $count && bccomp($left, '0', 6) > 0; $k++) {
                 [$minutes, $hours] = $overhead((string) $machine->id, $k);
                 $key = $machine->id.'|'.$k;
-                if ($sheet['capacity'] === null) {
+                $cap = self::cap($sheet, $k);
+                if ($cap === null) {
                     $take = $left;
                 } else {
-                    $free = bcsub(bcsub($sheet['capacity'], SpkHours::num($sheet['load'][$key] ?? '0'), 6), $hours, 6);
+                    $free = bcsub(bcsub($cap, SpkHours::num($sheet['load'][$key] ?? '0'), 6), $hours, 6);
                     $take = bccomp($free, '0', 6) > 0 ? self::floor(bcdiv(bcmul($free, SpkHours::num($sph), 6), $factor, 6)) : '0';
                     $take = bccomp($take, $left, 6) > 0 ? $left : $take;
                 }
@@ -452,7 +444,7 @@ final class SpkGenerator
             $this->addLine($sheet, $wo, $op, (string) $machine->id, $k, SpkHours::plain($left), $priority, $minutes, $sph, $hours);
             $placed[$k] = bcadd(SpkHours::num($placed[$k] ?? '0'), $left, 6);
             $first = $first === null ? $k : min($first, $k); // the earliest shift used on any machine
-            $capacity = SpkHours::num($sheet['capacity'] ?? '0');
+            $capacity = SpkHours::num(self::cap($sheet, $k) ?? '0');
             $over = static fn (string $load): string => bccomp(SpkHours::num($load), $capacity, 6) > 0 ? bcsub(SpkHours::num($load), $capacity, 6) : '0';
             $out['overtime'][] = ['machineId' => (string) $machine->id, 'machineCode' => (string) $machine->code, 'workCenterCode' => $sheet['code'],
                 'shiftCode' => $sheet['shifts'][$k]['code'], 'hours' => SpkHours::round3(bcsub($over(SpkHours::num($sheet['load'][$key])), $over($before), 6)),
@@ -564,12 +556,13 @@ final class SpkGenerator
         // the limit holds for the machine's whole day as its draft now stands (lines already there included), not only what was added now
         $perMachine = [];
         foreach ($sheets as $sheet) {
-            if ($sheet['capacity'] === null) {
-                continue;
-            }
             foreach ($sheet['load'] as $key => $load) {
-                $machine = explode('|', (string) $key)[0];
-                $over = bcsub(SpkHours::num($load), SpkHours::num($sheet['capacity']), 6);
+                [$machine, $shift] = explode('|', (string) $key);
+                $cap = self::cap($sheet, (int) $shift);
+                if ($cap === null) {
+                    continue;
+                }
+                $over = bcsub(SpkHours::num($load), $cap, 6);
                 if (bccomp($over, '0', 6) > 0) {
                     $perMachine[$machine] = bcadd(SpkHours::num($perMachine[$machine] ?? '0'), $over, 6);
                 }
@@ -581,6 +574,20 @@ final class SpkGenerator
             $out['overtime'][$i]['overLimit'] = $limit !== null && bccomp($day, SpkHours::num($limit), 6) > 0;
             $out['overtime'][$i]['limitHours'] = $limit;
         }
+    }
+
+    /**
+     * Hours a machine of the sheet's line may run in shift $k (D-142 C-3): the shift's work hours that day capped by the
+     * line's hours per shift; null when neither is known.
+     *
+     * @param  array<string, mixed>  $sheet
+     * @return numeric-string|null
+     */
+    private static function cap(array $sheet, int $k): ?string
+    {
+        $shift = $sheet['shifts'][$k]['hours'] ?? null;
+
+        return ShiftCalendar::capacity($shift === null ? null : SpkHours::num((string) $shift), $sheet['capacity'] === null ? null : SpkHours::num((string) $sheet['capacity']));
     }
 
     /**

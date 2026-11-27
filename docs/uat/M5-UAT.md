@@ -199,3 +199,15 @@ Login sebagai planner (PPC) di plant uji tanpa stok milik customer. Siapkan part
 3. Klik **Edit** pada satu baris. Harapan: halaman `?edit=<id>` dengan data record (kode, plant, dll.) di samping form; reload halaman membuka form yang sama.
 4. Record yang hanya bisa dilihat (Movement Ledger, lokasi virtual, atau tanpa hak ubah) tetap terbuka di **drawer detail**; aksi baris seperti **Release** / **Split** / **Receive** terbuka sebagai dialog.
 5. **PPIC → SPK Line → Generate SPK** membuka halaman sendiri; hasilnya tampil sebagai tabel (Draft SPKs, Work orders created and released, Proposed overtime, Material short, Not planned).
+
+## Calendars — D-142 (doc 40)
+
+Login sebagai PPC (atau CSA) di plant uji.
+
+1. **Master Data → Calendars → New shift version**: kode `STD`, first day hari ini (versi pertama) atau besok, S1 06:00–14:00 break 60 Senin–Kamis, Jumat 06:00–14:30 break 90, Sabtu 07:00–12:15 break 15; S2 14:00–22:00 / 14:30–22:30 / 13:00–18:15. Harapan: tabel minggu menampilkan 14 h Senin–Jumat, 10 h Sabtu, Minggu kosong; versi berstatus *In force* atau *Starts later*.
+2. Isi **hours per shift** 7 di work center line. **PPIC → Master Production Schedule**: kapasitas line 80 h per minggu penuh (Sabtu 2 × 5 h, bukan 2 × 7 h).
+3. **Working days → New version** mulai besok, production day starts 06:00. Harapan: baris baru *Starts later*; versi lama tetap *In force*.
+4. **Add exception day** Sabtu depan, *Non-working day*. Harapan: muncul di tabel; MPS minggu itu kehilangan kapasitas Sabtu. **Edit** jenisnya lalu hapus lagi.
+5. Hapus versi yang *Starts later* lewat menu baris → **Remove**. Harapan: dialog menyebut hari pengecualiannya ikut terhapus; versi *In force* tidak punya menu hapus.
+6. **SPK Line → New SPK**: pilihan shift hanya shift yang jalan di tanggal itu (Sabtu tanpa S3 dsb.); beban mesin per shift memakai jam kerja shift hari itu.
+7. Login sebagai role tanpa `master.calendar.create` (mis. PRL / INV / AUD): halaman Calendars hanya bisa dilihat, tanpa tombol buat / ubah / hapus. Cek juga di ponsel (390 px): tabel minggu bisa digeser di dalam kartu.
