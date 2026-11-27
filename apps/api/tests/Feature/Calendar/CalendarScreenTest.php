@@ -78,6 +78,11 @@ it('writes a shift calendar with times per weekday and breaks; the day\'s shifts
     $late = $resolve("{$friday}T23:00:00+07:00");
     expect([$s2->shiftCode, $s2->productionDate])->toBe(['S2', $saturday])
         ->and([$late->shiftCode, $late->productionDate])->toBe([null, $friday]);
+
+    // Generate SPK on a day the calendar in force gives no shift (Sunday) plans nothing: refused before any WO is made
+    spa($this)->postJson('/api/v1/production/spk/generate', ['plantId' => $this->plant, 'productionDate' => $sunday])
+        ->assertStatus(422)->assertJsonValidationErrors(['productionDate']);
+    expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => (int) $db->selectOne('select count(*) as n from work_orders')->n))->toBe(0);
 })->group('integration', 'calendar');
 
 it('caps a shift by the work center hours per shift (C-3)', function () {

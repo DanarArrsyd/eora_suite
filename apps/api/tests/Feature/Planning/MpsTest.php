@@ -47,15 +47,20 @@ it('calculates a draft: FG on hand used once, firm and net forecast netted, lot-
     spa($this)->postJson('/api/v1/planning/mps-versions', ['plantId' => $f['plant']])->assertStatus(409)->assertJsonPath('code', 'INVALID_STATE_TRANSITION');
 
     // with a shift calendar the load is a percentage; above 100 % it warns. A shift counts its work hours capped by the
-    // work center's hours per shift (D-142 C-3): PRS-01 0.1 h × 6 days, WLD-01 (no hours per shift) the shift's 8 h × 6 days
+    // work center's hours per shift (D-142 C-3). The shift runs Monday to Friday only: Saturday is still a working day but
+    // the calendar gives it no shift, so it adds 0 h (not "not configured"): PRS-01 0.1 h × 5 days, WLD-01 (no hours per
+    // shift) the shift's 8 h × 5 days
     AccessFixtures::run($this->t, function (EoraPostgresConnection $db) use ($f) {
         $cal = (string) $db->selectOne("insert into shift_calendars (tenant_id, plant_id, code, name, effective_from) values (?, null, 'STD', 'Standard', '2026-01-01') returning id", [$this->t['tenant']])->id;
-        $db->insert("insert into shifts (tenant_id, shift_calendar_id, code, name, starts_at, ends_at) values (?, ?, 'S1', 'Day', '07:00', '15:00')", [$this->t['tenant'], $cal]);
+        $shift = (string) $db->selectOne("insert into shifts (tenant_id, shift_calendar_id, code, name, starts_at, ends_at) values (?, ?, 'S1', 'Day', '07:00', '15:00') returning id", [$this->t['tenant'], $cal])->id;
+        foreach ([1, 2, 3, 4, 5] as $weekday) {
+            $db->insert("insert into shift_weekday_times (tenant_id, shift_id, iso_weekday, starts_at, ends_at, break_minutes) values (?, ?, ?, '07:00', '15:00', 0)", [$this->t['tenant'], $shift, $weekday]);
+        }
         $db->update('update work_centers set available_hours_per_shift = 0.1 where id = ?', [$f['wc']['id']]);
     });
     $m = mpsAct($this, $m, 'recalculate')->assertOk()->json('data');
     expect(array_map(static fn (array $c) => [$c['workCenterCode'], $c['availableHours'], $c['loadPercent'], $c['status']], $m['capacity']))
-        ->toBe([['PRS-01', '0.6', 111, 'OVERLOAD'], ['WLD-01', '48', 2, 'OK']])
+        ->toBe([['PRS-01', '0.5', 134, 'OVERLOAD'], ['WLD-01', '40', 2, 'OK']])
         ->and($m['overloadCount'])->toBe(1);
 });
 

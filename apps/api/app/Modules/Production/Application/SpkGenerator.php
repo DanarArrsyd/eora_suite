@@ -55,7 +55,10 @@ final class SpkGenerator
         /** @var list<array{id: ?string, code: ?string, hours: ?string}> $shifts */
         $shifts = array_map(static fn (array $s) => ['id' => $s['id'], 'code' => $s['code'], 'hours' => $s['workHours']], $this->shifts->shiftsOn($db, $plant, $date));
         if ($shifts === []) {
-            $shifts = [['id' => null, 'code' => null, 'hours' => null]];
+            if ($this->shifts->versionOn($db, $plant, $date) !== null) {
+                return $out; // a day without shifts in the calendar in force: nothing is planned (the controller refuses it first)
+            }
+            $shifts = [['id' => null, 'code' => null, 'hours' => null]]; // no shift calendar at all: one shift without times
         }
         $today = $this->calendar->resolve($db, $plant, new DateTimeImmutable)->productionDate;
         $orders = $db->select(

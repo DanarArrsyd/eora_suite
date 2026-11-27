@@ -106,8 +106,8 @@ final class MpsCapacity
                 $warnings[$key]['NO_ACTIVE_MACHINE'] = true;
             }
             // available = Σ over the week's working days (from the plan date) of that day's shifts, each shift its work hours
-            // capped by the work center's hours per shift (D-142 C-3); a working day without a shift calendar in force (nor
-            // hours to count) leaves the week not configured
+            // capped by the work center's hours per shift (D-142 C-3); a working day without a shift calendar in force leaves
+            // the week not configured, while a day the calendar in force gives no shift (e.g. a 5-day pattern's Saturday) adds 0
             $available = '0';
             for ($d = new DateTimeImmutable(max($week, $today)), $end = (new DateTimeImmutable($week))->modify('+6 days'); $d <= $end; $d = $d->modify('+1 day')) {
                 $day = $d->format('Y-m-d');
@@ -115,7 +115,7 @@ final class MpsCapacity
                     continue;
                 }
                 $shifts = $this->shifts->shiftsOn($db, $plant, $day);
-                if ($shifts === []) {
+                if ($shifts === [] && $this->shifts->versionOn($db, $plant, $day) === null) {
                     $available = null;
                     break;
                 }

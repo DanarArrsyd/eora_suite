@@ -78,6 +78,11 @@ final class SpkController
         if ($data['productionDate'] < $today) {
             throw ValidationException::withMessages(['productionDate' => "Choose today ({$today}) or a later day."]);
         }
+        // a shift calendar in force with no shift that day (e.g. Sunday) means no production: nothing to generate (D-142)
+        if ($this->shifts->versionOn($db, (string) $plant->id, $data['productionDate']) !== null
+            && $this->shifts->shiftsOn($db, (string) $plant->id, $data['productionDate']) === []) {
+            throw ValidationException::withMessages(['productionDate' => 'No shift runs on this day in the calendar in force. Choose a working day.']);
+        }
         // one generate or Daily Recovery write at a time per plant: both read and change the same supply
         $db->select('select pg_advisory_xact_lock(hashtextextended(?,0))', ['daily-recovery:'.$plant->id]);
         $result = $this->generator->generate($db, (string) $plant->id, $data['productionDate']);
