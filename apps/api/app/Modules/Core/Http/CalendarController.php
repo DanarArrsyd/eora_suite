@@ -76,12 +76,32 @@ final class CalendarController
         if (! in_array($zone, DateTimeZone::listIdentifiers(), true)) {
             throw ValidationException::withMessages(['timezone' => 'Choose a time zone such as Asia/Jakarta.']);
         }
+        $before = $this->businessVersions($db, $plant);
         $id = $this->insert($db,
             'insert into business_calendars (tenant_id, plant_id, timezone, production_day_starts_at, effective_from)
              values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?) returning id',
             [$plant, $zone, $data['productionDayStartsAt'], $data['effectiveFrom']],
             'The plant has a business calendar version from this day already.');
-        $this->audit->record($db, 'business_calendar.created', 'business_calendar', $id, null, $this->state($db, 'business_calendars', $id), [], $plant);
+        // exception days already entered from that day on move to the new version wherever it takes over: a new day start
+        // never resets the holidays or extra working days planning counts (only the version in force on a date is read)
+        $after = $this->businessVersions($db, $plant);
+        $copied = 0;
+        $exceptions = $before === [] ? [] : $db->select(
+            'select calendar_id, exception_date::text as d, kind, description from calendar_exceptions
+              where calendar_id in ('.implode(',', array_fill(0, count($before), '?')).') and exception_date >= ?::date',
+            [...array_map(static fn (stdClass $v) => $v->id, $before), $data['effectiveFrom']],
+        );
+        foreach ($exceptions as $e) {
+            if ($this->inForce($before, (string) $e->d) === (string) $e->calendar_id && $this->inForce($after, (string) $e->d) === $id) {
+                $db->insert(
+                    'insert into calendar_exceptions (tenant_id, calendar_id, exception_date, kind, description)
+                     values ((select c.tenant from ctx_api.context() c), ?, ?, ?, ?)',
+                    [$id, $e->d, $e->kind, $e->description],
+                );
+                $copied++;
+            }
+        }
+        $this->audit->record($db, 'business_calendar.created', 'business_calendar', $id, null, $this->state($db, 'business_calendars', $id), ['copiedExceptionDays' => $copied], $plant);
 
         return $this->respondPlant($db, $plant, 201);
     }
@@ -382,6 +402,15 @@ final class CalendarController
                 'status' => $stateOf($v, $shiftInForce), 'removable' => $removable($v),
                 'shifts' => array_values($shifts[(string) $v->id] ?? [])], $shiftCalendars),
         ]], $status);
+    }
+
+    /** @return array<stdClass> the plant's business calendar versions and the tenant defaults, as {@see inForce()} reads them */
+    private function businessVersions(EoraPostgresConnection $db, string $plant): array
+    {
+        return $db->select(
+            'select id, plant_id, effective_from::text as since from business_calendars where plant_id = ? or plant_id is null order by effective_from desc, (plant_id is null)',
+            [$plant],
+        );
     }
 
     /**

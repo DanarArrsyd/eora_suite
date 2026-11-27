@@ -100,8 +100,13 @@ it('keeps started versions; a later one may be removed before it starts and the 
     $tomorrow = date('Y-m-d', strtotime($today.' +1 day'));
     spa($this)->postJson("/api/v1/core/plants/{$this->plant}/business-calendars", ['effectiveFrom' => $today, 'productionDayStartsAt' => '06:00'])
         ->assertStatus(422)->assertJsonValidationErrors(['effectiveFrom']);
+    // a holiday entered before the new day start stays a holiday after it: it moves to the new version
+    $holiday = date('Y-m-d', strtotime($today.' +7 days'));
+    spa($this)->postJson("/api/v1/core/plants/{$this->plant}/calendar-exceptions", ['date' => $holiday, 'kind' => 'HOLIDAY', 'description' => 'Plant outing'])->assertCreated();
     $data = spa($this)->postJson("/api/v1/core/plants/{$this->plant}/business-calendars", ['effectiveFrom' => $tomorrow, 'productionDayStartsAt' => '06:00'])
         ->assertCreated()->json('data');
+    expect(array_map(static fn (array $e) => [$e['date'], $e['kind'], $e['description'], $e['scope']], $data['exceptions']))
+        ->toBe([[$holiday, 'HOLIDAY', 'Plant outing', 'PLANT']]);
     $future = collect($data['business'])->firstWhere('effectiveFrom', $tomorrow);
     $current = collect($data['business'])->firstWhere('status', 'IN_FORCE');
     expect($future)->toMatchArray(['scope' => 'PLANT', 'timezone' => 'Asia/Jakarta', 'productionDayStartsAt' => '06:00', 'status' => 'FUTURE', 'removable' => true])
