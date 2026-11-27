@@ -46,7 +46,8 @@ it('calculates a draft: FG on hand used once, firm and net forecast netted, lot-
     // one open MPS per plant
     spa($this)->postJson('/api/v1/planning/mps-versions', ['plantId' => $f['plant']])->assertStatus(409)->assertJsonPath('code', 'INVALID_STATE_TRANSITION');
 
-    // with a shift calendar and hours per shift the load is a percentage; above 100 % it warns
+    // with a shift calendar the load is a percentage; above 100 % it warns. A shift counts its work hours capped by the
+    // work center's hours per shift (D-142 C-3): PRS-01 0.1 h × 6 days, WLD-01 (no hours per shift) the shift's 8 h × 6 days
     AccessFixtures::run($this->t, function (EoraPostgresConnection $db) use ($f) {
         $cal = (string) $db->selectOne("insert into shift_calendars (tenant_id, plant_id, code, name, effective_from) values (?, null, 'STD', 'Standard', '2026-01-01') returning id", [$this->t['tenant']])->id;
         $db->insert("insert into shifts (tenant_id, shift_calendar_id, code, name, starts_at, ends_at) values (?, ?, 'S1', 'Day', '07:00', '15:00')", [$this->t['tenant'], $cal]);
@@ -54,7 +55,7 @@ it('calculates a draft: FG on hand used once, firm and net forecast netted, lot-
     });
     $m = mpsAct($this, $m, 'recalculate')->assertOk()->json('data');
     expect(array_map(static fn (array $c) => [$c['workCenterCode'], $c['availableHours'], $c['loadPercent'], $c['status']], $m['capacity']))
-        ->toBe([['PRS-01', '0.6', 111, 'OVERLOAD'], ['WLD-01', null, null, 'NOT_CONFIGURED']])
+        ->toBe([['PRS-01', '0.6', 111, 'OVERLOAD'], ['WLD-01', '48', 2, 'OK']])
         ->and($m['overloadCount'])->toBe(1);
 });
 

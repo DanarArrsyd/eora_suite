@@ -92,3 +92,13 @@ Catatan:
 Generate memakai hasil Daily Recovery per pemilik; WO yang dibuat selalu membawa **Production customer** dari baris rencananya, jadi bahan milik customer itu bisa di-issue ke WO tersebut.
 
 SPK tidak memindahkan stok: WO manual tetap dirilis orang kedua seperti biasa, dan hasil produksi tetap dicatat lewat Production Runs.
+
+## Calendars (D-142)
+
+**Master Data → Calendars** menyimpan jam shift dan hari kerja per plant. Dipakai MPS (kapasitas), SPK Line dan Generate SPK (jam per shift), serta posting (shift dan tanggal produksi). CSA dan PPC boleh mengubah; role lain hanya melihat.
+
+1. Tab **Shifts** → **New shift version**: isi kode (mis. `STD`), nama, dan **First day**. Versi pertama boleh mulai hari ini; versi berikutnya mulai besok atau sesudahnya.
+2. Per shift isi jam **mulai–selesai** dan **break** (menit) tiap hari. Hari yang tidak dicentang = shift tidak jalan hari itu. **Copy Monday to Tue–Thu** menyalin jam Senin. Jam kerja = panjang shift − break; shift yang lewat tengah malam (mis. 22:30–06:30) milik hari ia mulai.
+3. Kapasitas line per shift = **yang lebih kecil** antara jam kerja shift dan **hours per shift** work center (kosong = jam kerja shift). Contoh: Sabtu 5 jam walau work center 7 jam.
+4. Tab **Working days**: hari kerja Senin–Sabtu. **New version** mengubah **jam mulai hari produksi** mulai tanggal tertentu (posting sebelum jam itu milik tanggal produksi sebelumnya). **Add exception day**: *Holiday* / *Non-working day* (hari kerja jadi libur) atau *Extra working day* (Minggu masuk). Hanya hari ini atau sesudahnya; bisa **Edit** atau hapus.
+5. Versi yang sudah berlaku tidak bisa diubah. Mau ganti jam? Buat versi baru dari tanggal berikutnya. Versi yang belum mulai boleh dihapus (**Remove**); hari pengecualiannya ikut terhapus.

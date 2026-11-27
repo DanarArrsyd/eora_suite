@@ -6,6 +6,7 @@ import { PLANNING_SCREENS } from './planning-resources';
 import { MasterGroupScreen, type MasterGroup } from './master-screen';
 import { MASTER_SCREENS } from './resources';
 import { BomsScreen } from './bom-screen';
+import { CalendarsScreen } from './calendar-screen';
 import { ConversionDataScreen } from './conversion-screen';
 import { ExportsScreen } from './exports-screen';
 import { ImportScreen } from './import-screen';
@@ -22,6 +23,7 @@ const GROUPS: Record<string, MasterGroup> = {
 };
 
 export function MasterDataScreen({ item }: { item: string }) {
+  if (item === 'calendars') return <CalendarsScreen />;
   if (item === 'routings') return <RoutingsScreen />;
   if (item === 'boms') return <BomsScreen />;
   if (item === 'conversion-data') return <ConversionDataScreen />;

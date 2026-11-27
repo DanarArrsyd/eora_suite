@@ -12,6 +12,7 @@ use App\Platform\Access\Authorizer;
 use App\Platform\Access\Scope;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Calendar\BusinessCalendar;
+use App\Platform\Calendar\ShiftCalendar;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
 use App\Platform\Http\Concurrency;
@@ -54,6 +55,7 @@ final class SpkController
         private readonly OutboxPublisher $outbox,
         private readonly SpkGenerator $generator,
         private readonly WorkOrderController $workOrders,
+        private readonly ShiftCalendar $shifts,
     ) {}
 
     /**
@@ -151,9 +153,9 @@ final class SpkController
             ], $operations),
             'machines' => array_map(static fn (stdClass $m) => ['id' => (string) $m->id, 'code' => (string) $m->code, 'name' => (string) $m->name],
                 $db->select("select id, code, name from machines where work_center_id = ? and status = 'ACTIVE' order by code", [$h->work_center_id])),
-            'shifts' => array_map(static fn (stdClass $s) => ['id' => (string) $s->id, 'code' => (string) $s->code, 'name' => (string) $s->name],
-                $db->select('select id, code, name from shifts where shift_calendar_id = ? order by starts_at, code',
-                    [$this->shiftCalendar($db, (string) $h->plant_id, (string) $h->production_date) ?? '00000000-0000-0000-0000-000000000000'])),
+            // the shifts that run on the SPK's day (D-142: weekday times), in the order they run
+            'shifts' => array_map(static fn (array $s) => ['id' => $s['id'], 'code' => $s['code'], 'name' => $s['name']],
+                $this->shifts->shiftsOn($db, (string) $h->plant_id, (string) $h->production_date)),
         ]]);
     }
 
@@ -350,9 +352,8 @@ final class SpkController
         $db->selectOne("select 1 as ok from machines where id = ? and work_center_id = ? and status = 'ACTIVE'", [strtolower((string) $line['machineId']), $h->work_center_id])
             ?? throw ValidationException::withMessages(["lines.{$i}.machineId" => 'Choose an active machine of this line.']);
         $shift = isset($line['shiftId']) ? strtolower((string) $line['shiftId']) : null;
-        if ($shift !== null && $db->selectOne('select 1 as ok from shifts where id = ? and shift_calendar_id = ?',
-            [$shift, $this->shiftCalendar($db, (string) $h->plant_id, (string) $h->production_date) ?? '00000000-0000-0000-0000-000000000000']) === null) {
-            throw ValidationException::withMessages(["lines.{$i}.shiftId" => 'Choose a shift of the calendar in force on this day.']);
+        if ($shift !== null && ! in_array($shift, array_column($this->shifts->shiftsOn($db, (string) $h->plant_id, (string) $h->production_date), 'id'), true)) {
+            throw ValidationException::withMessages(["lines.{$i}.shiftId" => 'Choose a shift that runs on this day in the calendar in force.']);
         }
 
         return [
@@ -509,17 +510,22 @@ final class SpkController
         }, $lines);
         $perShift = $db->selectOne('select trim_scale(available_hours_per_shift)::text as hours from work_centers where id = ?', [$row['workCenterId']])->hours;
         $row['hoursPerShift'] = $perShift;
+        // hours of each shift that day (D-142 C-3): the shift's work hours capped by the line's hours per shift
+        $dayShifts = array_column($this->shifts->shiftsOn($db, (string) $row['plantId'], (string) $row['productionDate']), 'workHours', 'id');
+        $capOf = static fn (?string $shift): ?string => ShiftCalendar::capacity($shift === null ? null : ($dayShifts[$shift] ?? null), $perShift === null ? null : SpkHours::num($perShift));
         // a machine is overloaded when any one of its shifts is: pooling shifts would hide an over-full shift (doc 38 §3)
-        $row['machineLoad'] = array_values(array_map(static function (array $m) use ($perShift): array {
-            $shifts = array_values(array_map(static function (array $b) use ($perShift): array {
+        $row['machineLoad'] = array_values(array_map(static function (array $m) use ($capOf): array {
+            $shifts = array_values(array_map(static function (array $b) use ($capOf): array {
                 $hours = SpkHours::num($b['hours']);
+                $cap = $capOf($b['shiftId'] ?? null);
 
                 return ['shiftId' => $b['shiftId'] ?? null, 'shiftCode' => $b['shiftCode'] ?? null, 'hours' => SpkHours::round3($hours),
-                    'capacityHours' => $perShift === null ? null : SpkHours::round3(SpkHours::num($perShift)),
-                    'balanceHours' => $perShift === null ? null : SpkHours::round3(bcsub(SpkHours::num($perShift), $hours, 6)),
-                    'overloaded' => $perShift !== null && bccomp($hours, SpkHours::num($perShift), 6) > 0];
+                    'capacityHours' => $cap === null ? null : SpkHours::round3($cap),
+                    'balanceHours' => $cap === null ? null : SpkHours::round3(bcsub($cap, $hours, 6)),
+                    'overloaded' => $cap !== null && bccomp($hours, $cap, 6) > 0];
             }, $m['shifts']));
-            $capacity = $perShift === null ? null : bcmul(SpkHours::num($perShift), (string) max(1, count($shifts)), 6);
+            $caps = array_column($shifts, 'capacityHours');
+            $capacity = $caps === [] || in_array(null, $caps, true) ? null : array_reduce($caps, static fn (string $sum, string $c): string => bcadd($sum, SpkHours::num($c), 6), '0');
             $hours = SpkHours::num($m['hours']);
 
             return ['machineId' => $m['machineId'], 'machineCode' => $m['machineCode'], 'machineName' => $m['machineName'],

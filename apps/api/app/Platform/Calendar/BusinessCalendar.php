@@ -22,6 +22,8 @@ use stdClass;
  */
 final class BusinessCalendar
 {
+    public function __construct(private readonly ShiftCalendar $shifts) {}
+
     public function resolve(EoraPostgresConnection $db, string $plantId, DateTimeInterface $instant): ResolvedTime
     {
         // Version selection uses the plant's local date (plant timezone inherits the tenant default, doc 04).
@@ -33,7 +35,7 @@ final class BusinessCalendar
         $cutoff = (string) $calendar->production_day_starts_at;
 
         $productionDate = $this->productionDate($local, $cutoff);
-        [$shiftId, $shiftCode, $shiftDate] = $this->shift($db, $plantId, $plantDate, $local, $cutoff);
+        [$shiftId, $shiftCode, $shiftDate] = $this->shift($db, $plantId, $local, $cutoff);
 
         if ($shiftDate !== null) {
             $productionDate = $shiftDate; // ADR-0012 §4: the whole shift belongs to the production date of its start
@@ -57,29 +59,26 @@ final class BusinessCalendar
             : $local->modify('-1 day')->format('Y-m-d');
     }
 
-    /** @return array{0: ?string, 1: ?string, 2: ?string} */
-    private function shift(EoraPostgresConnection $db, string $plantId, string $plantDate, DateTimeImmutable $local, string $cutoff): array
+    /**
+     * The shift the instant falls in (doc 40 C-1): a shift of the local date's weekday that has started, or a shift of the day
+     * before that runs past midnight and has not ended yet; it belongs to the production date of its start (ADR-0012 §4).
+     *
+     * @return array{0: ?string, 1: ?string, 2: ?string}
+     */
+    private function shift(EoraPostgresConnection $db, string $plantId, DateTimeImmutable $local, string $cutoff): array
     {
-        $calendar = $this->effectiveVersion($db, 'shift_calendars', $plantId, $plantDate);
-
-        if ($calendar === null) {
-            return [null, null, null];
-        }
-
         $time = $local->format('H:i:s');
-        $shifts = $db->select('select id, code, starts_at, ends_at, crosses_midnight from shifts where shift_calendar_id = ? order by starts_at', [$calendar->id]);
+        $yesterday = $local->modify('-1 day');
+        foreach ([[$local, false], [$yesterday, true]] as [$day, $carried]) {
+            foreach ($this->shifts->shiftsOn($db, $plantId, $day->format('Y-m-d')) as $shift) {
+                $inside = $carried
+                    ? $shift['crossesMidnight'] && $time < $shift['endsAt']
+                    : $time >= $shift['startsAt'] && ($shift['crossesMidnight'] || $time < $shift['endsAt']);
+                if ($inside) {
+                    $shiftStart = new DateTimeImmutable($day->format('Y-m-d').' '.$shift['startsAt'], $local->getTimezone());
 
-        foreach ($shifts as $shift) {
-            $start = $this->normalizeTime((string) $shift->starts_at);
-            $end = $this->normalizeTime((string) $shift->ends_at);
-            $startedYesterday = (bool) $shift->crosses_midnight && $time < $end;
-            $inside = $shift->crosses_midnight ? ($time >= $start || $time < $end) : ($time >= $start && $time < $end);
-
-            if ($inside) {
-                $startDay = $startedYesterday ? $local->modify('-1 day') : $local;
-                $shiftStart = new DateTimeImmutable($startDay->format('Y-m-d').' '.$start, $local->getTimezone());
-
-                return [(string) $shift->id, (string) $shift->code, $this->productionDate($shiftStart, $cutoff)];
+                    return [$shift['id'], $shift['code'], $this->productionDate($shiftStart, $cutoff)];
+                }
             }
         }
 
