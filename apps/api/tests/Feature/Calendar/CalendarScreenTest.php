@@ -142,8 +142,13 @@ it('writes exception days from today on; past days stay (C-7)', function () {
         ->firstWhere('date', $next);
     expect($e)->toMatchArray(['kind' => 'HOLIDAY', 'description' => 'Company holiday', 'scope' => 'TENANT', 'editable' => true]);
     spa($this)->postJson($url, ['date' => $next, 'kind' => 'NON_WORKING'])->assertStatus(422);
-    spa($this)->patchJson("/api/v1/core/calendar-exceptions/{$e['id']}", ['plantId' => $this->plant, 'kind' => 'NON_WORKING', 'description' => null])
-        ->assertOk()->assertJsonPath('data.exceptions.0.kind', 'NON_WORKING');
+    $patch = "/api/v1/core/calendar-exceptions/{$e['id']}";
+    $edit = ['plantId' => $this->plant, 'kind' => 'NON_WORKING', 'description' => null];
+    spa($this)->patchJson($patch, $edit)->assertStatus(428)->assertJsonPath('code', 'PRECONDITION_REQUIRED');
+    spa($this)->patchJson($patch, $edit, ['If-Match' => '"'.$e['version'].'"'])->assertOk()->assertJsonPath('data.exceptions.0.kind', 'NON_WORKING');
+    // a second form read before that change cannot put the old kind back
+    spa($this)->patchJson($patch, ['kind' => 'HOLIDAY', 'description' => 'stale'] + $edit, ['If-Match' => '"'.$e['version'].'"'])
+        ->assertStatus(412)->assertJsonPath('code', 'VERSION_CONFLICT');
     spa($this)->deleteJson("/api/v1/core/calendar-exceptions/{$e['id']}", ['plantId' => $this->plant])->assertOk()->assertJsonCount(0, 'data.exceptions');
     expect(AccessFixtures::run($this->t, fn (EoraPostgresConnection $db) => array_column($db->select(
         "select action from audit_events where entity_type = 'calendar_exception' order by occurred_at, id"), 'action')))

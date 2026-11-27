@@ -71,6 +71,7 @@ type ExceptionDay = {
   date: string;
   kind: 'HOLIDAY' | 'NON_WORKING' | 'WORKING';
   description: string | null;
+  version: number;
   scope: 'PLANT' | 'TENANT';
   editable: boolean;
 };
@@ -916,6 +917,7 @@ function ExceptionForm({
                 exception
                   ? api.PATCH('/core/calendar-exceptions/{exception}', {
                       params: { path: { exception: exception.id } },
+                      headers: { 'If-Match': `"${exception.version}"` },
                       body: { plantId: cal.plant.id, kind: v.kind, description: v.description || null },
                     })
                   : api.POST('/core/plants/{plant}/calendar-exceptions', {

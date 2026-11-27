@@ -9,6 +9,7 @@ use App\Platform\Access\Scope;
 use App\Platform\Audit\AuditRecorder;
 use App\Platform\Database\EoraPostgresConnection;
 use App\Platform\Exceptions\DomainProblem;
+use App\Platform\Http\Concurrency;
 use App\Platform\Http\MasterWrites;
 use App\Platform\Query\QueryRunner;
 use DateTimeZone;
@@ -150,7 +151,7 @@ final class CalendarController
         return $this->respondPlant($db, $plant, 201);
     }
 
-    /** Changes the kind or description of an exception day from today on. */
+    /** Changes the kind or description of an exception day from today on (If-Match: the version the form read). */
     public function updateException(Request $request, string $exception): JsonResponse
     {
         $data = $request->validate([
@@ -158,6 +159,7 @@ final class CalendarController
             'kind' => ['required', 'in:HOLIDAY,NON_WORKING,WORKING'],
             'description' => ['nullable', 'string', 'max:200'],
         ]);
+        $version = Concurrency::expectedVersion($request);
         $db = $this->db();
         $this->authorizer->requireAnywhere($db, self::MANAGE);
         $plant = $this->existing($db, 'plants', $data['plantId']);
@@ -166,9 +168,12 @@ final class CalendarController
         $this->authorizeScope($db, $row->plant_id, $plant);
         $before = $this->state($db, 'calendar_exceptions', $id);
         try {
-            $db->update('update calendar_exceptions set kind = ?, description = ? where id = ?', [$data['kind'], self::optionalText($data['description'] ?? null), $id]);
+            $changed = $db->update('update calendar_exceptions set kind = ?, description = ? where id = ? and version = ?', [$data['kind'], self::optionalText($data['description'] ?? null), $id, $version]);
         } catch (QueryException $e) {
             throw $e->getCode() === '23514' ? ValidationException::withMessages(['date' => 'A day already past keeps its calendar.']) : $e;
+        }
+        if ($changed === 0) {
+            throw Concurrency::conflict(); // another planner changed this day after the form was read
         }
         $this->audit->record($db, 'calendar_exception.updated', 'calendar_exception', $id, $before, $this->state($db, 'calendar_exceptions', $id), [], $plant);
 
@@ -356,7 +361,7 @@ final class CalendarController
         $removable = static fn (stdClass $v): bool => (string) $v->since > $today && ($v->plant_id === null ? $mayTenant : $mayPlant);
 
         $exceptions = $business === [] ? [] : $db->select(
-            'select e.id, e.calendar_id, e.exception_date::text as d, e.kind, e.description, b.plant_id
+            'select e.id, e.calendar_id, e.exception_date::text as d, e.kind, e.description, e.version, b.plant_id
                from calendar_exceptions e join business_calendars b on b.id = e.calendar_id
               where e.calendar_id in ('.implode(',', array_fill(0, count($business), '?')).') and e.exception_date >= ?::date - 31
               order by e.exception_date',
@@ -395,7 +400,7 @@ final class CalendarController
                 'effectiveFrom' => (string) $v->since, 'timezone' => (string) $v->timezone, 'productionDayStartsAt' => (string) $v->starts,
                 'status' => $stateOf($v, $inForce), 'removable' => $removable($v)], $business),
             'exceptions' => array_map(static fn (stdClass $e) => ['id' => (string) $e->id, 'date' => (string) $e->d, 'kind' => (string) $e->kind,
-                'description' => $e->description, 'scope' => $e->plant_id === null ? 'TENANT' : 'PLANT',
+                'description' => $e->description, 'version' => (int) $e->version, 'scope' => $e->plant_id === null ? 'TENANT' : 'PLANT',
                 'editable' => (string) $e->d >= $today && ($e->plant_id === null ? $mayTenant : $mayPlant)], $exceptions),
             'shiftCalendars' => array_map(static fn (stdClass $v) => ['id' => (string) $v->id, 'scope' => $v->plant_id === null ? 'TENANT' : 'PLANT',
                 'code' => (string) $v->code, 'name' => (string) $v->name, 'effectiveFrom' => (string) $v->since,
